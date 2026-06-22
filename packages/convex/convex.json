@@ -1,3 +1,11 @@
 {
-  "functions": "convex/"
+  "functions": "convex/",
+  "authProviders": [
+    {
+      "type": "clerk",
+      "config": {
+        "domain": "${CLERK_JWT_ISSUER_DOMAIN}"
+      }
+    }
+  ]
 }

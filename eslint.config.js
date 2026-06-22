@@ -81,5 +81,20 @@ export default tseslint.config(
       "react-hooks/exhaustive-deps": "error",
     },
   },
+  {
+    files: ["packages/convex/convex/**/*.ts"],
+    rules: {
+      // Convex handlers receive `ctx`/`args` even when stubbed; allow the
+      // underscore-prefix convention for intentionally unused parameters.
+      "@typescript-eslint/no-unused-vars": [
+        "error",
+        {
+          argsIgnorePattern: "^_",
+          varsIgnorePattern: "^_",
+          caughtErrorsIgnorePattern: "^_",
+        },
+      ],
+    },
+  },
   prettier
 );
