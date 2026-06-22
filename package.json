@@ -21,6 +21,7 @@
     "lint:fix": "eslint . --fix",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
+    "rebuild-apk": "cd apps/mobile/android && ./gradlew assembleDebug",
     "prepare": "husky"
   },
   "devDependencies": {
@@ -45,5 +46,10 @@
     "*.{js,jsx,json,md,yml,yaml}": [
       "prettier --write"
     ]
-  }
+  },
+  "trustedDependencies": [
+    "@clerk/shared",
+    "browser-tabs-lock",
+    "core-js"
+  ]
 }
