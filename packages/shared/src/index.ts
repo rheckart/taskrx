@@ -49,3 +49,16 @@ export interface DoseLog {
   readonly createdAt: number;
   readonly updatedAt: number;
 }
+
+/**
+ * RxNorm search result shape returned by the Convex `rxnorm.search` action.
+ *
+ * The action maps the RxNorm approximateTerm.json response down to a stable,
+ * UI-friendly shape.
+ */
+export interface RxNormSearchResult {
+  readonly rxcui: string;
+  readonly name: string;
+}
+
+export type RxNormSearchResponse = readonly RxNormSearchResult[];
