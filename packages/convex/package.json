@@ -1,0 +1,17 @@
+{
+  "name": "@taskrx/convex",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "convex dev",
+    "typecheck": "tsc --noEmit",
+    "build": "echo 'Convex builds on deploy'"
+  },
+  "dependencies": {
+    "convex": "^1.41.0"
+  },
+  "devDependencies": {
+    "typescript": "^5.7.0"
+  }
+}

@@ -1,0 +1,9 @@
+node_modules
+dist
+.expo
+.convex
+*.log
+.DS_Store
+coverage
+.omo/
+docs/
