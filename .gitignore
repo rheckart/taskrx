@@ -19,7 +19,7 @@ apps/mobile/dist
 
 # Convex
 .convex/
-packages/convex/convex/_generated
+# packages/convex/convex/_generated is committed (see api.d.ts header)
 
 # Logs
 *.log

@@ -1,8 +1,12 @@
 import { ClerkProvider, useAuth } from "@clerk/clerk-expo";
 import { tokenCache } from "@clerk/clerk-expo/token-cache";
+import { ConvexProviderWithClerk } from "convex/react-clerk";
 import { Slot, useRouter, useSegments } from "expo-router";
 import { useEffect } from "react";
 import type { ReactElement } from "react";
+
+import { convex } from "../src/api/convex";
+import { getDb } from "../src/db";
 
 const rawPublishableKey = process.env.EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY;
 
@@ -45,10 +49,27 @@ function AuthRedirectGate(): ReactElement {
   return <Slot />;
 }
 
+/**
+ * Opens the local SQLite database on mount so migrations run before any
+ * screen tries to read from it. Errors are logged but do not block the
+ * UI — the app can still render the auth flow even if the DB is broken.
+ */
+function DatabaseBootstrap(): null {
+  useEffect(() => {
+    void getDb().catch((error: unknown) => {
+      console.error("[db] failed to initialize SQLite:", error);
+    });
+  }, []);
+  return null;
+}
+
 export default function RootLayout(): ReactElement {
   return (
     <ClerkProvider publishableKey={publishableKey} tokenCache={clerkTokenCache}>
-      <AuthRedirectGate />
+      <ConvexProviderWithClerk client={convex} useAuth={useAuth}>
+        <DatabaseBootstrap />
+        <AuthRedirectGate />
+      </ConvexProviderWithClerk>
     </ClerkProvider>
   );
 }
