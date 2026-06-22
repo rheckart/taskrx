@@ -15,6 +15,7 @@ import {
 
 import * as doseLogsRepo from "../../../src/db/repos/doseLogs";
 import * as medicationsRepo from "../../../src/db/repos/medications";
+import { useMedicationsSync } from "../../../src/sync/pull";
 
 function describeSchedule(med: Medication): string {
   if (med.scheduleType === "daily") {
@@ -69,6 +70,7 @@ function MedicationRow({
 export default function MedsListScreen(): ReactElement {
   const router = useRouter();
   const { isLoaded, isSignedIn, user } = useUser();
+  const userId = user?.id;
   const [meds, setMeds] = useState<readonly Medication[]>([]);
   const [lastTakenMap, setLastTakenMap] = useState<
     ReadonlyMap<string, DoseLog | null>
@@ -77,7 +79,7 @@ export default function MedsListScreen(): ReactElement {
   const [refreshing, setRefreshing] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
 
-  const userId = user?.id;
+  useMedicationsSync(userId);
 
   const load = useCallback(async (): Promise<void> => {
     if (userId === undefined) {
@@ -87,7 +89,7 @@ export default function MedsListScreen(): ReactElement {
       return;
     }
     try {
-      const rows = await medicationsRepo.list(userId);
+      const rows = await medicationsRepo.selectAll(userId);
       const lastTakenEntries = await Promise.all(
         rows.map(async (med) => {
           const lastTaken = await doseLogsRepo.lastTakenFor(userId, med.id);

@@ -14,6 +14,7 @@ import {
   registerNotificationResponseHandler,
   rescheduleAll,
 } from "../src/notifications";
+import { syncWorker } from "../src/sync/worker";
 
 registerBackgroundNotificationHandler();
 
@@ -131,12 +132,35 @@ function NotificationBootstrap(): null {
   return null;
 }
 
+/**
+ * Starts the push sync worker when a user is signed in and stops it on
+ * sign-out or unmount. The worker drains the local sync_queue to Convex.
+ */
+function SyncBootstrap(): null {
+  const { isSignedIn } = useUser();
+
+  useEffect(() => {
+    if (!isSignedIn) {
+      syncWorker.stop();
+      return;
+    }
+
+    syncWorker.start();
+    return () => {
+      syncWorker.stop();
+    };
+  }, [isSignedIn]);
+
+  return null;
+}
+
 export default function RootLayout(): ReactElement {
   return (
     <ClerkProvider publishableKey={publishableKey} tokenCache={clerkTokenCache}>
       <ConvexProviderWithClerk client={convex} useAuth={useAuth}>
         <DatabaseBootstrap />
         <NotificationBootstrap />
+        <SyncBootstrap />
         <AuthRedirectGate />
       </ConvexProviderWithClerk>
     </ClerkProvider>

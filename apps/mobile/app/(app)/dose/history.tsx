@@ -14,6 +14,7 @@ import {
 
 import * as doseLogsRepo from "../../../src/db/repos/doseLogs";
 import * as medicationsRepo from "../../../src/db/repos/medications";
+import { useDoseLogsSync } from "../../../src/sync/pull";
 
 interface HistoryItem {
   readonly doseLog: DoseLog;
@@ -145,6 +146,8 @@ export default function DoseHistoryScreen(): ReactElement {
   const { isLoaded, isSignedIn, user } = useUser();
   const userId = user?.id;
 
+  useDoseLogsSync(userId);
+
   const [items, setItems] = useState<readonly HistoryItem[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
   const [refreshing, setRefreshing] = useState<boolean>(false);
@@ -158,8 +161,8 @@ export default function DoseHistoryScreen(): ReactElement {
     }
     try {
       const [doseLogs, medications] = await Promise.all([
-        doseLogsRepo.list({ userId }),
-        medicationsRepo.list(userId),
+        doseLogsRepo.selectAll({ userId }),
+        medicationsRepo.selectAll(userId),
       ]);
       const medMap = new Map<string, Medication>();
       for (const med of medications) {
