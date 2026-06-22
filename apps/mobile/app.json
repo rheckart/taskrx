@@ -19,13 +19,31 @@
         "backgroundImage": "./assets/android-icon-background.png",
         "monochromeImage": "./assets/android-icon-monochrome.png"
       },
-      "predictiveBackGestureEnabled": false
+      "predictiveBackGestureEnabled": false,
+      "permissions": ["POST_NOTIFICATIONS"]
     },
     "web": {
       "favicon": "./assets/favicon.png",
       "bundler": "metro"
     },
-    "plugins": ["expo-router", "expo-dev-client", "expo-secure-store"],
+    "plugins": [
+      "expo-router",
+      "expo-dev-client",
+      "expo-secure-store",
+      "./plugins/withNotifeeAndroidPermissions.js",
+      [
+        "expo-build-properties",
+        {
+          "android": {
+            "compileSdkVersion": 35,
+            "targetSdkVersion": 34,
+            "extraMavenRepos": [
+              "$rootDir/../node_modules/@notifee/react-native/android/libs"
+            ]
+          }
+        }
+      ]
+    ],
     "experiments": {
       "typedRoutes": true,
       "tsconfigPaths": true

@@ -62,3 +62,10 @@ export interface RxNormSearchResult {
 }
 
 export type RxNormSearchResponse = readonly RxNormSearchResult[];
+
+export {
+  nextNDaily,
+  nextNInterval,
+  upcomingDosesFor,
+} from "./schedule/index.js";
+export type { ScheduledDose } from "./schedule/index.js";

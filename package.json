@@ -16,6 +16,7 @@
     "dev": "npm run -w apps/mobile dev",
     "build": "npm run --workspaces --if-present build",
     "typecheck": "npm run --workspaces --if-present typecheck",
+    "test": "npm run -w packages/shared test",
     "lint": "eslint .",
     "lint:fix": "eslint . --fix",
     "format": "prettier --write .",
