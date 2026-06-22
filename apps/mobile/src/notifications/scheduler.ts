@@ -32,7 +32,7 @@ export async function createNotificationChannel(): Promise<void> {
   });
 }
 
-function buildNotificationId(
+export function buildNotificationId(
   medicationId: string,
   scheduledTime: number
 ): string {

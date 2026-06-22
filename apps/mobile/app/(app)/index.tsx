@@ -41,6 +41,9 @@ export default function HomeScreen(): ReactElement {
       <Link href="/meds" style={styles.link}>
         View Medications
       </Link>
+      <Link href={"/dose/history"} style={styles.link}>
+        View Dose History
+      </Link>
       <Link href={"/debug/notifications"} style={styles.link}>
         Notification Debug
       </Link>
