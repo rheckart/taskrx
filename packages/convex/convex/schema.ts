@@ -13,6 +13,10 @@ export default defineSchema({
   medications: defineTable({
     // Clerk user ID, extracted from the JWT subject by the auth helper.
     userId: v.string(),
+    // Stable local UUID from the device SQLite row. Used by the sync worker to
+    // map local ids to Convex-generated ids and to make create operations
+    // idempotent across app restarts.
+    localId: v.string(),
     name: v.string(),
     rxcui: v.optional(v.string()),
     dosage: v.optional(v.string()),
@@ -27,10 +31,13 @@ export default defineSchema({
     deletedAt: v.optional(v.number()),
   })
     .index("by_user", ["userId"])
-    .index("by_user_active", ["userId", "active"]),
+    .index("by_user_active", ["userId", "active"])
+    .index("by_local_id", ["localId"]),
 
   doseLogs: defineTable({
     userId: v.string(),
+    // Stable local UUID from the device SQLite row. See medications.localId.
+    localId: v.string(),
     medicationId: v.id("medications"),
     scheduledTime: v.number(),
     takenAt: v.optional(v.number()),
@@ -46,5 +53,6 @@ export default defineSchema({
   })
     .index("by_user", ["userId"])
     .index("by_medication", ["medicationId"])
-    .index("by_user_time", ["userId", "scheduledTime"]),
+    .index("by_user_time", ["userId", "scheduledTime"])
+    .index("by_local_id", ["localId"]),
 });

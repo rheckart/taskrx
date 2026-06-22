@@ -5,5 +5,5 @@
     "moduleResolution": "Bundler",
     "noEmit": true
   },
-  "include": ["convex/**/*.ts"]
+  "include": ["convex/**/*.ts", "index.ts"]
 }
