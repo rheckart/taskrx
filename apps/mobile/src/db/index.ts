@@ -77,6 +77,15 @@ const MIGRATIONS: readonly Migration[] = [
       CREATE INDEX IF NOT EXISTS idx_sync_queue_created ON sync_queue(created_at);
     `,
   },
+  {
+    name: "002_add_convex_id",
+    sql: `
+      ALTER TABLE medications ADD COLUMN convex_id TEXT;
+      ALTER TABLE dose_logs ADD COLUMN convex_id TEXT;
+      CREATE INDEX IF NOT EXISTS idx_medications_convex_id ON medications(convex_id);
+      CREATE INDEX IF NOT EXISTS idx_dose_logs_convex_id ON dose_logs(convex_id);
+    `,
+  },
 ];
 
 let dbPromise: Promise<SQLiteDatabase> | null = null;

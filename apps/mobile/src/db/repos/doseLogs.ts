@@ -21,6 +21,7 @@ import { enqueue } from "./syncQueue";
 interface DoseLogRow {
   readonly id: string;
   readonly user_id: string;
+  readonly convex_id: string | null;
   readonly medication_id: string;
   readonly scheduled_time: number;
   readonly taken_at: number | null;
@@ -111,7 +112,7 @@ export async function create(input: CreateDoseLogInput): Promise<DoseLog> {
   }
 
   await enqueue("dose_log", id, "create", {
-    id,
+    localId: id,
     userId: input.userId,
     medicationId: input.medicationId,
     scheduledTime: input.scheduledTime,
@@ -208,7 +209,7 @@ async function updateStatus(
   }
 
   await enqueue("dose_log", id, "update", {
-    id,
+    localId: id,
     userId: updated.userId,
     medicationId: updated.medicationId,
     scheduledTime: updated.scheduledTime,
@@ -305,4 +306,115 @@ export async function lastTakenFor(
     medicationId
   );
   return row === null ? null : rowToDoseLog(row);
+}
+
+/**
+ * Mark a dose log's sync status as `synced`.
+ */
+export async function markSynced(id: string): Promise<void> {
+  const db = await getDb();
+  await db.runAsync(
+    "UPDATE dose_logs SET sync_status = 'synced' WHERE id = ?",
+    id
+  );
+}
+
+/**
+ * Mark a dose log's sync status as `error` and log the last error.
+ */
+export async function markError(id: string, error: string): Promise<void> {
+  const db = await getDb();
+  await db.runAsync(
+    "UPDATE dose_logs SET sync_status = 'error' WHERE id = ?",
+    id
+  );
+  console.error(`[doseLogs] sync error for ${id}: ${error}`);
+}
+
+/**
+ * Store the Convex-generated id for a local dose log row.
+ */
+export async function setConvexId(
+  localId: string,
+  convexId: string
+): Promise<void> {
+  const db = await getDb();
+  await db.runAsync(
+    "UPDATE dose_logs SET convex_id = ? WHERE id = ?",
+    convexId,
+    localId
+  );
+}
+
+/**
+ * Look up the Convex id for a local dose log row.
+ */
+export async function getConvexId(localId: string): Promise<string | null> {
+  const db = await getDb();
+  const row = await db.getFirstAsync<{ convex_id: string | null }>(
+    "SELECT convex_id FROM dose_logs WHERE id = ?",
+    localId
+  );
+  return row?.convex_id ?? null;
+}
+
+/**
+ * Read all dose logs for a user directly from SQLite (offline-first),
+ * with optional filters.
+ */
+export async function selectAll(
+  filter: ListDoseLogsFilter
+): Promise<readonly DoseLog[]> {
+  return list(filter);
+}
+
+/**
+ * Upsert many dose logs from a remote pull. Skips rows where the remote
+ * `updatedAt` is not newer than the local `updated_at` (last-write-wins).
+ * Dose logs that are already `taken` locally are never overwritten remotely.
+ */
+export async function upsertMany(rows: readonly DoseLog[]): Promise<number> {
+  const db = await getDb();
+  let updated = 0;
+
+  for (const remote of rows) {
+    const local = await get(remote.id);
+    if (local !== null) {
+      if (local.status === "taken") {
+        continue;
+      }
+      if (local.updatedAt >= remote.updatedAt) {
+        continue;
+      }
+    }
+
+    await db.runAsync(
+      `INSERT INTO dose_logs (
+        id, user_id, medication_id, scheduled_time,
+        taken_at, status, notes, created_at, updated_at, sync_status
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'synced')
+      ON CONFLICT(id) DO UPDATE SET
+        user_id = excluded.user_id,
+        medication_id = excluded.medication_id,
+        scheduled_time = excluded.scheduled_time,
+        taken_at = excluded.taken_at,
+        status = excluded.status,
+        notes = excluded.notes,
+        created_at = excluded.created_at,
+        updated_at = excluded.updated_at,
+        sync_status = 'synced'`,
+      remote.id,
+      remote.userId,
+      remote.medicationId,
+      remote.scheduledTime,
+      remote.takenAt ?? null,
+      remote.status,
+      remote.notes ?? null,
+      remote.createdAt,
+      remote.updatedAt
+    );
+    updated += 1;
+  }
+
+  return updated;
 }

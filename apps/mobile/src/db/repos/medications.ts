@@ -26,6 +26,7 @@ import { enqueue } from "./syncQueue";
 interface MedicationRow {
   readonly id: string;
   readonly user_id: string;
+  readonly convex_id: string | null;
   readonly name: string;
   readonly rxcui: string | null;
   readonly dosage: string | null;
@@ -163,7 +164,7 @@ export async function create(
   }
 
   await enqueue("medication", id, "create", {
-    id,
+    localId: id,
     userId: input.userId,
     name: input.name,
     rxcui: input.rxcui ?? null,
@@ -248,7 +249,7 @@ export async function update(
   }
 
   await enqueue("medication", id, "update", {
-    id,
+    localId: id,
     userId: updated.userId,
     name: updated.name,
     rxcui: updated.rxcui ?? null,
@@ -284,8 +285,122 @@ export async function softDelete(id: string): Promise<void> {
   );
 
   await enqueue("medication", id, "delete", {
-    id,
+    localId: id,
     userId: existing.userId,
     deletedAt: now,
   });
+}
+
+/**
+ * Mark a medication's sync status as `synced`.
+ */
+export async function markSynced(id: string): Promise<void> {
+  const db = await getDb();
+  await db.runAsync(
+    "UPDATE medications SET sync_status = 'synced' WHERE id = ?",
+    id
+  );
+}
+
+/**
+ * Mark a medication's sync status as `error` and store the last error.
+ */
+export async function markError(id: string, error: string): Promise<void> {
+  const db = await getDb();
+  await db.runAsync(
+    "UPDATE medications SET sync_status = 'error' WHERE id = ?",
+    id
+  );
+  console.error(`[medications] sync error for ${id}: ${error}`);
+}
+
+/**
+ * Store the Convex-generated id for a local medication row.
+ */
+export async function setConvexId(
+  localId: string,
+  convexId: string
+): Promise<void> {
+  const db = await getDb();
+  await db.runAsync(
+    "UPDATE medications SET convex_id = ? WHERE id = ?",
+    convexId,
+    localId
+  );
+}
+
+/**
+ * Look up the Convex id for a local medication row.
+ */
+export async function getConvexId(localId: string): Promise<string | null> {
+  const db = await getDb();
+  const row = await db.getFirstAsync<{ convex_id: string | null }>(
+    "SELECT convex_id FROM medications WHERE id = ?",
+    localId
+  );
+  return row?.convex_id ?? null;
+}
+
+/**
+ * Read all medications for a user directly from SQLite (offline-first).
+ */
+export async function selectAll(
+  userId: string
+): Promise<readonly Medication[]> {
+  const db = await getDb();
+  const rows = await db.getAllAsync<MedicationRow>(
+    `SELECT * FROM medications
+     WHERE user_id = ? AND active = 1
+     ORDER BY created_at DESC`,
+    userId
+  );
+  return rows.map(rowToMedication);
+}
+
+/**
+ * Upsert many medications from a remote pull. Skips rows where the remote
+ * `updatedAt` is not newer than the local `updated_at` (last-write-wins).
+ */
+export async function upsertMany(rows: readonly Medication[]): Promise<number> {
+  const db = await getDb();
+  let updated = 0;
+
+  for (const remote of rows) {
+    const local = await get(remote.id);
+    if (local !== null && local.updatedAt >= remote.updatedAt) {
+      continue;
+    }
+
+    await db.runAsync(
+      `INSERT INTO medications (
+        id, user_id, name, rxcui, dosage,
+        schedule_type, schedule_times,
+        active, created_at, updated_at, sync_status
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'synced')
+      ON CONFLICT(id) DO UPDATE SET
+        user_id = excluded.user_id,
+        name = excluded.name,
+        rxcui = excluded.rxcui,
+        dosage = excluded.dosage,
+        schedule_type = excluded.schedule_type,
+        schedule_times = excluded.schedule_times,
+        active = excluded.active,
+        created_at = excluded.created_at,
+        updated_at = excluded.updated_at,
+        sync_status = 'synced'`,
+      remote.id,
+      remote.userId,
+      remote.name,
+      remote.rxcui ?? null,
+      remote.dosage ?? null,
+      remote.scheduleType,
+      JSON.stringify(remote.scheduleTimes),
+      remote.active ? 1 : 0,
+      remote.createdAt,
+      remote.updatedAt
+    );
+    updated += 1;
+  }
+
+  return updated;
 }

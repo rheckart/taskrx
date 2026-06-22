@@ -88,3 +88,25 @@ export async function pending(): Promise<readonly SyncQueueEntry[]> {
   );
   return rows.map(rowToEntry);
 }
+
+/**
+ * Remove a successfully processed entry from the sync queue.
+ */
+export async function remove(id: number): Promise<void> {
+  const db = await getDb();
+  await db.runAsync("DELETE FROM sync_queue WHERE id = ?", id);
+}
+
+/**
+ * Increment the attempt count and store the last error for a failed entry.
+ */
+export async function markFailed(id: number, error: string): Promise<void> {
+  const db = await getDb();
+  await db.runAsync(
+    `UPDATE sync_queue
+     SET attempts = attempts + 1, last_error = ?
+     WHERE id = ?`,
+    error,
+    id
+  );
+}
