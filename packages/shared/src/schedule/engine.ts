@@ -19,6 +19,7 @@ function parseTime(
   if (match === null) return undefined;
 
   const [hourStr, minuteStr] = [match[1], match[2]];
+  /* v8 ignore next */
   if (hourStr === undefined || minuteStr === undefined) return undefined;
 
   const hour = Number.parseInt(hourStr, 10);
