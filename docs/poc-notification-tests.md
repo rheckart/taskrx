@@ -2,6 +2,8 @@
 
 This document is the test script for the Day 6 gate: verifying that local medication reminders fire reliably on a physical Android device (Pixel 8) under a variety of power and lifecycle states.
 
+> **Next step:** After completing these 6 scenarios, proceed to [`docs/poc-stress-tests.md`](./poc-stress-tests.md) for the Day 8 exact-alarm and offline-first stress tests.
+
 > **Goal:** Confirm the React Native + Expo + Notifee stack can deliver time-critical, offline-first medication reminders on Android.
 > **Device:** Google Pixel 8 (physical), USB debugging enabled.
 > **APK:** `apps/mobile/android/app/build/outputs/apk/debug/app-debug.apk`

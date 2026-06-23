@@ -47,6 +47,12 @@ export default function HomeScreen(): ReactElement {
       <Link href={"/debug/notifications"} style={styles.link}>
         Notification Debug
       </Link>
+      <Link
+        href={"/debug/stress-seed" as unknown as "/debug/notifications"}
+        style={styles.link}
+      >
+        Stress Test Seed
+      </Link>
       <SignOutButton />
     </View>
   );
