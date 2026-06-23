@@ -13,6 +13,7 @@ import {
   View,
 } from "react-native";
 
+import { SkeletonList } from "../../../src/components/Skeleton";
 import * as doseLogsRepo from "../../../src/db/repos/doseLogs";
 import * as medicationsRepo from "../../../src/db/repos/medications";
 import { useMedicationsSync } from "../../../src/sync/pull";
@@ -164,9 +165,7 @@ export default function MedsListScreen(): ReactElement {
       />
 
       {loading ? (
-        <View style={styles.center}>
-          <ActivityIndicator />
-        </View>
+        <SkeletonList rows={6} linesPerRow={3} />
       ) : error !== null ? (
         <View style={styles.center}>
           <Text style={styles.errorText}>Failed to load: {error}</Text>

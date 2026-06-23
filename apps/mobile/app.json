@@ -6,7 +6,19 @@
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "automatic",
+    "splash": {
+      "image": "./assets/splash.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#007AFF"
+    },
     "scheme": "taskrx",
+    "runtimeVersion": {
+      "policy": "appVersion"
+    },
+    "updates": {
+      "enabled": false,
+      "url": "https://u.expo.dev/taskrx-poc"
+    },
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "com.taskrx.mobile"

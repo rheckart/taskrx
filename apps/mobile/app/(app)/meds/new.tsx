@@ -17,6 +17,7 @@ import {
   SchedulePicker,
   type ScheduleValue,
 } from "../../../src/components/SchedulePicker";
+import { useToast } from "../../../src/components/useToast";
 import * as medicationsRepo from "../../../src/db/repos/medications";
 
 const TIME_PATTERN = /^([01]\d|2[0-3]):([0-5]\d)$/;
@@ -67,6 +68,7 @@ export default function NewMedicationScreen(): ReactElement {
   );
   const [saving, setSaving] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
+  const { showToast, ToastContainer } = useToast();
 
   const onChangeType = useCallback((next: ScheduleType): void => {
     setScheduleType(next);
@@ -103,11 +105,13 @@ export default function NewMedicationScreen(): ReactElement {
         scheduleType,
         scheduleTimes: scheduleType === "daily" ? schedule : schedule,
       });
+      showToast.success("Medication added");
       router.replace("/meds");
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : "Save failed";
       setError(message);
       setSaving(false);
+      showToast.error("Couldn't save — will retry on next sync");
     }
   }, [
     userId,
@@ -117,6 +121,7 @@ export default function NewMedicationScreen(): ReactElement {
     scheduleType,
     schedule,
     router,
+    showToast,
   ]);
 
   if (!isLoaded) {
@@ -136,100 +141,105 @@ export default function NewMedicationScreen(): ReactElement {
   }
 
   return (
-    <ScrollView
-      style={styles.container}
-      contentContainerStyle={styles.content}
-      keyboardShouldPersistTaps="handled"
-    >
-      <Text style={styles.label}>Name</Text>
-      <TextInput
-        style={styles.input}
-        value={name}
-        onChangeText={setName}
-        placeholder="e.g. Metformin"
-        placeholderTextColor="#999"
-        autoCorrect={false}
-      />
-
-      <Text style={styles.label}>Dosage (optional)</Text>
-      <TextInput
-        style={styles.input}
-        value={dosage}
-        onChangeText={setDosage}
-        placeholder="e.g. 500mg"
-        placeholderTextColor="#999"
-        autoCorrect={false}
-      />
-
-      {initialRxcui !== undefined ? (
-        <Text style={styles.rxcui}>RxCUI: {initialRxcui}</Text>
-      ) : null}
-
-      <Text style={styles.label}>Schedule type</Text>
-      <View style={styles.typeRow}>
-        <Pressable
-          onPress={() => {
-            onChangeType("daily");
-          }}
-          style={[
-            styles.typeButton,
-            scheduleType === "daily" ? styles.typeButtonActive : null,
-          ]}
-        >
-          <Text
-            style={[
-              styles.typeButtonText,
-              scheduleType === "daily" ? styles.typeButtonTextActive : null,
-            ]}
-          >
-            Daily
-          </Text>
-        </Pressable>
-        <Pressable
-          onPress={() => {
-            onChangeType("interval");
-          }}
-          style={[
-            styles.typeButton,
-            scheduleType === "interval" ? styles.typeButtonActive : null,
-          ]}
-        >
-          <Text
-            style={[
-              styles.typeButtonText,
-              scheduleType === "interval" ? styles.typeButtonTextActive : null,
-            ]}
-          >
-            Interval
-          </Text>
-        </Pressable>
-      </View>
-
-      <SchedulePicker
-        scheduleType={scheduleType}
-        value={schedule}
-        onChange={setSchedule}
-      />
-
-      {error !== null ? (
-        <Text style={styles.errorText}>Save failed: {error}</Text>
-      ) : null}
-
-      <Pressable
-        onPress={() => void onSave()}
-        disabled={!canSave || saving}
-        style={[
-          styles.saveButton,
-          !canSave || saving ? styles.saveButtonDisabled : null,
-        ]}
+    <>
+      <ToastContainer />
+      <ScrollView
+        style={styles.container}
+        contentContainerStyle={styles.content}
+        keyboardShouldPersistTaps="handled"
       >
-        {saving ? (
-          <ActivityIndicator color="#fff" />
-        ) : (
-          <Text style={styles.saveButtonText}>Save medication</Text>
-        )}
-      </Pressable>
-    </ScrollView>
+        <Text style={styles.label}>Name</Text>
+        <TextInput
+          style={styles.input}
+          value={name}
+          onChangeText={setName}
+          placeholder="e.g. Metformin"
+          placeholderTextColor="#999"
+          autoCorrect={false}
+        />
+
+        <Text style={styles.label}>Dosage (optional)</Text>
+        <TextInput
+          style={styles.input}
+          value={dosage}
+          onChangeText={setDosage}
+          placeholder="e.g. 500mg"
+          placeholderTextColor="#999"
+          autoCorrect={false}
+        />
+
+        {initialRxcui !== undefined ? (
+          <Text style={styles.rxcui}>RxCUI: {initialRxcui}</Text>
+        ) : null}
+
+        <Text style={styles.label}>Schedule type</Text>
+        <View style={styles.typeRow}>
+          <Pressable
+            onPress={() => {
+              onChangeType("daily");
+            }}
+            style={[
+              styles.typeButton,
+              scheduleType === "daily" ? styles.typeButtonActive : null,
+            ]}
+          >
+            <Text
+              style={[
+                styles.typeButtonText,
+                scheduleType === "daily" ? styles.typeButtonTextActive : null,
+              ]}
+            >
+              Daily
+            </Text>
+          </Pressable>
+          <Pressable
+            onPress={() => {
+              onChangeType("interval");
+            }}
+            style={[
+              styles.typeButton,
+              scheduleType === "interval" ? styles.typeButtonActive : null,
+            ]}
+          >
+            <Text
+              style={[
+                styles.typeButtonText,
+                scheduleType === "interval"
+                  ? styles.typeButtonTextActive
+                  : null,
+              ]}
+            >
+              Interval
+            </Text>
+          </Pressable>
+        </View>
+
+        <SchedulePicker
+          scheduleType={scheduleType}
+          value={schedule}
+          onChange={setSchedule}
+        />
+
+        {error !== null ? (
+          <Text style={styles.errorText}>Save failed: {error}</Text>
+        ) : null}
+
+        <Pressable
+          onPress={() => void onSave()}
+          disabled={!canSave || saving}
+          style={[
+            styles.saveButton,
+            !canSave || saving ? styles.saveButtonDisabled : null,
+          ]}
+        >
+          {saving ? (
+            <ActivityIndicator color="#fff" />
+          ) : (
+            <Text style={styles.saveButtonText}>Save medication</Text>
+          )}
+        </Pressable>
+      </ScrollView>
+    </>
   );
 }
 

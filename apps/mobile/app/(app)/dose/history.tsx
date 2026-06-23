@@ -12,6 +12,7 @@ import {
   View,
 } from "react-native";
 
+import { SkeletonList } from "../../../src/components/Skeleton";
 import * as doseLogsRepo from "../../../src/db/repos/doseLogs";
 import * as medicationsRepo from "../../../src/db/repos/medications";
 import { useDoseLogsSync } from "../../../src/sync/pull";
@@ -221,9 +222,7 @@ export default function DoseHistoryScreen(): ReactElement {
       <Stack.Screen options={{ title: "Dose History" }} />
 
       {loading ? (
-        <View style={styles.center}>
-          <ActivityIndicator />
-        </View>
+        <SkeletonList rows={8} linesPerRow={4} />
       ) : error !== null ? (
         <View style={styles.center}>
           <Text style={styles.errorText}>Failed to load: {error}</Text>

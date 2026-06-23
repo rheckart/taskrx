@@ -12,6 +12,7 @@ import {
   View,
 } from "react-native";
 
+import { useToast } from "../../../src/components/useToast";
 import * as doseLogsRepo from "../../../src/db/repos/doseLogs";
 import * as medicationsRepo from "../../../src/db/repos/medications";
 import { snoozeDose } from "../../../src/notifications/snooze";
@@ -82,6 +83,7 @@ export default function DoseLogScreen(): ReactElement {
   const [actionStatus, setActionStatus] = useState<ActionStatus>("idle");
   const [completedAt, setCompletedAt] = useState<number | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const { showToast, ToastContainer } = useToast();
 
   const parsedParams = useMemo(() => parseParams(params), [params]);
 
@@ -142,13 +144,15 @@ export default function DoseLogScreen(): ReactElement {
       await doseLogsRepo.markTaken(state.doseLog.id, now);
       setCompletedAt(now);
       setActionStatus("done");
+      showToast.success("Dose recorded");
     } catch (err: unknown) {
       const message =
         err instanceof Error ? err.message : "Failed to mark taken";
       setError(message);
       setActionStatus("idle");
+      showToast.error("Couldn't record dose — will retry on next sync");
     }
-  }, [state]);
+  }, [state, showToast]);
 
   const handleSkip = useCallback(async (): Promise<void> => {
     if (state.kind !== "loaded") {
@@ -160,13 +164,15 @@ export default function DoseLogScreen(): ReactElement {
       await doseLogsRepo.markSkipped(state.doseLog.id);
       setCompletedAt(Date.now());
       setActionStatus("done");
+      showToast.success("Dose skipped");
     } catch (err: unknown) {
       const message =
         err instanceof Error ? err.message : "Failed to skip dose";
       setError(message);
       setActionStatus("idle");
+      showToast.error("Couldn't record skip — will retry on next sync");
     }
-  }, [state]);
+  }, [state, showToast]);
 
   const handleSnooze = useCallback(async (): Promise<void> => {
     if (state.kind !== "loaded") {
@@ -178,12 +184,14 @@ export default function DoseLogScreen(): ReactElement {
       await snoozeDose(state.medication.id, state.scheduledTime, 15);
       setCompletedAt(Date.now());
       setActionStatus("done");
+      showToast.info("Reminder snoozed 15 minutes");
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : "Failed to snooze";
       setError(message);
       setActionStatus("idle");
+      showToast.error("Couldn't snooze reminder");
     }
-  }, [state]);
+  }, [state, showToast]);
 
   const handleDone = useCallback((): void => {
     router.replace("/meds");
@@ -244,93 +252,96 @@ export default function DoseLogScreen(): ReactElement {
   const isDone = actionStatus === "done";
 
   return (
-    <ScrollView
-      style={styles.container}
-      contentContainerStyle={styles.content}
-      keyboardShouldPersistTaps="handled"
-    >
-      <View style={styles.card}>
-        <Text style={styles.medName}>{medication.name}</Text>
-        {medication.dosage !== undefined ? (
-          <Text style={styles.dosage}>{medication.dosage}</Text>
-        ) : null}
-        <Text style={styles.scheduledTime}>
-          Scheduled: {formatDateTime(scheduledDate)}
-        </Text>
-        <Text
-          style={[
-            styles.urgency,
-            scheduledTime < Date.now() - 5 * 60_000 && styles.urgencyOverdue,
-          ]}
-        >
-          {urgencyLabel(scheduledTime)}
-        </Text>
-      </View>
-
-      {isDone && completedAt !== null ? (
-        <View style={styles.successCard}>
-          <Text style={styles.successTitle}>Recorded</Text>
-          <Text style={styles.successBody}>
-            {formatDateTime(new Date(completedAt))}
+    <>
+      <ToastContainer />
+      <ScrollView
+        style={styles.container}
+        contentContainerStyle={styles.content}
+        keyboardShouldPersistTaps="handled"
+      >
+        <View style={styles.card}>
+          <Text style={styles.medName}>{medication.name}</Text>
+          {medication.dosage !== undefined ? (
+            <Text style={styles.dosage}>{medication.dosage}</Text>
+          ) : null}
+          <Text style={styles.scheduledTime}>
+            Scheduled: {formatDateTime(scheduledDate)}
           </Text>
-          <Pressable onPress={handleDone} style={styles.doneButton}>
-            <Text style={styles.doneButtonText}>Done</Text>
-          </Pressable>
+          <Text
+            style={[
+              styles.urgency,
+              scheduledTime < Date.now() - 5 * 60_000 && styles.urgencyOverdue,
+            ]}
+          >
+            {urgencyLabel(scheduledTime)}
+          </Text>
         </View>
-      ) : (
-        <View style={styles.actions}>
-          <Pressable
-            onPress={() => void handleMarkTaken()}
-            disabled={actionStatus !== "idle"}
-            style={[
-              styles.actionButton,
-              styles.takenButton,
-              actionStatus !== "idle" && styles.actionButtonDisabled,
-            ]}
-          >
-            {actionStatus === "taking" ? (
-              <ActivityIndicator color="#fff" />
-            ) : (
-              <Text style={styles.actionButtonText}>Mark Taken</Text>
-            )}
-          </Pressable>
 
-          <Pressable
-            onPress={() => void handleSkip()}
-            disabled={actionStatus !== "idle"}
-            style={[
-              styles.actionButton,
-              styles.skipButton,
-              actionStatus !== "idle" && styles.actionButtonDisabled,
-            ]}
-          >
-            {actionStatus === "skipping" ? (
-              <ActivityIndicator color="#fff" />
-            ) : (
-              <Text style={styles.actionButtonText}>Skip</Text>
-            )}
-          </Pressable>
+        {isDone && completedAt !== null ? (
+          <View style={styles.successCard}>
+            <Text style={styles.successTitle}>Recorded</Text>
+            <Text style={styles.successBody}>
+              {formatDateTime(new Date(completedAt))}
+            </Text>
+            <Pressable onPress={handleDone} style={styles.doneButton}>
+              <Text style={styles.doneButtonText}>Done</Text>
+            </Pressable>
+          </View>
+        ) : (
+          <View style={styles.actions}>
+            <Pressable
+              onPress={() => void handleMarkTaken()}
+              disabled={actionStatus !== "idle"}
+              style={[
+                styles.actionButton,
+                styles.takenButton,
+                actionStatus !== "idle" && styles.actionButtonDisabled,
+              ]}
+            >
+              {actionStatus === "taking" ? (
+                <ActivityIndicator color="#fff" />
+              ) : (
+                <Text style={styles.actionButtonText}>Mark Taken</Text>
+              )}
+            </Pressable>
 
-          <Pressable
-            onPress={() => void handleSnooze()}
-            disabled={actionStatus !== "idle"}
-            style={[
-              styles.actionButton,
-              styles.snoozeButton,
-              actionStatus !== "idle" && styles.actionButtonDisabled,
-            ]}
-          >
-            {actionStatus === "snoozing" ? (
-              <ActivityIndicator color="#fff" />
-            ) : (
-              <Text style={styles.actionButtonText}>Snooze 15 min</Text>
-            )}
-          </Pressable>
-        </View>
-      )}
+            <Pressable
+              onPress={() => void handleSkip()}
+              disabled={actionStatus !== "idle"}
+              style={[
+                styles.actionButton,
+                styles.skipButton,
+                actionStatus !== "idle" && styles.actionButtonDisabled,
+              ]}
+            >
+              {actionStatus === "skipping" ? (
+                <ActivityIndicator color="#fff" />
+              ) : (
+                <Text style={styles.actionButtonText}>Skip</Text>
+              )}
+            </Pressable>
 
-      {error !== null ? <Text style={styles.errorText}>{error}</Text> : null}
-    </ScrollView>
+            <Pressable
+              onPress={() => void handleSnooze()}
+              disabled={actionStatus !== "idle"}
+              style={[
+                styles.actionButton,
+                styles.snoozeButton,
+                actionStatus !== "idle" && styles.actionButtonDisabled,
+              ]}
+            >
+              {actionStatus === "snoozing" ? (
+                <ActivityIndicator color="#fff" />
+              ) : (
+                <Text style={styles.actionButtonText}>Snooze 15 min</Text>
+              )}
+            </Pressable>
+          </View>
+        )}
+
+        {error !== null ? <Text style={styles.errorText}>{error}</Text> : null}
+      </ScrollView>
+    </>
   );
 }
 
