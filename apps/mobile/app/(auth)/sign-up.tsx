@@ -1,5 +1,5 @@
 import { useSignUp } from "@clerk/clerk-expo";
-import { Link } from "expo-router";
+import { Link, useRouter } from "expo-router";
 import type { ReactElement } from "react";
 import { useState } from "react";
 import {
@@ -28,6 +28,7 @@ function getClerkErrorMessage(error: unknown): string {
 
 export default function SignUpScreen(): ReactElement {
   const { isLoaded, signUp, setActive } = useSignUp();
+  const router = useRouter();
   const [email, setEmail] = useState("");
   const [code, setCode] = useState("");
   const [isCodeSent, setIsCodeSent] = useState(false);
@@ -78,6 +79,7 @@ export default function SignUpScreen(): ReactElement {
 
       if (result.createdSessionId !== null) {
         await setActive({ session: result.createdSessionId });
+        router.replace("/(app)");
       }
     } catch (err) {
       setError(getClerkErrorMessage(err));
