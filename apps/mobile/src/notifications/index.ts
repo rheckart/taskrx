@@ -7,18 +7,18 @@ export {
   cancelAll,
   rescheduleAll,
   getPendingCount,
-} from "./scheduler.js";
+} from "./scheduler";
 
 export {
   requestPermissions,
   checkNotificationPermission,
   checkExactAlarmPermission,
   openExactAlarmSettings,
-} from "./permissions.js";
+} from "./permissions";
 
-export type { PermissionStatus, PermissionResult } from "./permissions.js";
+export type { PermissionStatus, PermissionResult } from "./permissions";
 
 export {
   registerNotificationResponseHandler,
   registerBackgroundNotificationHandler,
-} from "./tap-handler.js";
+} from "./tap-handler";

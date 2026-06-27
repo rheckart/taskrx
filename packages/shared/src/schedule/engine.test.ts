@@ -1,8 +1,8 @@
 import { describe, expect, it } from "vitest";
 
-import type { Medication } from "../index.js";
+import type { Medication } from "../index";
 
-import { nextNDaily, nextNInterval, upcomingDosesFor } from "./engine.js";
+import { nextNDaily, nextNInterval, upcomingDosesFor } from "./engine";
 
 /**
  * Build a local-timestamp from an ISO date interpreted in the test process TZ.

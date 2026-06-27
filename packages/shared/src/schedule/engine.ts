@@ -1,6 +1,6 @@
-import type { Medication } from "../index.js";
+import type { Medication } from "../index";
 
-import type { ScheduledDose } from "./types.js";
+import type { ScheduledDose } from "./types";
 
 const MS_PER_MINUTE = 60_000;
 const MS_PER_HOUR = 60 * MS_PER_MINUTE;

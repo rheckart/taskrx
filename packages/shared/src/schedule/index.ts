@@ -1,2 +1,2 @@
-export { nextNDaily, nextNInterval, upcomingDosesFor } from "./engine.js";
-export type { ScheduledDose } from "./types.js";
+export { nextNDaily, nextNInterval, upcomingDosesFor } from "./engine";
+export type { ScheduledDose } from "./types";

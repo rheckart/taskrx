@@ -6,12 +6,12 @@ import notifee, {
   type TimestampTrigger,
 } from "@notifee/react-native";
 
-import * as medicationsRepo from "../db/repos/medications.js";
+import * as medicationsRepo from "../db/repos/medications";
 
 import {
   buildNotificationId as buildBaseNotificationId,
   MEDICATION_REMINDER_CHANNEL_ID,
-} from "./scheduler.js";
+} from "./scheduler";
 
 /**
  * Schedules a one-off snooze notification for a dose.

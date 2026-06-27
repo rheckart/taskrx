@@ -8,7 +8,7 @@ import notifee, {
 import type { Medication } from "@taskrx/shared";
 import { upcomingDosesFor } from "@taskrx/shared";
 
-import * as medicationsRepo from "../db/repos/medications.js";
+import * as medicationsRepo from "../db/repos/medications";
 
 export const MEDICATION_REMINDER_CHANNEL_ID = "medication_reminders";
 export const MEDICATION_REMINDER_CHANNEL_NAME = "Medication Reminders";
