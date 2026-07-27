@@ -74,3 +74,22 @@ export type {
   DoseLogWithConflictFields,
   MedicationWithTimestamps,
 } from "./sync/conflict";
+
+export {
+  ANDROID_ALARM_DISABLED,
+  ANDROID_ALARM_ENABLED,
+  ANDROID_ALARM_NOT_SUPPORTED,
+  NOTIFICATION_AUTH_AUTHORIZED,
+  NOTIFICATION_AUTH_DENIED,
+  NOTIFICATION_AUTH_NOT_DETERMINED,
+  NOTIFICATION_AUTH_PROVISIONAL,
+  derivePermissionStatus,
+  isExactAlarmGranted,
+} from "./notifications/permission-state";
+export type {
+  AndroidAlarmSetting,
+  NotificationAuthorization,
+  PermissionSnapshot,
+  PermissionSnapshotInput,
+  PermissionStatus,
+} from "./notifications/permission-state";

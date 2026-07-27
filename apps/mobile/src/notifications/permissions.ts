@@ -1,11 +1,17 @@
+import {
+  ANDROID_ALARM_DISABLED,
+  ANDROID_ALARM_ENABLED,
+  ANDROID_ALARM_NOT_SUPPORTED,
+  derivePermissionStatus,
+  isExactAlarmGranted,
+  type AndroidAlarmSetting,
+  type NotificationAuthorization,
+  type PermissionStatus,
+} from "@taskrx/shared";
 import { Linking, Platform } from "react-native";
 import notifee, { AuthorizationStatus } from "react-native-notify-kit";
 
-export type PermissionStatus =
-  | "authorized"
-  | "denied"
-  | "partial"
-  | "undetermined";
+export type { PermissionStatus } from "@taskrx/shared";
 
 export interface PermissionResult {
   readonly status: PermissionStatus;
@@ -14,25 +20,63 @@ export interface PermissionResult {
 }
 
 /**
- * Checks whether the app can schedule exact alarms on Android.
- *
- * On Android < 12 this always returns true. On Android 12+ (API 31+) this
- * checks the SCHEDULE_EXACT_ALARM special app access. On Android 14+ (API 34+)
- * if the permission has been denied by the user, this returns false and the
- * user must be routed to system settings.
+ * Maps notify-kit's numeric AuthorizationStatus to our shared numeric enum.
+ * notify-kit's enum values are 0/1/2/-1; this mapping guards against future
+ * upstream drift and satisfies @typescript-eslint/no-unsafe-enum-comparison.
  */
-export function checkExactAlarmPermission(): Promise<boolean> {
-  if (Platform.OS !== "android") {
-    return Promise.resolve(true);
+function toNotificationAuthorization(
+  status: AuthorizationStatus
+): NotificationAuthorization {
+  switch (status) {
+    case AuthorizationStatus.AUTHORIZED:
+      return 1;
+    case AuthorizationStatus.PROVISIONAL:
+      return 2;
+    case AuthorizationStatus.DENIED:
+      return 0;
+    case AuthorizationStatus.NOT_DETERMINED:
+    default:
+      return -1;
   }
+}
 
-  // Notifee exposes openAlarmPermissionSettings but not a direct check.
-  // We infer the state from the power-manager / alarm APIs. On Android 12+
-  // the only reliable signal is whether creating an exact trigger succeeds;
-  // however Notifee 9.x does not expose a synchronous check. We treat the
-  // permission as granted until a schedule operation fails, at which point
-  // the caller can route to settings.
-  return Promise.resolve(true);
+/**
+ * Maps notify-kit's AndroidNotificationSetting numeric values (-1/0/1) to
+ * the shared enum. Returns null on non-Android platforms because the exact-
+ * alarm restriction is Android-specific.
+ */
+function toAndroidAlarm(alarm: number | undefined): AndroidAlarmSetting | null {
+  if (Platform.OS !== "android" || alarm === undefined) {
+    return null;
+  }
+  if (alarm === ANDROID_ALARM_ENABLED) {
+    return ANDROID_ALARM_ENABLED;
+  }
+  if (alarm === ANDROID_ALARM_DISABLED) {
+    return ANDROID_ALARM_DISABLED;
+  }
+  return ANDROID_ALARM_NOT_SUPPORTED;
+}
+
+/**
+ * Returns whether the app currently holds SCHEDULE_EXACT_ALARM special
+ * access. On iOS this returns true unconditionally; on Android < 12 it
+ * returns true because the exact-alarm concept does not exist; on Android
+ * 12+ it returns whether the user has granted the permission.
+ *
+ * Replaces the earlier POC stub which hardcoded `true` on every platform
+ * (see `docs/architecture.md` and the plan in
+ * `.omo/plans/convex-expo-revisit.md` todo 6). The stub existed because
+ * upstream Notifee 9.x did not correctly report state before the user was
+ * prompted; the notify-kit fork fixes that (upstream issue #1237), so the
+ * real check is now trustworthy.
+ */
+export async function checkExactAlarmPermission(): Promise<boolean> {
+  if (Platform.OS !== "android") {
+    return true;
+  }
+  const settings = await notifee.getNotificationSettings();
+  return isExactAlarmGranted(toAndroidAlarm(settings.android.alarm));
 }
 
 /**
@@ -49,41 +93,41 @@ export async function openExactAlarmSettings(): Promise<void> {
   await notifee.openAlarmPermissionSettings();
 }
 
+async function buildResult(
+  settings: Awaited<ReturnType<typeof notifee.getNotificationSettings>>
+): Promise<PermissionResult> {
+  const snapshot = derivePermissionStatus({
+    notificationAuthorization: toNotificationAuthorization(
+      settings.authorizationStatus
+    ),
+    androidAlarm: toAndroidAlarm(settings.android.alarm),
+  });
+
+  const canAskAgain =
+    snapshot.status === "undetermined" ||
+    (snapshot.status === "denied" &&
+      (await Linking.canOpenURL("app-settings:")));
+
+  return {
+    status: snapshot.status,
+    canAskAgain,
+    exactAlarmGranted: snapshot.exactAlarmGranted,
+  };
+}
+
 /**
  * Requests notification permission (POST_NOTIFICATIONS on Android 13+) and
  * checks exact-alarm permission state.
  *
  * Returns a normalized PermissionResult. `partial` means notification
- * permission is granted but exact-alarm permission is not.
+ * permission is granted but exact-alarm permission is not; alarms will
+ * still be delivered (notify-kit falls back to setAndAllowWhileIdle) but
+ * exact timing is not guaranteed.
  */
 export async function requestPermissions(): Promise<PermissionResult> {
-  const settings = await notifee.requestPermission();
-  const exactAlarmGranted = await checkExactAlarmPermission();
-
-  let status: PermissionStatus;
-  switch (settings.authorizationStatus) {
-    case AuthorizationStatus.AUTHORIZED:
-      status = exactAlarmGranted ? "authorized" : "partial";
-      break;
-    case AuthorizationStatus.DENIED:
-      status = "denied";
-      break;
-    case AuthorizationStatus.NOT_DETERMINED:
-      status = "undetermined";
-      break;
-    default:
-      status = exactAlarmGranted ? "authorized" : "partial";
-  }
-
-  const canAskAgain =
-    status === "undetermined" ||
-    (status === "denied" && (await Linking.canOpenURL("app-settings:")));
-
-  return {
-    status,
-    canAskAgain,
-    exactAlarmGranted,
-  };
+  await notifee.requestPermission();
+  const settings = await notifee.getNotificationSettings();
+  return buildResult(settings);
 }
 
 /**
@@ -91,26 +135,5 @@ export async function requestPermissions(): Promise<PermissionResult> {
  */
 export async function checkNotificationPermission(): Promise<PermissionResult> {
   const settings = await notifee.getNotificationSettings();
-  const exactAlarmGranted = await checkExactAlarmPermission();
-
-  let status: PermissionStatus;
-  switch (settings.authorizationStatus) {
-    case AuthorizationStatus.AUTHORIZED:
-      status = exactAlarmGranted ? "authorized" : "partial";
-      break;
-    case AuthorizationStatus.DENIED:
-      status = "denied";
-      break;
-    case AuthorizationStatus.NOT_DETERMINED:
-      status = "undetermined";
-      break;
-    default:
-      status = exactAlarmGranted ? "authorized" : "partial";
-  }
-
-  return {
-    status,
-    canAskAgain: status !== "authorized",
-    exactAlarmGranted,
-  };
+  return buildResult(settings);
 }
