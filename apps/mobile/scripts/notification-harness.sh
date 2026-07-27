@@ -206,26 +206,41 @@ case3_doze() {
   fi
   grant_exact
   harness cancel-all >/dev/null
-  local sched reached posted st
+  local sched reached posted
   sched="$(harness schedule doze-test 150000)"
   adb_shell dumpsys deviceidle enable deep >/dev/null 2>&1
   adb_shell dumpsys battery unplug >/dev/null 2>&1
   kill_app_realistically
-  adb_shell input keyevent KEYCODE_POWER >/dev/null 2>&1
-  sleep 3
-  for _ in $(seq 1 8); do
-    st="$(adb_shell dumpsys deviceidle step deep 2>&1 | tr -d '\r')"
-    printf '%s' "$st" | grep -qE "IDLE$" && break
+  # KEYCODE_SLEEP, never KEYCODE_POWER: POWER is a TOGGLE, so depending on the
+  # screen state a prior case left behind it can switch the screen ON, pinning
+  # the device at ACTIVE and making deep idle unreachable.
+  adb_shell input keyevent KEYCODE_SLEEP >/dev/null 2>&1
+  # The framework needs a moment after screen-off to leave ACTIVE before
+  # stepping has any effect.
+  for _ in $(seq 1 10); do
+    [[ "$(idle_state)" != "ACTIVE" ]] && break
+    sleep 2
+  done
+  # Poll the REAL state after each step rather than parsing step output, so a
+  # stall at an intermediate state (e.g. QUICK_DOZE_DELAY) cannot be mistaken
+  # for having reached deep idle.
+  for _ in $(seq 1 15); do
+    adb_shell dumpsys deviceidle step deep >/dev/null 2>&1
+    [[ "$(idle_state)" == "IDLE" ]] && break
     sleep 2
   done
   reached="$(idle_state)"
   sleep 150
   posted="$(notification_has "doze-test")"
   restore_device
-  if [[ "$posted" -ge 1 ]]; then
-    add_result 3 doze_deep_idle true "posted while idle state=$reached; $sched"
+  # The case name claims deep idle, so passing REQUIRES deep idle. Delivering
+  # at a shallower state is a weaker result and must not be reported as a pass.
+  if [[ "$posted" -ge 1 && "$reached" == "IDLE" ]]; then
+    add_result 3 doze_deep_idle true "posted while in deep IDLE; $sched"
+  elif [[ "$posted" -ge 1 ]]; then
+    add_result 3 doze_deep_idle false "INCONCLUSIVE: delivered, but device only reached '$reached', not deep IDLE. A USB-attached device often cannot enter deep idle; retry on battery only. $sched"
   else
-    add_result 3 doze_deep_idle false "NOT posted; idle state=$reached; $sched. Screen-off locks the device (constraint 5) — unlock and re-run if the app could not be reached."
+    add_result 3 doze_deep_idle false "NOT posted; device state '$reached'; $sched. Screen-off locks the device (constraint 5) — unlock and re-run if the app could not be reached."
   fi
 }
 
