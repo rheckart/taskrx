@@ -1,6 +1,6 @@
-import notifee, { EventType, type Event } from "@notifee/react-native";
 import * as Linking from "expo-linking";
 import type { ImperativeRouter } from "expo-router";
+import notifee, { EventType, type Event } from "react-native-notify-kit";
 
 export type NavigateFunction = ImperativeRouter["navigate"];
 

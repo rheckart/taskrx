@@ -4,7 +4,7 @@ import notifee, {
   type Notification,
   TriggerType,
   type TimestampTrigger,
-} from "@notifee/react-native";
+} from "react-native-notify-kit";
 
 import * as medicationsRepo from "../db/repos/medications";
 

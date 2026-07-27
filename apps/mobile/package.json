@@ -5,7 +5,6 @@
   "main": "expo-router/entry",
   "dependencies": {
     "@clerk/clerk-expo": "^2.19.31",
-    "@notifee/react-native": "^9.1.8",
     "@react-native-community/netinfo": "^11.4.1",
     "@taskrx/convex": "^0.1.0",
     "convex": "^1.41.0",
@@ -21,6 +20,7 @@
     "expo-web-browser": "^56.0.5",
     "react": "19.2.3",
     "react-native": "0.85.3",
+    "react-native-notify-kit": "^10.5.0",
     "react-native-safe-area-context": "5.4.0",
     "react-native-screens": "^4.25.2"
   },

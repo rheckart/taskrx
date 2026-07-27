@@ -1,12 +1,12 @@
+import type { Medication } from "@taskrx/shared";
+import { upcomingDosesFor } from "@taskrx/shared";
 import notifee, {
   AndroidImportance,
   type Notification,
   type TimestampTrigger,
   TriggerType,
   AlarmType,
-} from "@notifee/react-native";
-import type { Medication } from "@taskrx/shared";
-import { upcomingDosesFor } from "@taskrx/shared";
+} from "react-native-notify-kit";
 
 import * as medicationsRepo from "../db/repos/medications";
 

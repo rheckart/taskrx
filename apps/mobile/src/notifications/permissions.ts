@@ -1,5 +1,5 @@
-import notifee, { AuthorizationStatus } from "@notifee/react-native";
 import { Linking, Platform } from "react-native";
+import notifee, { AuthorizationStatus } from "react-native-notify-kit";
 
 export type PermissionStatus =
   | "authorized"

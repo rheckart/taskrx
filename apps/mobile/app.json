@@ -42,16 +42,13 @@
       "expo-router",
       "expo-dev-client",
       "expo-secure-store",
-      "./plugins/withNotifeeAndroidPermissions.js",
+      "./plugins/withAndroidNotificationPermissions.js",
       [
         "expo-build-properties",
         {
           "android": {
             "compileSdkVersion": 35,
-            "targetSdkVersion": 34,
-            "extraMavenRepos": [
-              "$rootDir/../node_modules/@notifee/react-native/android/libs"
-            ]
+            "targetSdkVersion": 34
           }
         }
       ]
