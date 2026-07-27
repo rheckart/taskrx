@@ -21,6 +21,9 @@ apps/mobile/dist
 .convex/
 # packages/convex/convex/_generated is committed (see api.d.ts header)
 
+# OMO planning workspace (evidence artifacts only — plans and drafts are tracked)
+.omo/evidence/
+
 # Logs
 *.log
 npm-debug.log*
