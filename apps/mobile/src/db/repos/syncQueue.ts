@@ -25,6 +25,7 @@ export interface SyncQueueEntry {
   readonly attempts: number;
   readonly lastError: string | null;
   readonly createdAt: number;
+  readonly deadLetter: boolean;
 }
 
 interface SyncQueueRow {
@@ -36,6 +37,7 @@ interface SyncQueueRow {
   readonly attempts: number;
   readonly last_error: string | null;
   readonly created_at: number;
+  readonly dead_letter: number;
 }
 
 function rowToEntry(row: SyncQueueRow): SyncQueueEntry {
@@ -48,6 +50,7 @@ function rowToEntry(row: SyncQueueRow): SyncQueueEntry {
     attempts: row.attempts,
     lastError: row.last_error,
     createdAt: row.created_at,
+    deadLetter: row.dead_letter !== 0,
   };
 }
 
@@ -78,13 +81,29 @@ export async function enqueue(
 }
 
 /**
- * Return all pending queue entries, oldest first. The sync worker drains
- * these in order.
+ * Return pending queue entries (non-dead-lettered), oldest first. The sync
+ * worker drains these in order. Rows that were terminally failed via
+ * `markDeadLettered` are excluded so the worker does not retry them
+ * forever and the sync-status badge is not pinned to `error` indefinitely.
  */
 export async function pending(): Promise<readonly SyncQueueEntry[]> {
   const db = await getDb();
   const rows = await db.getAllAsync<SyncQueueRow>(
-    "SELECT * FROM sync_queue ORDER BY created_at ASC"
+    "SELECT * FROM sync_queue WHERE dead_letter = 0 ORDER BY created_at ASC"
+  );
+  return rows.map(rowToEntry);
+}
+
+/**
+ * Return dead-lettered entries for inspection. Never called by the worker;
+ * exposed for debug UI and manual requeue flows. Rows remain in the queue
+ * indefinitely — the choice to keep them is deliberate: a dropped
+ * medication dose log is unacceptable data loss.
+ */
+export async function deadLettered(): Promise<readonly SyncQueueEntry[]> {
+  const db = await getDb();
+  const rows = await db.getAllAsync<SyncQueueRow>(
+    "SELECT * FROM sync_queue WHERE dead_letter = 1 ORDER BY created_at ASC"
   );
   return rows.map(rowToEntry);
 }
@@ -99,6 +118,8 @@ export async function remove(id: number): Promise<void> {
 
 /**
  * Increment the attempt count and store the last error for a failed entry.
+ * This does NOT set the dead-letter flag; the worker calls `markDeadLettered`
+ * separately when attempts reach the terminal threshold.
  */
 export async function markFailed(id: number, error: string): Promise<void> {
   const db = await getDb();
@@ -107,6 +128,31 @@ export async function markFailed(id: number, error: string): Promise<void> {
      SET attempts = attempts + 1, last_error = ?
      WHERE id = ?`,
     error,
+    id
+  );
+}
+
+/**
+ * Move an entry to the dead-letter state. Called by the worker after
+ * `MAX_ATTEMPTS` failures. The row is retained (not deleted) so it can be
+ * inspected and manually requeued.
+ */
+export async function markDeadLettered(id: number): Promise<void> {
+  const db = await getDb();
+  await db.runAsync("UPDATE sync_queue SET dead_letter = 1 WHERE id = ?", id);
+}
+
+/**
+ * Re-arm a dead-lettered entry: clear the dead-letter flag and reset the
+ * attempt counter so the worker will retry it on its next drain. Exposed
+ * for debug UI and manual recovery flows.
+ */
+export async function requeue(id: number): Promise<void> {
+  const db = await getDb();
+  await db.runAsync(
+    `UPDATE sync_queue
+     SET dead_letter = 0, attempts = 0, last_error = NULL
+     WHERE id = ?`,
     id
   );
 }

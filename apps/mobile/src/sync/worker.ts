@@ -147,6 +147,7 @@ export class SyncWorker {
           await syncQueueRepo.markFailed(entry.id, result.error);
           if (entry.attempts + 1 >= MAX_ATTEMPTS) {
             await this.markSourceError(entry, result.error);
+            await syncQueueRepo.markDeadLettered(entry.id);
           }
           this.setStatus("error");
           await this.backoff(entry.attempts + 1);
