@@ -44,7 +44,7 @@ function handleEvent(event: Event, navigate?: NavigateFunction): void {
   )}&scheduledTime=${encodeURIComponent(String(dose.scheduledTime))}`;
 
   if (navigate !== undefined) {
-    navigate({ pathname: "/dose/log" as never, params: dose });
+    navigate({ pathname: "/dose/log", params: dose });
   } else {
     void Linking.openURL(`taskrx://${path}`);
   }

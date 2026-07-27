@@ -126,7 +126,7 @@ export default function MedsListScreen(): ReactElement {
   const navigateToDoseLog = useCallback(
     (medicationId: string): void => {
       router.push({
-        pathname: "/dose/log" as never,
+        pathname: "/dose/log",
         params: { medicationId, scheduledTime: String(Date.now()) },
       });
     },

@@ -1,7 +1,7 @@
 import { useAuth } from "@clerk/clerk-expo";
 import { ConvexReactClient } from "convex/react";
 
-const convexUrl = process.env.EXPO_PUBLIC_CONVEX_URL;
+const convexUrl = process.env.EXPO_PUBLIC_CONVEX_URL as string | undefined;
 
 if (!convexUrl) {
   throw new Error(

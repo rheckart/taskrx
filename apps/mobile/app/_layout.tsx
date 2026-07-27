@@ -18,7 +18,9 @@ import { syncWorker } from "../src/sync/worker";
 
 registerBackgroundNotificationHandler();
 
-const rawPublishableKey = process.env.EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY;
+const rawPublishableKey = process.env.EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY as
+  | string
+  | undefined;
 
 if (!rawPublishableKey) {
   throw new Error(

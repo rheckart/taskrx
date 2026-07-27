@@ -85,7 +85,7 @@ export default function MedSearchScreen(): ReactElement {
       router.navigate({
         pathname: "/meds/new",
         params: { rxcui: item.rxcui, name: item.name },
-      } as never);
+      });
     },
     [router]
   );
