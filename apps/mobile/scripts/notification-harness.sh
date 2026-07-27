@@ -9,13 +9,20 @@
 # rather than by eyeballing the device.
 #
 # ── EMPIRICALLY-VALIDATED CONSTRAINTS ──────────────────────────────────────
-# Learned by running against a Pixel 8 Pro on Android 17 (API 37).
+# Learned by running against a Pixel 8 Pro on Android 17 (API 37). Six constraints.
 # Do not "simplify" these away; each one caused a real false result.
 #
-#  1. DEEP LINKS MUST USE PATH SEGMENTS, NOT A QUERY STRING.
-#     taskrx://harness?action=schedule&id=x does NOT route — expo-router will
-#     not match a custom-scheme deep link carrying a query string.
-#     taskrx://harness/schedule/x/60000/nonce DOES route.
+#  1. DEEP LINKS MUST CONTAIN A REAL PATH, NOT JUST A HOST.
+#     taskrx://harness?action=schedule does NOT route: with two slashes,
+#     "harness" parses as the URL *host* and the path is empty, so
+#     expo-router has nothing to match.
+#     Both of these DO route (three slashes = real path):
+#       taskrx:///harness/schedule/x/60000/nonce
+#       taskrx:///harness/pending-count/x/0/nonce?extra=1
+#     Query strings are fine once a path is present. This script uses path
+#     segments purely because they are simpler to build and read.
+#     (Earlier debugging wrongly blamed query strings; the real cause of
+#     those failures was a LogBox overlay blocking navigation — see 5.)
 #
 #  2. USE `am kill`, NEVER `am force-stop`, TO MODEL "APP CLOSED".
 #     force-stop sets the package's stopped=true flag, which makes Android
@@ -37,6 +44,12 @@
 #  5. DEEP DOZE NEEDS SCREEN-OFF, WHICH LOCKS THE DEVICE, WHICH BLOCKS
 #     RELAUNCHING THE APP. Schedule before turning the screen off, and expect
 #     to need a manual unlock afterwards. Case 3 is therefore best-effort.
+#
+#  6. A CRASHING ROUTE CAN BLOCK EVERYTHING. In a dev build, an unhandled
+#     render error raises a full-screen LogBox overlay that swallows all
+#     subsequent deep links, so every case silently reports nothing. If the
+#     harness suddenly stops responding, check logcat for a render error
+#     before suspecting the deep-link format.
 #
 # Requires: adb on PATH; one attached device; the app installed; Metro
 # reachable. Use `adb reverse tcp:8081 tcp:8081` for USB — this also sidesteps

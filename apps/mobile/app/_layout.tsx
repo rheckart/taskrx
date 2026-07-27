@@ -17,13 +17,10 @@ import { convex, isConvexConfigured } from "../src/api/convex";
 import { getDb } from "../src/db";
 import {
   createNotificationChannel,
-  registerBackgroundNotificationHandler,
   registerNotificationResponseHandler,
   rescheduleAll,
 } from "../src/notifications";
 import { syncWorker } from "../src/sync/worker";
-
-registerBackgroundNotificationHandler();
 
 const rawPublishableKey = process.env.EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY;
 
