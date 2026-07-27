@@ -4,6 +4,7 @@ import type {
   Medication,
   ScheduleType,
 } from "@taskrx/shared";
+import { shouldApplyRemoteMedication } from "@taskrx/shared";
 
 import { getDb } from "../index";
 
@@ -367,7 +368,7 @@ export async function upsertMany(rows: readonly Medication[]): Promise<number> {
 
   for (const remote of rows) {
     const local = await get(remote.id);
-    if (local !== null && local.updatedAt >= remote.updatedAt) {
+    if (!shouldApplyRemoteMedication(local, remote)) {
       continue;
     }
 

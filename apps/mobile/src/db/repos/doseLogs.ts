@@ -1,4 +1,5 @@
 import type { DoseLog, DoseStatus } from "@taskrx/shared";
+import { shouldApplyRemoteDoseLog } from "@taskrx/shared";
 
 import { getDb } from "../index";
 
@@ -379,13 +380,8 @@ export async function upsertMany(rows: readonly DoseLog[]): Promise<number> {
 
   for (const remote of rows) {
     const local = await get(remote.id);
-    if (local !== null) {
-      if (local.status === "taken") {
-        continue;
-      }
-      if (local.updatedAt >= remote.updatedAt) {
-        continue;
-      }
+    if (!shouldApplyRemoteDoseLog(local, remote)) {
+      continue;
     }
 
     await db.runAsync(

@@ -65,3 +65,12 @@ export type RxNormSearchResponse = readonly RxNormSearchResult[];
 
 export { nextNDaily, nextNInterval, upcomingDosesFor } from "./schedule/index";
 export type { ScheduledDose } from "./schedule/index";
+
+export {
+  shouldApplyRemoteDoseLog,
+  shouldApplyRemoteMedication,
+} from "./sync/conflict";
+export type {
+  DoseLogWithConflictFields,
+  MedicationWithTimestamps,
+} from "./sync/conflict";
