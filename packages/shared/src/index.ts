@@ -63,8 +63,13 @@ export interface RxNormSearchResult {
 
 export type RxNormSearchResponse = readonly RxNormSearchResult[];
 
-export { nextNDaily, nextNInterval, upcomingDosesFor } from "./schedule/index";
-export type { ScheduledDose } from "./schedule/index";
+export {
+  nextNDaily,
+  nextNInterval,
+  selectUpcomingDoses,
+  upcomingDosesFor,
+} from "./schedule/index";
+export type { GlobalDose, ScheduledDose } from "./schedule/index";
 
 export {
   shouldApplyRemoteDoseLog,
