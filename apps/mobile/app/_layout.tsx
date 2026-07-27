@@ -50,6 +50,12 @@ function AuthRedirectGate(): ReactElement {
 
     const currentSegment = segments[0] as string | undefined;
     const inAuthGroup = currentSegment === "(auth)";
+    // Security carve-out: /harness is invoked only by the adb test harness
+    // and performs local-only notification operations, so it must bypass
+    // the auth redirect to run against a fresh install.
+    if (currentSegment === "harness") {
+      return;
+    }
 
     if (isSignedIn && inAuthGroup) {
       router.replace({ pathname: "/(app)" });
