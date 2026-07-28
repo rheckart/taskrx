@@ -45,11 +45,29 @@
 #     RELAUNCHING THE APP. Schedule before turning the screen off, and expect
 #     to need a manual unlock afterwards. Case 3 is therefore best-effort.
 #
+#     GENERALISED: on a device with any screen lock set, `--all` CANNOT exit 0
+#     in a single pass. Case 3 ends with the device asleep and case 5 ends
+#     mid-reboot; both leave the keyguard up, and every other case needs the
+#     app foregroundable. Whichever of 3/5 runs first locks the other out, and
+#     the script cannot self-unlock — it does not know the credential. Run it
+#     in two passes with a manual unlock between (see Usage). `require_reachable`
+#     makes this legible: a locked-out case reports UNREACHABLE rather than
+#     manufacturing a product FAIL.
+#
 #  6. A CRASHING ROUTE CAN BLOCK EVERYTHING. In a dev build, an unhandled
 #     render error raises a full-screen LogBox overlay that swallows all
 #     subsequent deep links, so every case silently reports nothing. If the
 #     harness suddenly stops responding, check logcat for a render error
 #     before suspecting the deep-link format.
+#
+#  7. ACTION_BOOT_COMPLETED IS WITHHELD UNTIL THE FIRST MANUAL UNLOCK. On a
+#     device with any screen lock, user 0 boots to RUNNING_LOCKED: credential-
+#     encrypted storage stays sealed and only LOCKED_BOOT_COMPLETED is sent.
+#     `getprop sys.boot_completed` flips to 1 long before this, so timing a
+#     boot-receiver check from that property measures nothing. Case 5 waits for
+#     `dumpsys user` to report RUNNING_UNLOCKED and prompts for the unlock.
+#     This is real product behaviour, not a test artifact: after a reboot, an
+#     app's alarms genuinely do not re-arm until the user unlocks once.
 #
 # Requires: adb on PATH; one attached device; the app installed; Metro
 # reachable. Use `adb reverse tcp:8081 tcp:8081` for USB — this also sidesteps
@@ -60,7 +78,19 @@
 #   apps/mobile/scripts/notification-harness.sh --case 2
 #   apps/mobile/scripts/notification-harness.sh --all --output report.json
 #
+# On a device with NO screen lock, `--all` is a single pass. With a screen lock
+# set, use two passes and unlock the device before each (see constraint 5):
+#   pass A: --case 1 --case 2 --case 4 --case 6 --case 7
+#   pass B: --case 3            # ends asleep + locked
+#   pass C: --case 5            # reboots; ends at the lock screen
+# Passes B and C each need a fresh manual unlock beforehand. Their assertions
+# do not need the app after their setup, so the lock afterwards is harmless.
+#
 # Env: TASKRX_PKG ANDROID_SERIAL METRO_URL VERBOSE=1 SKIP_DOZE=1 SKIP_REBOOT=1
+#      BOOT_UNLOCK_TIMEOUT_S (default 300) BOOT_REGISTER_TIMEOUT_S (default 300)
+#
+# Case 5 is INTERACTIVE on a device with a screen lock: it reboots, then waits
+# for you to unlock before it can observe anything (constraint 7).
 #
 # Exit: 0 all passed | 1 a case failed | 2 precondition failure
 
@@ -70,6 +100,11 @@ PKG="${TASKRX_PKG:-com.taskrx.mobile}"
 METRO_URL="${METRO_URL:-http://localhost:8081}"
 APP_READY_TIMEOUT_S=180
 HARNESS_SETTLE_S=8
+# Case 5 only. How long to wait for a human to unlock the device after the
+# reboot (ACTION_BOOT_COMPLETED is withheld until then — see constraint 7),
+# and how long to then wait for the boot receiver to re-arm the alarm.
+BOOT_UNLOCK_TIMEOUT_S="${BOOT_UNLOCK_TIMEOUT_S:-300}"
+BOOT_REGISTER_TIMEOUT_S="${BOOT_REGISTER_TIMEOUT_S:-300}"
 
 script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 repo_root="$(cd "$script_dir/../../.." && pwd)"
@@ -208,6 +243,33 @@ add_result() {
   local verdict=FAIL
   [[ "$pass" == true ]] && verdict=PASS
   printf '  [%s] case %s: %s — %s\n' "$verdict" "$n" "$name" "$d"
+}
+
+# An empty harness reply means the app could not be reached, which is NOT the
+# same as the app answering "false". `harness()` already self-heals one level,
+# but a case that reads an empty reply into its pass expression renders a
+# product FAIL for an environmental fault — case 4 reported
+# `status= window= posted=0` this way when the real cause was a secure
+# keyguard. Every case whose verdict depends on a harness round-trip must call
+# this first and bail on non-zero.
+#
+# The dominant cause is the lock screen: with a PIN/pattern set, `am start`
+# cannot resume the activity while the keyguard is up, so no JS runs and no
+# `[harness] result:` line is ever logged. Cases 3 and 5 end by putting the
+# device to sleep, which re-arms it for everything that follows.
+require_reachable() {
+  local n="$1" name="$2"
+  local probe
+  probe="$(harness pending-count reachability 0)"
+  if [[ -n "$probe" ]]; then
+    return 0
+  fi
+  local keyguard wakefulness
+  keyguard="$(adb_shell dumpsys window 2>/dev/null | grep -oE 'isKeyguardShowing=[a-z]+' | head -1 | tr -d '\r')"
+  wakefulness="$(screen_wakefulness)"
+  add_result "$n" "$name" false \
+    "UNREACHABLE (not a product failure): the app never answered a deep link, so this case could not be evaluated. ${keyguard:-isKeyguardShowing=unknown} mWakefulness=${wakefulness:-unknown}. If the keyguard is showing, unlock the device and re-run this case."
+  return 1
 }
 
 # ── Cases ──────────────────────────────────────────────────────────────────
@@ -381,6 +443,8 @@ case3_doze() {
 }
 
 case4_exact_denied_degrades() {
+  # Probe BEFORE deny_exact so that bailing out cannot leave the appop revoked.
+  require_reachable 4 exact_denied_degrades || return
   deny_exact
   harness cancel-all >/dev/null
   local status sched window posted
@@ -418,11 +482,22 @@ case5_boot_reschedule() {
     add_result 5 boot_reschedule true "skipped (SKIP_REBOOT=1)"
     return
   fi
+  # The pass expression reads `dumpsys alarm` only, but the SETUP below needs
+  # the app: an unreachable app arms nothing, so `before` is 0, nothing can
+  # survive the reboot, and the case reports "alarms NOT re-registered" for a
+  # boot receiver that was never given anything to restore. Probe before the
+  # reboot so an unreachable device costs no reboot cycle.
+  require_reachable 5 boot_reschedule || return
   grant_exact
   harness cancel-all >/dev/null
   harness schedule boot-test 900000 >/dev/null
   local before after deadline
   before="$(alarm_count)"
+  if [[ "$before" -lt 1 ]]; then
+    add_result 5 boot_reschedule false \
+      "SETUP FAILED (not a product failure): no alarm was armed before the reboot (before=$before), so there was nothing for the boot receiver to restore. Not rebooting."
+    return
+  fi
   adb_run reboot >/dev/null 2>&1
   sleep 10
   deadline=$(( $(date +%s) + 180 ))
@@ -430,38 +505,71 @@ case5_boot_reschedule() {
     [[ "$(adb_shell getprop sys.boot_completed 2>/dev/null | tr -d '\r')" == "1" ]] && break
     sleep 3
   done
+  # `sys.boot_completed=1` is NOT the starting gun for ACTION_BOOT_COMPLETED.
+  # On a device with any screen lock, user 0 comes up RUNNING_LOCKED: only
+  # LOCKED_BOOT_COMPLETED is broadcast, credential-encrypted storage stays
+  # sealed, and ACTION_BOOT_COMPLETED is withheld until the FIRST manual
+  # unlock — which may never come while a script is watching. Timing the
+  # registration poll from boot_completed therefore expired against a
+  # broadcast Android was deliberately holding back, and reported "alarms NOT
+  # re-registered" for a receiver that had not been called yet. Measured on a
+  # Pixel 8 Pro / Android 17: BOOT_COMPLETED fanned out 0s after unlock and
+  # RebootBroadcastReceiver started the app process ~52s later, restoring the
+  # alarm exactly (window=0).
+  #
+  # Wait for the unlock first, and say so, rather than silently burning the
+  # budget. This is a real user-visible property, not a test artifact: alarms
+  # legitimately do not re-arm after a reboot until the user unlocks once.
+  local unlock_deadline
+  unlock_deadline=$(( $(date +%s) + BOOT_UNLOCK_TIMEOUT_S ))
+  if ! adb_shell dumpsys user 2>/dev/null | grep -q RUNNING_UNLOCKED; then
+    printf '  [note] device rebooted into the lock screen. ACTION_BOOT_COMPLETED is withheld until the first unlock — UNLOCK THE DEVICE NOW (waiting up to %ss).\n' "$BOOT_UNLOCK_TIMEOUT_S"
+  fi
+  while (( $(date +%s) < unlock_deadline )); do
+    adb_shell dumpsys user 2>/dev/null | grep -q RUNNING_UNLOCKED && break
+    sleep 5
+  done
+  if ! adb_shell dumpsys user 2>/dev/null | grep -q RUNNING_UNLOCKED; then
+    ensure_reverse
+    add_result 5 boot_reschedule false \
+      "UNREACHABLE (not a product failure): the device rebooted into the lock screen and was never unlocked within ${BOOT_UNLOCK_TIMEOUT_S}s, so Android never broadcast ACTION_BOOT_COMPLETED (user 0 stayed RUNNING_LOCKED) and the boot receiver could not have run. Re-run and unlock when prompted."
+    return
+  fi
   # The reboot dropped the adb reverse tunnel with it. Restore it now, or every
   # subsequent case fails "app never became ready" for a Metro-connectivity
   # reason that looks like an app fault.
   ensure_reverse
-  # POLL, do not sleep a fixed grace. sys.boot_completed=1 does NOT mean the
-  # BOOT_COMPLETED broadcast has reached this app: the framework fans that
-  # broadcast out to every registered receiver in turn, and a phone with many
-  # installed apps takes a while to get to ours. Measured on a Pixel 8 Pro /
-  # Android 17: RebootBroadcastReceiver started ~40s after boot_completed, so
-  # the previous fixed 20s grace reported a FALSE NEGATIVE ("alarms NOT
-  # re-registered") for a boot receiver that was simply not called yet.
-  local reg_deadline
-  reg_deadline=$(( $(date +%s) + 180 ))
+  # POLL, do not sleep a fixed grace, and time the poll from the UNLOCK rather
+  # than from boot: the framework fans BOOT_COMPLETED out to every registered
+  # receiver in turn, and a phone with many installed apps takes a while to
+  # reach ours. Measured on a Pixel 8 Pro / Android 17: BOOT_COMPLETED began
+  # fanning out immediately on unlock and RebootBroadcastReceiver started our
+  # process ~52s later. The previous fixed 20s grace, and then a 180s window
+  # timed from boot_completed, both reported a FALSE NEGATIVE ("alarms NOT
+  # re-registered") for a receiver that had not been called yet.
+  local unlocked_at reg_deadline
+  unlocked_at=$(date +%s)
+  reg_deadline=$(( unlocked_at + BOOT_REGISTER_TIMEOUT_S ))
   after=0
   while (( $(date +%s) < reg_deadline )); do
     after="$(alarm_count)"
     [[ "$after" -ge 1 ]] && break
     sleep 5
   done
-  local waited_s=$(( 180 - (reg_deadline - $(date +%s)) ))
+  local waited_s=$(( $(date +%s) - unlocked_at ))
   # Leave the app usable for whatever case runs next: after a reboot the
   # process is gone and the dev client has not reconnected to Metro, so a
   # following case would fail its harness call for reasons this case caused.
   wait_for_app_ready >/dev/null 2>&1 || true
   if [[ "$after" -ge 1 ]]; then
-    add_result 5 boot_reschedule true "alarms re-registered after reboot (before=$before after=$after; receiver landed ~${waited_s}s after sys.boot_completed)"
+    add_result 5 boot_reschedule true "alarms re-registered after reboot (before=$before after=$after; receiver landed ~${waited_s}s after the first unlock, which is when ACTION_BOOT_COMPLETED is broadcast)"
   else
-    add_result 5 boot_reschedule false "alarms NOT re-registered within 180s of boot (before=$before after=$after). Check that RECEIVE_BOOT_COMPLETED is granted and the package is not in the stopped state."
+    add_result 5 boot_reschedule false "alarms NOT re-registered within ${BOOT_REGISTER_TIMEOUT_S}s of the first unlock (before=$before after=$after). The device WAS unlocked, so ACTION_BOOT_COMPLETED was broadcast and this is a real failure. Check that RECEIVE_BOOT_COMPLETED is granted and the package is not in the stopped state."
   fi
 }
 
 case6_stress_horizon() {
+  require_reachable 6 stress_horizon_cap || return
   grant_exact
   harness cancel-all >/dev/null
   local i count
@@ -485,6 +593,7 @@ case6_stress_horizon() {
 # date`), not the host's — a weekly schedule that drifts across a DST boundary
 # fails here even though the host would call it correct.
 case7_weekly_schedule() {
+  require_reachable 7 weekly_schedule || return
   grant_exact
   harness cancel-all >/dev/null
   local out fire_ats tz ts sec dow hhmm bad=0 count=0

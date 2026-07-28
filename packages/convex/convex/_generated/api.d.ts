@@ -8,18 +8,21 @@
  * @module
  */
 
-import type {
-  ApiFromModules,
-  FilterApi,
-  FunctionReference,
-} from "convex/server";
+import type * as auth from "../auth.js";
 import type * as doseLogs from "../doseLogs.js";
 import type * as medications from "../medications.js";
 import type * as reminderInstances from "../reminderInstances.js";
 import type * as reminders from "../reminders.js";
 import type * as rxnorm from "../rxnorm.js";
 
+import type {
+  ApiFromModules,
+  FilterApi,
+  FunctionReference,
+} from "convex/server";
+
 declare const fullApi: ApiFromModules<{
+  auth: typeof auth;
   doseLogs: typeof doseLogs;
   medications: typeof medications;
   reminderInstances: typeof reminderInstances;
