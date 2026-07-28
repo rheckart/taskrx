@@ -121,6 +121,17 @@ export type {
 } from "./schedule/index";
 
 /**
+ * Adherence scoring and refill planning, ported from `TaskRx.Core`. Both are
+ * pure functions over the unified `Reminder` domain above: the caller supplies
+ * the clock and any generated ids.
+ */
+export { computeAdherence } from "./adherence/calculator";
+export type { AdherenceStats, DayAdherence } from "./adherence/calculator";
+
+export { planRefill } from "./refill/planner";
+export type { PlanRefillOptions, RefillDecision } from "./refill/planner";
+
+/**
  * The natural-language reminder parser, ported from `TaskRx.Core`. Both entry
  * points are pure: the caller supplies the clock and any generated ids.
  *
