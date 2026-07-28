@@ -91,7 +91,7 @@ next_nonce() { nonce_counter=$((nonce_counter + 1)); printf 'n%s' "$nonce_counte
 
 # ── Harness invocation (constraints 1 and 3) ───────────────────────────────
 
-harness() {
+harness_once() {
   local action="$1" id="${2:-x}" delay="${3:-0}"
   local nonce
   nonce="$(next_nonce)"
@@ -102,8 +102,49 @@ harness() {
   adb_run logcat -d 2>/dev/null | grep -oE "\[harness\] result:.{0,120}" | tail -1
 }
 
+# Self-heal one level. Cases 1, 3 and 5 deliberately destroy the app process
+# (am kill / reboot), so the FOLLOWING case issues its first deep link into a
+# dead app: `am start` re-creates the task but the dev client has to reconnect
+# to Metro and re-bundle first, which takes longer than HARNESS_SETTLE_S. The
+# call then returns empty and the case reports a scheduler failure that never
+# happened — measured as a bogus "case 2 exact_windows=0 expected_ts=" right
+# after case 1's kill. An empty result means UNREACHABLE, not "false"; relaunch
+# through the dev-client URL and ask exactly once more.
+harness() {
+  local out
+  out="$(harness_once "$@")"
+  if [[ -z "$out" ]]; then
+    launch_app
+    sleep "$HARNESS_SETTLE_S"
+    out="$(harness_once "$@")"
+  fi
+  printf '%s\n' "$out"
+}
+
+# `adb reverse` is per-connection state and does NOT survive a reboot, so
+# case 5 silently loses Metro and every later case fails its app-ready
+# precondition for a reason that has nothing to do with the app. Re-assert it
+# whenever we are about to need Metro. Only meaningful for a loopback
+# METRO_URL; a LAN URL needs no reverse.
+ensure_reverse() {
+  case "$METRO_URL" in
+    *localhost*|*127.0.0.1*)
+      local port
+      port="$(printf '%s' "$METRO_URL" | grep -oE ':[0-9]+' | tail -1 | tr -d ':')"
+      port="${port:-8081}"
+      adb_run reverse "tcp:$port" "tcp:$port" >/dev/null 2>&1 || true
+      ;;
+  esac
+}
+
 launch_app() {
   local encoded
+  ensure_reverse
+  # Wake first. Between cases the screen times out on its own, and `am start`
+  # against a sleeping display does not reliably resume the activity — which
+  # surfaces as a bogus "app never became ready" precondition failure rather
+  # than as anything to do with the app.
+  adb_shell input keyevent KEYCODE_WAKEUP >/dev/null 2>&1
   encoded="$(printf '%s' "$METRO_URL" | sed 's|:|%3A|g; s|/|%2F|g')"
   adb_shell am start -a android.intent.action.VIEW \
     -d "exp+taskrx://expo-development-client/?url=${encoded}" >/dev/null 2>&1
@@ -130,6 +171,7 @@ notification_has() { adb_shell dumpsys notification --noredact 2>/dev/null | gre
 grant_exact()      { adb_shell cmd appops set "$PKG" SCHEDULE_EXACT_ALARM allow >/dev/null 2>&1 || true; }
 deny_exact()       { adb_shell cmd appops set "$PKG" SCHEDULE_EXACT_ALARM deny  >/dev/null 2>&1 || true; }
 idle_state()       { adb_shell dumpsys deviceidle get deep 2>/dev/null | tail -1 | tr -d '\r'; }
+screen_wakefulness() { adb_shell dumpsys power 2>/dev/null | grep -oE 'mWakefulness=[A-Za-z]+' | head -1 | cut -d= -f2 | tr -d '\r'; }
 pkg_stopped()      { adb_shell dumpsys package "$PKG" 2>/dev/null | grep -oE "stopped=(true|false)" | head -1 | tr -d '\r'; }
 
 # Constraint 2: background first, then `am kill`. NEVER force-stop.
@@ -145,6 +187,10 @@ restore_device() {
   adb_shell dumpsys deviceidle disable >/dev/null 2>&1 || true
   adb_shell dumpsys battery reset      >/dev/null 2>&1 || true
   adb_shell input keyevent KEYCODE_WAKEUP >/dev/null 2>&1 || true
+  # Case 3 shrinks min_time_to_alarm to make deep Doze reachable. Always put
+  # the device back on stock Doze constants — leaving a phone with a 30s
+  # min_time_to_alarm would quietly change its real battery behaviour.
+  adb_shell settings delete global device_idle_constants >/dev/null 2>&1 || true
 }
 
 # ── Results ────────────────────────────────────────────────────────────────
@@ -207,7 +253,26 @@ case3_doze() {
   grant_exact
   harness cancel-all >/dev/null
   local sched reached posted
-  sched="$(harness schedule doze-test 150000)"
+  # ── Constraint 8: A PENDING WAKE-FROM-IDLE ALARM BLOCKS DEEP DOZE BY DESIGN.
+  # DeviceIdleController.stepIdleStateLocked refuses to enter deep idle when
+  # getNextWakeFromIdleTime() is within min_time_to_alarm, which defaults to
+  # ONE HOUR. Measured: with the test alarm 150s out, both `step deep` and
+  # `force-idle deep` stall, and force-idle reports
+  #   "Unable to go deep idle; stopped at QUICK_DOZE_DELAY".
+  # That refusal is itself evidence our alarm is classified wake-from-idle —
+  # the OS will not Doze straight past a setAlarmClock alarm. But to observe
+  # DELIVERY from inside deep Doze we must shrink the constant for the run,
+  # then restore it. This is a test accommodation and is recorded as such in
+  # the result detail; it changes when the OS is WILLING to Doze, never
+  # whether the alarm fires.
+  adb_shell settings put global device_idle_constants min_time_to_alarm=30000 >/dev/null 2>&1
+  local mtta
+  mtta="$(adb_shell dumpsys deviceidle 2>/dev/null | grep -oE 'min_time_to_alarm=[^ ]+' | head -1 | tr -d '\r')"
+  # Alarm far enough out that we can reach idle and still sit in it: at the
+  # moment we force idle the alarm must be MORE than min_time_to_alarm away.
+  sched="$(harness schedule doze-test 240000)"
+  local fire_at
+  fire_at=$(( $(date +%s) + 240 ))
   adb_shell dumpsys deviceidle enable deep >/dev/null 2>&1
   adb_shell dumpsys battery unplug >/dev/null 2>&1
   kill_app_realistically
@@ -215,30 +280,97 @@ case3_doze() {
   # screen state a prior case left behind it can switch the screen ON, pinning
   # the device at ACTIVE and making deep idle unreachable.
   adb_shell input keyevent KEYCODE_SLEEP >/dev/null 2>&1
-  # The framework needs a moment after screen-off to leave ACTIVE before
-  # stepping has any effect.
-  for _ in $(seq 1 10); do
-    [[ "$(idle_state)" != "ACTIVE" ]] && break
+  # Confirm the screen is genuinely off before stepping. deviceidle will not
+  # leave ACTIVE while the display is on, and a single blind keyevent is not
+  # reliable if a prior case left the device awake.
+  local awake_tries=0
+  while (( awake_tries < 6 )); do
+    [[ "$(screen_wakefulness)" != "Awake" ]] && break
+    adb_shell input keyevent KEYCODE_SLEEP >/dev/null 2>&1
     sleep 2
+    awake_tries=$((awake_tries + 1))
   done
-  # Poll the REAL state after each step rather than parsing step output, so a
-  # stall at an intermediate state (e.g. QUICK_DOZE_DELAY) cannot be mistaken
-  # for having reached deep idle.
-  for _ in $(seq 1 15); do
+  # Track the DEEPEST state observed rather than sampling one point: after
+  # screen-off the framework advances ACTIVE -> INACTIVE -> QUICK_DOZE_DELAY on
+  # its own and then parks awaiting explicit steps, so a single read races those
+  # transitions and can report a shallower state than was actually reached.
+  # Keep this loop SHORT. It previously ran 25 x 2s and consumed most of the
+  # window before the alarm fired, so the device was already awake servicing
+  # the alarm by the time the force-idle fallback ran.
+  local deepest cur
+  deepest="$(idle_state)"
+  for _ in $(seq 1 6); do
+    cur="$(idle_state)"
+    case "$cur" in
+      IDLE|IDLE_MAINTENANCE) deepest=IDLE; break ;;
+      SENSING|LOCATING|IDLE_PENDING|QUICK_DOZE_DELAY|INACTIVE) deepest="$cur" ;;
+    esac
     adb_shell dumpsys deviceidle step deep >/dev/null 2>&1
-    [[ "$(idle_state)" == "IDLE" ]] && break
     sleep 2
   done
-  reached="$(idle_state)"
-  sleep 150
+  # Constraint 7: `step deep` CANNOT advance past QUICK_DOZE_DELAY. Once quick
+  # doze is armed (screen off + unplugged), DeviceIdleController drives the
+  # ACTIVE -> IDLE transition from a timer, and stepIdleStateLocked has no
+  # handler for that state, so stepping silently no-ops forever. Measured on a
+  # Pixel 8 Pro / Android 17: 25 steps left it parked at QUICK_DOZE_DELAY.
+  # `force-idle deep` is the procedure in Android's own Doze testing docs and
+  # DOES reach genuine deep idle. Record which mechanism got us there so the
+  # evidence never overstates how the state was reached.
+  local reach_method=stepped stalled_at force_out
+  if [[ "$deepest" != "IDLE" ]]; then
+    stalled_at="$deepest"
+    # Capture stdout: force-idle reports WHY it could not reach idle
+    # ("Unable to go deep idle; stopped at <state>"), and silently discarding
+    # that turns a diagnosable refusal into an unexplained INCONCLUSIVE.
+    force_out="$(adb_shell dumpsys deviceidle force-idle deep 2>&1 | tr -d '\r' | tr '\n' ' ')"
+    sleep 3
+    cur="$(idle_state)"
+    if [[ "$cur" == "IDLE" || "$cur" == "IDLE_MAINTENANCE" ]]; then
+      deepest=IDLE
+      reach_method="force-idle deep (stepping stalled at $stalled_at)"
+    else
+      reach_method="force-idle REFUSED: '${force_out}' (stepping stalled at $stalled_at, state after=$cur)"
+    fi
+  fi
+  reached="$deepest"
+  # Hold until the alarm is due, sampling as we go. The LAST state observed
+  # before the alarm fires is the meaningful one: it proves the device was
+  # still genuinely dozing right up to the moment the alarm had to wake it.
+  # Do NOT require idle to still hold AFTER delivery — a wake-from-idle alarm
+  # is supposed to pull the device out of Doze, so demanding otherwise would
+  # fail the test for behaving correctly.
+  # Doze is a CYCLE, not a latch: the controller runs
+  #   IDLE -> IDLE_MAINTENANCE -> QUICK_DOZE_DELAY -> IDLE -> ...
+  # for as long as the screen stays off. Sampling one instant and demanding
+  # it read IDLE fails the test whenever that instant lands in a maintenance
+  # window — i.e. it fails for the OS behaving exactly as designed. What
+  # actually matters is that the device was genuinely dozing for the whole
+  # wait and never woke to ACTIVE before the alarm was due.
+  local saw_deep_idle=0 woke_active=0 trail=""
+  [[ "$reached" == "IDLE" ]] && saw_deep_idle=1
+  while (( $(date +%s) < fire_at - 10 )); do
+    cur="$(idle_state)"
+    case "$cur" in
+      IDLE|IDLE_MAINTENANCE) saw_deep_idle=1 ;;
+      ACTIVE) woke_active=1 ;;
+    esac
+    [[ "$cur" != "${trail##*>}" ]] && trail="${trail:+$trail>}$cur"
+    sleep 5
+  done
+  sleep 25
   posted="$(notification_has "doze-test")"
+  local at_check
+  at_check="$(idle_state)"
   restore_device
-  # The case name claims deep idle, so passing REQUIRES deep idle. Delivering
-  # at a shallower state is a weaker result and must not be reported as a pass.
-  if [[ "$posted" -ge 1 && "$reached" == "IDLE" ]]; then
-    add_result 3 doze_deep_idle true "posted while in deep IDLE; $sched"
+  # The case name claims deep idle, so passing REQUIRES deep idle: the device
+  # must have BEEN in deep idle while the alarm was pending. Delivering at a
+  # shallower state is a weaker result and must not be reported as a pass.
+  if [[ "$posted" -ge 1 && "$saw_deep_idle" -eq 1 && "$woke_active" -eq 0 ]]; then
+    add_result 3 doze_deep_idle true "posted after the device entered deep IDLE with the alarm pending and dozed continuously until it fired (entered via $reach_method; $mtta [lowered for the run, then restored]; doze cycle observed: $trail; never returned to ACTIVE before fire; state after delivery=$at_check); $sched"
+  elif [[ "$posted" -ge 1 && "$saw_deep_idle" -eq 1 ]]; then
+    add_result 3 doze_deep_idle false "INCONCLUSIVE: reached deep IDLE via $reach_method and delivered, but the device returned to ACTIVE before the alarm was due, so delivery cannot be attributed to Doze survival (cycle: $trail). $sched"
   elif [[ "$posted" -ge 1 ]]; then
-    add_result 3 doze_deep_idle false "INCONCLUSIVE: delivered, but device only reached '$reached', not deep IDLE. A USB-attached device often cannot enter deep idle; retry on battery only. $sched"
+    add_result 3 doze_deep_idle false "INCONCLUSIVE: delivered, but device only reached '$reached', not deep IDLE. $reach_method. $sched"
   else
     add_result 3 doze_deep_idle false "NOT posted; device state '$reached'; $sched. Screen-off locks the device (constraint 5) — unlock and re-run if the app could not be reached."
   fi
@@ -251,15 +383,29 @@ case4_exact_denied_degrades() {
   status="$(harness exact-alarm-status)"
   sched="$(harness schedule denied-test 45000)"
   window="$(alarm_lines | grep -oE "window=[+0-9a-z]+" | head -1)"
-  sleep 60
-  posted="$(notification_has "denied-test")"
+  # An INEXACT alarm may legitimately fire anywhere inside its window, so a
+  # fixed sleep is a coin flip. Measured: 45s delay + window=+33s729ms means
+  # delivery as late as ~79s, while the old `sleep 60` checked at ~68s and
+  # reported "posted=0" for an alarm that had not yet come due — the app was
+  # degrading correctly and still got marked FAIL. Poll past the END of the
+  # window instead, and only conclude non-delivery once it has fully elapsed.
+  local win_s deadline
+  win_s="$(printf '%s' "$window" | grep -oE '[0-9]+s' | head -1 | tr -d 's')"
+  win_s="${win_s:-60}"
+  deadline=$(( $(date +%s) + 45 + win_s + 30 ))
+  posted=0
+  while (( $(date +%s) < deadline )); do
+    posted="$(notification_has "denied-test")"
+    [[ "$posted" -ge 1 ]] && break
+    sleep 5
+  done
   grant_exact
   # The contract is graceful degradation: report denied, downgrade to an
   # inexact alarm, but still deliver. Never silently drop.
   if [[ "$posted" -ge 1 ]] && printf '%s' "$status" | grep -q "exact_alarm_granted=false"; then
-    add_result 4 exact_denied_degrades true "reported denied AND still delivered inexactly ($window); $sched"
+    add_result 4 exact_denied_degrades true "reported denied AND still delivered inexactly ($window, polled to end of window); $sched"
   else
-    add_result 4 exact_denied_degrades false "status=$status window=$window posted=$posted"
+    add_result 4 exact_denied_degrades false "status=$status window=$window posted=$posted (waited past end of the inexact window)"
   fi
 }
 
@@ -280,12 +426,34 @@ case5_boot_reschedule() {
     [[ "$(adb_shell getprop sys.boot_completed 2>/dev/null | tr -d '\r')" == "1" ]] && break
     sleep 3
   done
-  sleep 20
-  after="$(alarm_count)"
+  # The reboot dropped the adb reverse tunnel with it. Restore it now, or every
+  # subsequent case fails "app never became ready" for a Metro-connectivity
+  # reason that looks like an app fault.
+  ensure_reverse
+  # POLL, do not sleep a fixed grace. sys.boot_completed=1 does NOT mean the
+  # BOOT_COMPLETED broadcast has reached this app: the framework fans that
+  # broadcast out to every registered receiver in turn, and a phone with many
+  # installed apps takes a while to get to ours. Measured on a Pixel 8 Pro /
+  # Android 17: RebootBroadcastReceiver started ~40s after boot_completed, so
+  # the previous fixed 20s grace reported a FALSE NEGATIVE ("alarms NOT
+  # re-registered") for a boot receiver that was simply not called yet.
+  local reg_deadline
+  reg_deadline=$(( $(date +%s) + 180 ))
+  after=0
+  while (( $(date +%s) < reg_deadline )); do
+    after="$(alarm_count)"
+    [[ "$after" -ge 1 ]] && break
+    sleep 5
+  done
+  local waited_s=$(( 180 - (reg_deadline - $(date +%s)) ))
+  # Leave the app usable for whatever case runs next: after a reboot the
+  # process is gone and the dev client has not reconnected to Metro, so a
+  # following case would fail its harness call for reasons this case caused.
+  wait_for_app_ready >/dev/null 2>&1 || true
   if [[ "$after" -ge 1 ]]; then
-    add_result 5 boot_reschedule true "alarms re-registered after reboot (before=$before after=$after)"
+    add_result 5 boot_reschedule true "alarms re-registered after reboot (before=$before after=$after; receiver landed ~${waited_s}s after sys.boot_completed)"
   else
-    add_result 5 boot_reschedule false "alarms NOT re-registered (before=$before after=$after). A locked device may block notify-kit's boot receiver."
+    add_result 5 boot_reschedule false "alarms NOT re-registered within 180s of boot (before=$before after=$after). Check that RECEIVE_BOOT_COMPLETED is granted and the package is not in the stopped state."
   fi
 }
 
@@ -382,6 +550,12 @@ ready="$(wait_for_app_ready)" || {
 }
 echo "app ready: $ready"
 echo "running cases: ${cases_to_run[*]}"
+
+# Case 3 mutates device state (battery unplug, deviceidle, and the global
+# device_idle_constants). If the run is interrupted, that state MUST still be
+# rolled back — otherwise the user is left holding a phone whose Doze
+# behaviour has been silently altered by a test.
+trap 'restore_device' EXIT INT TERM
 
 for c in "${cases_to_run[@]}"; do
   echo "---- case $c ----"
