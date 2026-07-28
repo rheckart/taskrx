@@ -24,6 +24,12 @@ apps/mobile/dist
 # OMO planning workspace (evidence artifacts only — plans and drafts are tracked)
 .omo/evidence/
 
+# Agent tooling scratch state (written anywhere in the tree, not just the root)
+.omc/
+.serena/
+.tokensave/
+.claude/.headroom_wrap_marker.json
+
 # Logs
 *.log
 npm-debug.log*
