@@ -2,7 +2,7 @@
 
 This document tracks the 13 success criteria from the POC plan §3. Each row shows the criterion, the expected result, the actual result, and a pass/fail verdict.
 
-**Status:** 2026-07-26, post-Phase 1 revisit. Code-level fixes committed on `main`; APK builds and installs cleanly on the emulator. Physical Android 17 device verification remains the authoritative test (see criteria #5, #11, #12) and is pending user action.
+**Status:** 2026-07-27, Phase 1 gate **PASS**. Code-level fixes committed on `main`; the notification harness reports **6/6 on a physical Pixel 8 Pro (Android 17, API 37)** in a single end-to-end run, closing criteria #5, #5a, #11 and #12. The remaining criteria are the auth / RxNorm / sync / cross-device ones, which need a signed-in Clerk + Convex session.
 
 ## Success criteria
 
@@ -12,8 +12,8 @@ This document tracks the 13 success criteria from the POC plan §3. Each row sho
 | 2 | User can search "metformin" → RxNorm returns matches → user selects one | RxNorm search returns relevant results | Convex Action `rxnorm.search` implemented and typed against the real NLM `approximateTerm.json` endpoint; UI debounces + guards stale responses | ⏸️ Pending (device test) |
 | 3 | User can save medication with schedule ("daily at 09:00" or "every 8 hours") | Medication saved locally with correct schedule | SQLite repo + schedule picker implemented; 23 vitest cases on the schedule engine pass; no device verification yet | ⏸️ Pending (device test) |
 | 4 | Medication persists in local SQLite across app restart | Medication list survives force-stop | `expo-sqlite` repo persists to device storage; migrations 001–003 apply cleanly on boot; no runtime restart test yet | ⏸️ Pending (device test) |
-| 5 | Local notification fires at scheduled time on a physical Android device, app closed, not in foreground, surviving Doze + battery optimization | Notification fires within 1 minute of scheduled time | **VERIFIED on Pixel 8 Pro / Android 17 / API 37.** Uses `AlarmType.SET_ALARM_CLOCK`. Delivered with the app process dead (`am kill`, 0 processes, `stopped=false`) across **three independent runs: 34 ms, 94 ms, and 31 ms late** — all far inside the 1-minute budget. Full chain in logcat: `Start proc ... for broadcast {NotificationAlarmReceiver}` → `NotifeeHeadlessJS: launched taskId: 1` → notification posted with correct title + `medicationId`. Primitive confirmed at OS level, not inferred: `window=0`, `exactAllowReason=permission`, `whenElapsed == maxWhenElapsed`, and the alarm registered as the device's *next alarm clock* with a timestamp exactly matching the scheduled one. Evidence: `.omo/evidence/task-13-SUMMARY.md`, `task-13-cases-1-4.json`, `task-13-cases-6-2.json`. **Doze caveat:** the "surviving Doze" clause is NOT yet verified — see criterion note below. | ✅ **PASS** (killed-app + exact timing); ⏸️ Doze clause pending |
-| 5a | *(sub-criterion)* Notification survives **deep Doze** specifically | Fires while device is in deep IDLE | Deep idle proven reachable in isolation (`mWakefulness=Dozing`, `mScreenOn=false`, stepping `IDLE_PENDING → SENSING → IDLE`). But the test is self-blocking: reaching deep idle needs screen-off, screen-off engages the keyguard, and a locked device cannot foreground the app to schedule the next run's alarm. `wm dismiss-keyguard` cannot bypass a user PIN. Harness case 3 now requires genuine deep IDLE and reports INCONCLUSIVE rather than passing on a shallower state. | ⏸️ Pending (needs device kept unlocked) |
+| 5 | Local notification fires at scheduled time on a physical Android device, app closed, not in foreground, surviving Doze + battery optimization | Notification fires within 1 minute of scheduled time | **VERIFIED on Pixel 8 Pro / Android 17 / API 37.** Uses `AlarmType.SET_ALARM_CLOCK`. Delivered with the app process dead (`am kill`, 0 processes, `stopped=false`) across **three independent runs: 34 ms, 94 ms, and 31 ms late** — all far inside the 1-minute budget. Full chain in logcat: `Start proc ... for broadcast {NotificationAlarmReceiver}` → `NotifeeHeadlessJS: launched taskId: 1` → notification posted with correct title + `medicationId`. Primitive confirmed at OS level, not inferred: `window=0`, `exactAllowReason=permission`, `whenElapsed == maxWhenElapsed`, and the alarm registered as the device's *next alarm clock* with a timestamp exactly matching the scheduled one. The Doze clause is verified in criterion 5a below. Evidence: `.omo/evidence/task-13-all-cases-final.json` (6/6, single run), `.omo/evidence/task-13-SUMMARY.md`, `task-13-cases-1-4.json`, `task-13-cases-6-2.json`. | ✅ **PASS** |
+| 5a | *(sub-criterion)* Notification survives **deep Doze** specifically | Fires while device is in deep IDLE | **VERIFIED on Pixel 8 Pro / Android 17.** With the app process killed and the device on simulated battery, it entered deep `IDLE` with the alarm pending and dozed continuously — observed cycle `IDLE → IDLE_MAINTENANCE → IDLE → IDLE_MAINTENANCE → QUICK_DOZE_DELAY`, never returning to `ACTIVE` before the alarm fired — and the notification still posted. `dumpsys alarm` shows Doze imposes **zero deferral**: `policyWhenElapsed: requester=+2m22s657ms … device_idle=-1m21s983ms` (device_idle resolves earlier than the request) with `whenElapsed == maxWhenElapsed`. **Finding:** Android refuses to enter deep Doze at all while a wake-from-idle alarm is due within `min_time_to_alarm` (default **1 hour**) — `force-idle` reports `Unable to go deep idle; stopped at QUICK_DOZE_DELAY`. That refusal is itself evidence the alarm is classified wake-from-idle. **Accommodation:** `min_time_to_alarm` was lowered to 30s for this case only and stock constants restored afterwards (verified `device_idle_constants = null`); no battery-optimization exemption was granted. Evidence: `.omo/evidence/task-13-case-3-deep-idle.json`, `.omo/evidence/task-13-all-cases-final.json`. | ✅ **PASS** |
 | 6 | Tapping notification opens the dose logging screen pre-filled with the right med + scheduled time | Correct medication and time shown | Tap handler + deep-link routing implemented (`src/notifications/tap-handler.ts`); notification data includes `medicationId` and `scheduledTime` for the dose-log deep link; no device verification yet | ⏸️ Pending (device test) |
 | 7 | Marking dose "taken" writes a `dose_logs` row in local SQLite | Row exists with status `taken` | Dose log repo + UI implemented; 10 vitest cases on conflict resolution guarantee a locally `taken` dose is never overwritten by a remote pull; no device verification yet | ⏸️ Pending (device test) |
 | 8 | When online, `dose_logs` rows sync to Convex (visible in Convex dashboard) | Row appears in Convex within 60s | Sync worker + Convex mutations implemented; requires deployed backend + device test | ⏸️ Pending (Day 7 / device test) |
@@ -55,14 +55,14 @@ See `docs/poc-notification-tests.md` for the (now-executable) test cases. The ma
 
 | Scenario | Result | Notes |
 |---|---|---|
-| App closed, normal mode | ⏸️ Pending | Run `apps/mobile/scripts/notification-harness.sh --case 1` on physical device |
-| Force-killed | ⏸️ Pending | Case 1 + `dumpsys alarm` inspection |
-| Do Not Disturb | ⏸️ Pending | Manual — harness verifies delivery only |
-| Low Power Mode | ⏸️ Pending | Case 3 (Doze approximates this) |
-| Doze mode | ⏸️ Pending | Case 3 (`--case 3`) |
-| Boot reschedule | ⏸️ Pending | Case 5 (`--case 5`) — SKIP_REBOOT=1 on physical if inconvenient |
-| Exact-alarm denied fallback | ⏸️ Pending | Case 4 (`--case 4`) |
-| `SET_ALARM_CLOCK` primitive in dumpsys | ⏸️ Pending | Case 2 (`--case 2`) |
+| App closed, normal mode | ✅ Pass | Case 1 — posted with the app backgrounded then killed |
+| Force-killed | ✅ Pass | Case 1 — `am kill`, `procs_after_kill=0`, `stopped=false`, `exact_windows=2`. Note: the harness deliberately does **not** use `am force-stop`; that sets the package `stopped=true` flag and Android then drops broadcasts to its receivers by OS contract, which is not an app defect |
+| Do Not Disturb | ⏸️ Pending | Manual — harness verifies delivery only, not DND channel behaviour |
+| Low Power Mode | ⏸️ Pending | Doze is verified (case 3), but battery-saver mode itself was not separately exercised |
+| Doze mode | ✅ Pass | Case 3 — deep `IDLE` reached with the alarm pending, dozed continuously, notification still posted |
+| Boot reschedule | ✅ Pass | Case 5 — alarms re-registered ~62-66s after `sys.boot_completed` |
+| Exact-alarm denied fallback | ✅ Pass | Case 4 — reported denied AND still delivered inexactly (`window=+33s716ms`) |
+| `SET_ALARM_CLOCK` primitive in dumpsys | ✅ Pass | Case 2 — `window=0`, `exactAllowReason=permission`, registered as the device's next alarm clock with a matching timestamp |
 
 ### Day 8 — Stress tests
 
@@ -70,9 +70,9 @@ See `docs/poc-stress-tests.md`. Also superseded by the harness.
 
 | Scenario | Result | Notes |
 |---|---|---|
-| 30-medication rolling horizon | ⏸️ Pending | Case 6 (`--case 6`) verifies pending_count in [30, 64] |
-| Doze force-idle | ⏸️ Pending | Case 3 |
-| Force-stop then next dose | ⏸️ Pending | Case 1 |
+| 30-medication rolling horizon | ✅ Pass | Case 6 — `pending_count=30`, within the [1,64] cap, no drops |
+| Doze force-idle | ✅ Pass | Case 3 — via `dumpsys deviceidle force-idle deep` after `step deep` stalls at `QUICK_DOZE_DELAY` |
+| Force-stop then next dose | ✅ Pass | Case 1 — via `am kill` (see the force-stop note in the Day 6 table) |
 | Offline-first 3 meds + 5 doses | ⏸️ Pending | Not yet in harness — manual test |
 | Restore network sync within 60s | ⏸️ Pending | Not yet in harness — manual test |
 
@@ -82,7 +82,7 @@ See `docs/poc-stress-tests.md`. Also superseded by the harness.
 |---|---|---|
 | Local debug APK builds | ✅ Verified | `./gradlew assembleDebug` produces `app-debug.apk` (260MB) |
 | APK installs on emulator | ✅ Verified | `emulator-5554` (Android 16, API 36) |
-| APK installs on physical device | ⏸️ Pending | `adb install -r apps/mobile/android/app/build/outputs/apk/debug/app-debug.apk` |
+| APK installs on physical device | ✅ Verified | Pixel 8 Pro, Android 17 / API 37, serial 38220DLJG000JK — installed, launched, and ran the full 6-case harness |
 | EAS preview APK builds | ⏸️ Pending | `./apps/mobile/scripts/build-production-apk.sh` (requires EAS account) |
 
 ## Summary
@@ -90,21 +90,24 @@ See `docs/poc-stress-tests.md`. Also superseded by the harness.
 Verified on a physical Pixel 8 Pro (Android 17, API 37) on 2026-07-27.
 Full evidence: `.omo/evidence/task-13-SUMMARY.md`.
 
-- **Passed: 5/13** — #5 (killed-app exact delivery, 31-94 ms across 3 runs),
-  #11 (30-med horizon cap, no drops), #12 (APK builds + installs + runs on
-  hardware), #13 (git + docs), plus the graceful-degradation contract
-  (harness case 4) and the `SET_ALARM_CLOCK` primitive proven at OS level
-  (harness case 2).
-- **Pending: 8/13** — require a signed-in session (Clerk + Convex `.env`) for
-  the auth, RxNorm, sync, and cross-device criteria, which are orthogonal to
-  the notification question Phase 1 set out to answer.
-- **Inconclusive: 1** — deep-Doze survival (criterion 5a). Deep idle is proven
-  reachable, but the test is self-blocking: screen-off engages the keyguard and
-  a locked device cannot foreground the app to schedule the next alarm.
+- **Passed: 4/13** — #5 (killed-app exact delivery, 31-94 ms across 3 runs, plus
+  sub-criterion #5a deep-Doze survival), #11 (30-med horizon cap, no drops),
+  #12 (APK builds + installs + runs on hardware), #13 (git + docs). The
+  graceful-degradation contract (harness case 4) and the `SET_ALARM_CLOCK`
+  primitive proven at OS level (harness case 2) are supporting evidence for #5,
+  not separate criteria.
+- **Pending: 9/13** — #1, #2, #3, #4, #6, #7, #8, #9, #10 all require a
+  signed-in session (Clerk + Convex `.env`), which is orthogonal to the
+  notification question Phase 1 set out to answer. Phase 1's gate was the
+  notification stack, not these; they are Phase 2 work.
+- **Inconclusive: 0** — deep-Doze survival (criterion 5a) is now **verified**;
+  see that row for the observed doze cycle, the `dumpsys alarm` zero-deferral
+  policy line, and the `min_time_to_alarm` accommodation it required.
 - **Failed: 0**
 - **Blockers:** none for the Phase 1 gate. The load-bearing question — does an
-  exact `SET_ALARM_CLOCK` notification fire on Android 17 with the app killed —
-  is answered **YES** and reproduced three times.
+  exact `SET_ALARM_CLOCK` notification fire on Android 17 with the app killed,
+  in deep Doze, and after a reboot — is answered **YES**, with the full harness
+  reporting **6/6 in a single end-to-end run** (`exit 0`).
 
 ### Harness case tally
 
@@ -112,18 +115,33 @@ Full evidence: `.omo/evidence/task-13-SUMMARY.md`.
 |---|------|---------|
 | 1 | killed_app_delivery | ✅ PASS |
 | 2 | alarm_clock_primitive | ✅ PASS |
-| 3 | doze_deep_idle | ⏸️ INCONCLUSIVE (needs unlocked device) |
+| 3 | doze_deep_idle | ✅ PASS |
 | 4 | exact_denied_degrades | ✅ PASS |
-| 5 | boot_reschedule | ⏸️ NOT RUN (needs unlocked device) |
+| 5 | boot_reschedule | ✅ PASS |
 | 6 | stress_horizon_cap | ✅ PASS |
+
+**6/6 in one end-to-end run**, exit 0 — `.omo/evidence/task-13-all-cases-final.json`
+(`"passed": 6, "failed": 0`), Pixel 8 Pro / Android 17 / API 37, 2026-07-27.
+
+Nine false-result bugs were found and fixed *in the harness itself* during this
+verification — including a fixed 20s boot grace against a boot receiver that
+actually lands at ~62-66s, a 60s wait against an inexact alarm window of up to
+~79s, `adb reverse` not surviving case 5's reboot, and deep links into an app a
+previous case had killed being treated as "false" rather than "unreachable".
+Each of these had previously reported a FAIL or INCONCLUSIVE for behaviour that
+was correct. See `.omo/evidence/task-13-SUMMARY.md` for the full list.
+
+## Reproducing the device run
+
+1. Plug in the physical Android 17 device with USB debugging enabled; confirm `adb devices` shows it.
+2. Install the debug APK: `adb -s <serial> install -r apps/mobile/android/app/build/outputs/apk/debug/app-debug.apk` (or rebuild via `./gradlew assembleDebug`).
+3. Start Metro: `cd apps/mobile && npx expo start --dev-client`, then `adb -s <serial> reverse tcp:8081 tcp:8081`.
+4. **Disable the device's screen lock for the duration.** Case 3 needs screen-off to reach deep Doze, and screen-off engages the keyguard, which prevents foregrounding the app for the next case. This is a test-rig setting, not a product requirement — restore your PIN afterwards.
+5. Run the harness: `ANDROID_SERIAL=<serial> apps/mobile/scripts/notification-harness.sh --all --output .omo/evidence/<name>.json`. Takes ~16 minutes and reboots the device (case 5).
+6. The harness restores all mutated device state on exit (`deviceidle`, simulated battery, and `device_idle_constants`) via an EXIT/INT/TERM trap. Verify with `adb shell settings get global device_idle_constants` → `null`.
 
 ## Next actions
 
 1. Set up Clerk + Convex accounts and populate `apps/mobile/.env` if not already.
 2. Deploy Convex backend (`npx convex dev` or `npx convex deploy`).
-3. Plug in the physical Android 17 device with USB debugging enabled and confirm `adb devices` shows it.
-4. Install the debug APK: `adb -s <serial> install -r apps/mobile/android/app/build/outputs/apk/debug/app-debug.apk` (or rebuild via `./gradlew assembleDebug`).
-5. Start Metro: `cd apps/mobile && npx expo start --dev-client`. In the DevLauncher on the device, tap the discovered "TaskRx" server card once.
-6. Run the harness: `apps/mobile/scripts/notification-harness.sh --all --output .omo/evidence/task-13-android17-device.json`.
-7. Review the JSON report; each ⏸️ Pending row above becomes ✅ (pass) or ❌ (fail) with a real evidence artifact.
-8. Update `docs/post-poc-decisions.md` and this document with the go/no-go verdict.
+3. Work the remaining 8 pending criteria, which all require a signed-in session (auth, RxNorm, sync, cross-device) and are orthogonal to the notification question Phase 1 answered.
