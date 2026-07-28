@@ -120,6 +120,30 @@ export type {
   ScheduledOccurrence,
 } from "./schedule/index";
 
+/**
+ * The natural-language reminder parser, ported from `TaskRx.Core`. Both entry
+ * points are pure: the caller supplies the clock and any generated ids.
+ *
+ * `parseReminder` reads a whole command ("aspirin 100mg mwf at 9am") and
+ * returns a `Reminder`; `parseScheduleGrammar` handles just the schedule half
+ * and is what `parseReminder` defers to once it has closed the name.
+ */
+export { parseReminder } from "./parser/reminder-parser";
+export type {
+  ParseReminderOptions,
+  ReminderParseResult,
+} from "./parser/reminder-parser";
+
+export {
+  isGrammarToken,
+  parseScheduleGrammar,
+} from "./parser/schedule-grammar";
+export type {
+  ScheduleParseFailure,
+  ScheduleParseResult,
+  ScheduleParseSuccess,
+} from "./parser/schedule-grammar";
+
 export {
   shouldApplyRemoteDoseLog,
   shouldApplyRemoteMedication,

@@ -9,6 +9,11 @@ export default defineConfig({
       provider: "v8",
       reporter: ["text", "html"],
       include: [
+        "src/parser/extractors.ts",
+        "src/parser/lexicon.ts",
+        "src/parser/patterns.ts",
+        "src/parser/reminder-parser.ts",
+        "src/parser/schedule-grammar.ts",
         "src/schedule/engine.ts",
         "src/schedule/occurrences.ts",
         "src/domain/enums.ts",
