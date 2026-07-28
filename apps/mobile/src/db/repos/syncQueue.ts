@@ -5,15 +5,23 @@ import { getDb } from "../index";
  *
  * The sync queue is an append-only log of pending writes that need to be
  * pushed to Convex. Every local mutation (medication create/update/delete,
- * dose log create/update) enqueues an entry here. The sync worker (Day 7)
- * drains the queue, calls the matching Convex mutation, and deletes the
- * entry on success.
- *
- * For Day 3 we only need `enqueue` and `pending` — the worker itself is
- * Day 7 work.
+ * dose log create/update, and the unified reminder / reminder instance
+ * equivalents) enqueues an entry here. The sync worker drains the queue,
+ * calls the matching Convex mutation, and deletes the entry on success.
  */
 
-export type SyncEntityType = "medication" | "dose_log";
+/**
+ * The entity kinds the queue accepts. This union is enforced in the database
+ * by the `entity_type` CHECK constraint on `sync_queue`: 001 declared it with
+ * only 'medication' and 'dose_log', and `006_widen_sync_queue.sql` rebuilt the
+ * table to admit the two unified kinds. Adding a member here without widening
+ * that CHECK produces a constraint failure at insert time, not a type error.
+ */
+export type SyncEntityType =
+  | "medication"
+  | "dose_log"
+  | "reminder"
+  | "reminder_instance";
 export type SyncOperation = "create" | "update" | "delete";
 
 export interface SyncQueueEntry {

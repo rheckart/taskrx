@@ -196,6 +196,10 @@ restore_device() {
 # ── Results ────────────────────────────────────────────────────────────────
 
 results=()
+note() {
+  if [[ "${VERBOSE:-0}" == "1" ]]; then printf '  [note] %s\n' "$*" >&2; fi
+}
+
 add_result() {
   local n="$1" name="$2" pass="$3" detail="$4"
   local d
@@ -473,6 +477,59 @@ case6_stress_horizon() {
   fi
 }
 
+# The unified-model case. Before the cutover `medications` had no shape for a
+# weekly schedule, so a "Mon/Wed/Fri at 09:00" reminder produced no alarms at
+# all. This asserts the opposite from device state: every fire timestamp the
+# scheduler produced must land on a requested weekday at the requested
+# wall-clock time, evaluated with the DEVICE's clock and timezone (`adb shell
+# date`), not the host's — a weekly schedule that drifts across a DST boundary
+# fails here even though the host would call it correct.
+case7_weekly_schedule() {
+  grant_exact
+  harness cancel-all >/dev/null
+  local out fire_ats tz ts sec dow hhmm bad=0 count=0
+  out="$(harness schedule-weekly "weekly-$(date +%s)" 0)"
+  fire_ats="$(printf '%s' "$out" | grep -oE "weekly_fire_ats=[0-9,]*" | cut -d= -f2)"
+
+  if [[ -z "$fire_ats" ]]; then
+    add_result 7 weekly_schedule false "no fire times returned: ${out:-unreachable}"
+    return
+  fi
+
+  # Interpret the timestamps in the DEVICE's timezone, but with the host's GNU
+  # date: Android's toybox date does not reliably accept `-d @epoch`, and a
+  # silently-empty weekday there would read as a violation and fail a passing
+  # build. Reading the zone off the device keeps the assertion device-local.
+  tz="$(adb_shell getprop persist.sys.timezone 2>/dev/null | tr -d '\r')"
+  if [[ -z "$tz" ]]; then
+    add_result 7 weekly_schedule false "could not read device timezone"
+    return
+  fi
+
+  for ts in ${fire_ats//,/ }; do
+    count=$((count + 1))
+    sec=$((ts / 1000))
+    dow="$(TZ="$tz" date -d "@$sec" +%w)"
+    hhmm="$(TZ="$tz" date -d "@$sec" +%H:%M)"
+    case "$dow" in
+      1|3|5) ;;
+      *) bad=$((bad + 1)); note "fire $ts weekday=$dow not in {1,3,5}" ;;
+    esac
+    if [[ "$hhmm" != "09:00" ]]; then
+      bad=$((bad + 1))
+      note "fire $ts time=$hhmm expected 09:00"
+    fi
+  done
+
+  harness cancel-all >/dev/null
+
+  if (( count == 3 && bad == 0 )); then
+    add_result 7 weekly_schedule true "3 alarms, all Mon/Wed/Fri 09:00 in $tz ($fire_ats)"
+  else
+    add_result 7 weekly_schedule false "count=$count expected 3, violations=$bad ($fire_ats)"
+  fi
+}
+
 run_case() {
   case "$1" in
     1) case1_killed_app ;;
@@ -481,6 +538,7 @@ run_case() {
     4) case4_exact_denied_degrades ;;
     5) case5_boot_reschedule ;;
     6) case6_stress_horizon ;;
+    7) case7_weekly_schedule ;;
     *) echo "unknown case: $1" >&2; return 2 ;;
   esac
 }
@@ -490,7 +548,7 @@ usage() {
 notification-harness.sh — adb-driven notification test harness
 
   --list          List cases
-  --case N        Run case N (1..6)
+  --case N        Run case N (1..7)
   --all           Run every case
   --output PATH   JSON report destination
 
@@ -511,6 +569,7 @@ list_cases() {
 4  exact_denied_degrades    Permission denied: reports denied AND still delivers inexactly
 5  boot_reschedule          Alarms re-registered after reboot
 6  stress_horizon_cap       30 scheduled -> pending count stays within the 64 cap
+7  weekly_schedule          Mon/Wed/Fri weekly reminder arms 3 alarms at 09:00 device-local
 EOF
 }
 
@@ -524,7 +583,7 @@ while [[ $# -gt 0 ]]; do
     --help|-h) usage; exit 0 ;;
     --list) list_cases; exit 0 ;;
     --case) cases_to_run+=("$2"); shift 2 ;;
-    --all) cases_to_run=(1 2 3 4 5 6); shift ;;
+    --all) cases_to_run=(1 2 3 4 5 6 7); shift ;;
     --output) output="$2"; shift 2 ;;
     *) echo "unknown arg: $1" >&2; usage; exit 2 ;;
   esac

@@ -8,6 +8,7 @@ import { shouldApplyRemoteMedication } from "@taskrx/shared";
 
 import { getDb } from "../index";
 
+import { mirrorMedication, mirrorMedicationDelete } from "./medication-mirror";
 import { enqueue } from "./syncQueue";
 
 /**
@@ -164,6 +165,10 @@ export async function create(
     throw new Error("Failed to read inserted medication");
   }
 
+  // Without this the new medication has no `reminders` row, and the scheduler
+  // — which reads `reminders` — would never arm an alarm for it.
+  await mirrorMedication(id);
+
   await enqueue("medication", id, "create", {
     localId: id,
     userId: input.userId,
@@ -249,6 +254,8 @@ export async function update(
     throw new Error(`Medication ${id} disappeared after update`);
   }
 
+  await mirrorMedication(id);
+
   await enqueue("medication", id, "update", {
     localId: id,
     userId: updated.userId,
@@ -285,6 +292,8 @@ export async function softDelete(id: string): Promise<void> {
     id
   );
 
+  await mirrorMedicationDelete(id, now);
+
   await enqueue("medication", id, "delete", {
     localId: id,
     userId: existing.userId,
@@ -301,6 +310,7 @@ export async function markSynced(id: string): Promise<void> {
     "UPDATE medications SET sync_status = 'synced' WHERE id = ?",
     id
   );
+  await mirrorMedication(id);
 }
 
 /**
@@ -312,6 +322,7 @@ export async function markError(id: string, error: string): Promise<void> {
     "UPDATE medications SET sync_status = 'error' WHERE id = ?",
     id
   );
+  await mirrorMedication(id);
   console.error(`[medications] sync error for ${id}: ${error}`);
 }
 
@@ -328,6 +339,10 @@ export async function setConvexId(
     convexId,
     localId
   );
+  // Propagates the document id into the projection so the sync worker's
+  // `convex_id`-then-`getByLocalId` bridge keeps resolving under either
+  // identity, which is the same invariant migration 005 preserves.
+  await mirrorMedication(localId);
 }
 
 /**
@@ -400,6 +415,9 @@ export async function upsertMany(rows: readonly Medication[]): Promise<number> {
       remote.createdAt,
       remote.updatedAt
     );
+    // A medication arriving from a remote pull needs an alarm just as much as
+    // one typed on this device.
+    await mirrorMedication(remote.id);
     updated += 1;
   }
 

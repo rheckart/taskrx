@@ -1,0 +1,1180 @@
+#!/usr/bin/env node
+/**
+ * Data-survival check for migrations 004/005/006.
+ *
+ * `apps/mobile` has no test runner (the only vitest project in the repo is
+ * `packages/shared`), so this is a standalone script rather than a spec file.
+ * Run it with:
+ *
+ *   node apps/mobile/scripts/verify-reminder-migrations.mjs
+ *
+ * It exits non-zero on the first failed assertion so it can be wired into CI
+ * as-is.
+ *
+ * These migrations run on devices holding real medication history, so the
+ * check is about survival, not just syntax:
+ *
+ *   Part 0 — the SQL inlined in `src/db/index.ts` (what actually runs on the
+ *            device) has not drifted from the `.sql` files (what gets
+ *            reviewed).
+ *   Part A — a fresh database applies 001 -> 006 and lands on the expected
+ *            schema, including the widened `sync_queue.entity_type` CHECK.
+ *   Part B — a database seeded with 3 medications, 5 dose logs, and 4 pending
+ *            sync_queue rows under 001/002/003 keeps all 12 rows, with the
+ *            right field mapping, after 004/005/006. Values are asserted, not
+ *            counts. 006 rebuilds `sync_queue` (SQLite cannot ALTER a CHECK),
+ *            so this is the part that proves the rebuild does not eat the
+ *            queue.
+ *   Part C — re-running is a no-op: nothing errors and nothing duplicates.
+ *   Part D — after the rebuild the queue still behaves: the two new entity
+ *            types insert, a bogus one is still rejected, and AUTOINCREMENT
+ *            continues from the preserved high-water mark.
+ *
+ * Uses `node:sqlite`, so it needs Node 22+. This is NOT the same SQLite build
+ * that ships in expo-sqlite; it proves the SQL is correct, not that a
+ * particular device's SQLite has the same feature set. Migration 005 depends
+ * on the JSON1 functions, which have been compiled in by default since SQLite
+ * 3.38.
+ */
+
+import { readFileSync } from "node:fs";
+import { dirname, join } from "node:path";
+import { DatabaseSync } from "node:sqlite";
+import { fileURLToPath } from "node:url";
+
+const HERE = dirname(fileURLToPath(import.meta.url));
+const MIGRATIONS_DIR = join(HERE, "..", "src", "db", "migrations");
+const DB_INDEX = join(HERE, "..", "src", "db", "index.ts");
+
+const MIGRATION_FILES = [
+  ["001_init", "001_init.sql"],
+  ["002_add_convex_id", "002_add_convex_id.sql"],
+  ["003_sync_queue_dead_letter", "003_sync_queue_dead_letter.sql"],
+  ["004_unified_reminders", "004_unified_reminders.sql"],
+  ["005_backfill_reminders", "005_backfill_reminders.sql"],
+  ["006_widen_sync_queue", "006_widen_sync_queue.sql"],
+];
+
+const sqlByName = new Map(
+  MIGRATION_FILES.map(([name, file]) => [
+    name,
+    readFileSync(join(MIGRATIONS_DIR, file), "utf8"),
+  ])
+);
+
+function sql(name) {
+  const text = sqlByName.get(name);
+  if (text === undefined) throw new Error(`No SQL loaded for ${name}`);
+  return text;
+}
+
+// ── assertions ────────────────────────────────────────────────────────────
+
+let failures = 0;
+let checks = 0;
+
+function ok(label, condition, detail) {
+  checks += 1;
+  if (condition) {
+    console.log(`  PASS  ${label}`);
+  } else {
+    failures += 1;
+    console.log(
+      `  FAIL  ${label}${detail === undefined ? "" : ` — ${detail}`}`
+    );
+  }
+}
+
+function eq(label, actual, expected) {
+  const a = JSON.stringify(actual);
+  const e = JSON.stringify(expected);
+  ok(label, a === e, `expected ${e}, got ${a}`);
+}
+
+function section(title) {
+  console.log(`\n${title}`);
+}
+
+// ── migration runner (mirrors runMigrations in src/db/index.ts) ────────────
+
+function open() {
+  const db = new DatabaseSync(":memory:");
+  db.exec(
+    "CREATE TABLE IF NOT EXISTS _migrations (name TEXT PRIMARY KEY, applied_at INTEGER NOT NULL);"
+  );
+  return db;
+}
+
+/** Applies the named migrations, skipping any already recorded, each in a
+ *  transaction — the same guard and framing `runMigrations` uses. */
+function applyMigrations(db, names) {
+  const applied = [];
+  for (const name of names) {
+    const already = db
+      .prepare("SELECT name FROM _migrations WHERE name = ?")
+      .get(name);
+    if (already !== undefined) continue;
+
+    db.exec("BEGIN");
+    try {
+      db.exec(sql(name));
+      db.prepare(
+        "INSERT INTO _migrations (name, applied_at) VALUES (?, ?)"
+      ).run(name, Date.now());
+      db.exec("COMMIT");
+    } catch (error) {
+      db.exec("ROLLBACK");
+      throw error;
+    }
+    applied.push(name);
+  }
+  return applied;
+}
+
+const ALL = MIGRATION_FILES.map(([name]) => name);
+
+// ── Part 0: inlined SQL has not drifted from the .sql files ───────────────
+
+function normalize(text) {
+  return text
+    .split("\n")
+    .map((line) => line.replace(/--.*$/, ""))
+    .join("\n")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function part0() {
+  section("Part 0 — src/db/index.ts inline SQL matches the .sql files");
+  const source = readFileSync(DB_INDEX, "utf8");
+  const inline = new Map();
+  const pattern = /name:\s*"([^"]+)",\s*sql:\s*`([\s\S]*?)`,/g;
+  let match;
+  while ((match = pattern.exec(source)) !== null) {
+    inline.set(match[1], match[2]);
+  }
+
+  eq("MIGRATIONS list order", [...inline.keys()], ALL);
+  for (const name of ALL) {
+    const inlined = inline.get(name);
+    ok(
+      `${name} inlined SQL == ${name}.sql`,
+      inlined !== undefined && normalize(inlined) === normalize(sql(name))
+    );
+  }
+}
+
+// ── Part A: fresh database, 001 -> 005 ────────────────────────────────────
+
+function columns(db, table) {
+  return db
+    .prepare(`PRAGMA table_info(${table})`)
+    .all()
+    .map((row) => row.name);
+}
+
+function indexes(db, table) {
+  return db
+    .prepare(`PRAGMA index_list(${table})`)
+    .all()
+    .map((row) => row.name)
+    .filter((name) => name.startsWith("idx_"))
+    .sort();
+}
+
+function partA() {
+  section("Part A — fresh database, 001 -> 006");
+  const db = open();
+  const applied = applyMigrations(db, ALL);
+  eq("all six migrations applied", applied, ALL);
+
+  const tables = db
+    .prepare(
+      "SELECT name FROM sqlite_master WHERE type = 'table' ORDER BY name"
+    )
+    .all()
+    .map((row) => row.name)
+    .filter((name) => !name.startsWith("sqlite_"));
+  eq("tables", tables, [
+    "_migrations",
+    "dose_logs",
+    "medications",
+    "reminder_instances",
+    "reminders",
+    "sync_queue",
+  ]);
+
+  eq("reminders columns", columns(db, "reminders"), [
+    "id",
+    "user_id",
+    "kind",
+    "name",
+    "rxcui",
+    "dosage",
+    "instructions",
+    "schedule",
+    "priority",
+    "tags",
+    "pills_remaining",
+    "pills_per_dose",
+    "refill_reminder_days",
+    "caregiver_ids",
+    "active",
+    "created_at",
+    "updated_at",
+    "sync_status",
+    "convex_id",
+  ]);
+
+  eq("reminder_instances columns", columns(db, "reminder_instances"), [
+    "id",
+    "reminder_id",
+    "user_id",
+    "reminder_kind",
+    "scheduled_time",
+    "status",
+    "taken_at",
+    "snoozed_until",
+    "snooze_count",
+    "notes",
+    "created_at",
+    "updated_at",
+    "sync_status",
+    "convex_id",
+  ]);
+
+  eq("reminders indexes", indexes(db, "reminders"), [
+    "idx_reminders_convex_id",
+    "idx_reminders_user_active",
+    "idx_reminders_user_kind",
+  ]);
+  eq("reminder_instances indexes", indexes(db, "reminder_instances"), [
+    "idx_reminder_instances_convex_id",
+    "idx_reminder_instances_pending",
+    "idx_reminder_instances_reminder",
+    "idx_reminder_instances_user_scheduled",
+  ]);
+
+  const fk = db.prepare("PRAGMA foreign_key_list(reminder_instances)").all();
+  ok(
+    "FK reminder_instances.reminder_id -> reminders.id ON DELETE CASCADE",
+    fk.length === 1 &&
+      fk[0].table === "reminders" &&
+      fk[0].from === "reminder_id" &&
+      fk[0].to === "id" &&
+      fk[0].on_delete === "CASCADE"
+  );
+
+  const pending = db
+    .prepare(
+      "SELECT sql FROM sqlite_master WHERE name = 'idx_reminder_instances_pending'"
+    )
+    .get();
+  ok(
+    "pending index is partial (WHERE status = 'pending')",
+    typeof pending?.sql === "string" &&
+      /WHERE status = 'pending'/.test(pending.sql)
+  );
+
+  // CHECK constraints actually bite.
+  const rejects = (label, statement) => {
+    let threw = false;
+    try {
+      db.exec(statement);
+    } catch {
+      threw = true;
+    }
+    ok(label, threw);
+  };
+  rejects(
+    "reminders.kind CHECK rejects an unknown kind",
+    `INSERT INTO reminders (id,user_id,kind,name,schedule,priority,tags,caregiver_ids,active,created_at,updated_at)
+     VALUES ('x','u','chore','n','{}','normal','[]','[]',1,0,0)`
+  );
+  rejects(
+    "reminder_instances.status CHECK rejects an unknown status",
+    `INSERT INTO reminders (id,user_id,kind,name,schedule,priority,tags,caregiver_ids,active,created_at,updated_at)
+       VALUES ('r1','u','task','n','{}','normal','[]','[]',1,0,0);
+     INSERT INTO reminder_instances (id,reminder_id,user_id,reminder_kind,scheduled_time,status,snooze_count,created_at,updated_at)
+       VALUES ('i1','r1','u','task',0,'deferred',0,0,0)`
+  );
+  const accepts = (label, statement) => {
+    let error = null;
+    try {
+      db.exec(statement);
+    } catch (e) {
+      error = e;
+    }
+    ok(label, error === null, error === null ? undefined : String(error));
+  };
+
+  accepts(
+    "reminder_instances accepts the new 'snoozed' status",
+    `INSERT INTO reminder_instances (id,reminder_id,user_id,reminder_kind,scheduled_time,status,snoozed_until,snooze_count,created_at,updated_at)
+     VALUES ('i2','r1','u','task',0,'snoozed',99,1,0,0)`
+  );
+
+  // ── 006: the rebuilt sync_queue ────────────────────────────────────────
+  //
+  // The rebuild has to reproduce the table as 001 + 003 left it, not just the
+  // widened CHECK. A column dropped or reordered here would silently corrupt
+  // every subsequent enqueue.
+  eq("sync_queue columns", columns(db, "sync_queue"), [
+    "id",
+    "entity_type",
+    "entity_id",
+    "operation",
+    "payload",
+    "attempts",
+    "last_error",
+    "created_at",
+    "dead_letter",
+  ]);
+  eq("sync_queue indexes", indexes(db, "sync_queue"), [
+    "idx_sync_queue_created",
+    "idx_sync_queue_dead_letter",
+  ]);
+
+  const queueSql = db
+    .prepare("SELECT sql FROM sqlite_master WHERE name = 'sync_queue'")
+    .get();
+  ok(
+    "sync_queue is still AUTOINCREMENT",
+    typeof queueSql?.sql === "string" && /AUTOINCREMENT/.test(queueSql.sql)
+  );
+  ok(
+    "the scratch rebuild table did not survive",
+    db
+      .prepare("SELECT name FROM sqlite_master WHERE name = 'sync_queue_006'")
+      .get() === undefined
+  );
+
+  const enqueue = (entityType, operation) =>
+    `INSERT INTO sync_queue (entity_type, entity_id, operation, payload, created_at)
+     VALUES ('${entityType}', 'e-${entityType}-${operation}', '${operation}', '{}', 0)`;
+
+  accepts(
+    "sync_queue still accepts entity_type 'medication'",
+    enqueue("medication", "create")
+  );
+  accepts(
+    "sync_queue still accepts entity_type 'dose_log'",
+    enqueue("dose_log", "create")
+  );
+  accepts(
+    "sync_queue accepts entity_type 'reminder'",
+    enqueue("reminder", "create")
+  );
+  accepts(
+    "sync_queue accepts entity_type 'reminder_instance'",
+    enqueue("reminder_instance", "update")
+  );
+  // Widened, not dropped.
+  rejects(
+    "sync_queue.entity_type CHECK still rejects an unknown entity type",
+    enqueue("appointment", "create")
+  );
+  rejects(
+    "sync_queue.operation CHECK survived the rebuild",
+    enqueue("reminder", "upsert")
+  );
+  rejects(
+    "sync_queue.payload NOT NULL survived the rebuild",
+    `INSERT INTO sync_queue (entity_type, entity_id, operation, payload, created_at)
+     VALUES ('reminder', 'e-null', 'create', NULL, 0)`
+  );
+
+  const defaults = db
+    .prepare(
+      "SELECT attempts, last_error, dead_letter FROM sync_queue WHERE entity_id = 'e-reminder-create'"
+    )
+    .get();
+  eq("sync_queue defaults survived the rebuild", defaults, {
+    attempts: 0,
+    last_error: null,
+    dead_letter: 0,
+  });
+
+  db.close();
+}
+
+// ── Part B: seeded database survives 004/005 ──────────────────────────────
+
+const MEDS = [
+  {
+    id: "med-aaaa-1111",
+    user_id: "user_alpha",
+    name: "Metformin",
+    rxcui: "860975",
+    dosage: "500 mg",
+    schedule_type: "daily",
+    schedule_times: JSON.stringify({ times: ["08:00", "20:00"] }),
+    active: 1,
+    created_at: 1_700_000_000_000,
+    updated_at: 1_700_000_100_000,
+    sync_status: "synced",
+    convex_id: "cx_med_1",
+  },
+  {
+    id: "med-bbbb-2222",
+    user_id: "user_alpha",
+    name: "Ibuprofen",
+    rxcui: null,
+    dosage: null,
+    schedule_type: "interval",
+    schedule_times: JSON.stringify({ hours: 8, startAt: 1_700_000_500_000 }),
+    active: 1,
+    created_at: 1_700_000_200_000,
+    updated_at: 1_700_000_200_000,
+    sync_status: "pending",
+    convex_id: null,
+  },
+  {
+    id: "med-cccc-3333",
+    user_id: "user_beta",
+    name: "Lisinopril",
+    rxcui: "29046",
+    dosage: "10 mg",
+    schedule_type: "daily",
+    schedule_times: JSON.stringify({ times: [] }),
+    active: 0,
+    created_at: 1_700_000_300_000,
+    updated_at: 1_700_000_400_000,
+    sync_status: "error",
+    convex_id: "cx_med_3",
+  },
+];
+
+const LOGS = [
+  {
+    id: "dose-1",
+    user_id: "user_alpha",
+    medication_id: "med-aaaa-1111",
+    scheduled_time: 1_700_001_000_000,
+    taken_at: 1_700_001_060_000,
+    status: "taken",
+    notes: "with breakfast",
+    created_at: 1_700_001_000_000,
+    updated_at: 1_700_001_060_000,
+    sync_status: "synced",
+    convex_id: "cx_dose_1",
+  },
+  {
+    id: "dose-2",
+    user_id: "user_alpha",
+    medication_id: "med-aaaa-1111",
+    scheduled_time: 1_700_002_000_000,
+    taken_at: null,
+    status: "missed",
+    notes: null,
+    created_at: 1_700_002_000_000,
+    updated_at: 1_700_002_500_000,
+    sync_status: "pending",
+    convex_id: null,
+  },
+  {
+    id: "dose-3",
+    user_id: "user_alpha",
+    medication_id: "med-bbbb-2222",
+    scheduled_time: 1_700_003_000_000,
+    taken_at: null,
+    status: "skipped",
+    notes: "felt fine",
+    created_at: 1_700_003_000_000,
+    updated_at: 1_700_003_100_000,
+    sync_status: "error",
+    convex_id: null,
+  },
+  {
+    id: "dose-4",
+    user_id: "user_alpha",
+    medication_id: "med-bbbb-2222",
+    scheduled_time: 1_700_004_000_000,
+    taken_at: null,
+    status: "pending",
+    notes: null,
+    created_at: 1_700_004_000_000,
+    updated_at: 1_700_004_000_000,
+    sync_status: "pending",
+    convex_id: null,
+  },
+  {
+    id: "dose-5",
+    user_id: "user_beta",
+    medication_id: "med-cccc-3333",
+    scheduled_time: 1_700_005_000_000,
+    taken_at: 1_700_005_030_000,
+    status: "taken",
+    notes: null,
+    created_at: 1_700_005_000_000,
+    updated_at: 1_700_005_030_000,
+    sync_status: "synced",
+    convex_id: "cx_dose_5",
+  },
+];
+
+/**
+ * Pending queue rows under the OLD narrow CHECK — only 'medication' and
+ * 'dose_log' are insertable at seed time, which is the point: these are the
+ * rows a device is holding when 006 rebuilds the table under them. The set
+ * deliberately spans every column that carries state a worker depends on:
+ * a retried entry with `attempts` and `last_error`, a dead-lettered entry,
+ * all three operations, and an explicit id sequence.
+ */
+const QUEUE = [
+  {
+    id: 1,
+    entity_type: "medication",
+    entity_id: "med-aaaa-1111",
+    operation: "create",
+    payload: JSON.stringify({
+      localId: "med-aaaa-1111",
+      userId: "user_alpha",
+      name: "Metformin",
+    }),
+    attempts: 0,
+    last_error: null,
+    created_at: 1_700_000_050_000,
+    dead_letter: 0,
+  },
+  {
+    id: 2,
+    entity_type: "dose_log",
+    entity_id: "dose-2",
+    operation: "update",
+    payload: JSON.stringify({ localId: "dose-2", status: "missed" }),
+    attempts: 3,
+    last_error: "Network request failed",
+    created_at: 1_700_002_600_000,
+    dead_letter: 0,
+  },
+  {
+    id: 3,
+    entity_type: "medication",
+    entity_id: "med-cccc-3333",
+    operation: "delete",
+    payload: JSON.stringify({
+      localId: "med-cccc-3333",
+      userId: "user_beta",
+      deletedAt: 1_700_000_400_000,
+    }),
+    attempts: 5,
+    last_error: "Medication med-cccc-3333 not found on Convex",
+    created_at: 1_700_000_450_000,
+    dead_letter: 1,
+  },
+  {
+    id: 4,
+    entity_type: "dose_log",
+    entity_id: "dose-3",
+    operation: "create",
+    payload: JSON.stringify({ localId: "dose-3", status: "pending" }),
+    attempts: 0,
+    last_error: null,
+    created_at: 1_700_003_050_000,
+    dead_letter: 0,
+  },
+];
+
+/**
+ * The AUTOINCREMENT watermark the seeded queue leaves behind. Row 5 is
+ * inserted and then deleted, which is what a drained queue looks like: the
+ * table is short of its high-water mark, so a rebuild that only copies rows
+ * would hand out id 5 twice. 006 copies `sqlite_sequence` across for exactly
+ * this reason.
+ */
+const QUEUE_SEQ = 5;
+
+function seedQueue(db) {
+  const row = db.prepare(
+    `INSERT INTO sync_queue (id, entity_type, entity_id, operation, payload, attempts, last_error, created_at, dead_letter)
+     VALUES (?,?,?,?,?,?,?,?,?)`
+  );
+  for (const q of QUEUE) {
+    row.run(
+      q.id,
+      q.entity_type,
+      q.entity_id,
+      q.operation,
+      q.payload,
+      q.attempts,
+      q.last_error,
+      q.created_at,
+      q.dead_letter
+    );
+  }
+  row.run(
+    QUEUE_SEQ,
+    "dose_log",
+    "dose-5",
+    "update",
+    "{}",
+    0,
+    null,
+    1_700_005_050_000,
+    0
+  );
+  db.exec(`DELETE FROM sync_queue WHERE id = ${String(QUEUE_SEQ)}`);
+}
+
+/** Every seeded queue row, asserted column by column rather than by count. */
+function assertQueue(db, phase) {
+  for (const q of QUEUE) {
+    const r = db.prepare("SELECT * FROM sync_queue WHERE id = ?").get(q.id);
+    if (r === undefined) {
+      ok(`${phase}: sync_queue row ${String(q.id)} exists`, false);
+      continue;
+    }
+    eq(`${phase}: sync_queue #${String(q.id)} (${q.entity_type}) intact`, r, q);
+  }
+
+  const count = db.prepare("SELECT count(*) AS n FROM sync_queue").get().n;
+  eq(`${phase}: sync_queue row count`, count, QUEUE.length);
+
+  const seq = db
+    .prepare("SELECT seq FROM sqlite_sequence WHERE name = 'sync_queue'")
+    .get();
+  eq(`${phase}: AUTOINCREMENT watermark preserved`, seq, { seq: QUEUE_SEQ });
+
+  const stray = db
+    .prepare("SELECT count(*) AS n FROM sqlite_sequence WHERE name LIKE ?")
+    .get("sync_queue_%").n;
+  eq(`${phase}: no stray sqlite_sequence row for the scratch table`, stray, 0);
+}
+
+function seed(db) {
+  const med = db.prepare(
+    `INSERT INTO medications (id,user_id,name,rxcui,dosage,schedule_type,schedule_times,active,created_at,updated_at,sync_status,convex_id)
+     VALUES (?,?,?,?,?,?,?,?,?,?,?,?)`
+  );
+  for (const m of MEDS) {
+    med.run(
+      m.id,
+      m.user_id,
+      m.name,
+      m.rxcui,
+      m.dosage,
+      m.schedule_type,
+      m.schedule_times,
+      m.active,
+      m.created_at,
+      m.updated_at,
+      m.sync_status,
+      m.convex_id
+    );
+  }
+  const log = db.prepare(
+    `INSERT INTO dose_logs (id,user_id,medication_id,scheduled_time,taken_at,status,notes,created_at,updated_at,sync_status,convex_id)
+     VALUES (?,?,?,?,?,?,?,?,?,?,?)`
+  );
+  for (const l of LOGS) {
+    log.run(
+      l.id,
+      l.user_id,
+      l.medication_id,
+      l.scheduled_time,
+      l.taken_at,
+      l.status,
+      l.notes,
+      l.created_at,
+      l.updated_at,
+      l.sync_status,
+      l.convex_id
+    );
+  }
+}
+
+const EXPECTED_SCHEDULE = {
+  "med-aaaa-1111": '{"type":"daily","times":["08:00","20:00"]}',
+  "med-bbbb-2222": '{"type":"interval","hours":8,"startAt":1700000500000}',
+  "med-cccc-3333": '{"type":"daily","times":[]}',
+};
+
+function assertBackfill(db, phase) {
+  for (const m of MEDS) {
+    const r = db.prepare("SELECT * FROM reminders WHERE id = ?").get(m.id);
+    if (r === undefined) {
+      ok(`${phase}: reminder ${m.id} exists`, false);
+      continue;
+    }
+    eq(
+      `${phase}: ${m.name} -> reminders row`,
+      {
+        id: r.id,
+        user_id: r.user_id,
+        kind: r.kind,
+        name: r.name,
+        rxcui: r.rxcui,
+        dosage: r.dosage,
+        instructions: r.instructions,
+        schedule: r.schedule,
+        priority: r.priority,
+        tags: r.tags,
+        pills_remaining: r.pills_remaining,
+        pills_per_dose: r.pills_per_dose,
+        refill_reminder_days: r.refill_reminder_days,
+        caregiver_ids: r.caregiver_ids,
+        active: r.active,
+        created_at: r.created_at,
+        updated_at: r.updated_at,
+        sync_status: r.sync_status,
+        convex_id: r.convex_id,
+      },
+      {
+        id: m.id,
+        user_id: m.user_id,
+        kind: "medication",
+        name: m.name,
+        rxcui: m.rxcui,
+        dosage: m.dosage,
+        instructions: null,
+        schedule: EXPECTED_SCHEDULE[m.id],
+        priority: "normal",
+        tags: "[]",
+        pills_remaining: null,
+        pills_per_dose: null,
+        refill_reminder_days: null,
+        caregiver_ids: "[]",
+        active: m.active,
+        created_at: m.created_at,
+        updated_at: m.updated_at,
+        sync_status: m.sync_status,
+        convex_id: m.convex_id,
+      }
+    );
+  }
+
+  for (const l of LOGS) {
+    const i = db
+      .prepare("SELECT * FROM reminder_instances WHERE id = ?")
+      .get(l.id);
+    if (i === undefined) {
+      ok(`${phase}: instance ${l.id} exists`, false);
+      continue;
+    }
+    eq(
+      `${phase}: ${l.id} -> reminder_instances row`,
+      {
+        id: i.id,
+        reminder_id: i.reminder_id,
+        user_id: i.user_id,
+        reminder_kind: i.reminder_kind,
+        scheduled_time: i.scheduled_time,
+        status: i.status,
+        taken_at: i.taken_at,
+        snoozed_until: i.snoozed_until,
+        snooze_count: i.snooze_count,
+        notes: i.notes,
+        created_at: i.created_at,
+        updated_at: i.updated_at,
+        sync_status: i.sync_status,
+        convex_id: i.convex_id,
+      },
+      {
+        id: l.id,
+        reminder_id: l.medication_id,
+        user_id: l.user_id,
+        reminder_kind: "medication",
+        scheduled_time: l.scheduled_time,
+        status: l.status,
+        taken_at: l.taken_at,
+        snoozed_until: null,
+        snooze_count: 0,
+        notes: l.notes,
+        created_at: l.created_at,
+        updated_at: l.updated_at,
+        sync_status: l.sync_status,
+        convex_id: l.convex_id,
+      }
+    );
+  }
+
+  const count = (table) =>
+    db.prepare(`SELECT count(*) AS n FROM ${table}`).get().n;
+  eq(`${phase}: reminders row count`, count("reminders"), MEDS.length);
+  eq(
+    `${phase}: reminder_instances row count`,
+    count("reminder_instances"),
+    LOGS.length
+  );
+
+  // Widen-then-migrate: the source tables must be untouched.
+  eq(`${phase}: medications still present`, count("medications"), MEDS.length);
+  eq(`${phase}: dose_logs still present`, count("dose_logs"), LOGS.length);
+  const original = db
+    .prepare(
+      "SELECT rxcui, schedule_type, schedule_times FROM medications WHERE id = ?"
+    )
+    .get("med-aaaa-1111");
+  eq(
+    `${phase}: medications row unmodified (005 copies, never moves)`,
+    original,
+    {
+      rxcui: "860975",
+      schedule_type: "daily",
+      schedule_times: '{"times":["08:00","20:00"]}',
+    }
+  );
+}
+
+function partB() {
+  section(
+    "Part B — 3 medications + 5 dose logs + 4 queue rows survive 004/005/006"
+  );
+  const db = open();
+  applyMigrations(db, [
+    "001_init",
+    "002_add_convex_id",
+    "003_sync_queue_dead_letter",
+  ]);
+  seed(db);
+  seedQueue(db);
+
+  // Guard the guard: if the seed could already hold a unified entity type,
+  // Part B would not be testing the widening at all.
+  let seededWide = false;
+  try {
+    db.exec(
+      `INSERT INTO sync_queue (entity_type, entity_id, operation, payload, created_at)
+       VALUES ('reminder', 'pre-006', 'create', '{}', 0)`
+    );
+    seededWide = true;
+  } catch {
+    seededWide = false;
+  }
+  ok("before 006 the narrow CHECK rejects entity_type 'reminder'", !seededWide);
+
+  const applied = applyMigrations(db, ALL);
+  eq("only 004/005/006 applied to the seeded db", applied, [
+    "004_unified_reminders",
+    "005_backfill_reminders",
+    "006_widen_sync_queue",
+  ]);
+
+  assertBackfill(db, "after first run");
+  assertQueue(db, "after first run");
+  return db;
+}
+
+// ── Part C: re-running is a no-op ─────────────────────────────────────────
+
+function partC(db) {
+  section("Part C — re-running is idempotent");
+
+  // C1: the runner's _migrations guard makes a second pass a no-op.
+  const reapplied = applyMigrations(db, ALL);
+  eq("_migrations guard skips everything on a second pass", reapplied, []);
+
+  // C2: force-execute 004, 005 and 006 again with the guard bypassed. This is
+  // the partially-applied case the guard does not cover. 001-003 are excluded:
+  // 002 and 003 are bare `ALTER TABLE ADD COLUMN` and have never been
+  // re-runnable, which predates this work.
+  //
+  // 006 is the one that has to earn this. It is a table rebuild — drop and
+  // recreate — so "no-op on a second run" is a property of how it is written
+  // (`DROP TABLE IF EXISTS` on the scratch name, copy from whatever
+  // `sync_queue` currently is), not something the statements get for free the
+  // way 005's `INSERT OR IGNORE` does.
+  let error = null;
+  try {
+    db.exec(sql("004_unified_reminders"));
+    db.exec(sql("005_backfill_reminders"));
+    db.exec(sql("006_widen_sync_queue"));
+  } catch (e) {
+    error = e;
+  }
+  ok(
+    "004 + 005 + 006 re-execute with the guard bypassed without error",
+    error === null,
+    error === null ? undefined : String(error)
+  );
+
+  assertBackfill(db, "after forced re-run");
+  assertQueue(db, "after forced re-run");
+  return db;
+}
+
+// ── Part D: the rebuilt queue is usable ───────────────────────────────────
+
+function partD(db) {
+  section("Part D — the rebuilt sync_queue accepts the unified entity types");
+
+  const insert = db.prepare(
+    `INSERT INTO sync_queue (entity_type, entity_id, operation, payload, created_at)
+     VALUES (?,?,?,?,?)`
+  );
+  const tryInsert = (entityType, operation) => {
+    try {
+      insert.run(entityType, `x-${entityType}`, operation, "{}", 0);
+      return null;
+    } catch (e) {
+      return e;
+    }
+  };
+
+  const reminderError = tryInsert("reminder", "create");
+  ok(
+    "enqueue entity_type 'reminder' succeeds",
+    reminderError === null,
+    reminderError === null ? undefined : String(reminderError)
+  );
+
+  // The AUTOINCREMENT watermark carried across, so the first id handed out
+  // after the rebuild is one past it — not a reused id.
+  const firstNewId = db
+    .prepare("SELECT id FROM sync_queue WHERE entity_id = 'x-reminder'")
+    .get();
+  eq("first id after the rebuild continues the sequence", firstNewId, {
+    id: QUEUE_SEQ + 1,
+  });
+
+  const instanceError = tryInsert("reminder_instance", "update");
+  ok(
+    "enqueue entity_type 'reminder_instance' succeeds",
+    instanceError === null,
+    instanceError === null ? undefined : String(instanceError)
+  );
+
+  ok(
+    "a bogus entity type is still rejected (CHECK widened, not dropped)",
+    tryInsert("appointment", "create") !== null
+  );
+  ok(
+    "a bogus operation is still rejected",
+    tryInsert("reminder", "upsert") !== null
+  );
+
+  // The pre-006 rows are still readable alongside the new ones — the queue is
+  // one table, and the worker drains it in `created_at` order.
+  const byType = db
+    .prepare(
+      "SELECT entity_type, count(*) AS n FROM sync_queue GROUP BY entity_type ORDER BY entity_type"
+    )
+    .all();
+  eq("queue holds both generations after the rebuild", byType, [
+    { entity_type: "dose_log", n: 2 },
+    { entity_type: "medication", n: 2 },
+    { entity_type: "reminder", n: 1 },
+    { entity_type: "reminder_instance", n: 1 },
+  ]);
+
+  db.close();
+}
+
+// ── Part E: repos/medication-mirror.ts keeps `reminders` in step ──────────
+//
+// The scheduler reads `reminders`, so a medication written after the 005 boot
+// needs a projection or it silently never alarms. `medication-mirror.ts`
+// claims parity with 005 "by construction" — it reuses 005's SELECT rather
+// than re-deriving the mapping. This part holds that claim to account: it
+// extracts the real SQL out of the TS source (not a copy) and both diffs it
+// against the migration and executes it.
+
+const MIRROR_TS = join(HERE, "..", "src", "db", "repos", "medication-mirror.ts");
+
+/** Pulls a backtick template literal out of the TS source by its opening marker. */
+function template(source, marker) {
+  const start = source.indexOf(marker);
+  if (start === -1) throw new Error(`marker not found: ${marker}`);
+  const open = source.indexOf("`", start);
+  const close = source.indexOf("`", open + 1);
+  if (open === -1 || close === -1) throw new Error(`no template after ${marker}`);
+  return source.slice(open + 1, close);
+}
+
+function partE() {
+  section("Part E — repos/medication-mirror.ts projects medications -> reminders");
+
+  const source = readFileSync(MIRROR_TS, "utf8");
+  const select = template(source, "const MEDICATION_TO_REMINDER_SELECT");
+  const insert = template(source, "async function mirrorMedication(").replace(
+    "${MEDICATION_TO_REMINDER_SELECT}",
+    select
+  );
+  const softDelete = template(source, "async function mirrorMedicationDelete(");
+
+  // The drift guard. 005's SELECT runs from `SELECT src.id,` to `AS src;`; the
+  // mirror's is the same text plus a `WHERE src.id = ?`. If someone edits the
+  // schedule mapping in one place and not the other, this fails — which is the
+  // whole reason the mirror reuses the migration's SQL instead of its own.
+  const migration = sql("005_backfill_reminders");
+  const from = migration.indexOf("SELECT\n  src.id,");
+  const to = migration.indexOf("AS src;");
+  const migrationSelect = normalize(migration.slice(from, to + "AS src".length));
+  const mirrorSelect = normalize(select).replace(/ WHERE src\.id = \?$/, "");
+  ok(
+    "mirror SELECT is 005's SELECT verbatim (schedule mapping cannot drift)",
+    mirrorSelect === migrationSelect,
+    `\n    mirror:    ${mirrorSelect}\n    migration: ${migrationSelect}`
+  );
+  ok(
+    "mirror scopes the backfill SELECT to one medication",
+    /WHERE src\.id = \?\s*$/.test(select)
+  );
+  // Code only — the module's doc comment discusses enqueuing at length to
+  // explain why it must not, so a bare substring search would match the prose.
+  const code = source
+    .replace(/\/\*[\s\S]*?\*\//g, "")
+    .replace(/\/\/.*$/gm, "");
+  ok(
+    "mirror never enqueues (the medication write already enqueues its own entry)",
+    !/\benqueue\s*\(/.test(code) && !/from\s+"\.\/syncQueue"/.test(code)
+  );
+
+  const db = open();
+  applyMigrations(db, ALL);
+
+  const insertMed = db.prepare(
+    `INSERT INTO medications (
+       id, user_id, convex_id, name, rxcui, dosage,
+       schedule_type, schedule_times, active, created_at, updated_at, sync_status
+     ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+  );
+  const runMirror = db.prepare(insert);
+  const runMirrorDelete = db.prepare(softDelete);
+  const reminder = (id) =>
+    db.prepare("SELECT * FROM reminders WHERE id = ?").get(id);
+
+  // A medication created *after* the migration — the case that has no backfill
+  // and is the entire reason this module exists.
+  insertMed.run(
+    "post-1", "user-1", null, "Sertraline", "36437", "50mg",
+    "daily", '{"times":["09:00","21:00"]}', 1, 1000, 1000, "pending"
+  );
+  runMirror.run("post-1");
+  const r1 = reminder("post-1");
+  ok("post-migration daily medication produces a reminders row", r1 !== undefined);
+  eq("  kind", r1?.kind, "medication");
+  eq("  name", r1?.name, "Sertraline");
+  eq("  rxcui survives (storage-only, as 005 preserves it)", r1?.rxcui, "36437");
+  eq("  dosage", r1?.dosage, "50mg");
+  eq("  schedule is the tagged daily union", r1?.schedule, '{"type":"daily","times":["09:00","21:00"]}');
+  eq("  priority defaults to normal", r1?.priority, "normal");
+  eq("  tags default to []", r1?.tags, "[]");
+  eq("  caregiver_ids default to []", r1?.caregiver_ids, "[]");
+  eq("  instructions has no POC source", r1?.instructions, null);
+  eq("  active", r1?.active, 1);
+  eq("  created_at is the medication's, not now()", r1?.created_at, 1000);
+  eq("  sync_status is inherited", r1?.sync_status, "pending");
+
+  insertMed.run(
+    "post-2", "user-1", null, "Ibuprofen", null, "200mg",
+    "interval", '{"hours":8,"startAt":1700000000000}', 1, 2000, 2000, "pending"
+  );
+  runMirror.run("post-2");
+  eq(
+    "interval schedule maps to the tagged interval union",
+    reminder("post-2")?.schedule,
+    '{"type":"interval","hours":8,"startAt":1700000000000}'
+  );
+
+  // Same degrade 005 applies: a malformed blob becomes an empty schedule rather
+  // than throwing and taking the write down with it.
+  insertMed.run(
+    "post-3", "user-1", null, "Broken", null, null,
+    "daily", "not json at all", 1, 3000, 3000, "pending"
+  );
+  runMirror.run("post-3");
+  eq(
+    "an unparseable schedule_times degrades to an empty schedule, not an error",
+    reminder("post-3")?.schedule,
+    '{"type":"daily","times":[]}'
+  );
+
+  // Idempotency: the mirror runs on every write, including repeat writes.
+  runMirror.run("post-1");
+  runMirror.run("post-1");
+  eq(
+    "re-mirroring is idempotent (no duplicate rows)",
+    db.prepare("SELECT COUNT(*) AS n FROM reminders WHERE id = 'post-1'").get()
+      ?.n,
+    1
+  );
+
+  // An edit must reach the projection, or the alarm keeps firing on the old
+  // schedule after the user changed it.
+  db.prepare(
+    `UPDATE medications
+     SET name = 'Sertraline XR', schedule_times = '{"times":["08:00"]}',
+         updated_at = 4000, sync_status = 'pending'
+     WHERE id = 'post-1'`
+  ).run();
+  runMirror.run("post-1");
+  const r1b = reminder("post-1");
+  eq("an edit propagates: name", r1b?.name, "Sertraline XR");
+  eq("an edit propagates: schedule", r1b?.schedule, '{"type":"daily","times":["08:00"]}');
+  eq("an edit propagates: updated_at", r1b?.updated_at, 4000);
+
+  // The COALESCE guard. A synced reminder holds a convex_id; a later mirror of
+  // a medication whose own convex_id is still NULL must not erase it, or the
+  // sync worker's id bridge stops resolving.
+  db.prepare("UPDATE reminders SET convex_id = 'cx-1' WHERE id = 'post-1'").run();
+  runMirror.run("post-1");
+  eq(
+    "a NULL medication convex_id does not erase the reminder's",
+    reminder("post-1")?.convex_id,
+    "cx-1"
+  );
+  db.prepare("UPDATE medications SET convex_id = 'cx-2' WHERE id = 'post-1'").run();
+  runMirror.run("post-1");
+  eq(
+    "a real medication convex_id does overwrite it",
+    reminder("post-1")?.convex_id,
+    "cx-2"
+  );
+
+  // Soft delete deactivates rather than removes: `selectUpcomingOccurrences`
+  // skips inactive reminders, and dose history still has to resolve the row.
+  runMirrorDelete.run(9000, "post-2");
+  const r2 = reminder("post-2");
+  eq("soft delete deactivates the projection", r2?.active, 0);
+  eq("soft delete keeps the row for dose history", r2 !== undefined, true);
+  eq("soft delete bumps updated_at", r2?.updated_at, 9000);
+
+  // Mirroring an id with no medication is a no-op, not a crash or a phantom row.
+  runMirror.run("does-not-exist");
+  eq(
+    "mirroring an unknown medication inserts nothing",
+    reminder("does-not-exist"),
+    undefined
+  );
+
+  // The backfilled and mirrored paths must be indistinguishable. Insert the
+  // same medication twice under different ids, backfill one via 005's own SQL
+  // and project the other via the mirror, then diff every column.
+  insertMed.run(
+    "parity-a", "user-9", "cx-9", "Parity", "111", "10mg",
+    "interval", '{"hours":6,"startAt":123}', 1, 5000, 6000, "synced"
+  );
+  insertMed.run(
+    "parity-b", "user-9", "cx-9", "Parity", "111", "10mg",
+    "interval", '{"hours":6,"startAt":123}', 1, 5000, 6000, "synced"
+  );
+  db.exec(sql("005_backfill_reminders")); // INSERT OR IGNORE — backfills parity-a and parity-b
+  db.prepare("DELETE FROM reminders WHERE id = 'parity-b'").run();
+  runMirror.run("parity-b");
+  const a = reminder("parity-a");
+  const b = reminder("parity-b");
+  const strip = (row) =>
+    Object.fromEntries(Object.entries(row ?? {}).filter(([k]) => k !== "id"));
+  eq(
+    "a mirrored row is column-for-column identical to a backfilled one",
+    strip(b),
+    strip(a)
+  );
+
+  db.close();
+}
+
+// ── run ───────────────────────────────────────────────────────────────────
+
+console.log(`node ${process.version}, node:sqlite`);
+part0();
+partA();
+partD(partC(partB()));
+partE();
+
+console.log(
+  `\n${checks - failures}/${checks} checks passed${failures === 0 ? "" : `, ${failures} FAILED`}`
+);
+process.exit(failures === 0 ? 0 : 1);

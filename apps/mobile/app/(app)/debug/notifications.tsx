@@ -1,4 +1,5 @@
 import { useUser } from "@clerk/clerk-expo";
+import { createReminder, intervalTimes } from "@taskrx/shared";
 import { Stack } from "expo-router";
 import { useCallback, useEffect, useState } from "react";
 import type { ReactElement } from "react";
@@ -19,7 +20,7 @@ import {
   MEDICATION_REMINDER_CHANNEL_ID,
   requestPermissions,
   rescheduleAll,
-  scheduleForMedication,
+  scheduleForReminder,
 } from "../../../src/notifications";
 import type { PermissionResult } from "../../../src/notifications";
 
@@ -93,20 +94,17 @@ export default function NotificationsDebugScreen(): ReactElement {
     setLoading(true);
     try {
       const scheduledTime = Date.now() + 30_000;
-      await scheduleForMedication(
-        {
+      await scheduleForReminder(
+        createReminder({
           id: "debug-med",
           userId,
+          kind: "medication",
           name: "Debug Medication",
           dosage: "1 tablet",
-          scheduleType: "interval",
-          scheduleTimes: { hours: 24, startAt: scheduledTime },
-          active: true,
+          schedule: intervalTimes(24, scheduledTime),
           createdAt: Date.now(),
           updatedAt: Date.now(),
-          deletedAt: undefined,
-          rxcui: undefined,
-        },
+        }),
         1
       );
       setMessage(

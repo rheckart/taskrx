@@ -12,12 +12,14 @@ function extractDoseData(
     return null;
   }
 
-  const medicationId = data.medicationId;
+  // `reminderId` is the post-cutover key; `medicationId` is what alarms
+  // scheduled before the unified migration carry. Both resolve to the same
+  // value on a migrated device (005 preserves the primary key), so preferring
+  // the new key while still accepting the old one means a tap on an alarm
+  // armed by the previous build is still handled instead of silently dropped.
+  const reminderId = data.reminderId ?? data.medicationId;
   const scheduledTimeRaw = data.scheduledTime;
-  if (
-    typeof medicationId !== "string" ||
-    typeof scheduledTimeRaw !== "string"
-  ) {
+  if (typeof reminderId !== "string" || typeof scheduledTimeRaw !== "string") {
     return null;
   }
 
@@ -26,7 +28,9 @@ function extractDoseData(
     return null;
   }
 
-  return { medicationId, scheduledTime };
+  // The route param stays `medicationId`: `/dose/log` still reads through
+  // `medicationsRepo`, which the unified cutover deliberately left in place.
+  return { medicationId: reminderId, scheduledTime };
 }
 
 function handleEvent(event: Event, navigate?: NavigateFunction): void {

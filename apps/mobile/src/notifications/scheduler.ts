@@ -1,5 +1,5 @@
-import type { Medication } from "@taskrx/shared";
-import { selectUpcomingDoses, upcomingDosesFor } from "@taskrx/shared";
+import type { Reminder, ScheduledOccurrence } from "@taskrx/shared";
+import { nextOccurrences, selectUpcomingOccurrences } from "@taskrx/shared";
 import notifee, {
   AlarmType,
   AndroidImportance,
@@ -8,14 +8,22 @@ import notifee, {
   TriggerType,
 } from "react-native-notify-kit";
 
-import * as medicationsRepo from "../db/repos/medications";
+import * as remindersRepo from "../db/repos/reminders";
 
+/**
+ * The Android channel id is persisted on the device the first time the channel
+ * is created, and the user's per-channel sound / importance / DND overrides are
+ * keyed to it. Renaming the constant is safe; changing this *string* is not —
+ * it would orphan the existing channel and silently reset every override the
+ * user had set. The value therefore stays `medication_reminders` even though
+ * the scheduler now also fires for `task` reminders.
+ */
 export const MEDICATION_REMINDER_CHANNEL_ID = "medication_reminders";
 export const MEDICATION_REMINDER_CHANNEL_NAME = "Medication Reminders";
 
 /**
- * Per-medication default used by the debug screen when scheduling a single
- * medication in isolation. Production paths go through `rescheduleAll`,
+ * Per-reminder default used by the debug screen when scheduling a single
+ * reminder in isolation. Production paths go through `rescheduleAll`,
  * which uses `MAX_GLOBAL_TRIGGERS` instead.
  */
 const DEFAULT_UPCOMING_COUNT = 10;
@@ -23,8 +31,8 @@ const DEFAULT_UPCOMING_COUNT = 10;
 /**
  * iOS enforces a hard cap of 64 pending local notifications per app.
  * Android has no cap but 64 is a natural rolling horizon and keeps parity
- * with the future iOS build. Selection is global across all active meds
- * (see `selectUpcomingDoses` in `@taskrx/shared`), not per-medication.
+ * with the future iOS build. Selection is global across all active reminders
+ * (see `selectUpcomingOccurrences` in `@taskrx/shared`), not per-reminder.
  */
 const MAX_GLOBAL_TRIGGERS = 64;
 
@@ -45,25 +53,41 @@ export async function createNotificationChannel(): Promise<void> {
   });
 }
 
+/**
+ * The notification id for a scheduled occurrence.
+ *
+ * Deliberately still `${id}-${fireAt}` rather than the engine's
+ * `occurrenceId`. Migration 005 backfills `reminders` preserving the primary
+ * key, so a migrated reminder's id equals the medication id that generated the
+ * alarms already pending on the device. Keeping the format byte-identical
+ * means the first post-upgrade `rescheduleAll` diffs those existing alarms as
+ * *desired* and leaves them armed, instead of cancelling and recreating all
+ * 64 — which would open a churn window on exactly the boot where the user is
+ * least able to tolerate a missed dose.
+ */
 export function buildNotificationId(
-  medicationId: string,
+  reminderId: string,
   scheduledTime: number
 ): string {
-  return `${medicationId}-${String(scheduledTime)}`;
+  return `${reminderId}-${String(scheduledTime)}`;
 }
 
-function buildNotification(
-  med: Medication,
-  scheduledTime: number
-): Notification {
-  const dosageLabel = med.dosage !== undefined ? ` (${med.dosage})` : "";
+function buildNotification(occurrence: ScheduledOccurrence): Notification {
+  const dosageLabel =
+    occurrence.dosage !== undefined ? ` (${occurrence.dosage})` : "";
   return {
-    id: buildNotificationId(med.id, scheduledTime),
-    title: med.name,
+    id: buildNotificationId(occurrence.reminderId, occurrence.fireAt),
+    title: occurrence.name,
     body: `Time to take${dosageLabel}`,
     data: {
-      medicationId: med.id,
-      scheduledTime: String(scheduledTime),
+      reminderId: occurrence.reminderId,
+      // Compatibility key. Alarms scheduled before the unified cutover carry
+      // only `medicationId`, and `tap-handler` / `snooze` / the `/dose/log`
+      // route still speak that name. Both keys hold the same value because
+      // migration 005 preserves the primary key. Drop this once the read
+      // screens move off `medications`.
+      medicationId: occurrence.reminderId,
+      scheduledTime: String(occurrence.fireAt),
     },
     android: {
       channelId: MEDICATION_REMINDER_CHANNEL_ID,
@@ -79,7 +103,7 @@ function buildNotification(
 }
 
 /**
- * Builds the AlarmManager trigger for a scheduled dose.
+ * Builds the AlarmManager trigger for a scheduled occurrence.
  *
  * Uses `SET_ALARM_CLOCK` — the strongest Android guarantee available for a
  * scheduled notification, and the mechanism empirically verified firing on
@@ -96,7 +120,7 @@ function buildNotification(
  *     upstream Notifee #961 documented "SET_EXACT doesn't work in Doze".
  *
  * Deliberate tradeoff: `SET_ALARM_CLOCK` renders a persistent status-bar
- * alarm-clock glyph while any trigger is pending. With a 64-dose rolling
+ * alarm-clock glyph while any trigger is pending. With a 64-occurrence rolling
  * horizon there is always at least one pending, so the icon is effectively
  * permanent. This is acceptable and arguably a feature for a medication
  * reminder — it signals to the user that reminders are armed, which is
@@ -117,37 +141,38 @@ function buildTrigger(scheduledTime: number): TimestampTrigger {
 }
 
 /**
- * Schedules up to `count` upcoming dose notifications for a single medication.
+ * Schedules up to `count` upcoming notifications for a single reminder.
  *
- * Intended for the debug screen (test-one-med scenarios). Production paths
- * should call `rescheduleAll`, which uses the global 64-dose horizon.
+ * Intended for the debug screen (test-one-reminder scenarios). Production
+ * paths should call `rescheduleAll`, which uses the global 64-occurrence
+ * horizon.
  */
-export async function scheduleForMedication(
-  med: Medication,
+export async function scheduleForReminder(
+  reminder: Reminder,
   count = DEFAULT_UPCOMING_COUNT
 ): Promise<void> {
-  if (!med.active || count <= 0) {
+  if (!reminder.active || count <= 0) {
     return;
   }
 
-  const doses = upcomingDosesFor(med, Date.now(), count);
+  const occurrences = nextOccurrences(reminder, Date.now(), count);
 
-  for (const dose of doses) {
-    const notification = buildNotification(med, dose.scheduledTime);
-    const trigger = buildTrigger(dose.scheduledTime);
+  for (const occurrence of occurrences) {
+    const notification = buildNotification(occurrence);
+    const trigger = buildTrigger(occurrence.fireAt);
     await notifee.createTriggerNotification(notification, trigger);
   }
 }
 
 /**
- * Cancels all scheduled notifications that belong to a given medication.
+ * Cancels all scheduled notifications that belong to a given reminder.
  *
  * Matching is based on the deterministic notification ID prefix
- * `${medicationId}-`.
+ * `${reminderId}-`.
  */
-export async function cancelForMedication(medicationId: string): Promise<void> {
+export async function cancelForReminder(reminderId: string): Promise<void> {
   const ids = await notifee.getTriggerNotificationIds();
-  const toCancel = ids.filter((id) => id.startsWith(`${medicationId}-`));
+  const toCancel = ids.filter((id) => id.startsWith(`${reminderId}-`));
   if (toCancel.length > 0) {
     await notifee.cancelTriggerNotifications(toCancel);
   }
@@ -165,9 +190,10 @@ export async function cancelAll(): Promise<void> {
 /**
  * Refreshes the schedule for the given user using a diff-based algorithm:
  *
- *   1. Load active medications from the local SQLite repo.
- *   2. Compute the desired 64 soonest doses across ALL active meds (global
- *      selection — see `selectUpcomingDoses`).
+ *   1. Load active reminders from the local SQLite repo — every kind, so a
+ *      `task` reminder alarms exactly like a `medication` one.
+ *   2. Compute the desired 64 soonest occurrences across ALL active reminders
+ *      (global selection — see `selectUpcomingOccurrences`).
  *   3. Read the currently-scheduled notification IDs from Notifee.
  *   4. Cancel only the notifications that are no longer in the desired set.
  *   5. Create only the notifications that are missing.
@@ -177,18 +203,21 @@ export async function cancelAll(): Promise<void> {
  * where notifications were briefly unarmed. The diff approach is
  * idempotent: two consecutive calls with unchanged data cancel and create
  * nothing.
+ *
+ * Reading `reminders` rather than `medications` is what makes a `weekly`
+ * schedule produce alarms at all — the POC engine had no shape for one.
  */
 export async function rescheduleAll(userId: string): Promise<void> {
-  const meds = await medicationsRepo.list(userId);
-  const medById = new Map<string, Medication>();
-  for (const med of meds) {
-    medById.set(med.id, med);
-  }
+  const reminders = await remindersRepo.list(userId);
 
-  const desired = selectUpcomingDoses(meds, Date.now(), MAX_GLOBAL_TRIGGERS);
+  const desired = selectUpcomingOccurrences(
+    reminders,
+    Date.now(),
+    MAX_GLOBAL_TRIGGERS
+  );
   const desiredIds = new Set(
-    desired.map((dose) =>
-      buildNotificationId(dose.medicationId, dose.scheduledTime)
+    desired.map((occurrence) =>
+      buildNotificationId(occurrence.reminderId, occurrence.fireAt)
     )
   );
   const currentIds = new Set(await notifee.getTriggerNotificationIds());
@@ -203,17 +232,13 @@ export async function rescheduleAll(userId: string): Promise<void> {
     await notifee.cancelTriggerNotifications(toCancel);
   }
 
-  for (const dose of desired) {
-    const id = buildNotificationId(dose.medicationId, dose.scheduledTime);
+  for (const occurrence of desired) {
+    const id = buildNotificationId(occurrence.reminderId, occurrence.fireAt);
     if (currentIds.has(id)) {
       continue;
     }
-    const med = medById.get(dose.medicationId);
-    if (med === undefined) {
-      continue;
-    }
-    const notification = buildNotification(med, dose.scheduledTime);
-    const trigger = buildTrigger(dose.scheduledTime);
+    const notification = buildNotification(occurrence);
+    const trigger = buildTrigger(occurrence.fireAt);
     await notifee.createTriggerNotification(notification, trigger);
   }
 }

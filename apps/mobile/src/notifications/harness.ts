@@ -1,3 +1,4 @@
+import { createReminder, weeklyTimes } from "@taskrx/shared";
 import notifee, {
   AlarmType,
   AndroidImportance,
@@ -11,6 +12,7 @@ import {
   MEDICATION_REMINDER_CHANNEL_ID,
   cancelAll,
   createNotificationChannel,
+  scheduleForReminder,
 } from "./index";
 
 /**
@@ -24,6 +26,7 @@ import {
 
 export type HarnessAction =
   | "schedule"
+  | "schedule-weekly"
   | "cancel-all"
   | "pending-count"
   | "pending-ids"
@@ -38,6 +41,7 @@ export interface HarnessSpec {
 
 const VALID_ACTIONS: readonly HarnessAction[] = [
   "schedule",
+  "schedule-weekly",
   "cancel-all",
   "pending-count",
   "pending-ids",
@@ -97,10 +101,58 @@ async function runSchedule(spec: HarnessSpec): Promise<string> {
   return `scheduled id=${spec.id} at=${String(scheduledTime)} delayMs=${String(spec.delayMs)}`;
 }
 
+/**
+ * Weekday and time-of-day the weekly harness case asserts against. Mon/Wed/Fri
+ * is chosen because it is non-contiguous — a scheduler that ignored
+ * `daysOfWeek` and fell back to daily would produce consecutive days and fail
+ * the check, whereas a contiguous set could pass by accident.
+ */
+const WEEKLY_DAYS = [1, 3, 5] as const;
+const WEEKLY_TIME = "09:00";
+const WEEKLY_COUNT = 3;
+
+/**
+ * Schedules a genuinely weekly reminder through the production path.
+ *
+ * This is the case the POC could not express at all: `medications` had no
+ * shape for a weekly schedule, so `weekly` reminders produced no alarms. It
+ * deliberately goes through `scheduleForReminder` rather than calling notifee
+ * directly (as `runSchedule` does), because the thing under test is the
+ * scheduler's use of the unified engine, not notifee's trigger API.
+ *
+ * Returns the fire timestamps so the shell harness can verify each one lands
+ * on a requested weekday at the requested wall-clock time — a check that runs
+ * against real device-local time, not the app's own assertion.
+ */
+async function runScheduleWeekly(spec: HarnessSpec): Promise<string> {
+  await createNotificationChannel();
+  const now = Date.now();
+  const reminder = createReminder({
+    id: spec.id,
+    userId: "harness",
+    kind: "medication",
+    name: `Harness ${spec.id}`,
+    schedule: weeklyTimes([...WEEKLY_DAYS], [WEEKLY_TIME]),
+    createdAt: now,
+    updatedAt: now,
+  });
+
+  await scheduleForReminder(reminder, WEEKLY_COUNT);
+
+  const ids = await notifee.getTriggerNotificationIds();
+  const fireAts = ids
+    .filter((id) => id.startsWith(`${spec.id}-`))
+    .map((id) => id.slice(spec.id.length + 1))
+    .sort();
+  return `weekly_fire_ats=${fireAts.join(",")}`;
+}
+
 export async function runHarnessAction(spec: HarnessSpec): Promise<string> {
   switch (spec.action) {
     case "schedule":
       return runSchedule(spec);
+    case "schedule-weekly":
+      return runScheduleWeekly(spec);
     case "cancel-all": {
       await cancelAll();
       return "cancelled all trigger notifications";

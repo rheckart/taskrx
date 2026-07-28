@@ -17,6 +17,10 @@ export default tseslint.config(
       "**/*.config.js",
       "**/*.config.ts",
       "**/plugins/**/*.js",
+      // Standalone operational scripts (shell, and plain Node run directly
+      // with `node`). They are outside every tsconfig `include`, so the
+      // type-aware rules have no project to resolve them against.
+      "apps/mobile/scripts/**",
     ],
   },
   js.configs.recommended,

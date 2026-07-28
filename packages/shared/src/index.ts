@@ -111,6 +111,7 @@ export {
   nextNInterval,
   nextOccurrences,
   selectUpcomingDoses,
+  selectUpcomingOccurrences,
   upcomingDosesFor,
 } from "./schedule/index";
 export type {
@@ -136,8 +137,10 @@ export type { PlanRefillOptions, RefillDecision } from "./refill/planner";
  * points are pure: the caller supplies the clock and any generated ids.
  *
  * `parseReminder` reads a whole command ("aspirin 100mg mwf at 9am") and
- * returns a `Reminder`; `parseScheduleGrammar` handles just the schedule half
- * and is what `parseReminder` defers to once it has closed the name.
+ * returns a `Reminder`; `parseScheduleGrammar` reads just the schedule half.
+ * The two are independent — `ReminderParser.cs` never references
+ * `ScheduleGrammarParser`, so `parseReminder` carries its own schedule
+ * handling and does not defer to `parseScheduleGrammar`.
  */
 export { parseReminder } from "./parser/reminder-parser";
 export type {
