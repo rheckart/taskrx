@@ -63,6 +63,49 @@ export interface RxNormSearchResult {
 
 export type RxNormSearchResponse = readonly RxNormSearchResult[];
 
+/**
+ * The unified reminder domain, ported from `TaskRx.Core`. `Reminder` carries a
+ * `kind` of `medication` or `task` and a `ScheduleTimes` union that includes
+ * weekly schedules, none of which the POC types above can express. Both sets
+ * are exported while the app is migrated across.
+ */
+export {
+  INSTANCE_STATUSES,
+  NOTIFICATION_TYPES,
+  PRIORITIES,
+  REMINDER_KINDS,
+  assertNever,
+  createCaregiver,
+  createReminder,
+  createReminderInstance,
+  dailyTimes,
+  intervalTimes,
+  parseScheduleTimes,
+  serializeScheduleTimes,
+  weeklyTimes,
+} from "./domain/index";
+export type {
+  Caregiver,
+  CreateCaregiverInput,
+  CreateReminderInput,
+  CreateReminderInstanceInput,
+  DailyTimes,
+  DailyTimesWire,
+  InstanceStatus,
+  IntervalTimes,
+  IntervalTimesWire,
+  NotificationType,
+  Priority,
+  Reminder,
+  ReminderInstance,
+  ReminderKind,
+  ScheduleTimes,
+  ScheduleTimesWire,
+  Weekday,
+  WeeklyTimes,
+  WeeklyTimesWire,
+} from "./domain/index";
+
 export {
   nextNDaily,
   nextNInterval,

@@ -8,7 +8,12 @@ export default defineConfig({
     coverage: {
       provider: "v8",
       reporter: ["text", "html"],
-      include: ["src/schedule/engine.ts"],
+      include: [
+        "src/schedule/engine.ts",
+        "src/domain/enums.ts",
+        "src/domain/reminder.ts",
+        "src/domain/schedule-times.ts",
+      ],
       exclude: ["src/**/*.test.ts", "src/**/index.ts"],
       thresholds: {
         lines: 100,
