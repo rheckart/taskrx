@@ -10,6 +10,7 @@ export default defineConfig({
       reporter: ["text", "html"],
       include: [
         "src/schedule/engine.ts",
+        "src/schedule/occurrences.ts",
         "src/domain/enums.ts",
         "src/domain/reminder.ts",
         "src/domain/schedule-times.ts",

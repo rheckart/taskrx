@@ -109,10 +109,16 @@ export type {
 export {
   nextNDaily,
   nextNInterval,
+  nextOccurrences,
   selectUpcomingDoses,
   upcomingDosesFor,
 } from "./schedule/index";
-export type { GlobalDose, ScheduledDose } from "./schedule/index";
+export type {
+  GlobalDose,
+  OccurrenceSource,
+  ScheduledDose,
+  ScheduledOccurrence,
+} from "./schedule/index";
 
 export {
   shouldApplyRemoteDoseLog,
