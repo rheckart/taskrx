@@ -90,8 +90,8 @@ SELECT
   src.active,
   src.created_at,
   src.updated_at,
-  src.sync_status,
-  src.convex_id
+  'pending',
+  NULL
 FROM (
   SELECT
     m.*,
@@ -129,7 +129,7 @@ SELECT
   d.notes,
   d.created_at,
   d.updated_at,
-  d.sync_status,
-  d.convex_id
+  'pending',
+  NULL
 FROM dose_logs d
 WHERE EXISTS (SELECT 1 FROM reminders r WHERE r.id = d.medication_id);

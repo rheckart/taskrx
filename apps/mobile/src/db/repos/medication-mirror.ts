@@ -1,5 +1,7 @@
 import { getDb } from "../index";
 
+import * as remindersRepo from "./reminders";
+
 /**
  * Keeps the unified `reminders` table in step with writes to the POC
  * `medications` table.
@@ -27,15 +29,41 @@ import { getDb } from "../index";
  * of that SQL are this file and the migration, and `scripts/verify-reminder-
  * migrations.mjs` asserts the migration half.
  *
- * ## Why raw SQL rather than `remindersRepo`
+ * ## Why raw SQL rather than `remindersRepo.create` / `update`
  *
- * `remindersRepo.create` / `update` / `softDelete` enqueue a `reminder`-typed
- * `sync_queue` entry. The medication write that triggers this mirror has
- * already enqueued a `medication`-typed entry for the same logical record, so
- * routing through the repo would push one user action to Convex twice, under
- * two identities. The mirror is deliberately local-only: `reminders` rows it
- * writes inherit the medication's `sync_status` and `convex_id`, so the row
- * reports the truth about a sync that the medication entry is performing.
+ * Only to keep the mapping identical to the migration, per the section above.
+ * The row write is SQL; the sync enqueue is not. Each write ends by calling
+ * `remindersRepo.enqueueExternalWrite`, which builds the canonical reminder
+ * payload from the persisted row.
+ *
+ * ## Sync identity: the projection is its own entity
+ *
+ * This module previously copied `medications.sync_status` and
+ * `medications.convex_id` into the projection, on the reasoning that the
+ * mirror was local-only and the row should "report the truth about a sync the
+ * medication entry is performing". That was wrong in a way that mattered.
+ *
+ * `convex_id` is not a shared identifier. A medication's `convex_id` is an
+ * `Id<"medications">` — a document id in a *different Convex table*. The sync
+ * worker's `resolveReminderId` reads `reminders.convex_id` and hands it to
+ * `api.reminders.update` and to `api.reminderInstances.create` as an
+ * `Id<"reminders">`. Copying the column across therefore aimed a medications
+ * document id at the reminders table. It was latent only because nothing
+ * enqueued reminder entries, so `resolveReminderId` never ran; enqueuing here
+ * is exactly what would have armed it.
+ *
+ * So the projection now owns its sync lifecycle: it is written `pending` with
+ * a NULL `convex_id`, and `convex_id` is set only by `remindersRepo.
+ * setConvexId` after a genuine `api.reminders.create`. The conflict clause
+ * does not mention `convex_id` at all — the mirror has no correct value to
+ * offer, and must not disturb the one a real sync resolved.
+ *
+ * The cost is that one medication write now pushes twice: a `medication` entry
+ * and a `reminder` entry, creating a document in each Convex table. That is
+ * deliberate dual-write. It is the price of having the unified model populated
+ * and current *before* the cutover, so the cutover is a read-path change
+ * rather than a big-bang server migration. It ends when `medications` is
+ * retired.
  */
 
 /**
@@ -88,8 +116,8 @@ const MEDICATION_TO_REMINDER_SELECT = `
     src.active,
     src.created_at,
     src.updated_at,
-    src.sync_status,
-    src.convex_id
+    'pending',
+    NULL
   FROM (
     SELECT
       m.*,
@@ -111,9 +139,13 @@ const MEDICATION_TO_REMINDER_SELECT = `
  *
  *   * `kind` — a mirrored row is always `medication`, and rewriting it would
  *     clobber the row if a user ever converts a reminder to a task.
- *   * `convex_id` falls back to the existing value with `COALESCE`, because a
- *     medication that has not synced yet carries `NULL` and must not erase the
- *     document id an earlier sync already resolved.
+ *   * `convex_id` — the mirror has no `Id<"reminders">` to offer (see the
+ *     header), and must not disturb one an earlier sync resolved. It is
+ *     absent from the clause entirely rather than defaulted.
+ *
+ * `sync_status` is forced to `'pending'` rather than inherited: the projection
+ * has just changed and has its own unsynced edit to push, independent of
+ * whatever the medication's own queue entry is doing.
  *
  * Fields the POC has no source for (`instructions`, pill counts, refill days,
  * caregivers, `tags`, `priority`) are left untouched on update rather than
@@ -137,10 +169,11 @@ export async function mirrorMedication(medicationId: string): Promise<void> {
        schedule    = excluded.schedule,
        active      = excluded.active,
        updated_at  = excluded.updated_at,
-       sync_status = excluded.sync_status,
-       convex_id   = COALESCE(excluded.convex_id, reminders.convex_id)`,
+       sync_status = 'pending'`,
     medicationId
   );
+
+  await remindersRepo.enqueueExternalWrite(medicationId);
 }
 
 /**
@@ -153,7 +186,11 @@ export async function mirrorMedication(medicationId: string): Promise<void> {
  *
  * A no-op when the reminder is absent — a medication created before migration
  * 005 ran and deleted before it was ever mirrored has nothing to deactivate,
- * and that is not an error.
+ * and that is not an error. `enqueueExternalWrite` is likewise a no-op for a
+ * missing row, so the trailing call is safe in that case.
+ *
+ * The deactivation propagates as an `update` carrying `active: false`, not as
+ * a `delete`; see `enqueueExternalWrite` for why.
  */
 export async function mirrorMedicationDelete(
   medicationId: string,
@@ -167,4 +204,6 @@ export async function mirrorMedicationDelete(
     deletedAt,
     medicationId
   );
+
+  await remindersRepo.enqueueExternalWrite(medicationId);
 }

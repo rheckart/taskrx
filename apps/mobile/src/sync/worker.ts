@@ -213,6 +213,20 @@ export class SyncWorker {
     this.setStatus("syncing");
 
     try {
+      // Before reading the queue, give reminders that are pending but absent
+      // from it a queue entry. Migration 005 backfilled them in SQL, which
+      // cannot enqueue, and a best-effort enqueue can fail after its row
+      // write; in both cases nothing else would ever push the row. Cheap and
+      // indexed once the backlog is clear.
+      //
+      // Failing here must not cost the drain: the queue as it already stands
+      // is still worth draining, and the next drain retries the reconcile.
+      try {
+        await remindersRepo.reconcilePending();
+      } catch (error) {
+        console.error("[sync] reminder reconciliation failed", error);
+      }
+
       const entries = await syncQueueRepo.pending();
       for (const entry of entries) {
         const result = await this.processEntry(entry);
@@ -442,9 +456,7 @@ export class SyncWorker {
         return { ok: true };
       }
       case "update": {
-        const convexId = (await this.resolveReminderId(
-          payload.localId
-        )) as Id<"reminders">;
+        const convexId = await this.resolveReminderId(payload.localId);
         await this.client.mutation(api.reminders.update, {
           id: convexId,
           name: payload.name,
@@ -472,9 +484,7 @@ export class SyncWorker {
         return { ok: true };
       }
       case "delete": {
-        const convexId = (await this.resolveReminderId(
-          payload.localId
-        )) as Id<"reminders">;
+        const convexId = await this.resolveReminderId(payload.localId);
         await this.client.mutation(api.reminders.softDelete, { id: convexId });
         return { ok: true };
       }
@@ -501,9 +511,9 @@ export class SyncWorker {
       case "create": {
         // The parent has to exist on Convex first: `reminderInstances.create`
         // takes an `Id<"reminders">` and reads `kind` off the parent document.
-        const reminderConvexId = (await this.resolveReminderId(
+        const reminderConvexId = await this.resolveReminderId(
           payload.reminderId
-        )) as Id<"reminders">;
+        );
         const convexId = await this.client.mutation(
           api.reminderInstances.create,
           {
@@ -526,9 +536,7 @@ export class SyncWorker {
         return { ok: true };
       }
       case "update": {
-        const convexId = (await this.resolveReminderInstanceId(
-          payload.localId
-        )) as Id<"reminderInstances">;
+        const convexId = await this.resolveReminderInstanceId(payload.localId);
         switch (payload.status) {
           case "taken": {
             await this.client.mutation(api.reminderInstances.markTaken, {
@@ -622,10 +630,27 @@ export class SyncWorker {
     return remote._id;
   }
 
-  private async resolveReminderId(localId: string): Promise<string> {
+  /**
+   * Resolve a local reminder id to its Convex document id.
+   *
+   * The return type is branded rather than a bare `string` so callers cannot
+   * re-brand it themselves. That matters here more than it looks: until
+   * migration 007, `reminders.convex_id` could hold an `Id<"medications">`,
+   * because the medication mirror and migration 005 copied the column across
+   * from `medications`. Every call site then wrote `as Id<"reminders">`, which
+   * is exactly the assertion that made the wrong-table id typecheck. With the
+   * brand applied once, here, the only unchecked step left is this cache read.
+   *
+   * The invariant it rests on: `reminders.convex_id` is written by
+   * `remindersRepo.setConvexId` and by nothing else, and every caller of that
+   * passes an id returned by an `api.reminders.*` mutation or query. The
+   * mirror no longer touches the column at all, and 007 cleared the values it
+   * had already written.
+   */
+  private async resolveReminderId(localId: string): Promise<Id<"reminders">> {
     const cached = await remindersRepo.getConvexId(localId);
     if (cached !== null) {
-      return cached;
+      return cached as Id<"reminders">;
     }
 
     const remote = await this.client.query(api.reminders.getByLocalId, {
@@ -639,10 +664,17 @@ export class SyncWorker {
     return remote._id;
   }
 
-  private async resolveReminderInstanceId(localId: string): Promise<string> {
+  /**
+   * As `resolveReminderId`, for instances. `reminder_instances.convex_id` had
+   * the same contamination — migration 005 copied `dose_logs.convex_id` into
+   * it, so it could hold an `Id<"doseLogs">` — and 007 clears that too.
+   */
+  private async resolveReminderInstanceId(
+    localId: string
+  ): Promise<Id<"reminderInstances">> {
     const cached = await reminderInstancesRepo.getConvexId(localId);
     if (cached !== null) {
-      return cached;
+      return cached as Id<"reminderInstances">;
     }
 
     const remote = await this.client.query(api.reminderInstances.getByLocalId, {

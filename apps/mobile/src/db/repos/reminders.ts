@@ -435,6 +435,109 @@ export async function softDelete(id: string): Promise<void> {
 }
 
 /**
+ * Enqueue a sync entry for a `reminders` row that was written *outside* this
+ * repo.
+ *
+ * Two writers bypass `create`/`update`: the medication mirror's raw-SQL upsert
+ * (`medication-mirror.ts`) and migration 005's backfill. Neither can call the
+ * repo — the mirror deliberately writes SQL so it can stay column-for-column
+ * identical to the migration, and a `.sql` file cannot call TypeScript at all.
+ * Before this existed, that meant no mirrored or backfilled reminder ever
+ * produced a `sync_queue` row, so the Convex `reminders` table stayed empty
+ * indefinitely no matter how many medications the user created.
+ *
+ * The payload is built here rather than at the call sites so there is exactly
+ * one definition of a reminder's sync shape. A second copy in SQL (or in the
+ * mirror) is precisely the drift the mirror's own header warns about.
+ *
+ * The operation is chosen from `convex_id` rather than passed in: a row the
+ * server has never seen needs `create`, and one it has needs `update`. Getting
+ * this backwards is not a cosmetic error — `processReminderEntry`'s `update`
+ * branch calls `resolveReminderId`, which throws when the document does not
+ * exist yet.
+ *
+ * A soft delete routes through here as an ordinary `update` carrying
+ * `active: false`, never as a `delete`. The mirror only ever flips `active` to
+ * 0 (the row is retained so dose history still resolves), and a `delete` entry
+ * for a row that never synced would fail id resolution for no reason.
+ *
+ * A no-op for an absent row, matching `softDelete`: there is nothing to
+ * describe and no user to attribute it to.
+ */
+export async function enqueueExternalWrite(id: string): Promise<void> {
+  const existing = await get(id);
+  if (existing === null) {
+    return;
+  }
+
+  const convexId = await getConvexId(id);
+  const rxcui = await getRxcui(id);
+
+  await enqueue("reminder", id, convexId === null ? "create" : "update", {
+    localId: id,
+    userId: existing.userId,
+    kind: existing.kind,
+    name: existing.name,
+    rxcui: rxcui ?? null,
+    dosage: existing.dosage ?? null,
+    instructions: existing.instructions ?? null,
+    schedule: existing.schedule,
+    priority: existing.priority,
+    tags: existing.tags,
+    pillsRemaining: existing.pillsRemaining ?? null,
+    pillsPerDose: existing.pillsPerDose ?? null,
+    refillReminderDays: existing.refillReminderDays ?? null,
+    caregiverIds: existing.caregiverIds,
+    active: existing.active,
+    createdAt: existing.createdAt,
+    updatedAt: existing.updatedAt,
+  });
+}
+
+/**
+ * Enqueue every reminder that is `pending` but has nothing in the queue to
+ * make it un-pend, and return how many were enqueued.
+ *
+ * This is the "later reconciliation pass" the enqueue-is-best-effort note at
+ * the top of this file refers to. It closes two gaps:
+ *
+ *   * Migration 005 backfilled `reminders` from `medications` in SQL, which
+ *     cannot enqueue. Migration 007 then returns those rows to `pending`.
+ *     Without this pass, an existing install's backfilled reminders would sit
+ *     unsynced until the user happened to edit each medication, so the Convex
+ *     `reminders` table would stay empty or partial indefinitely.
+ *   * An enqueue that failed after its row write — the failure mode the repo
+ *     header already anticipates — leaves a `pending` row with no queue entry.
+ *     Nothing previously recovered from that.
+ *
+ * The `NOT EXISTS` is the whole safety argument: a row that already has a live
+ * queue entry is skipped, so this cannot duplicate work, and running it on
+ * every drain is a cheap indexed no-op once the backlog is clear. Dead-lettered
+ * entries are deliberately not counted as live — an entry the worker has given
+ * up on must not suppress a fresh attempt forever.
+ */
+export async function reconcilePending(): Promise<number> {
+  const db = await getDb();
+  const rows = await db.getAllAsync<{ readonly id: string }>(
+    `SELECT r.id
+     FROM reminders r
+     WHERE r.sync_status = 'pending'
+       AND NOT EXISTS (
+         SELECT 1 FROM sync_queue q
+         WHERE q.entity_type = 'reminder'
+           AND q.entity_id = r.id
+           AND q.dead_letter = 0
+       )`
+  );
+
+  for (const row of rows) {
+    await enqueueExternalWrite(row.id);
+  }
+
+  return rows.length;
+}
+
+/**
  * Mark a reminder's sync status as `synced`.
  */
 export async function markSynced(id: string): Promise<void> {

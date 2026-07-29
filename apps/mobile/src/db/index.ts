@@ -200,8 +200,8 @@ const MIGRATIONS: readonly Migration[] = [
         src.active,
         src.created_at,
         src.updated_at,
-        src.sync_status,
-        src.convex_id
+        'pending',
+        NULL
       FROM (
         SELECT
           m.*,
@@ -227,8 +227,8 @@ const MIGRATIONS: readonly Migration[] = [
         d.notes,
         d.created_at,
         d.updated_at,
-        d.sync_status,
-        d.convex_id
+        'pending',
+        NULL
       FROM dose_logs d
       WHERE EXISTS (SELECT 1 FROM reminders r WHERE r.id = d.medication_id);
     `,
@@ -267,6 +267,26 @@ const MIGRATIONS: readonly Migration[] = [
 
       CREATE INDEX IF NOT EXISTS idx_sync_queue_created ON sync_queue(created_at);
       CREATE INDEX IF NOT EXISTS idx_sync_queue_dead_letter ON sync_queue(dead_letter);
+    `,
+  },
+  {
+    name: "007_clear_projected_convex_ids",
+    sql: `
+      UPDATE reminders
+      SET convex_id   = NULL,
+          sync_status = 'pending'
+      WHERE convex_id IS NOT NULL
+        AND convex_id = (
+          SELECT m.convex_id FROM medications m WHERE m.id = reminders.id
+        );
+
+      UPDATE reminder_instances
+      SET convex_id   = NULL,
+          sync_status = 'pending'
+      WHERE convex_id IS NOT NULL
+        AND convex_id = (
+          SELECT d.convex_id FROM dose_logs d WHERE d.id = reminder_instances.id
+        );
     `,
   },
 ];

@@ -53,6 +53,7 @@ const MIGRATION_FILES = [
   ["004_unified_reminders", "004_unified_reminders.sql"],
   ["005_backfill_reminders", "005_backfill_reminders.sql"],
   ["006_widen_sync_queue", "006_widen_sync_queue.sql"],
+  ["007_clear_projected_convex_ids", "007_clear_projected_convex_ids.sql"],
 ];
 
 const sqlByName = new Map(
@@ -738,8 +739,13 @@ function assertBackfill(db, phase) {
         active: m.active,
         created_at: m.created_at,
         updated_at: m.updated_at,
-        sync_status: m.sync_status,
-        convex_id: m.convex_id,
+        // NOT inherited from the medication. A projection is its own sync
+        // entity: it starts unsynced, and `convex_id` stays NULL until
+        // `api.reminders.create` returns a real `Id<"reminders">`. Copying
+        // `m.convex_id` across put an `Id<"medications">` where the sync
+        // worker expected an `Id<"reminders">`.
+        sync_status: "pending",
+        convex_id: null,
       }
     );
   }
@@ -783,8 +789,10 @@ function assertBackfill(db, phase) {
         notes: l.notes,
         created_at: l.created_at,
         updated_at: l.updated_at,
-        sync_status: l.sync_status,
-        convex_id: l.convex_id,
+        // Same reasoning as the reminders half: `l.convex_id` is an
+        // `Id<"doseLogs">`, not an `Id<"reminderInstances">`.
+        sync_status: "pending",
+        convex_id: null,
       }
     );
   }
@@ -849,6 +857,7 @@ function partB() {
     "004_unified_reminders",
     "005_backfill_reminders",
     "006_widen_sync_queue",
+    "007_clear_projected_convex_ids",
   ]);
 
   assertBackfill(db, "after first run");
@@ -1011,14 +1020,40 @@ function partE() {
     "mirror scopes the backfill SELECT to one medication",
     /WHERE src\.id = \?\s*$/.test(select)
   );
-  // Code only — the module's doc comment discusses enqueuing at length to
-  // explain why it must not, so a bare substring search would match the prose.
+  // Code only — the module's doc comment discusses enqueuing at length, so a
+  // bare substring search would match the prose.
   const code = source
     .replace(/\/\*[\s\S]*?\*\//g, "")
     .replace(/\/\/.*$/gm, "");
+  // The mirror MUST enqueue. Migration 005 backfills in SQL and cannot; if the
+  // mirror does not either, no medication ever reaches the Convex `reminders`
+  // table and the unified model stays permanently empty. Both write paths are
+  // checked because a soft delete that stops propagating is just as silent.
   ok(
-    "mirror never enqueues (the medication write already enqueues its own entry)",
-    !/\benqueue\s*\(/.test(code) && !/from\s+"\.\/syncQueue"/.test(code)
+    "mirrorMedication enqueues a reminder sync entry",
+    /enqueueExternalWrite\(/.test(
+      template(source, "async function mirrorMedication(")
+    ) ||
+      /mirrorMedication\b[\s\S]*?enqueueExternalWrite\(/.test(code)
+  );
+  ok(
+    "mirrorMedicationDelete enqueues too",
+    /mirrorMedicationDelete\b[\s\S]*?enqueueExternalWrite\(/.test(code)
+  );
+  // It routes through the repo rather than calling `enqueue` itself, so the
+  // reminder payload has exactly one definition. A direct `syncQueue` import
+  // here would be a second copy of that contract, free to drift.
+  ok(
+    "mirror does not hand-roll the payload (no direct syncQueue import)",
+    !/from\s+"\.\/syncQueue"/.test(code)
+  );
+  // `convex_id` must be absent from the projection entirely: the mirror has no
+  // `Id<"reminders">` to offer, and copying the medication's aimed a
+  // wrong-table document id at the sync worker. This is the M2 source guard —
+  // Part F covers the repair, this covers the regression.
+  ok(
+    "mirror never writes medications.convex_id into the projection",
+    !/src\.convex_id/.test(code) && !/COALESCE\(excluded\.convex_id/.test(code)
   );
 
   const db = open();
@@ -1055,7 +1090,7 @@ function partE() {
   eq("  instructions has no POC source", r1?.instructions, null);
   eq("  active", r1?.active, 1);
   eq("  created_at is the medication's, not now()", r1?.created_at, 1000);
-  eq("  sync_status is inherited", r1?.sync_status, "pending");
+  eq("  sync_status is forced to pending, not inherited", r1?.sync_status, "pending");
 
   insertMed.run(
     "post-2", "user-1", null, "Ibuprofen", null, "200mg",
@@ -1105,22 +1140,27 @@ function partE() {
   eq("an edit propagates: schedule", r1b?.schedule, '{"type":"daily","times":["08:00"]}');
   eq("an edit propagates: updated_at", r1b?.updated_at, 4000);
 
-  // The COALESCE guard. A synced reminder holds a convex_id; a later mirror of
-  // a medication whose own convex_id is still NULL must not erase it, or the
-  // sync worker's id bridge stops resolving.
+  // `convex_id` is not in the conflict clause at all. A Convex document id is
+  // scoped to its table, so a medication's id (`Id<"medications">`) is not a
+  // legal value for `reminders.convex_id` (`Id<"reminders">`) no matter what
+  // either column currently holds. The mirror has no correct value to offer.
   db.prepare("UPDATE reminders SET convex_id = 'cx-1' WHERE id = 'post-1'").run();
   runMirror.run("post-1");
   eq(
-    "a NULL medication convex_id does not erase the reminder's",
+    "mirroring does not erase a resolved reminder convex_id",
     reminder("post-1")?.convex_id,
     "cx-1"
   );
+  // This is the M2 regression guard. The mirror used to COALESCE the
+  // medication's convex_id in, which aimed an `Id<"medications">` at
+  // `api.reminders.update` and at `api.reminderInstances.create`'s parent
+  // lookup. It must now be ignored.
   db.prepare("UPDATE medications SET convex_id = 'cx-2' WHERE id = 'post-1'").run();
   runMirror.run("post-1");
   eq(
-    "a real medication convex_id does overwrite it",
+    "a medication convex_id never reaches the reminder",
     reminder("post-1")?.convex_id,
-    "cx-2"
+    "cx-1"
   );
 
   // Soft delete deactivates rather than removes: `selectUpcomingOccurrences`
@@ -1166,6 +1206,104 @@ function partE() {
   db.close();
 }
 
+// ── Part F: 007 repairs devices that already applied the old 005 ──────────
+
+/**
+ * 005 no longer copies `convex_id` across, so a fresh install never sees the
+ * fault. A device that upgraded, though, already has an `Id<"medications">`
+ * sitting in `reminders.convex_id`, and the medication mirror now enqueues
+ * reminder sync entries — which is exactly what would hand that id to
+ * `api.reminders.update`. 007 is what makes those devices safe, so it is
+ * tested against the pre-fix on-disk state rather than a clean one.
+ */
+function partF() {
+  section("Part F: 007 clears cross-table convex ids");
+
+  const db = open();
+  applyMigrations(db, [
+    "001_init",
+    "002_add_convex_id",
+    "003_sync_queue_dead_letter",
+    "004_unified_reminders",
+  ]);
+  seed(db);
+  applyMigrations(db, ["005_backfill_reminders", "006_widen_sync_queue"]);
+
+  // Reproduce what the OLD 005 left behind: the projections carrying the
+  // source rows' sync identity. This is the on-disk state of every device that
+  // upgraded before the fix.
+  db.exec(
+    `UPDATE reminders SET
+       convex_id   = (SELECT m.convex_id   FROM medications m WHERE m.id = reminders.id),
+       sync_status = (SELECT m.sync_status FROM medications m WHERE m.id = reminders.id)`
+  );
+  db.exec(
+    `UPDATE reminder_instances SET
+       convex_id   = (SELECT d.convex_id   FROM dose_logs d WHERE d.id = reminder_instances.id),
+       sync_status = (SELECT d.sync_status FROM dose_logs d WHERE d.id = reminder_instances.id)`
+  );
+
+  const reminder = (id) =>
+    db.prepare("SELECT * FROM reminders WHERE id = ?").get(id);
+  const instance = (id) =>
+    db.prepare("SELECT * FROM reminder_instances WHERE id = ?").get(id);
+
+  eq("pre-007: contaminated", reminder("med-aaaa-1111")?.convex_id, "cx_med_1");
+
+  applyMigrations(db, ["007_clear_projected_convex_ids"]);
+
+  eq("007 clears a medication id", reminder("med-aaaa-1111")?.convex_id, null);
+  eq("007 clears another", reminder("med-cccc-3333")?.convex_id, null);
+  eq(
+    "007 re-pends the cleared row",
+    reminder("med-aaaa-1111")?.sync_status,
+    "pending"
+  );
+  eq(
+    "007 leaves an already-NULL row alone",
+    reminder("med-bbbb-2222")?.convex_id,
+    null
+  );
+  eq("007 clears a dose log id", instance("dose-1")?.convex_id, null);
+  eq(
+    "007 re-pends the cleared instance",
+    instance("dose-1")?.sync_status,
+    "pending"
+  );
+
+  // The idempotency requirement, and the reason the guard matches on the
+  // *value* rather than on "this row came from 005". Once a reminder has
+  // genuinely synced it holds an `Id<"reminders">`, which can never equal the
+  // `Id<"medications">` on the medication of the same local id — so a re-run
+  // must not touch it. A cruder `id IN (SELECT id FROM medications)` guard
+  // would discard it here and force a duplicate create on the server.
+  db.prepare(
+    "UPDATE reminders SET convex_id = 'rem_real_1', sync_status = 'synced' WHERE id = 'med-aaaa-1111'"
+  ).run();
+  db.exec(sql("007_clear_projected_convex_ids"));
+  eq(
+    "re-running 007 spares a genuinely resolved reminder id",
+    reminder("med-aaaa-1111")?.convex_id,
+    "rem_real_1"
+  );
+  eq(
+    "re-running 007 does not re-pend it",
+    reminder("med-aaaa-1111")?.sync_status,
+    "synced"
+  );
+
+  // And a re-run over already-cleared rows changes nothing.
+  const before = JSON.stringify(reminder("med-cccc-3333"));
+  db.exec(sql("007_clear_projected_convex_ids"));
+  eq(
+    "re-running 007 over cleared rows is a no-op",
+    JSON.stringify(reminder("med-cccc-3333")),
+    before
+  );
+
+  db.close();
+}
+
 // ── run ───────────────────────────────────────────────────────────────────
 
 console.log(`node ${process.version}, node:sqlite`);
@@ -1173,6 +1311,7 @@ part0();
 partA();
 partD(partC(partB()));
 partE();
+partF();
 
 console.log(
   `\n${checks - failures}/${checks} checks passed${failures === 0 ? "" : `, ${failures} FAILED`}`
