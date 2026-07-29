@@ -1023,12 +1023,104 @@ function template(source, marker) {
 // negative `!/.../` checks -- they pass because the call moved outside the
 // truncated window -- which is the same disease this extractor exists to cure.
 //
-// Pass comment-stripped text so prose braces cannot skew the count either.
+// A regex-based blanker is not enough, and the gap was exploitable. An earlier
+// version matched only `"`, `'` and `` ` ``, so a REGEX literal containing a
+// brace -- `const stripBrace = /[}]/g;` -- still truncated the slice, and a real
+// `mirrorMedication` call added below it passed `!/mirrorMedication/` vacuously.
+// That is the identical failure the string case was fixed for, one literal type
+// over. This is a single pass over the text instead, blanking the contents of
+// strings, template literals, regex literals AND comments, so callers no longer
+// have to strip comments first either.
+//
+// Length is preserved exactly (newlines included) so every offset computed on
+// the blanked copy still indexes the original.
+const REGEX_CAN_FOLLOW = /[([{,;:=!&|?+\-*%^~<>]$/;
+const REGEX_CAN_FOLLOW_WORD =
+  /\b(return|typeof|case|in|of|do|else|yield|await|new|delete|void|instanceof)$/;
+
 function blankLiterals(text) {
-  return text.replace(
-    /(["'`])(?:\\.|(?!\1)[^\\])*\1/g,
-    (m) => m[0] + " ".repeat(Math.max(0, m.length - 2)) + m[0]
-  );
+  const out = text.split("");
+  const blank = (from, to) => {
+    for (let k = from; k < to && k < out.length; k += 1) {
+      if (out[k] !== "\n") out[k] = " ";
+    }
+  };
+  // The last non-space character seen in code position, which is what decides
+  // whether a `/` opens a regex or is a division operator.
+  let before = "";
+  let i = 0;
+
+  while (i < text.length) {
+    const c = text[i];
+    const next = text[i + 1];
+
+    if (c === "/" && next === "/") {
+      const nl = text.indexOf("\n", i);
+      const end = nl === -1 ? text.length : nl;
+      blank(i, end);
+      i = end;
+      continue;
+    }
+    if (c === "/" && next === "*") {
+      const close = text.indexOf("*/", i + 2);
+      const end = close === -1 ? text.length : close + 2;
+      blank(i, end);
+      i = end;
+      continue;
+    }
+    if (c === '"' || c === "'" || c === "`") {
+      let j = i + 1;
+      while (j < text.length) {
+        if (text[j] === "\\") {
+          j += 2;
+          continue;
+        }
+        if (text[j] === c) break;
+        j += 1;
+      }
+      blank(i + 1, j);
+      before = c;
+      i = Math.min(j + 1, text.length);
+      continue;
+    }
+    if (
+      c === "/" &&
+      (before === "" ||
+        REGEX_CAN_FOLLOW.test(before) ||
+        REGEX_CAN_FOLLOW_WORD.test(text.slice(0, i)))
+    ) {
+      let j = i + 1;
+      let inClass = false;
+      let closed = false;
+      while (j < text.length) {
+        const d = text[j];
+        if (d === "\\") {
+          j += 2;
+          continue;
+        }
+        // An unescaped newline means this was never a regex -- fall through and
+        // treat the `/` as division rather than eating the rest of the file.
+        if (d === "\n") break;
+        if (d === "[") inClass = true;
+        else if (d === "]") inClass = false;
+        else if (d === "/" && !inClass) {
+          closed = true;
+          break;
+        }
+        j += 1;
+      }
+      if (closed) {
+        blank(i + 1, j);
+        before = "/";
+        i = j + 1;
+        continue;
+      }
+    }
+    if (!/\s/.test(c)) before = c;
+    i += 1;
+  }
+
+  return out.join("");
 }
 
 function body(source, marker) {
@@ -1170,20 +1262,71 @@ function partE() {
   // literal, so `template()` cannot see it -- every check that runs `insert`
   // alone is exercising the pull-path variant. An audit made that clause
   // syntactically invalid, inverted it to `'synced'`, and deleted it outright,
-  // and the suite stayed green all three times. Both variants are prepared and
-  // executed here so the difference between them is observed, not asserted.
+  // and the suite stayed green all three times.
+  //
+  // Preparing `insert + rependClause` here closed that, but only halfway: the
+  // harness was then asserting against its OWN concatenation, and nothing
+  // observed which variant `upsertProjection` actually selects. Swapping the
+  // source's ternary to `(repend ? "" : REPEND_CLAUSE)` -- a live bug that stops
+  // local edits re-pending and starts pull writes doing it -- still passed every
+  // check. So the argument expression is lifted out of the source and evaluated
+  // for both values of `repend`: the wiring is executed, not restated.
   const rependClause = template(source, "const REPEND_CLAUSE");
-  let runMirror;
+  const upsertBody = body(source, "async function upsertProjection(");
+  const sqlArgExpr = (() => {
+    const blanked = blankLiterals(upsertBody);
+    const callAt = blanked.indexOf("db.runAsync(");
+    const open = blanked.indexOf("(", callAt);
+    let depth = 0;
+    let close = -1;
+    const commas = [];
+    for (let i = open; i < blanked.length; i += 1) {
+      const ch = blanked[i];
+      if (ch === "(" || ch === "[" || ch === "{") depth += 1;
+      else if (ch === ")" || ch === "]" || ch === "}") {
+        depth -= 1;
+        if (depth === 0) {
+          close = i;
+          break;
+        }
+      } else if (ch === "," && depth === 1) commas.push(i);
+    }
+    // Everything up to the last top-level comma: the SQL argument, whatever
+    // shape it has. `medicationId` is what follows it.
+    const lastComma = commas[commas.length - 1];
+    return upsertBody.slice(open + 1, lastComma === undefined ? close : lastComma);
+  })();
+
+  let buildSql;
   try {
-    runMirror = db.prepare(insert + rependClause);
-    ok("the re-pend variant is valid SQL", true);
+    buildSql = new Function(
+      "MEDICATION_TO_REMINDER_SELECT",
+      "REPEND_CLAUSE",
+      "repend",
+      // Parenthesised: the extracted expression starts on the next line, and a
+      // bare `return` followed by a newline is an ASI hazard that silently
+      // returns undefined.
+      `return (${sqlArgExpr});`
+    );
   } catch (err) {
-    // Reported rather than thrown: a prepare failure here is the finding, and
-    // aborting would skip every remaining check in the file.
-    ok("the re-pend variant is valid SQL", false, `\n    ${err.message}`);
-    runMirror = db.prepare(insert);
+    ok("the mirror's SQL argument expression parses", false, `\n    ${err.message}`);
+    buildSql = (sel, clause, repend) => insert + (repend ? clause : "");
   }
-  const runMirrorRow = db.prepare(insert);
+
+  const prepared = (repend, label) => {
+    try {
+      const stmt = db.prepare(buildSql(select, rependClause, repend));
+      ok(`the ${label} variant is valid SQL`, true);
+      return stmt;
+    } catch (err) {
+      // Reported rather than thrown: a prepare failure here is the finding, and
+      // aborting would skip every remaining check in the file.
+      ok(`the ${label} variant is valid SQL`, false, `\n    ${err.message}`);
+      return db.prepare(insert);
+    }
+  };
+  const runMirror = prepared(true, "re-pend");
+  const runMirrorRow = prepared(false, "pull-path");
   const runMirrorDelete = db.prepare(softDelete);
   const reminder = (id) =>
     db.prepare("SELECT * FROM reminders WHERE id = ?").get(id);
@@ -1396,56 +1539,130 @@ function partE() {
 function partH() {
   section("Part H: drain() releases the re-entrancy flag on every path");
 
-  const code = readFileSync(WORKER_TS, "utf8")
-    .replace(/\/\*[\s\S]*?\*\//g, "")
-    .replace(/\/\/.*$/gm, "");
+  const code = readFileSync(WORKER_TS, "utf8");
   const drain = body(code, "async drain(");
-
-  const claim = drain.indexOf("this.draining = true;");
-  ok("drain() claims the flag before awaiting", claim !== -1);
-
-  // The guarded region: the try that opens after the claim, brace-matched.
   const scan = blankLiterals(drain);
-  const tryOpen = scan.indexOf("{", scan.indexOf("try", claim));
-  let depth = 0;
-  let tryClose = -1;
-  for (let i = tryOpen; i < scan.length; i += 1) {
-    if (scan[i] === "{") depth += 1;
-    else if (scan[i] === "}") {
-      depth -= 1;
-      if (depth === 0) {
-        tryClose = i;
-        break;
+
+  const matchBrace = (open) => {
+    let depth = 0;
+    for (let i = open; i < scan.length; i += 1) {
+      if (scan[i] === "{") depth += 1;
+      else if (scan[i] === "}") {
+        depth -= 1;
+        if (depth === 0) return i;
       }
     }
-  }
-  ok("drain() opens a try after claiming the flag", tryClose !== -1);
+    return -1;
+  };
 
-  const beforeTry = drain.slice(claim, tryOpen);
-  const afterTry = drain.slice(tryClose);
+  const claim = scan.indexOf("this.draining = true;");
+  ok("drain() claims the flag", claim !== -1);
+
+  // Ordering, not presence. The previous check here was `claim !== -1` under a
+  // label that promised ordering, so inserting an `await` above the claim --
+  // reintroducing precisely the race the claim exists to prevent -- passed.
+  const firstAwait = scan.search(/\bawait\b/);
   ok(
-    "no return between claiming the flag and entering the guarded try",
-    !/\breturn\b/.test(beforeTry),
+    "drain() claims the flag before its first await",
+    claim !== -1 && firstAwait !== -1 && claim < firstAwait,
+    `\n    claim at ${claim}, first await at ${firstAwait}`
+  );
+
+  // Every try in the body, brace-matched, paired with its own `finally`.
+  //
+  // The previous version took "the first `try` after the claim" as the guarded
+  // region. That is a shape, not the invariant, and one edit defeated all of
+  // it: closing a decoy try around the connectivity block and reopening a
+  // second try for the real work left every check reading the decoy, while the
+  // offline `return` escaped through a try that had only a `catch`. The flag
+  // latched for the process lifetime and the suite stayed green. So the guard
+  // is now identified by what it does -- releasing the flag in a finally -- and
+  // every exit is tested for containment within it.
+  const tries = [];
+  for (const m of scan.matchAll(/\btry\b/g)) {
+    const open = scan.indexOf("{", m.index);
+    const close = matchBrace(open);
+    if (open === -1 || close === -1) continue;
+    let cursor = close + 1;
+    let fin = null;
+    for (;;) {
+      const rest = scan.slice(cursor);
+      const mFinally = /^\s*finally\s*\{/.exec(rest);
+      if (mFinally) {
+        const fOpen = cursor + mFinally[0].length - 1;
+        const fClose = matchBrace(fOpen);
+        fin = { open: fOpen, close: fClose };
+        cursor = fClose + 1;
+        break;
+      }
+      const mCatch = /^\s*catch\s*(\([^)]*\)\s*)?\{/.exec(rest);
+      if (mCatch) {
+        cursor = matchBrace(cursor + mCatch[0].length - 1) + 1;
+        continue;
+      }
+      break;
+    }
+    tries.push({ open, close, end: cursor, fin });
+  }
+
+  const releasing = tries.filter(
+    (t) => t.fin && /this\.draining\s*=\s*false\s*;/.test(scan.slice(t.fin.open, t.fin.close))
+  );
+  ok(
+    "exactly one try releases the flag in a finally",
+    releasing.length === 1,
+    `\n    found ${releasing.length}`
+  );
+  const guard = releasing[0];
+
+  // Unconditionally. `finally { if (this.status !== "error") this.draining =
+  // false; }` satisfies any "the finally mentions the release" pattern while
+  // leaking the flag on every errored drain.
+  const finallyBody = guard ? scan.slice(guard.fin.open + 1, guard.fin.close) : "";
+  ok(
+    "that finally releases the flag unconditionally",
+    guard !== undefined &&
+      finallyBody.replace(/this\.draining\s*=\s*false\s*;/, "").trim() === "",
+    `\n    finally body: ${finallyBody.trim()}`
+  );
+
+  // The containment invariant itself: after the flag is claimed, no exit may
+  // bypass the releasing finally.
+  const returns = [...scan.matchAll(/\breturn\b/g)]
+    .map((m) => m.index)
+    .filter((i) => i > claim);
+  const escaping = guard
+    ? returns.filter((i) => !(i > guard.open && i < guard.close))
+    : returns;
+  ok(
+    "every return after the claim is inside the releasing try",
+    guard !== undefined && escaping.length === 0,
+    `\n    ${escaping.length} return(s) escape the guard`
+  );
+
+  const beforeTry = guard ? scan.slice(claim, guard.open) : "";
+  ok(
+    "nothing returns or awaits between the claim and the releasing try",
+    guard !== undefined && !/\b(return|await)\b/.test(beforeTry),
     `\n    found: ${beforeTry.trim()}`
   );
+
+  const afterGuard = guard ? scan.slice(guard.end) : "";
   ok(
-    "no return after the guarded try (would skip the finally)",
-    !/\breturn\b/.test(afterTry.slice(0, afterTry.lastIndexOf("}"))),
-    `\n    found: ${afterTry.trim()}`
-  );
-  ok(
-    "the guarded try has a finally that releases the flag",
-    /finally\s*\{[^}]*this\.draining\s*=\s*false/.test(afterTry)
+    "nothing returns or awaits after the releasing try",
+    guard !== undefined && !/\b(return|await)\b/.test(afterGuard),
+    `\n    found: ${afterGuard.trim()}`
   );
 
-  // Both early exits must therefore sit inside the guarded region.
-  const guarded = drain.slice(tryOpen, tryClose);
+  // Content pins for the two exits that historically escaped. Sliced from the
+  // original text, not the blanked copy, because these match string contents.
+  const guarded = guard ? drain.slice(guard.open, guard.close) : "";
   ok(
-    "the offline early-return is inside the guarded try",
+    "the offline early-return is inside the releasing try",
     /setStatus\("offline"\)/.test(guarded)
   );
   ok(
-    "the connectivity-failure exit is inside the guarded try",
+    "the connectivity-failure exit is inside the releasing try",
     /connectivity check failed/.test(guarded)
   );
 }
