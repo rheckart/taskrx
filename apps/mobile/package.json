@@ -27,7 +27,8 @@
   "devDependencies": {
     "@babel/core": "^7.25.0",
     "@types/react": "~19.2.2",
-    "typescript": "~6.0.3"
+    "typescript": "~6.0.3",
+    "vitest": "^3.2.6"
   },
   "scripts": {
     "dev": "expo start",
@@ -36,6 +37,8 @@
     "ios": "expo run:ios",
     "web": "expo start --web",
     "build": "expo export --platform android",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "test:watch": "vitest"
   }
 }
