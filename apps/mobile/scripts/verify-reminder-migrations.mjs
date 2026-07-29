@@ -1032,11 +1032,26 @@ function template(source, marker) {
 // strings, template literals, regex literals AND comments, so callers no longer
 // have to strip comments first either.
 //
+// Fixing that one literal spelling was not enough either. Deciding regex-vs-
+// division from the previous character alone left `if (c) /[}]/.exec(x)` and
+// `} \n /[}]/` unblanked, and the keyword list was anchored against text ending
+// in the space before the `/`, so even `return /[}]/` never matched. Each was
+// the same truncation with a different token in front of it. The decision is
+// made against the last non-space character AND its index now, so:
+//
+//   * a keyword match tolerates the whitespace between it and the `/`;
+//   * `)` is resolved by matching back to its `(` -- regex only when that paren
+//     opened an `if`/`while`/`for`/`with` head, division otherwise;
+//   * `}` closes a block, and `} / 2` is not a thing, so it is regex position;
+//   * `]` stays division: `arr[0] /re/` does not parse, so it is not a shape a
+//     mutation can hide behind.
+//
 // Length is preserved exactly (newlines included) so every offset computed on
 // the blanked copy still indexes the original.
 const REGEX_CAN_FOLLOW = /[([{,;:=!&|?+\-*%^~<>]$/;
 const REGEX_CAN_FOLLOW_WORD =
-  /\b(return|typeof|case|in|of|do|else|yield|await|new|delete|void|instanceof)$/;
+  /\b(return|typeof|case|in|of|do|else|yield|await|new|delete|void|instanceof)\s*$/;
+const CONTROL_HEAD = /\b(if|while|for|with)\s*$/;
 
 function blankLiterals(text) {
   const out = text.split("");
@@ -1045,10 +1060,93 @@ function blankLiterals(text) {
       if (out[k] !== "\n") out[k] = " ";
     }
   };
-  // The last non-space character seen in code position, which is what decides
-  // whether a `/` opens a regex or is a division operator.
+  // The last non-space character seen in code position, and where it sits.
+  // Together these decide whether a `/` opens a regex or is a division operator.
   let before = "";
+  let beforeIdx = -1;
   let i = 0;
+
+  // Walks back over the already-blanked prefix to the `(` that `)` at `from`
+  // closes. Literals before `from` are blanked by now, so parens inside them
+  // cannot skew the depth count.
+  const matchBackParen = (from) => {
+    let depth = 0;
+    for (let k = from; k >= 0; k -= 1) {
+      if (out[k] === ")") depth += 1;
+      else if (out[k] === "(") {
+        depth -= 1;
+        if (depth === 0) return k;
+      }
+    }
+    return -1;
+  };
+
+  const stringEnd = (from, quote) => {
+    let j = from + 1;
+    while (j < text.length) {
+      if (text[j] === "\\") {
+        j += 2;
+        continue;
+      }
+      if (text[j] === quote) return j;
+      j += 1;
+    }
+    return text.length;
+  };
+
+  // The backtick that closes the template opening at `from`. Interpolations are
+  // skipped by brace count, recursing through nested templates and strings,
+  // because scanning for "the next backtick" closed the OUTER literal of
+  // `` `a${ `in}ner` }b` `` on the INNER one -- leaving a `}` visible with no
+  // `{` to match it. Same truncation as the regex case, one nesting level down.
+  const templateEnd = (from) => {
+    let j = from + 1;
+    while (j < text.length) {
+      const d = text[j];
+      if (d === "\\") {
+        j += 2;
+        continue;
+      }
+      if (d === "`") return j;
+      if (d === "$" && text[j + 1] === "{") {
+        let depth = 1;
+        j += 2;
+        while (j < text.length && depth > 0) {
+          const e = text[j];
+          if (e === "\\") {
+            j += 2;
+            continue;
+          }
+          if (e === "`") {
+            j = templateEnd(j) + 1;
+            continue;
+          }
+          if (e === '"' || e === "'") {
+            j = stringEnd(j, e) + 1;
+            continue;
+          }
+          if (e === "{") depth += 1;
+          else if (e === "}") depth -= 1;
+          j += 1;
+        }
+        continue;
+      }
+      j += 1;
+    }
+    return text.length;
+  };
+
+  const atRegexPosition = () => {
+    if (before === "") return true;
+    if (REGEX_CAN_FOLLOW.test(before)) return true;
+    if (REGEX_CAN_FOLLOW_WORD.test(text.slice(0, beforeIdx + 1))) return true;
+    if (before === "}") return true;
+    if (before === ")") {
+      const open = matchBackParen(beforeIdx);
+      return open !== -1 && CONTROL_HEAD.test(out.slice(0, open).join(""));
+    }
+    return false;
+  };
 
   while (i < text.length) {
     const c = text[i];
@@ -1069,26 +1167,14 @@ function blankLiterals(text) {
       continue;
     }
     if (c === '"' || c === "'" || c === "`") {
-      let j = i + 1;
-      while (j < text.length) {
-        if (text[j] === "\\") {
-          j += 2;
-          continue;
-        }
-        if (text[j] === c) break;
-        j += 1;
-      }
+      const j = c === "`" ? templateEnd(i) : stringEnd(i, c);
       blank(i + 1, j);
       before = c;
+      beforeIdx = i;
       i = Math.min(j + 1, text.length);
       continue;
     }
-    if (
-      c === "/" &&
-      (before === "" ||
-        REGEX_CAN_FOLLOW.test(before) ||
-        REGEX_CAN_FOLLOW_WORD.test(text.slice(0, i)))
-    ) {
+    if (c === "/" && atRegexPosition()) {
       let j = i + 1;
       let inClass = false;
       let closed = false;
@@ -1112,11 +1198,15 @@ function blankLiterals(text) {
       if (closed) {
         blank(i + 1, j);
         before = "/";
+        beforeIdx = j;
         i = j + 1;
         continue;
       }
     }
-    if (!/\s/.test(c)) before = c;
+    if (!/\s/.test(c)) {
+      before = c;
+      beforeIdx = i;
+    }
     i += 1;
   }
 
@@ -1275,6 +1365,17 @@ function partE() {
   const upsertBody = body(source, "async function upsertProjection(");
   const sqlArgExpr = (() => {
     const blanked = blankLiterals(upsertBody);
+    // The extraction takes the FIRST `db.runAsync` in the function, so it is
+    // only the executed one while there is exactly one. A correct copy parked
+    // in a dead branch, with the live call inverted to
+    // `(repend ? "" : REPEND_CLAUSE)`, otherwise reinstates the whole bug
+    // behind an expression the harness happily evaluates and approves.
+    const calls = blanked.split("db.runAsync(").length - 1;
+    ok(
+      "upsertProjection issues exactly one db.runAsync (the one extracted below)",
+      calls === 1,
+      `\n    found ${calls}`
+    );
     const callAt = blanked.indexOf("db.runAsync(");
     const open = blanked.indexOf("(", callAt);
     let depth = 0;
@@ -1561,6 +1662,15 @@ function partH() {
   // Ordering, not presence. The previous check here was `claim !== -1` under a
   // label that promised ordering, so inserting an `await` above the claim --
   // reintroducing precisely the race the claim exists to prevent -- passed.
+  // Claiming and releasing a flag nobody reads is theatre: two drains then run
+  // concurrently over the same queue snapshot, which is the race the guard was
+  // added for. Deleting the short-circuit is caught by `tsc` only while the
+  // field has no other reader, which is not a property to lean on.
+  ok(
+    "drain() short-circuits on the flag before claiming it",
+    /if\s*\(\s*this\.draining\s*\)\s*\{?\s*return\b/.test(scan.slice(0, claim === -1 ? 0 : claim))
+  );
+
   const firstAwait = scan.search(/\bawait\b/);
   ok(
     "drain() claims the flag before its first await",
@@ -1631,8 +1741,12 @@ function partH() {
   const returns = [...scan.matchAll(/\breturn\b/g)]
     .map((m) => m.index)
     .filter((i) => i > claim);
+  // Bounded by `end` (past the catch and finally clauses), not `close` (the try
+  // block's own brace). A `return` in the guarded try's `catch` sits between the
+  // two and still runs the `finally`, so bounding by `close` would report
+  // correct code as escaping the moment anyone adds one.
   const escaping = guard
-    ? returns.filter((i) => !(i > guard.open && i < guard.close))
+    ? returns.filter((i) => !(i > guard.open && i < guard.end))
     : returns;
   ok(
     "every return after the claim is inside the releasing try",
@@ -1640,17 +1754,25 @@ function partH() {
     `\n    ${escaping.length} return(s) escape the guard`
   );
 
+  // `throw` is here because `return` and `await` are only two of the three ways
+  // control leaves a function. A `throw` between the claim and the guarded try
+  // -- `if (this.status === "offline") throw new Error(...)` -- escapes without
+  // ever entering the `finally`, wedging the flag on for the life of the
+  // process: exactly the failure this whole part exists to prevent, and it
+  // passed every check here.
+  const ESCAPES = /\b(return|await|throw)\b/;
+
   const beforeTry = guard ? scan.slice(claim, guard.open) : "";
   ok(
-    "nothing returns or awaits between the claim and the releasing try",
-    guard !== undefined && !/\b(return|await)\b/.test(beforeTry),
+    "nothing returns, awaits or throws between the claim and the releasing try",
+    guard !== undefined && !ESCAPES.test(beforeTry),
     `\n    found: ${beforeTry.trim()}`
   );
 
   const afterGuard = guard ? scan.slice(guard.end) : "";
   ok(
-    "nothing returns or awaits after the releasing try",
-    guard !== undefined && !/\b(return|await)\b/.test(afterGuard),
+    "nothing returns, awaits or throws after the releasing try",
+    guard !== undefined && !ESCAPES.test(afterGuard),
     `\n    found: ${afterGuard.trim()}`
   );
 
