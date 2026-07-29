@@ -62,6 +62,18 @@ vi.mock("../db/repos/syncQueue", () => ({
 vi.mock("../db/repos/medications", () => ({}));
 vi.mock("../db/repos/doseLogs", () => ({}));
 
+// The two mirrors are mocked for the same reason every other repo here is:
+// they reach `getDb()` and pull expo-sqlite, and through it react-native, into
+// a node test's module graph. `repairMissingProjections` resolves rather than
+// throws so the default case exercises the drain's ordinary path; the tests
+// that care about a failing repair override it per case.
+vi.mock("../db/repos/medication-mirror", () => ({
+  repairMissingProjections: vi.fn(() => Promise.resolve(0)),
+}));
+vi.mock("../db/repos/dose-log-mirror", () => ({
+  repairMissingProjections: vi.fn(() => Promise.resolve(0)),
+}));
+
 describe("SyncWorker.drain", () => {
   beforeEach(() => {
     vi.clearAllMocks();

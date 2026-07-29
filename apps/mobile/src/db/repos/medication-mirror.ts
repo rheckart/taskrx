@@ -254,3 +254,56 @@ export async function mirrorMedicationDelete(
 
   await remindersRepo.enqueueExternalWrite(medicationId);
 }
+
+/**
+ * Re-project every medication that has no `reminders` row.
+ *
+ * The reminders-side counterpart to
+ * `dose-log-mirror.repairMissingProjections`, and it exists for the same
+ * reason: a mirror that throws is a projection lost for good, because
+ * `shouldApplyRemoteMedication` rejects any remote row that is not strictly
+ * newer than the local one and `reconcilePending` only re-enqueues reminders
+ * that already exist. Since the read cutover `meds/index.tsx` reads
+ * `remindersRepo.list`, so a missing projection is a medication absent from
+ * the user's own list — and, because `selectUpcomingOccurrences` schedules off
+ * `reminders`, one whose alarms never fire.
+ *
+ * This runs ahead of the dose-log pass in the drain. A dose log cannot be
+ * projected while its medication has no reminder to point at, so repairing
+ * medications first turns what would be a skipped instance into a repaired one
+ * within the same drain.
+ *
+ * Soft deletes are safe from it. `mirrorMedicationDelete` flips
+ * `reminders.active = 0` and leaves the row in place, so a deleted
+ * medication's reminder still exists and is never selected here. Only a
+ * projection that was never written at all is.
+ *
+ * Returns the number of medications successfully re-projected.
+ */
+export async function repairMissingProjections(): Promise<number> {
+  const db = await getDb();
+  const rows = await db.getAllAsync<{ readonly id: string }>(
+    `SELECT m.id
+     FROM medications m
+     WHERE NOT EXISTS (
+       SELECT 1 FROM reminders r WHERE r.id = m.id
+     )`
+  );
+
+  let repaired = 0;
+  for (const row of rows) {
+    try {
+      await mirrorMedication(row.id);
+      repaired += 1;
+    } catch (error: unknown) {
+      // Per row: one unprojectable medication must not strand the backlog
+      // behind it, which is the same failure this pass exists to undo.
+      console.error(
+        `[medicationMirror] repair failed for medication ${row.id}:`,
+        error
+      );
+    }
+  }
+
+  return repaired;
+}

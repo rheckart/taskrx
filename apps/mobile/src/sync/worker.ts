@@ -10,7 +10,9 @@ import type {
 import type { ConvexReactClient } from "convex/react";
 
 import { convex } from "../api/convex";
+import * as doseLogMirror from "../db/repos/dose-log-mirror";
 import * as doseLogsRepo from "../db/repos/doseLogs";
+import * as medicationMirror from "../db/repos/medication-mirror";
 import * as medicationsRepo from "../db/repos/medications";
 import * as reminderInstancesRepo from "../db/repos/reminderInstances";
 import * as remindersRepo from "../db/repos/reminders";
@@ -231,6 +233,33 @@ export class SyncWorker {
       }
 
       this.setStatus("syncing");
+
+      // Ahead of everything else, rebuild projections that were never
+      // written. A mirror can throw — the pull path catches it per row so one
+      // bad row does not take the batch down — and nothing downstream repairs
+      // the result: the conflict rules reject the re-pulled row and
+      // `reconcilePending` only re-enqueues rows that already exist. Since the
+      // read cutover a missing projection is a medication gone from the med
+      // list or a dose gone from history, so this runs before the reconcile
+      // passes that would otherwise have nothing to find.
+      //
+      // Medications first: an instance's insert is dropped by the EXISTS guard
+      // while its parent has no `reminders` row, so repairing parents first is
+      // what lets both land in one drain rather than two.
+      //
+      // Both are best-effort for the same reason the reconciles are — a queue
+      // that already has entries is still worth draining.
+      try {
+        await medicationMirror.repairMissingProjections();
+      } catch (error) {
+        console.error("[sync] medication projection repair failed", error);
+      }
+
+      try {
+        await doseLogMirror.repairMissingProjections();
+      } catch (error) {
+        console.error("[sync] dose log projection repair failed", error);
+      }
 
       // Before reading the queue, give reminders that are pending but absent
       // from it a queue entry. Migration 005 backfilled them in SQL, which

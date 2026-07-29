@@ -367,6 +367,42 @@ export async function getConvexId(localId: string): Promise<string | null> {
 }
 
 /**
+ * Look up the local medication id for a Convex document id.
+ *
+ * The inverse of `getConvexId`, and it exists for the pull path. `push`
+ * converts a local id to a Convex id before every mutation
+ * (`worker.resolveMedicationId`), but the reverse direction had no equivalent:
+ * `pull.ts` mapped a dose log's `_id` back through `localId` while copying
+ * `medicationId` — an `Id<"medications">` — across untouched, so every pulled
+ * dose log landed with a Convex document id in a column that every other
+ * producer fills with a local UUID.
+ *
+ * That column is a join key, which is what made it costly rather than
+ * cosmetic. `DOSE_LOG_TO_INSTANCE_SELECT` guards on
+ * `EXISTS (SELECT 1 FROM reminders r WHERE r.id = d.medication_id)`, and a
+ * Convex id matches no `reminders.id`, so the mirror silently projected
+ * nothing for pulled rows — and since the read cutover the dose history screen
+ * reads only the projection. A restored or second device showed an empty
+ * history while `dose_logs` held every row.
+ *
+ * Served by `idx_medications_convex_id` (migration 002).
+ *
+ * Returns `null` when this device has not yet pulled the parent medication,
+ * which is a real and ordinary state: the two subscriptions land
+ * independently and the dose logs can arrive first.
+ */
+export async function localIdForConvexId(
+  convexId: string
+): Promise<string | null> {
+  const db = await getDb();
+  const row = await db.getFirstAsync<{ id: string }>(
+    "SELECT id FROM medications WHERE convex_id = ?",
+    convexId
+  );
+  return row?.id ?? null;
+}
+
+/**
  * Read all medications for a user directly from SQLite (offline-first).
  */
 export async function selectAll(
@@ -427,7 +463,19 @@ export async function upsertMany(rows: readonly Medication[]): Promise<number> {
     // A medication arriving from a remote pull needs an alarm just as much as
     // one typed on this device — but it does not need pushing back, so this
     // refreshes the row without re-pending it. See `mirrorMedicationRow`.
-    await mirrorMedicationRow(remote.id);
+    //
+    // Caught per row for the reason `doseLogs.upsertMany` gives: the
+    // medication is already committed, so aborting here would leave every
+    // later row in the batch unprojected too. `repairMissingProjections`
+    // retries whatever lands in this branch on the next drain.
+    try {
+      await mirrorMedicationRow(remote.id);
+    } catch (error: unknown) {
+      console.error(
+        `[medications] failed to mirror pulled medication ${remote.id}:`,
+        error
+      );
+    }
     updated += 1;
   }
 

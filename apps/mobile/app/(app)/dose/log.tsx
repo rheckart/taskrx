@@ -13,6 +13,7 @@ import {
 } from "react-native";
 
 import { useToast } from "../../../src/components/useToast";
+import * as doseLogMirror from "../../../src/db/repos/dose-log-mirror";
 import * as doseLogsRepo from "../../../src/db/repos/doseLogs";
 import * as instancesRepo from "../../../src/db/repos/reminderInstances";
 import * as remindersRepo from "../../../src/db/repos/reminders";
@@ -119,21 +120,51 @@ export default function DoseLogScreen(): ReactElement {
         parsedParams.scheduledTime
       );
       if (instance === null) {
-        // Create through the POC table and read the projection back, rather
+        // Deduplicate against `dose_logs`, the write table — never against the
+        // projection alone. The two disagree exactly when a previous attempt
+        // created the dose log and then failed to project it, and that is the
+        // case that reaches this branch. Keying the decision off the missing
+        // projection would create a *second* dose log, and a third on the next
+        // retry: each one is a real row plus a real `sync_queue` entry, and
+        // those entries do sync, so the duplicates reach the server and stay
+        // there. The error message below invites the retry, which is what
+        // turns the leak into a loop.
+        //
+        // Create through the POC table and read the projection back rather
         // than inserting an instance directly: `dose_logs` is still the write
         // source of truth, and its mirror is what produces the instance.
-        const created = await doseLogsRepo.create({
-          userId,
-          medicationId: parsedParams.medicationId,
-          scheduledTime: parsedParams.scheduledTime,
-        });
-        instance = await instancesRepo.get(created.id);
+        const doseLog =
+          (await doseLogsRepo.findPendingForDose(
+            userId,
+            parsedParams.medicationId,
+            parsedParams.scheduledTime
+          )) ??
+          (await doseLogsRepo.create({
+            userId,
+            medicationId: parsedParams.medicationId,
+            scheduledTime: parsedParams.scheduledTime,
+          }));
+
+        instance = await instancesRepo.get(doseLog.id);
+
+        if (instance === null) {
+          // Try once to repair it here instead of making the user wait for a
+          // drain. This is the same call the create path just made, so it only
+          // succeeds when the failure was transient — if the medication has no
+          // `reminders` row the EXISTS guard drops it again and we fall
+          // through to the error.
+          await doseLogMirror.mirrorDoseLog(doseLog.id);
+          instance = await instancesRepo.get(doseLog.id);
+        }
       }
 
       if (instance === null) {
         // The mirror's EXISTS guard dropped the projection, so the medication
         // has no `reminders` row. Saying so beats rendering a screen whose
-        // buttons write to a dose the rest of the app cannot see.
+        // buttons write to a dose the rest of the app cannot see. Retrying is
+        // sound advice now: the dose log above is reused rather than
+        // duplicated, and the drain's `repairMissingProjections` may have
+        // rebuilt the parent reminder in the meantime.
         setState({
           kind: "error",
           message: "This dose could not be prepared. Try again after a sync.",

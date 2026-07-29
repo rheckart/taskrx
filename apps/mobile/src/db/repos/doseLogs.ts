@@ -418,7 +418,21 @@ export async function upsertMany(rows: readonly DoseLog[]): Promise<number> {
       remote.updatedAt
     );
     // Refreshes the projection without re-pending it. See `mirrorDoseLogRow`.
-    await mirrorDoseLogRow(remote.id);
+    //
+    // Caught per row rather than allowed to escape. The dose log itself is
+    // already committed by the write above, so letting a mirror failure abort
+    // the loop would strand every later row in the batch with no projection
+    // either — one failure becoming many. `repairMissingProjections` picks up
+    // whatever is caught here on the next drain, which is the only reason
+    // swallowing it is safe.
+    try {
+      await mirrorDoseLogRow(remote.id);
+    } catch (error: unknown) {
+      console.error(
+        `[doseLogs] failed to mirror pulled dose log ${remote.id}:`,
+        error
+      );
+    }
     updated += 1;
   }
 

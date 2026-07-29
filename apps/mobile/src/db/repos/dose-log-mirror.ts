@@ -13,13 +13,20 @@ import * as instancesRepo from "./reminderInstances";
  * so the unified table stopped being a projection of the dose history and
  * became a snapshot of it, accurate only as of the upgrade.
  *
- * That divergence is quieter than the medications one and worse. A missing
- * `reminders` row means an alarm never fires, which a user notices. A missing
- * `reminder_instances` row changes nothing the user can see on the device —
- * the screens read `dose_logs` — while `api.reminderInstances` is what the
- * server computes adherence from. So the failure is a server-side history that
- * silently stops growing at the cutover boot, with the device showing a
- * complete one.
+ * Be precise about why that matters, because an earlier version of this
+ * comment was not. It claimed the damage was server-side: that the screens
+ * read `dose_logs` while `api.reminderInstances` was "what the server computes
+ * adherence from". Both halves were false. There is no server-side adherence
+ * computation — `computeAdherence` in
+ * `packages/shared/src/adherence/calculator.ts` has no call site outside
+ * `packages/shared/src`, and nothing anywhere reads the Convex
+ * `reminderInstances` table.
+ *
+ * The damage is local, and it arrived with the read cutover.
+ * `app/(app)/dose/history.tsx` reads `instancesRepo.list`, so an unmirrored
+ * dose log is a dose the user recorded and then cannot find in their history.
+ * The table it was written to still holds it; the screen that displays history
+ * no longer looks there.
  *
  * ## Parity with migration 005
  *
@@ -40,8 +47,12 @@ import * as instancesRepo from "./reminderInstances";
  *
  * If it is ever reached the row is not deferred, it is dropped — the
  * projection never exists, so `instancesRepo.reconcilePending` cannot find it
- * and no later write brings it back. That is the one way this module can fail
- * silently, so it is the one thing it logs.
+ * and no later write brings it back. It is the one failure this module can
+ * detect from the inside, so it is the one thing it logs. It is emphatically
+ * not the only way a projection goes missing: a caller that lets
+ * `upsertProjection` throw and swallows the error loses the row just as
+ * permanently, and logs nothing here. `repairMissingProjections` below is what
+ * covers both.
  *
  * ## Sync identity: the projection is its own entity
  *
@@ -114,10 +125,16 @@ const REPEND_CLAUSE = `,
  *     rewriting it would clobber the row if its parent ever became a task.
  *   * `snoozed_until` / `snooze_count` — the POC dose log has no source for
  *     either, so they are left untouched on update rather than reset to the
- *     migration's NULL/0. A snooze recorded through the unified path (see
- *     `notifications/snooze.ts`) therefore survives a later dose-log edit,
- *     which is the same rule `medication-mirror.ts` applies to the fields
- *     `medications` cannot express.
+ *     migration's NULL/0. This is the same rule `medication-mirror.ts` applies
+ *     to the fields `medications` cannot express: a field the source cannot
+ *     express is preserved, not overwritten.
+ *
+ *     It preserves nothing today. Nothing writes either column:
+ *     `instancesRepo.markSnoozed` has no callers, and `notifications/snooze.ts`
+ *     reschedules the notification without touching the database. An earlier
+ *     version of this comment cited `snooze.ts` as the writer whose snooze
+ *     "survives a later dose-log edit"; it records no snooze to survive. The
+ *     exclusion is right in advance of a writer, not because of one.
  *   * `convex_id` — see the header. Absent from the clause rather than
  *     defaulted.
  *
@@ -155,10 +172,20 @@ async function upsertProjection(
   );
 
   if (result.changes === 0) {
-    // The EXISTS guard dropped it: the parent medication has no `reminders`
-    // row. Nothing retries this, so say so rather than lose the dose silently.
+    // Two different causes reach this branch and the message must not pick
+    // one: either the EXISTS guard dropped the row because the parent
+    // medication has no `reminders` row, or the SELECT matched nothing at all
+    // because there is no such dose log. The harness covers both
+    // ("a dose log with no projected medication does not abort the write" and
+    // "mirroring an unknown dose log inserts nothing"), and naming only the
+    // first sent a maintainer to the wrong table.
+    //
+    // A no-op update is not one of the causes: SQLite counts a DO UPDATE row
+    // as changed even when every value it writes is identical, so this cannot
+    // false-fire. `repairMissingProjections` retries the first cause on each
+    // drain; the second is not retryable and not repairable.
     console.error(
-      `[doseLogMirror] no reminders row for dose log ${doseLogId}'s medication; instance not projected`
+      `[doseLogMirror] instance not projected for dose log ${doseLogId}: either its medication has no reminders row, or the dose log does not exist`
     );
   }
 }
@@ -190,4 +217,57 @@ export async function mirrorDoseLog(doseLogId: string): Promise<void> {
  */
 export async function mirrorDoseLogRow(doseLogId: string): Promise<void> {
   await upsertProjection(doseLogId, false);
+}
+
+/**
+ * Re-project every dose log that has no `reminder_instances` row.
+ *
+ * Every write path mirrors, but a mirror is still losable. `upsertProjection`
+ * throws on a database error, and the pull path catches that per row and moves
+ * on rather than abandoning the rest of the batch — a deliberate trade that
+ * needs something behind it, because nothing else in the system repairs the
+ * gap. `shouldApplyRemoteDoseLog` refuses every remote row whose local copy is
+ * already `taken`, so re-pulling does not fix it. `reconcilePending` only
+ * re-enqueues instances that already exist, so it never sees a row that was
+ * never inserted. Left alone, a dose log missing its projection stays missing
+ * for the life of the install, and since the read cutover that means a dose
+ * the user logged is absent from their history.
+ *
+ * `mirrorDoseLog` rather than `mirrorDoseLogRow`: an instance the local
+ * database has never held is one the server was never told about either, so
+ * the repaired row is genuinely pending and wants pushing.
+ *
+ * Dose logs whose medication still has no `reminders` row are skipped again by
+ * the EXISTS guard and logged by `upsertProjection`. Repairing those is
+ * `medication-mirror.repairMissingProjections`'s job, which is why the drain
+ * runs that pass first.
+ *
+ * Returns the number of dose logs successfully re-projected.
+ */
+export async function repairMissingProjections(): Promise<number> {
+  const db = await getDb();
+  const rows = await db.getAllAsync<{ readonly id: string }>(
+    `SELECT d.id
+     FROM dose_logs d
+     WHERE NOT EXISTS (
+       SELECT 1 FROM reminder_instances i WHERE i.id = d.id
+     )`
+  );
+
+  let repaired = 0;
+  for (const row of rows) {
+    try {
+      await mirrorDoseLog(row.id);
+      repaired += 1;
+    } catch (error: unknown) {
+      // Per row: one unprojectable dose log must not strand the backlog
+      // behind it, which is the same failure this pass exists to undo.
+      console.error(
+        `[doseLogMirror] repair failed for dose log ${row.id}:`,
+        error
+      );
+    }
+  }
+
+  return repaired;
 }

@@ -367,9 +367,19 @@ export async function lastTakenFor(
  * `sync_queue` entry. Migration 007 then cleared the `convex_id` values 005
  * had copied across from `dose_logs` and returned the rows to `pending`. The
  * result was that an existing install's entire pre-cutover dose history stayed
- * on the device: the Convex `reminderInstances` table began at the cutover, so
- * server-side adherence was computed over a history with its front half
- * missing. This is the instance-side counterpart to
+ * on the device, with the Convex `reminderInstances` table beginning at the
+ * cutover.
+ *
+ * An earlier version of this comment justified that as "server-side adherence
+ * was computed over a history with its front half missing". No such
+ * computation exists: `computeAdherence`
+ * (`packages/shared/src/adherence/calculator.ts`) has no call site outside
+ * `packages/shared/src`, and the Convex `reminderInstances` table has no
+ * reader at all. What is actually lost is the history itself — it lives only
+ * on one device, so a reinstall or a second device starts from the cutover.
+ * That is reason enough for this function; the invented consumer was not.
+ *
+ * This is the instance-side counterpart to
  * `reminders.enqueueExternalWrite`, which covers the reminders half of the
  * same backfill.
  *

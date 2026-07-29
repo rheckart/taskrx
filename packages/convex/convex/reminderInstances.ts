@@ -181,8 +181,24 @@ export const create = mutation({
         reminderKind: reminder.kind,
         scheduledTime: args.scheduledTime,
         status: args.status ?? "pending",
-        snoozeCount: args.snoozeCount ?? 0,
         updatedAt: args.updatedAt,
+        /**
+         * Spread like its optional siblings, not defaulted like `status`.
+         *
+         * On insert `?? 0` is the correct seed for a field the row does not
+         * have yet. On patch it is a reset: an omitted `snoozeCount` would
+         * overwrite a count the server had already accumulated — including one
+         * `markSnoozed` incremented between this row's first create and the
+         * duplicate create that lands here. The device's pull path is a live
+         * source of such payloads, since it projects dose logs, which have no
+         * snooze column to send.
+         *
+         * `status` is genuinely different: it is the field this branch exists
+         * to stop dropping, so defaulting it to `pending` is the intent.
+         */
+        ...(args.snoozeCount !== undefined
+          ? { snoozeCount: args.snoozeCount }
+          : {}),
         ...(args.takenAt !== undefined ? { takenAt: args.takenAt } : {}),
         ...(args.snoozedUntil !== undefined
           ? { snoozedUntil: args.snoozedUntil }

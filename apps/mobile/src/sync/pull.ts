@@ -154,7 +154,37 @@ export function useDoseLogsSync(
       return true;
     });
 
-    void doseLogsRepo.upsertMany(rows).catch((error: unknown) => {
+    // `medicationId` arrives as an `Id<"medications">` and cannot be stored as
+    // one. Every other producer of `dose_logs.medication_id` writes a local
+    // UUID, and the column is a join key: the mirror's EXISTS guard matches it
+    // against `reminders.id`, so a Convex id there projects no instance at
+    // all, and since the read cutover an unprojected dose log is one the
+    // history screen cannot show. Resolve it back before the write, never
+    // after — once a poisoned row is committed nothing downstream can tell it
+    // from a legitimate one.
+    void (async (): Promise<void> => {
+      const resolved: DoseLog[] = [];
+      for (const row of rows) {
+        const localMedicationId = await medicationsRepo.localIdForConvexId(
+          row.medicationId
+        );
+        if (localMedicationId === null) {
+          // The medications subscription has not delivered the parent yet.
+          // Skipping is the honest outcome: there is no local UUID to write,
+          // and inventing one or storing the Convex id would both corrupt the
+          // column. The row is not lost — it is still on the server, and the
+          // next delivery of this query (or the next app start, where the
+          // local copy is absent and the conflict rule admits it) applies it
+          // once the parent has landed.
+          console.warn(
+            `[sync] dose log ${row.id} skipped: medication ${row.medicationId} not pulled yet`
+          );
+          continue;
+        }
+        resolved.push({ ...row, medicationId: localMedicationId });
+      }
+      await doseLogsRepo.upsertMany(resolved);
+    })().catch((error: unknown) => {
       console.error("[sync] failed to mirror dose logs:", error);
     });
   }, [remote, userId, options]);
