@@ -148,6 +148,27 @@ export const create = mutation({
       if (existing.userId !== currentUserId) {
         throw new Error("Dose log localId already exists for another user");
       }
+
+      /**
+       * An upsert, not a no-op — see `reminders.create` for the full rationale.
+       *
+       * This table is the one where discarding the payload is worst: a dose
+       * logged offline and then marked taken before the first create drained
+       * would have kept `status: "pending"` on the server forever, so a second
+       * device would show a dose the patient has already taken as still due.
+       *
+       * `medicationId` is rewritten along with the rest because the ownership
+       * check above already validated it against the caller. `localId`,
+       * `userId` and `createdAt` are identity and are never rewritten.
+       */
+      await ctx.db.patch(existing._id, {
+        medicationId: args.medicationId,
+        scheduledTime: args.scheduledTime,
+        status: args.status,
+        updatedAt: args.updatedAt,
+        ...(args.takenAt !== undefined ? { takenAt: args.takenAt } : {}),
+        ...(args.notes !== undefined ? { notes: args.notes } : {}),
+      });
       return existing._id;
     }
 

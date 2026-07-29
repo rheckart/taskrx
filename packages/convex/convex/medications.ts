@@ -97,6 +97,32 @@ export const create = mutation({
       if (existing.userId !== currentUserId) {
         throw new Error("Medication localId already exists for another user");
       }
+
+      /**
+       * A repeated `create` for the same `localId` is an upsert, not a no-op —
+       * the same rule, and for the same reason, as `reminders.create`, which
+       * documents it at length.
+       *
+       * In short: the device picks `create` over `update` by whether its local
+       * row has a `convex_id` yet, so an edit made while the first create is
+       * still queued enqueues a *second* create. Returning `existing._id`
+       * without writing left the server permanently behind, because the client
+       * then marks the row synced and never re-sends it.
+       *
+       * `localId`, `userId` and `createdAt` are identity, not payload, and are
+       * never rewritten. The optionals keep the insert's conditional spreads,
+       * so an omitted field is left alone rather than cleared — matching the
+       * worker, which encodes a cleared field as an omission.
+       */
+      await ctx.db.patch(existing._id, {
+        name: args.name,
+        scheduleType: args.scheduleType,
+        scheduleTimes: args.scheduleTimes as unknown,
+        active: args.active,
+        updatedAt: args.updatedAt,
+        ...(args.rxcui !== undefined ? { rxcui: args.rxcui } : {}),
+        ...(args.dosage !== undefined ? { dosage: args.dosage } : {}),
+      });
       return existing._id;
     }
 
