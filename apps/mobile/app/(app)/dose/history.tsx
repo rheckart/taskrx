@@ -30,10 +30,19 @@ interface DayGroup {
 
 /**
  * `snoozed` has no `dose_logs` counterpart — it exists only in the unified
- * `InstanceStatus`, and reading `reminder_instances` is what makes it
- * reachable here. It is deliberately not folded into `skipped` or `missed`:
- * the adherence calculator counts those against the user and a snooze is not
- * a miss, so showing it as one would contradict the number on the same screen.
+ * `InstanceStatus`, so switching over that union obliges this arm to exist.
+ *
+ * It does not yet render on device: the only local writer of instance status
+ * is `dose-log-mirror.ts`, which copies `dose_logs.status` verbatim, and
+ * `reminderInstances.markSnoozed` currently has no callers — `snooze.ts`
+ * reschedules the notification without recording an instance. This arm is
+ * therefore forward-looking, and stays unreachable until the snooze path
+ * writes status.
+ *
+ * When it does become reachable it must not be folded into `skipped` or
+ * `missed`: the adherence calculator counts those against the user and a
+ * snooze is not a miss, so showing it as one would contradict the number on
+ * the same screen.
  */
 function statusLabel(status: ReminderInstance["status"]): string {
   switch (status) {

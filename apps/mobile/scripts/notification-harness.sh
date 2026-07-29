@@ -553,7 +553,13 @@ case5_boot_reschedule() {
   after=0
   while (( $(date +%s) < reg_deadline )); do
     after="$(alarm_count)"
-    [[ "$after" -ge 1 ]] && break
+    # `before`, not 1, is the bar. Breaking on the first alarm to reappear
+    # accepts a partial restore: a device that armed 3 and re-registered 2
+    # stops polling here and gets recorded as a pass, which is precisely the
+    # loss this case exists to detect (todo 11: "assert alarms re-registered").
+    # The setup above already rejects `before < 1`, so this can never be a
+    # vacuous 0 >= 0.
+    [[ "$after" -ge "$before" ]] && break
     sleep 5
   done
   local waited_s=$(( $(date +%s) - unlocked_at ))
@@ -561,8 +567,10 @@ case5_boot_reschedule() {
   # process is gone and the dev client has not reconnected to Metro, so a
   # following case would fail its harness call for reasons this case caused.
   wait_for_app_ready >/dev/null 2>&1 || true
-  if [[ "$after" -ge 1 ]]; then
+  if [[ "$after" -ge "$before" ]]; then
     add_result 5 boot_reschedule true "alarms re-registered after reboot (before=$before after=$after; receiver landed ~${waited_s}s after the first unlock, which is when ACTION_BOOT_COMPLETED is broadcast)"
+  elif [[ "$after" -ge 1 ]]; then
+    add_result 5 boot_reschedule false "PARTIAL re-registration within ${BOOT_REGISTER_TIMEOUT_S}s of the first unlock (before=$before after=$after): the boot receiver ran but restored fewer alarms than were armed, so $(( before - after )) dose(s) would never fire. A silent partial loss is the failure mode this case exists to catch — do not read it as a pass because some alarm came back."
   else
     add_result 5 boot_reschedule false "alarms NOT re-registered within ${BOOT_REGISTER_TIMEOUT_S}s of the first unlock (before=$before after=$after). The device WAS unlocked, so ACTION_BOOT_COMPLETED was broadcast and this is a real failure. Check that RECEIVE_BOOT_COMPLETED is granted and the package is not in the stopped state."
   fi
