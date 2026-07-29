@@ -3,6 +3,7 @@ import { shouldApplyRemoteDoseLog } from "@taskrx/shared";
 
 import { getDb } from "../index";
 
+import { mirrorDoseLog, mirrorDoseLogRow } from "./dose-log-mirror";
 import { enqueue } from "./syncQueue";
 
 /**
@@ -124,6 +125,8 @@ export async function create(input: CreateDoseLogInput): Promise<DoseLog> {
     updatedAt: now,
   });
 
+  await mirrorDoseLog(id);
+
   return inserted;
 }
 
@@ -220,6 +223,11 @@ async function updateStatus(
     createdAt: updated.createdAt,
     updatedAt: now,
   });
+
+  // Covers `markTaken`, `markSkipped`, `markMissed` and `deleteDoseLog` — all
+  // four route through here, so the projection follows every status change
+  // without four separate mirror calls to keep in step.
+  await mirrorDoseLog(id);
 
   return updated;
 }
@@ -409,6 +417,8 @@ export async function upsertMany(rows: readonly DoseLog[]): Promise<number> {
       remote.createdAt,
       remote.updatedAt
     );
+    // Refreshes the projection without re-pending it. See `mirrorDoseLogRow`.
+    await mirrorDoseLogRow(remote.id);
     updated += 1;
   }
 

@@ -1986,6 +1986,380 @@ function partF() {
   db.close();
 }
 
+// ── Part I: repos/dose-log-mirror.ts keeps `reminder_instances` in step ────
+//
+// Part E's twin, one table over, and the failure it guards is quieter. A
+// medication that stops projecting stops alarming, and the user notices. A dose
+// log that stops projecting changes nothing on the device -- the screens read
+// `dose_logs` -- while the server computes adherence from
+// `api.reminderInstances`. So the symptom is a server-side history that
+// silently stops growing, which is exactly the shape of bug that survives
+// manual QA. Everything here is the Part E check with the nouns changed,
+// deliberately: the two mirrors make the same claim and must be held to it the
+// same way.
+
+const DOSE_MIRROR_TS = join(
+  HERE,
+  "..",
+  "src",
+  "db",
+  "repos",
+  "dose-log-mirror.ts"
+);
+const DOSE_LOGS_TS = join(HERE, "..", "src", "db", "repos", "doseLogs.ts");
+
+function partI() {
+  section(
+    "Part I — repos/dose-log-mirror.ts projects dose_logs -> reminder_instances"
+  );
+
+  const source = readFileSync(DOSE_MIRROR_TS, "utf8");
+  const select = template(source, "const DOSE_LOG_TO_INSTANCE_SELECT");
+  const insert = template(source, "async function upsertProjection(").replace(
+    "${DOSE_LOG_TO_INSTANCE_SELECT}",
+    select
+  );
+
+  // The drift guard, as in Part E. 005's instance SELECT runs from
+  // `SELECT d.id,` to the end of its EXISTS clause; the mirror's is the same
+  // text plus `AND d.id = ?`.
+  const migration = sql("005_backfill_reminders");
+  const from = migration.indexOf("SELECT\n  d.id,");
+  const marker = "r.id = d.medication_id)";
+  const to = migration.indexOf(marker, from);
+  const migrationSelect = normalize(migration.slice(from, to + marker.length));
+  const mirrorSelect = normalize(select).replace(/ AND d\.id = \?$/, "");
+  ok(
+    "mirror SELECT is 005's instance SELECT verbatim (mapping cannot drift)",
+    mirrorSelect === migrationSelect,
+    `\n    mirror:    ${mirrorSelect}\n    migration: ${migrationSelect}`
+  );
+  ok(
+    "mirror scopes the backfill SELECT to one dose log",
+    /AND d\.id = \?\s*$/.test(select)
+  );
+
+  const code = source.replace(/\/\*[\s\S]*?\*\//g, "").replace(/\/\/.*$/gm, "");
+  ok(
+    "mirrorDoseLog enqueues an instance sync entry",
+    /instancesRepo\.enqueueExternalWrite\(/.test(
+      body(code, "async function mirrorDoseLog(")
+    )
+  );
+  ok(
+    "mirrorDoseLogRow does not enqueue (pull path must not push back)",
+    !/enqueueExternalWrite\(/.test(body(code, "async function mirrorDoseLogRow("))
+  );
+  ok(
+    "mirrorDoseLogRow does not re-pend",
+    /upsertProjection\(\s*doseLogId\s*,\s*false\s*\)/.test(
+      body(code, "async function mirrorDoseLogRow(")
+    )
+  );
+  ok(
+    "mirrorDoseLog does re-pend",
+    /upsertProjection\(\s*doseLogId\s*,\s*true\s*\)/.test(
+      body(code, "async function mirrorDoseLog(")
+    )
+  );
+  ok(
+    "mirror does not hand-roll the payload (no direct syncQueue import)",
+    !/from\s+"\.\/syncQueue"/.test(code)
+  );
+  // `dose_logs.convex_id` is an `Id<"doseLogs">`. Projecting it aims a
+  // wrong-table document id at `resolveReminderInstanceId` -- the defect
+  // migration 007 exists to clean up after 005 did it.
+  ok(
+    "mirror never writes dose_logs.convex_id into the projection",
+    !/d\.convex_id/.test(code) && !/COALESCE\(excluded\.convex_id/.test(code)
+  );
+
+  // The wiring. Without these the module is dead code and `reminder_instances`
+  // goes back to being frozen at the 005 boot -- the whole defect this part
+  // exists for, reachable by deleting three call sites and nothing else.
+  const doseCode = readFileSync(DOSE_LOGS_TS, "utf8")
+    .replace(/\/\*[\s\S]*?\*\//g, "")
+    .replace(/\/\/.*$/gm, "");
+  ok(
+    "doseLogs.create mirrors the new row",
+    /mirrorDoseLog\(/.test(body(doseCode, "export async function create("))
+  );
+  // Every status change -- taken, skipped, missed, and the soft delete -- funnels
+  // through `updateStatus`, so this one call site covers all four.
+  ok(
+    "doseLogs.updateStatus mirrors the status change",
+    /mirrorDoseLog\(/.test(body(doseCode, "async function updateStatus("))
+  );
+  ok(
+    "the remote pull refreshes the row without pushing it back",
+    /mirrorDoseLogRow\(/.test(body(doseCode, "async function upsertMany(")) &&
+      !/mirrorDoseLog\(/.test(body(doseCode, "async function upsertMany("))
+  );
+  for (const fn of ["markSynced", "markError", "setConvexId"]) {
+    ok(
+      `${fn} does not mirror (projection derives nothing from sync columns)`,
+      !/mirrorDoseLog/.test(body(doseCode, `export async function ${fn}(`))
+    );
+  }
+
+  // The re-pend wiring is executed rather than restated, for the reason Part E
+  // documents at length: asserting against the harness's own concatenation let
+  // an inverted ternary pass every check.
+  const rependClause = template(source, "const REPEND_CLAUSE");
+  const upsertBody = body(source, "async function upsertProjection(");
+  const sqlArgExpr = (() => {
+    const blanked = blankLiterals(upsertBody);
+    const calls = blanked.split("db.runAsync(").length - 1;
+    ok(
+      "upsertProjection issues exactly one db.runAsync (the one extracted below)",
+      calls === 1,
+      `\n    found ${calls}`
+    );
+    const callAt = blanked.indexOf("db.runAsync(");
+    const open = blanked.indexOf("(", callAt);
+    let depth = 0;
+    let close = -1;
+    const commas = [];
+    for (let i = open; i < blanked.length; i += 1) {
+      const ch = blanked[i];
+      if (ch === "(" || ch === "[" || ch === "{") depth += 1;
+      else if (ch === ")" || ch === "]" || ch === "}") {
+        depth -= 1;
+        if (depth === 0) {
+          close = i;
+          break;
+        }
+      } else if (ch === "," && depth === 1) commas.push(i);
+    }
+    const lastComma = commas[commas.length - 1];
+    return upsertBody.slice(
+      open + 1,
+      lastComma === undefined ? close : lastComma
+    );
+  })();
+
+  let buildSql;
+  try {
+    buildSql = new Function(
+      "DOSE_LOG_TO_INSTANCE_SELECT",
+      "REPEND_CLAUSE",
+      "repend",
+      `return (${sqlArgExpr});`
+    );
+  } catch (err) {
+    ok(
+      "the mirror's SQL argument expression parses",
+      false,
+      `\n    ${err.message}`
+    );
+    buildSql = (sel, clause, repend) => insert + (repend ? clause : "");
+  }
+
+  const db = open();
+  applyMigrations(db, ALL);
+  // The EXISTS guard's stated job is keeping `reminder_instances.reminder_id`
+  // satisfiable, and that claim is vacuous unless the constraint is armed.
+  db.exec("PRAGMA foreign_keys = ON");
+
+  const prepared = (repend, label) => {
+    try {
+      const stmt = db.prepare(buildSql(select, rependClause, repend));
+      ok(`the ${label} variant is valid SQL`, true);
+      return stmt;
+    } catch (err) {
+      ok(`the ${label} variant is valid SQL`, false, `\n    ${err.message}`);
+      return db.prepare(insert);
+    }
+  };
+  const runMirror = prepared(true, "re-pend");
+  const runMirrorRow = prepared(false, "pull-path");
+
+  const insertMed = db.prepare(
+    `INSERT INTO medications (
+       id, user_id, convex_id, name, rxcui, dosage,
+       schedule_type, schedule_times, active, created_at, updated_at, sync_status
+     ) VALUES (?, ?, NULL, 'Med', NULL, NULL, 'daily', '{"times":[]}', 1, 1, 1, 'synced')`
+  );
+  const insertReminder = db.prepare(
+    `INSERT INTO reminders (
+       id, user_id, kind, name, schedule, priority, tags, caregiver_ids,
+       active, created_at, updated_at, sync_status, convex_id
+     ) VALUES (?, ?, 'medication', 'Med', '{"type":"daily","times":[]}',
+               'normal', '[]', '[]', 1, 1, 1, 'synced', NULL)`
+  );
+  const insertDose = db.prepare(
+    `INSERT INTO dose_logs (
+       id, user_id, convex_id, medication_id, scheduled_time,
+       taken_at, status, notes, created_at, updated_at, sync_status
+     ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+  );
+  const instance = (id) =>
+    db.prepare("SELECT * FROM reminder_instances WHERE id = ?").get(id);
+
+  insertMed.run("med-1", "user-1");
+  insertReminder.run("med-1", "user-1");
+
+  // A dose logged *after* the migration -- the case with no backfill, and the
+  // entire reason this module exists.
+  insertDose.run(
+    "dose-1", "user-1", null, "med-1", 7000,
+    null, "pending", null, 7000, 7000, "pending"
+  );
+  runMirror.run("dose-1");
+  const i1 = instance("dose-1");
+  ok("post-migration dose log produces a reminder_instances row", i1 !== undefined);
+  eq("  reminder_id is the medication id", i1?.reminder_id, "med-1");
+  eq("  reminder_kind", i1?.reminder_kind, "medication");
+  eq("  scheduled_time", i1?.scheduled_time, 7000);
+  eq("  status", i1?.status, "pending");
+  eq("  snoozed_until defaults to NULL", i1?.snoozed_until, null);
+  eq("  snooze_count defaults to 0", i1?.snooze_count, 0);
+  eq("  created_at is the dose log's, not now()", i1?.created_at, 7000);
+  eq("  sync_status is forced to pending, not inherited", i1?.sync_status, "pending");
+  eq("  convex_id starts NULL", i1?.convex_id, null);
+
+  // A status change must reach the projection, or the server's adherence
+  // numbers keep counting a taken dose as pending.
+  db.prepare(
+    `UPDATE dose_logs
+     SET status = 'taken', taken_at = 8100, notes = 'with food', updated_at = 8100
+     WHERE id = 'dose-1'`
+  ).run();
+  runMirror.run("dose-1");
+  const i1b = instance("dose-1");
+  eq("a status change propagates: status", i1b?.status, "taken");
+  eq("a status change propagates: taken_at", i1b?.taken_at, 8100);
+  eq("a status change propagates: notes", i1b?.notes, "with food");
+  eq("a status change propagates: updated_at", i1b?.updated_at, 8100);
+
+  eq(
+    "re-mirroring is idempotent (no duplicate rows)",
+    db
+      .prepare("SELECT COUNT(*) AS n FROM reminder_instances WHERE id = 'dose-1'")
+      .get()?.n,
+    1
+  );
+
+  // Snooze state has no dose-log source, so it must survive a dose-log edit
+  // rather than being reset to the migration's NULL/0.
+  db.prepare(
+    "UPDATE reminder_instances SET snoozed_until = 9500, snooze_count = 2 WHERE id = 'dose-1'"
+  ).run();
+  db.prepare("UPDATE dose_logs SET notes = 'edited' WHERE id = 'dose-1'").run();
+  runMirror.run("dose-1");
+  eq("a dose-log edit preserves snoozed_until", instance("dose-1")?.snoozed_until, 9500);
+  eq("a dose-log edit preserves snooze_count", instance("dose-1")?.snooze_count, 2);
+
+  // `convex_id` is not in the conflict clause at all: an `Id<"doseLogs">` is
+  // not a legal `Id<"reminderInstances">` no matter what either column holds.
+  db.prepare(
+    "UPDATE reminder_instances SET convex_id = 'ix-1' WHERE id = 'dose-1'"
+  ).run();
+  db.prepare("UPDATE dose_logs SET convex_id = 'dx-1' WHERE id = 'dose-1'").run();
+  runMirror.run("dose-1");
+  eq(
+    "mirroring does not erase a resolved instance convex_id",
+    instance("dose-1")?.convex_id,
+    "ix-1"
+  );
+  eq(
+    "a dose log convex_id never reaches the instance",
+    instance("dose-1")?.convex_id,
+    "ix-1"
+  );
+
+  // The re-pend clause, behaviorally. It fires only ON CONFLICT, so the row has
+  // to be marked synced first.
+  db.prepare(
+    "UPDATE reminder_instances SET sync_status = 'synced' WHERE id = 'dose-1'"
+  ).run();
+  db.prepare("UPDATE dose_logs SET status = 'skipped' WHERE id = 'dose-1'").run();
+  runMirror.run("dose-1");
+  eq(
+    "the local-write path re-pends an already-synced projection",
+    instance("dose-1")?.sync_status,
+    "pending"
+  );
+
+  db.prepare(
+    "UPDATE reminder_instances SET sync_status = 'synced' WHERE id = 'dose-1'"
+  ).run();
+  db.prepare("UPDATE dose_logs SET notes = 'pulled' WHERE id = 'dose-1'").run();
+  runMirrorRow.run("dose-1");
+  eq(
+    "the pull path leaves sync_status alone on conflict",
+    instance("dose-1")?.sync_status,
+    "synced"
+  );
+  eq("  but still refreshes the content", instance("dose-1")?.notes, "pulled");
+
+  // The EXISTS guard. A dose log whose medication was never projected must be
+  // skipped, not aborted -- an FK violation here would take the caller's dose
+  // write down with it, losing the dose the user just recorded.
+  insertMed.run("med-orphan", "user-1");
+  insertDose.run(
+    "dose-orphan", "user-1", null, "med-orphan", 7000,
+    null, "pending", null, 7000, 7000, "pending"
+  );
+  let aborted = null;
+  try {
+    runMirror.run("dose-orphan");
+  } catch (err) {
+    aborted = err.message;
+  }
+  ok(
+    "a dose log with no projected medication does not abort the write",
+    aborted === null,
+    `\n    ${aborted}`
+  );
+  eq(
+    "  and inserts no phantom instance",
+    instance("dose-orphan"),
+    undefined
+  );
+
+  // Mirroring an unknown id is a no-op, not a crash or a phantom row.
+  runMirror.run("does-not-exist");
+  eq(
+    "mirroring an unknown dose log inserts nothing",
+    instance("does-not-exist"),
+    undefined
+  );
+
+  // The backfilled and mirrored paths must be indistinguishable. Insert the
+  // same dose log twice under different ids, backfill one with 005's own SQL
+  // and project the other with the mirror, then diff every column.
+  insertDose.run(
+    "parity-a", "user-9", "dx-9", "med-1", 4242,
+    4300, "taken", "note", 4200, 4400, "synced"
+  );
+  insertDose.run(
+    "parity-b", "user-9", "dx-9", "med-1", 4242,
+    4300, "taken", "note", 4200, 4400, "synced"
+  );
+  db.prepare(
+    `INSERT OR IGNORE INTO reminder_instances (
+       id, reminder_id, user_id, reminder_kind, scheduled_time,
+       status, taken_at, snoozed_until, snooze_count, notes,
+       created_at, updated_at, sync_status, convex_id
+     )
+     ${migrationSelect} AND d.id = 'parity-a'`
+  ).run();
+  runMirror.run("parity-b");
+  const a = instance("parity-a");
+  const b = instance("parity-b");
+  const differing = Object.keys(a ?? {}).filter(
+    (k) => k !== "id" && a?.[k] !== b?.[k]
+  );
+  ok(
+    "a mirrored instance equals a backfilled one column for column",
+    a !== undefined && b !== undefined && differing.length === 0,
+    `\n    differing: ${differing.join(", ")}`
+  );
+
+  db.close();
+}
+
 // ── run ───────────────────────────────────────────────────────────────────
 
 console.log(`node ${process.version}, node:sqlite`);
@@ -1996,6 +2370,7 @@ partE();
 partF();
 partG();
 partH();
+partI();
 
 console.log(
   `\n${checks - failures}/${checks} checks passed${failures === 0 ? "" : `, ${failures} FAILED`}`
