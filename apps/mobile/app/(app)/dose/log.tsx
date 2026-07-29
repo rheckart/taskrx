@@ -1,5 +1,5 @@
 import { useUser } from "@clerk/clerk-expo";
-import type { DoseLog, Medication } from "@taskrx/shared";
+import type { Reminder, ReminderInstance } from "@taskrx/shared";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import type { ReactElement } from "react";
@@ -14,16 +14,26 @@ import {
 
 import { useToast } from "../../../src/components/useToast";
 import * as doseLogsRepo from "../../../src/db/repos/doseLogs";
-import * as medicationsRepo from "../../../src/db/repos/medications";
+import * as instancesRepo from "../../../src/db/repos/reminderInstances";
+import * as remindersRepo from "../../../src/db/repos/reminders";
 import { snoozeDose } from "../../../src/notifications/snooze";
 
 type ActionStatus = "idle" | "taking" | "skipping" | "snoozing" | "done";
 
+/**
+ * Reads come from the unified tables; writes still go to `dose_logs`.
+ *
+ * That split is the cutover as `db/repos/medication-mirror.ts` frames it — the
+ * POC tables stay the source of truth, the unified ones are the projection the
+ * screens read, and rolling back is repointing the reads. The two rows share an
+ * id by construction (`db/repos/dose-log-mirror.ts`), so `instance.id` is the
+ * dose log's id and the write repo takes it unchanged.
+ */
 interface LoadedState {
   readonly kind: "loaded";
-  readonly medication: Medication;
+  readonly medication: Reminder;
   readonly scheduledTime: number;
-  readonly doseLog: DoseLog;
+  readonly instance: ReminderInstance;
 }
 
 interface ErrorState {
@@ -94,7 +104,7 @@ export default function DoseLogScreen(): ReactElement {
     }
 
     try {
-      const medication = await medicationsRepo.get(parsedParams.medicationId);
+      const medication = await remindersRepo.get(parsedParams.medicationId);
       if (medication === null) {
         setState({
           kind: "error",
@@ -103,22 +113,39 @@ export default function DoseLogScreen(): ReactElement {
         return;
       }
 
-      let doseLog = await doseLogsRepo.findPendingForDose(
+      let instance = await instancesRepo.findPendingForOccurrence(
         userId,
         parsedParams.medicationId,
         parsedParams.scheduledTime
       );
-      doseLog ??= await doseLogsRepo.create({
-        userId,
-        medicationId: parsedParams.medicationId,
-        scheduledTime: parsedParams.scheduledTime,
-      });
+      if (instance === null) {
+        // Create through the POC table and read the projection back, rather
+        // than inserting an instance directly: `dose_logs` is still the write
+        // source of truth, and its mirror is what produces the instance.
+        const created = await doseLogsRepo.create({
+          userId,
+          medicationId: parsedParams.medicationId,
+          scheduledTime: parsedParams.scheduledTime,
+        });
+        instance = await instancesRepo.get(created.id);
+      }
+
+      if (instance === null) {
+        // The mirror's EXISTS guard dropped the projection, so the medication
+        // has no `reminders` row. Saying so beats rendering a screen whose
+        // buttons write to a dose the rest of the app cannot see.
+        setState({
+          kind: "error",
+          message: "This dose could not be prepared. Try again after a sync.",
+        });
+        return;
+      }
 
       setState({
         kind: "loaded",
         medication,
         scheduledTime: parsedParams.scheduledTime,
-        doseLog,
+        instance,
       });
     } catch (err: unknown) {
       const message =
@@ -141,7 +168,7 @@ export default function DoseLogScreen(): ReactElement {
     setError(null);
     try {
       const now = Date.now();
-      await doseLogsRepo.markTaken(state.doseLog.id, now);
+      await doseLogsRepo.markTaken(state.instance.id, now);
       setCompletedAt(now);
       setActionStatus("done");
       showToast.success("Dose recorded");
@@ -161,7 +188,7 @@ export default function DoseLogScreen(): ReactElement {
     setActionStatus("skipping");
     setError(null);
     try {
-      await doseLogsRepo.markSkipped(state.doseLog.id);
+      await doseLogsRepo.markSkipped(state.instance.id);
       setCompletedAt(Date.now());
       setActionStatus("done");
       showToast.success("Dose skipped");

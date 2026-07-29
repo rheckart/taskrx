@@ -1,5 +1,5 @@
 import { useUser } from "@clerk/clerk-expo";
-import type { DoseLog, Medication } from "@taskrx/shared";
+import type { Reminder, ReminderInstance } from "@taskrx/shared";
 import { Stack } from "expo-router";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import type { ReactElement } from "react";
@@ -13,12 +13,12 @@ import {
 } from "react-native";
 
 import { SkeletonList } from "../../../src/components/Skeleton";
-import * as doseLogsRepo from "../../../src/db/repos/doseLogs";
-import * as medicationsRepo from "../../../src/db/repos/medications";
+import * as instancesRepo from "../../../src/db/repos/reminderInstances";
+import * as remindersRepo from "../../../src/db/repos/reminders";
 import { useDoseLogsSync } from "../../../src/sync/pull";
 
 interface HistoryItem {
-  readonly doseLog: DoseLog;
+  readonly instance: ReminderInstance;
   readonly medicationName: string;
   readonly dosage: string | undefined;
 }
@@ -28,10 +28,19 @@ interface DayGroup {
   readonly data: readonly HistoryItem[];
 }
 
-function statusLabel(status: DoseLog["status"]): string {
+/**
+ * `snoozed` has no `dose_logs` counterpart — it exists only in the unified
+ * `InstanceStatus`, and reading `reminder_instances` is what makes it
+ * reachable here. It is deliberately not folded into `skipped` or `missed`:
+ * the adherence calculator counts those against the user and a snooze is not
+ * a miss, so showing it as one would contradict the number on the same screen.
+ */
+function statusLabel(status: ReminderInstance["status"]): string {
   switch (status) {
     case "taken":
       return "Taken";
+    case "snoozed":
+      return "Snoozed";
     case "skipped":
       return "Skipped";
     case "missed":
@@ -41,10 +50,12 @@ function statusLabel(status: DoseLog["status"]): string {
   }
 }
 
-function statusColor(status: DoseLog["status"]): string {
+function statusColor(status: ReminderInstance["status"]): string {
   switch (status) {
     case "taken":
       return "#34c759";
+    case "snoozed":
+      return "#8e8e93";
     case "skipped":
       return "#ff9500";
     case "missed":
@@ -91,7 +102,7 @@ function formatDay(date: Date): string {
 function groupByDay(items: readonly HistoryItem[]): readonly DayGroup[] {
   const groups = new Map<string, HistoryItem[]>();
   for (const item of items) {
-    const day = formatDay(new Date(item.doseLog.scheduledTime));
+    const day = formatDay(new Date(item.instance.scheduledTime));
     const existing = groups.get(day);
     if (existing === undefined) {
       groups.set(day, [item]);
@@ -106,19 +117,19 @@ function groupByDay(items: readonly HistoryItem[]): readonly DayGroup[] {
 }
 
 function HistoryRow({ item }: { readonly item: HistoryItem }): ReactElement {
-  const { doseLog, medicationName, dosage } = item;
-  const scheduled = new Date(doseLog.scheduledTime);
+  const { instance, medicationName, dosage } = item;
+  const scheduled = new Date(instance.scheduledTime);
   const takenAt =
-    doseLog.takenAt !== undefined ? new Date(doseLog.takenAt) : null;
+    instance.takenAt !== undefined ? new Date(instance.takenAt) : null;
 
   return (
     <View style={styles.row}>
       <View style={styles.rowHeader}>
         <Text style={styles.rowName}>{medicationName}</Text>
         <Text
-          style={[styles.rowStatus, { color: statusColor(doseLog.status) }]}
+          style={[styles.rowStatus, { color: statusColor(instance.status) }]}
         >
-          {statusLabel(doseLog.status)}
+          {statusLabel(instance.status)}
         </Text>
       </View>
       {dosage !== undefined ? (
@@ -128,8 +139,8 @@ function HistoryRow({ item }: { readonly item: HistoryItem }): ReactElement {
       {takenAt !== null ? (
         <Text style={styles.rowTime}>Taken: {formatTime(takenAt)}</Text>
       ) : null}
-      {doseLog.notes !== undefined && doseLog.notes.length > 0 ? (
-        <Text style={styles.rowNotes}>{doseLog.notes}</Text>
+      {instance.notes !== undefined && instance.notes.length > 0 ? (
+        <Text style={styles.rowNotes}>{instance.notes}</Text>
       ) : null}
     </View>
   );
@@ -161,19 +172,19 @@ export default function DoseHistoryScreen(): ReactElement {
       return;
     }
     try {
-      const [doseLogs, medications] = await Promise.all([
-        doseLogsRepo.selectAll({ userId }),
-        medicationsRepo.selectAll(userId),
+      const [instances, medications] = await Promise.all([
+        instancesRepo.list({ userId }),
+        remindersRepo.list(userId, "medication"),
       ]);
-      const medMap = new Map<string, Medication>();
+      const medMap = new Map<string, Reminder>();
       for (const med of medications) {
         medMap.set(med.id, med);
       }
 
-      const enriched: HistoryItem[] = doseLogs.map((doseLog) => {
-        const med = medMap.get(doseLog.medicationId);
+      const enriched: HistoryItem[] = instances.map((instance) => {
+        const med = medMap.get(instance.reminderId);
         return {
-          doseLog,
+          instance,
           medicationName: med?.name ?? "Unknown medication",
           dosage: med?.dosage,
         };
@@ -242,7 +253,7 @@ export default function DoseHistoryScreen(): ReactElement {
             <View>
               <SectionHeader title={group.title} />
               {group.data.map((item) => (
-                <HistoryRow key={item.doseLog.id} item={item} />
+                <HistoryRow key={item.instance.id} item={item} />
               ))}
             </View>
           )}

@@ -6,7 +6,7 @@ import notifee, {
   type TimestampTrigger,
 } from "react-native-notify-kit";
 
-import * as medicationsRepo from "../db/repos/medications";
+import * as remindersRepo from "../db/repos/reminders";
 
 import {
   buildNotificationId as buildBaseNotificationId,
@@ -21,13 +21,19 @@ import {
  * `scheduledTime`. The original scheduled time is preserved so the dose
  * log row created from the snooze notification still records the intended
  * dose time.
+ *
+ * The title is read from `reminders`, which is the table `scheduler.ts` armed
+ * the alarm from. Reading `medications` here meant the snooze could disagree
+ * with the notification it was snoozing — a `weekly` reminder has no
+ * `medications` row to name at all. The id is the same either way: a mirrored
+ * reminder keeps the medication's id (see `db/repos/medication-mirror.ts`).
  */
 export async function snoozeDose(
   medicationId: string,
   scheduledTime: number,
   snoozeMinutes = 15
 ): Promise<void> {
-  const med = await medicationsRepo.get(medicationId);
+  const med = await remindersRepo.get(medicationId);
   const medName = med?.name ?? "Medication";
   const dosageLabel = med?.dosage !== undefined ? ` (${med.dosage})` : "";
 

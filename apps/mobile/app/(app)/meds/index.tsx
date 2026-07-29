@@ -1,5 +1,5 @@
 import { useUser } from "@clerk/clerk-expo";
-import type { DoseLog, Medication } from "@taskrx/shared";
+import type { Reminder, ReminderInstance } from "@taskrx/shared";
 import { Link, Stack, useRouter } from "expo-router";
 import { useCallback, useEffect, useState } from "react";
 import type { ReactElement } from "react";
@@ -14,29 +14,50 @@ import {
 } from "react-native";
 
 import { SkeletonList } from "../../../src/components/Skeleton";
-import * as doseLogsRepo from "../../../src/db/repos/doseLogs";
-import * as medicationsRepo from "../../../src/db/repos/medications";
+import * as instancesRepo from "../../../src/db/repos/reminderInstances";
+import * as remindersRepo from "../../../src/db/repos/reminders";
 import { useMedicationsSync } from "../../../src/sync/pull";
 
-function describeSchedule(med: Medication): string {
-  if (med.scheduleType === "daily") {
-    const times = (med.scheduleTimes as { times: readonly string[] }).times;
-    if (times.length === 0) {
-      return "Daily (no times set)";
+const DAY_NAMES = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"] as const;
+
+/**
+ * Renders a reminder's schedule.
+ *
+ * Switching on the tagged union replaces the two `as` casts this held while it
+ * read `medications`, where `scheduleTimes` was an untyped blob and the shape
+ * had to be asserted per branch. The `weekly` arm is not new behaviour so much
+ * as newly reachable: `medications` had no way to store one, so a weekly
+ * reminder was previously invisible on this screen.
+ */
+function describeSchedule(reminder: Reminder): string {
+  const schedule = reminder.schedule;
+  switch (schedule.type) {
+    case "daily":
+      return schedule.times.length === 0
+        ? "Daily (no times set)"
+        : `Daily at ${schedule.times.join(", ")}`;
+    case "weekly": {
+      if (schedule.daysOfWeek.length === 0 || schedule.times.length === 0) {
+        return "Weekly (not fully set)";
+      }
+      // `Weekday` is `0 | 1 | ... | 6` and `DAY_NAMES` has seven entries, so
+      // the index is total and needs no fallback.
+      const days = schedule.daysOfWeek.map((d) => DAY_NAMES[d]);
+      return `${days.join(", ")} at ${schedule.times.join(", ")}`;
     }
-    return `Daily at ${times.join(", ")}`;
+    case "interval": {
+      const start = new Date(schedule.startAt);
+      const startLabel = `${start.getHours().toString().padStart(2, "0")}:${start.getMinutes().toString().padStart(2, "0")}`;
+      return `Every ${String(schedule.hours)}h starting ${startLabel}`;
+    }
   }
-  const interval = med.scheduleTimes as { hours: number; startAt: number };
-  const start = new Date(interval.startAt);
-  const startLabel = `${start.getHours().toString().padStart(2, "0")}:${start.getMinutes().toString().padStart(2, "0")}`;
-  return `Every ${String(interval.hours)}h starting ${startLabel}`;
 }
 
-function formatLastTaken(doseLog: DoseLog | null): string {
-  if (doseLog?.takenAt === undefined) {
+function formatLastTaken(instance: ReminderInstance | null): string {
+  if (instance?.takenAt === undefined) {
     return "Never";
   }
-  const date = new Date(doseLog.takenAt);
+  const date = new Date(instance.takenAt);
   return date.toLocaleString([], {
     month: "short",
     day: "numeric",
@@ -50,8 +71,8 @@ function MedicationRow({
   lastTaken,
   onPress,
 }: {
-  readonly med: Medication;
-  readonly lastTaken: DoseLog | null;
+  readonly med: Reminder;
+  readonly lastTaken: ReminderInstance | null;
   readonly onPress: () => void;
 }): ReactElement {
   return (
@@ -72,9 +93,9 @@ export default function MedsListScreen(): ReactElement {
   const router = useRouter();
   const { isLoaded, isSignedIn, user } = useUser();
   const userId = user?.id;
-  const [meds, setMeds] = useState<readonly Medication[]>([]);
+  const [meds, setMeds] = useState<readonly Reminder[]>([]);
   const [lastTakenMap, setLastTakenMap] = useState<
-    ReadonlyMap<string, DoseLog | null>
+    ReadonlyMap<string, ReminderInstance | null>
   >(new Map());
   const [loading, setLoading] = useState<boolean>(true);
   const [refreshing, setRefreshing] = useState<boolean>(false);
@@ -90,14 +111,17 @@ export default function MedsListScreen(): ReactElement {
       return;
     }
     try {
-      const rows = await medicationsRepo.selectAll(userId);
+      // `kind: "medication"` is what keeps this the *medications* list now that
+      // it reads the unified table — a task reminder shares the table but not
+      // this screen.
+      const rows = await remindersRepo.list(userId, "medication");
       const lastTakenEntries = await Promise.all(
         rows.map(async (med) => {
-          const lastTaken = await doseLogsRepo.lastTakenFor(userId, med.id);
+          const lastTaken = await instancesRepo.lastTakenFor(userId, med.id);
           return [med.id, lastTaken] as const;
         })
       );
-      const map = new Map<string, DoseLog | null>();
+      const map = new Map<string, ReminderInstance | null>();
       for (const [medicationId, lastTaken] of lastTakenEntries) {
         map.set(medicationId, lastTaken);
       }
