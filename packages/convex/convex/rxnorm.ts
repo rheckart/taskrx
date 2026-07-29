@@ -1,6 +1,7 @@
 import { v } from "convex/values";
 
 import { action } from "./_generated/server.js";
+import { getCurrentUserId } from "./auth.js";
 
 /**
  * RxNorm drug lookup actions.
@@ -11,6 +12,14 @@ import { action } from "./_generated/server.js";
  * Endpoints:
  * - Search: https://rxnav.nlm.nih.gov/REST/approximateTerm.json?term={query}
  * - Properties: https://rxnav.nlm.nih.gov/REST/rxcui/{rxcui}/properties.json
+ *
+ * Both actions authenticate even though neither touches the database and
+ * RxNav is a public API. `auth.ts` states the house rule -- every public
+ * query, mutation and action calls `getCurrentUserId` first -- and these two
+ * were the only exceptions. Unauthenticated, they made the deployment an open
+ * relay to RxNav for anyone holding the deployment URL: no data of ours is
+ * exposed, but the traffic bills to us and is attributable to us, and rate
+ * limiting cannot be applied to callers we cannot identify.
  */
 
 const RXNORM_TIMEOUT_MS = 5000;
@@ -114,7 +123,9 @@ export const search = action({
       name: v.string(),
     })
   ),
-  handler: async (_ctx, args) => {
+  handler: async (ctx, args) => {
+    await getCurrentUserId(ctx);
+
     const encodedQuery = encodeURIComponent(args.query);
     const url = `https://rxnav.nlm.nih.gov/REST/approximateTerm.json?term=${encodedQuery}&maxEntries=${String(MAX_SEARCH_RESULTS)}`;
 
@@ -163,7 +174,9 @@ export const getByRxcui = action({
     }),
     v.null()
   ),
-  handler: async (_ctx, args) => {
+  handler: async (ctx, args) => {
+    await getCurrentUserId(ctx);
+
     const encodedRxcui = encodeURIComponent(args.rxcui);
     const url = `https://rxnav.nlm.nih.gov/REST/rxcui/${encodedRxcui}/properties.json`;
 
