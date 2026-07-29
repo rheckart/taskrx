@@ -987,6 +987,7 @@ function partD(db) {
 const MIRROR_TS = join(HERE, "..", "src", "db", "repos", "medication-mirror.ts");
 const MEDS_TS = join(HERE, "..", "src", "db", "repos", "medications.ts");
 const REMINDERS_TS = join(HERE, "..", "src", "db", "repos", "reminders.ts");
+const WORKER_TS = join(HERE, "..", "src", "sync", "worker.ts");
 const INSTANCES_TS = join(
   HERE,
   "..",
@@ -1015,18 +1016,33 @@ function template(source, marker) {
 // `mirrorMedicationDelete` and the assertion passed against code that no longer
 // existed. Scoping to a single body is what makes those checks discriminating.
 //
-// Brace counting is sound on this source: the only braces inside these bodies
-// come from `${...}` interpolations, which are balanced. Pass the comment-
-// stripped text so prose braces cannot skew the count.
+// String contents are blanked before counting. Relying on "these bodies happen
+// to contain no braces in literals" is exactly the kind of assumption that
+// rots: `medication-mirror.ts` already carries `ELSE '{}'` inside its SQL, and
+// a single `"}"` in a body truncates the slice. That failure is silent for the
+// negative `!/.../` checks -- they pass because the call moved outside the
+// truncated window -- which is the same disease this extractor exists to cure.
+//
+// Pass comment-stripped text so prose braces cannot skew the count either.
+function blankLiterals(text) {
+  return text.replace(
+    /(["'`])(?:\\.|(?!\1)[^\\])*\1/g,
+    (m) => m[0] + " ".repeat(Math.max(0, m.length - 2)) + m[0]
+  );
+}
+
 function body(source, marker) {
   const start = source.indexOf(marker);
   if (start === -1) throw new Error(`marker not found: ${marker}`);
   const open = source.indexOf("{", start);
   if (open === -1) throw new Error(`no body after ${marker}`);
+  // Count over a literal-blanked copy, but slice from the original so callers
+  // still see real code. Offsets are preserved because blanking is same-length.
+  const scan = blankLiterals(source);
   let depth = 0;
-  for (let i = open; i < source.length; i += 1) {
-    if (source[i] === "{") depth += 1;
-    else if (source[i] === "}") {
+  for (let i = open; i < scan.length; i += 1) {
+    if (scan[i] === "{") depth += 1;
+    else if (scan[i] === "}") {
       depth -= 1;
       if (depth === 0) return source.slice(open + 1, i);
     }
@@ -1150,7 +1166,24 @@ function partE() {
        schedule_type, schedule_times, active, created_at, updated_at, sync_status
      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
   );
-  const runMirror = db.prepare(insert);
+  // `REPEND_CLAUSE` is concatenated onto the statement *outside* the template
+  // literal, so `template()` cannot see it -- every check that runs `insert`
+  // alone is exercising the pull-path variant. An audit made that clause
+  // syntactically invalid, inverted it to `'synced'`, and deleted it outright,
+  // and the suite stayed green all three times. Both variants are prepared and
+  // executed here so the difference between them is observed, not asserted.
+  const rependClause = template(source, "const REPEND_CLAUSE");
+  let runMirror;
+  try {
+    runMirror = db.prepare(insert + rependClause);
+    ok("the re-pend variant is valid SQL", true);
+  } catch (err) {
+    // Reported rather than thrown: a prepare failure here is the finding, and
+    // aborting would skip every remaining check in the file.
+    ok("the re-pend variant is valid SQL", false, `\n    ${err.message}`);
+    runMirror = db.prepare(insert);
+  }
+  const runMirrorRow = db.prepare(insert);
   const runMirrorDelete = db.prepare(softDelete);
   const reminder = (id) =>
     db.prepare("SELECT * FROM reminders WHERE id = ?").get(id);
@@ -1248,6 +1281,44 @@ function partE() {
     "cx-1"
   );
 
+  // The re-pend clause, behaviorally. It fires only on ON CONFLICT, so a fresh
+  // insert cannot observe it -- the row has to be marked synced first. Without
+  // this, a local edit to an already-synced medication leaves the projection
+  // `synced`, `reconcilePending` never collects it, and the edit reaches the
+  // server for the medication but never for the reminder.
+  db.prepare(
+    "UPDATE reminders SET sync_status = 'synced' WHERE id = 'post-1'"
+  ).run();
+  db.prepare(
+    "UPDATE medications SET name = 'Sertraline ER' WHERE id = 'post-1'"
+  ).run();
+  runMirror.run("post-1");
+  eq(
+    "the local-write path re-pends an already-synced projection",
+    reminder("post-1")?.sync_status,
+    "pending"
+  );
+
+  // And the pull path must not, or every `api.medications.list` fire marks the
+  // whole account dirty and pushes the server's own rows straight back at it.
+  db.prepare(
+    "UPDATE reminders SET sync_status = 'synced' WHERE id = 'post-1'"
+  ).run();
+  db.prepare(
+    "UPDATE medications SET name = 'Sertraline SR' WHERE id = 'post-1'"
+  ).run();
+  runMirrorRow.run("post-1");
+  eq(
+    "the pull path leaves sync_status alone on conflict",
+    reminder("post-1")?.sync_status,
+    "synced"
+  );
+  eq(
+    "  but still refreshes the content",
+    reminder("post-1")?.name,
+    "Sertraline SR"
+  );
+
   // Soft delete deactivates rather than removes: `selectUpcomingOccurrences`
   // skips inactive reminders, and dose history still has to resolve the row.
   runMirrorDelete.run(9000, "post-2");
@@ -1313,6 +1384,72 @@ function partE() {
 // a typo in the `entity_type` literal turns the `NOT EXISTS` into a tautology,
 // so every pending row is re-enqueued on every drain, unboundedly — and the
 // source still reads as though it were correct.
+// ── Part H: drain() always releases its re-entrancy flag ─────────────────
+//
+// `drain()` sets `this.draining = true` before its first await so two drains
+// cannot both clear the guard. That flag is released in a `finally`, which
+// means every exit after the claim must be INSIDE that try. It is easy to get
+// wrong and the symptom is severe and silent: a `return` from outside it --
+// the offline path -- leaves the flag set, every later drain short-circuits,
+// and sync is dead for the life of the process. No SQL check can see this, so
+// it is asserted structurally.
+function partH() {
+  section("Part H: drain() releases the re-entrancy flag on every path");
+
+  const code = readFileSync(WORKER_TS, "utf8")
+    .replace(/\/\*[\s\S]*?\*\//g, "")
+    .replace(/\/\/.*$/gm, "");
+  const drain = body(code, "async drain(");
+
+  const claim = drain.indexOf("this.draining = true;");
+  ok("drain() claims the flag before awaiting", claim !== -1);
+
+  // The guarded region: the try that opens after the claim, brace-matched.
+  const scan = blankLiterals(drain);
+  const tryOpen = scan.indexOf("{", scan.indexOf("try", claim));
+  let depth = 0;
+  let tryClose = -1;
+  for (let i = tryOpen; i < scan.length; i += 1) {
+    if (scan[i] === "{") depth += 1;
+    else if (scan[i] === "}") {
+      depth -= 1;
+      if (depth === 0) {
+        tryClose = i;
+        break;
+      }
+    }
+  }
+  ok("drain() opens a try after claiming the flag", tryClose !== -1);
+
+  const beforeTry = drain.slice(claim, tryOpen);
+  const afterTry = drain.slice(tryClose);
+  ok(
+    "no return between claiming the flag and entering the guarded try",
+    !/\breturn\b/.test(beforeTry),
+    `\n    found: ${beforeTry.trim()}`
+  );
+  ok(
+    "no return after the guarded try (would skip the finally)",
+    !/\breturn\b/.test(afterTry.slice(0, afterTry.lastIndexOf("}"))),
+    `\n    found: ${afterTry.trim()}`
+  );
+  ok(
+    "the guarded try has a finally that releases the flag",
+    /finally\s*\{[^}]*this\.draining\s*=\s*false/.test(afterTry)
+  );
+
+  // Both early exits must therefore sit inside the guarded region.
+  const guarded = drain.slice(tryOpen, tryClose);
+  ok(
+    "the offline early-return is inside the guarded try",
+    /setStatus\("offline"\)/.test(guarded)
+  );
+  ok(
+    "the connectivity-failure exit is inside the guarded try",
+    /connectivity check failed/.test(guarded)
+  );
+}
+
 function partG() {
   section("Part G: reconcilePending selects exactly the unqueued pending rows");
 
@@ -1356,30 +1493,42 @@ function partG() {
   mkReminder.run("r-queued", "u1", "Queued", "pending", null);
   mkReminder.run("r-synced", "u1", "Synced", "synced", "rem_real");
   mkReminder.run("r-dead", "u1", "Dead", "error", null);
+  // r-revive:  pending, and its ONLY entry is dead-lettered. `markSourceError`
+  //            swallows its own failures while `markDeadLettered` still runs,
+  //            so this state is reachable. It MUST be picked up -- that is what
+  //            `dead_letter = 0` buys, and without the clause it is skipped
+  //            forever. The `r-dead` row above cannot test this: its status is
+  //            'error', so the status filter excludes it first.
+  mkReminder.run("r-revive", "u1", "Revive", "pending", null);
   mkQueue.run("reminder", "r-queued", 0);
   mkQueue.run("reminder", "r-dead", 1);
+  mkQueue.run("reminder", "r-revive", 1);
 
   const picked = db
     .prepare(reminderQuery)
     .all()
     .map((r) => r.id)
     .sort();
-  eq("reminder reconcile picks only the unqueued pending row", picked, [
+  eq("reminder reconcile picks only the unqueued pending rows", picked, [
     "r-backfill",
+    "r-revive",
   ]);
 
   mkInstance.run("i-backfill", "r-synced", "pending", null);
   mkInstance.run("i-queued", "r-synced", "pending", null);
   mkInstance.run("i-synced", "r-synced", "synced", "inst_real");
+  mkInstance.run("i-revive", "r-synced", "pending", null);
   mkQueue.run("reminder_instance", "i-queued", 0);
+  mkQueue.run("reminder_instance", "i-revive", 1);
 
   const pickedI = db
     .prepare(instanceQuery)
     .all()
     .map((r) => r.id)
     .sort();
-  eq("instance reconcile picks only the unqueued pending row", pickedI, [
+  eq("instance reconcile picks only the unqueued pending rows", pickedI, [
     "i-backfill",
+    "i-revive",
   ]);
 
   // The tautology guard. A reminder entry must not satisfy an instance's
@@ -1434,6 +1583,16 @@ function partF() {
 
   eq("pre-007: contaminated", reminder("med-aaaa-1111")?.convex_id, "cx_med_1");
 
+  // Pinned to a state a correct 007 must preserve *in full*. Asserting only
+  // `convex_id === null` on a row that was already NULL holds under any
+  // implementation -- including one whose UPDATE never runs, and one whose
+  // WHERE is wide enough to re-pend rows it did not clear. Capturing the whole
+  // row makes over-reach visible.
+  db.prepare(
+    "UPDATE reminders SET convex_id = NULL, sync_status = 'synced' WHERE id = 'med-bbbb-2222'"
+  ).run();
+  const untouched = JSON.stringify(reminder("med-bbbb-2222"));
+
   applyMigrations(db, ["007_clear_projected_convex_ids"]);
 
   eq("007 clears a medication id", reminder("med-aaaa-1111")?.convex_id, null);
@@ -1444,9 +1603,9 @@ function partF() {
     "pending"
   );
   eq(
-    "007 leaves an already-NULL row alone",
-    reminder("med-bbbb-2222")?.convex_id,
-    null
+    "007 leaves an already-NULL row completely alone",
+    JSON.stringify(reminder("med-bbbb-2222")),
+    untouched
   );
   eq("007 clears a dose log id", instance("dose-1")?.convex_id, null);
   eq(
@@ -1497,6 +1656,7 @@ partD(partC(partB()));
 partE();
 partF();
 partG();
+partH();
 
 console.log(
   `\n${checks - failures}/${checks} checks passed${failures === 0 ? "" : `, ${failures} FAILED`}`

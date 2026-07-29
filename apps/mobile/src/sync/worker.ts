@@ -205,22 +205,33 @@ export class SyncWorker {
     // Claimed before the first await. `start()` fires `void this.drain()` while
     // the NetInfo listener may fire another; with the flag set after the fetch,
     // both cleared the guard and drained the same snapshot concurrently.
+    //
+    // Everything after this line MUST stay inside the try whose `finally`
+    // releases the flag -- including the offline and connectivity-failure
+    // returns. An earlier shape returned from a separate inner try, so those
+    // paths never released it: launching the app offline left `draining` set
+    // and every later drain short-circuited above, for the life of the process.
     this.draining = true;
 
     try {
-      const state = await NetInfo.fetch();
-      if (!state.isConnected) {
+      let connected = false;
+      try {
+        connected = (await NetInfo.fetch()).isConnected === true;
+      } catch (error: unknown) {
+        // Handled rather than rethrown. A throw from here escaped the
+        // `void this.drain()` call sites as an unhandled rejection and skipped
+        // the status update every other drain failure performs.
+        console.error("[sync] connectivity check failed:", error);
+        this.setStatus("error");
+        return;
+      }
+      if (!connected) {
         this.setStatus("offline");
         return;
       }
-    } catch {
-      this.draining = false;
-      throw new Error("[sync] connectivity check failed");
-    }
 
-    this.setStatus("syncing");
+      this.setStatus("syncing");
 
-    try {
       // Before reading the queue, give reminders that are pending but absent
       // from it a queue entry. Migration 005 backfilled them in SQL, which
       // cannot enqueue, and a best-effort enqueue can fail after its row

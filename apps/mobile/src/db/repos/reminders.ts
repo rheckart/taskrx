@@ -524,14 +524,18 @@ export async function enqueueExternalWrite(id: string): Promise<void> {
  * 008 indexes `reminders(sync_status)` and `sync_queue(entity_type, entity_id,
  * dead_letter)`; without those it full-scans both.
  *
- * The `dead_letter = 0` clause is belt-and-braces, not a recovery path. Be
- * clear about what this does NOT do: dead-lettering runs `markSourceError`
- * first, which sets the reminder to `'error'`, and the `sync_status = 'pending'`
- * filter then excludes it. So a reminder the worker gave up on is never
- * reconciled — recovery needs a fresh local edit. Widening the filter to
- * include `'error'` would be worse, not better: a dead-lettered entry has
- * `dead_letter = 1`, so `NOT EXISTS` would hold and this would re-enqueue the
- * same doomed write on every single drain, forever.
+ * The `dead_letter = 0` clause is narrow but real. In the ordinary case it does
+ * nothing: dead-lettering runs `markSourceError` first, which sets the row to
+ * `'error'`, and the `sync_status = 'pending'` filter excludes it — so a row
+ * the worker genuinely gave up on is not reconciled, and recovery needs a fresh
+ * local edit. But `markSourceError` swallows its own failures while
+ * `markDeadLettered` still runs, so `pending` row + dead-lettered entry is
+ * reachable. Without the clause that row would be skipped forever, because its
+ * only entry is one nothing will ever drain.
+ *
+ * Widening the status filter to include `'error'` would be worse, not better: a
+ * dead-lettered entry has `dead_letter = 1`, so `NOT EXISTS` would hold and
+ * this would re-enqueue the same doomed write on every single drain, forever.
  */
 export async function reconcilePending(): Promise<number> {
   const db = await getDb();

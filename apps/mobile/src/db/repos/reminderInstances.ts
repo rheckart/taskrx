@@ -458,12 +458,17 @@ export async function enqueueExternalWrite(id: string): Promise<void> {
  * `(entity_type, entity_id, dead_letter)`), so the subquery is an index-only
  * seek instead of a scan of the queue per candidate row.
  *
- * `dead_letter = 0` is belt-and-braces, not a recovery path, exactly as in
- * `reminders.ts`: dead-lettering runs `markSourceError` first, which sets the
- * instance to `'error'`, and the `sync_status = 'pending'` filter then
- * excludes it. Widening that filter to admit `'error'` would be worse than
- * leaving it — a dead-lettered entry has `dead_letter = 1`, so `NOT EXISTS`
- * would hold and the same doomed write would be re-enqueued forever.
+ * `dead_letter = 0` is narrow but real, exactly as in `reminders.ts`. In the
+ * ordinary case it does nothing: dead-lettering runs `markSourceError` first,
+ * which sets the instance to `'error'`, and the `sync_status = 'pending'`
+ * filter then excludes it. But `markSourceError` swallows its own failures
+ * while `markDeadLettered` still runs, so a `pending` instance whose only entry
+ * is dead-lettered is reachable — and without this clause it would be skipped
+ * forever, because that entry is one nothing will ever drain.
+ *
+ * Widening the status filter to admit `'error'` would be worse than leaving it
+ * — a dead-lettered entry has `dead_letter = 1`, so `NOT EXISTS` would hold and
+ * the same doomed write would be re-enqueued forever.
  *
  * One state this cannot rescue: a row with a `convex_id` but a status still
  * `'pending'` yields an `update` entry, and `processReminderInstanceEntry`
