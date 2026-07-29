@@ -8,7 +8,11 @@ import { shouldApplyRemoteMedication } from "@taskrx/shared";
 
 import { getDb } from "../index";
 
-import { mirrorMedication, mirrorMedicationDelete } from "./medication-mirror";
+import {
+  mirrorMedication,
+  mirrorMedicationDelete,
+  mirrorMedicationRow,
+} from "./medication-mirror";
 import { enqueue } from "./syncQueue";
 
 /**
@@ -310,7 +314,10 @@ export async function markSynced(id: string): Promise<void> {
     "UPDATE medications SET sync_status = 'synced' WHERE id = ?",
     id
   );
-  await mirrorMedication(id);
+  // No mirror call. Since the projection stopped inheriting the medication's
+  // sync columns, nothing it stores derives from `sync_status` — mirroring here
+  // would rewrite the row to its existing value, re-pend it, and enqueue a push
+  // from the function whose whole job is recording that a push succeeded.
 }
 
 /**
@@ -322,7 +329,7 @@ export async function markError(id: string, error: string): Promise<void> {
     "UPDATE medications SET sync_status = 'error' WHERE id = ?",
     id
   );
-  await mirrorMedication(id);
+  // No mirror call, for the same reason as `markSynced`.
   console.error(`[medications] sync error for ${id}: ${error}`);
 }
 
@@ -339,10 +346,12 @@ export async function setConvexId(
     convexId,
     localId
   );
-  // Propagates the document id into the projection so the sync worker's
-  // `convex_id`-then-`getByLocalId` bridge keeps resolving under either
-  // identity, which is the same invariant migration 005 preserves.
-  await mirrorMedication(localId);
+  // No mirror call. This used to propagate the document id into the projection
+  // "so the bridge keeps resolving under either identity" — but that identity
+  // was an `Id<"medications">` being written into a column the sync worker
+  // reads as an `Id<"reminders">`, which is the defect migration 007 repairs.
+  // The projection's `convex_id` now comes only from `remindersRepo.setConvexId`
+  // after a genuine `api.reminders.create`, so there is nothing to propagate.
 }
 
 /**
@@ -416,8 +425,9 @@ export async function upsertMany(rows: readonly Medication[]): Promise<number> {
       remote.updatedAt
     );
     // A medication arriving from a remote pull needs an alarm just as much as
-    // one typed on this device.
-    await mirrorMedication(remote.id);
+    // one typed on this device — but it does not need pushing back, so this
+    // refreshes the row without re-pending it. See `mirrorMedicationRow`.
+    await mirrorMedicationRow(remote.id);
     updated += 1;
   }
 

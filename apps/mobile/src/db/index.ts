@@ -289,6 +289,19 @@ const MIGRATIONS: readonly Migration[] = [
         );
     `,
   },
+  {
+    name: "008_sync_reconcile_indexes",
+    sql: `
+      CREATE INDEX IF NOT EXISTS idx_sync_queue_entity
+        ON sync_queue(entity_type, entity_id, dead_letter);
+
+      CREATE INDEX IF NOT EXISTS idx_reminders_sync_status
+        ON reminders(sync_status);
+
+      CREATE INDEX IF NOT EXISTS idx_reminder_instances_sync_status
+        ON reminder_instances(sync_status);
+    `,
+  },
 ];
 
 let dbPromise: Promise<SQLiteDatabase> | null = null;

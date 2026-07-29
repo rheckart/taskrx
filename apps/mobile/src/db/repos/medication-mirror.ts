@@ -128,6 +128,17 @@ const MEDICATION_TO_REMINDER_SELECT = `
 `;
 
 /**
+ * Appended to the conflict clause on the local-write path only.
+ *
+ * Concatenated rather than interpolated so the statement above stays a single
+ * unbroken template literal: `scripts/verify-reminder-migrations.mjs` extracts
+ * that literal and prepares it against real SQLite, and a `${...}` conditional
+ * inside it would land in the extracted text verbatim and fail to parse.
+ */
+const REPEND_CLAUSE = `,
+       sync_status = 'pending'`;
+
+/**
  * Upserts the `reminders` projection of a single medication.
  *
  * Call this *after* the `medications` write has committed — the statement
@@ -143,16 +154,28 @@ const MEDICATION_TO_REMINDER_SELECT = `
  *     header), and must not disturb one an earlier sync resolved. It is
  *     absent from the clause entirely rather than defaulted.
  *
- * `sync_status` is forced to `'pending'` rather than inherited: the projection
- * has just changed and has its own unsynced edit to push, independent of
- * whatever the medication's own queue entry is doing.
+ * `sync_status` is never *inherited* from the medication — see the header. When
+ * `repend` is set it is forced to `'pending'`, because the projection has its
+ * own unsynced edit to push independent of whatever the medication's queue
+ * entry is doing. `mirrorMedicationRow` clears the flag for the pull path,
+ * where the content arrived from the server and re-pending it would push the
+ * server's own data back.
  *
  * Fields the POC has no source for (`instructions`, pill counts, refill days,
  * caregivers, `tags`, `priority`) are left untouched on update rather than
  * reset to the migration's defaults, so a value set through the unified path
  * survives a subsequent medication edit.
+ *
+ * Private: callers pick `mirrorMedication` (local write — refresh and push) or
+ * `mirrorMedicationRow` (remote pull — refresh only). Making that choice
+ * explicit at the call site is the point; the previous single entry point
+ * enqueued from `markSynced`, so recording a *successful* sync re-pended the
+ * projection and queued more work.
  */
-export async function mirrorMedication(medicationId: string): Promise<void> {
+async function upsertProjection(
+  medicationId: string,
+  repend: boolean
+): Promise<void> {
   const db = await getDb();
   await db.runAsync(
     `INSERT INTO reminders (
@@ -168,12 +191,36 @@ export async function mirrorMedication(medicationId: string): Promise<void> {
        dosage      = excluded.dosage,
        schedule    = excluded.schedule,
        active      = excluded.active,
-       updated_at  = excluded.updated_at,
-       sync_status = 'pending'`,
+       updated_at  = excluded.updated_at` + (repend ? REPEND_CLAUSE : ""),
     medicationId
   );
+}
 
+export async function mirrorMedication(medicationId: string): Promise<void> {
+  await upsertProjection(medicationId, true);
   await remindersRepo.enqueueExternalWrite(medicationId);
+}
+
+/**
+ * Refreshes the projection without claiming the change needs pushing.
+ *
+ * For the pull path. `useMedicationsSync` hands `upsertMany` whatever the live
+ * `api.medications.list` subscription last emitted, and the projection must
+ * follow or the scheduler arms alarms from stale rows. But that content
+ * *arrived from the server*, so enqueuing it would push the server's own data
+ * straight back — one entry per medication in the account, on every
+ * subscription fire.
+ *
+ * `sync_status` is likewise left alone on conflict. A row already `synced` is
+ * still synced: under dual-write, whichever device wrote the medication also
+ * wrote the reminder, so the server's reminder document already carries this
+ * content. A projection row that does not exist yet is still INSERTed
+ * `pending` by the SELECT, because that one genuinely has never been pushed —
+ * `reconcilePending` collects it on the next drain, and the server's create is
+ * an upsert on `localId`, so a duplicate is absorbed rather than doubled.
+ */
+export async function mirrorMedicationRow(medicationId: string): Promise<void> {
+  await upsertProjection(medicationId, false);
 }
 
 /**

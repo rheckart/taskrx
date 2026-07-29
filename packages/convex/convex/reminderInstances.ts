@@ -159,6 +159,37 @@ export const create = mutation({
           "Reminder instance localId already exists for another user"
         );
       }
+
+      /**
+       * A repeated `create` for the same `localId` is an upsert, not a no-op,
+       * for the reason spelled out in `reminders.ts`: the device picks `create`
+       * whenever its local row still has no `convex_id`, so an instance taken
+       * or snoozed while its first create is still queued enqueues a *second*
+       * create carrying the newer status. Returning `existing._id` without
+       * writing dropped that status on the floor, and the client marks the row
+       * synced and never re-sends it.
+       *
+       * Defaults match the insert below for the same reason they do there — the
+       * device always sends `status` and `snoozeCount`, so the fallbacks are
+       * unreachable in practice and both paths produce the same document.
+       * `reminderKind` is re-read off the parent rather than trusted from the
+       * payload, exactly as on insert. `localId`, `userId` and `createdAt` are
+       * identity and stay put.
+       */
+      await ctx.db.patch(existing._id, {
+        reminderId: args.reminderId,
+        reminderKind: reminder.kind,
+        scheduledTime: args.scheduledTime,
+        status: args.status ?? "pending",
+        snoozeCount: args.snoozeCount ?? 0,
+        updatedAt: args.updatedAt,
+        ...(args.takenAt !== undefined ? { takenAt: args.takenAt } : {}),
+        ...(args.snoozedUntil !== undefined
+          ? { snoozedUntil: args.snoozedUntil }
+          : {}),
+        ...(args.notes !== undefined ? { notes: args.notes } : {}),
+      });
+
       return existing._id;
     }
 

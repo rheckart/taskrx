@@ -54,6 +54,7 @@ const MIGRATION_FILES = [
   ["005_backfill_reminders", "005_backfill_reminders.sql"],
   ["006_widen_sync_queue", "006_widen_sync_queue.sql"],
   ["007_clear_projected_convex_ids", "007_clear_projected_convex_ids.sql"],
+  ["008_sync_reconcile_indexes", "008_sync_reconcile_indexes.sql"],
 ];
 
 const sqlByName = new Map(
@@ -246,6 +247,7 @@ function partA() {
 
   eq("reminders indexes", indexes(db, "reminders"), [
     "idx_reminders_convex_id",
+    "idx_reminders_sync_status",
     "idx_reminders_user_active",
     "idx_reminders_user_kind",
   ]);
@@ -253,6 +255,7 @@ function partA() {
     "idx_reminder_instances_convex_id",
     "idx_reminder_instances_pending",
     "idx_reminder_instances_reminder",
+    "idx_reminder_instances_sync_status",
     "idx_reminder_instances_user_scheduled",
   ]);
 
@@ -334,6 +337,7 @@ function partA() {
   eq("sync_queue indexes", indexes(db, "sync_queue"), [
     "idx_sync_queue_created",
     "idx_sync_queue_dead_letter",
+    "idx_sync_queue_entity",
   ]);
 
   const queueSql = db
@@ -858,6 +862,7 @@ function partB() {
     "005_backfill_reminders",
     "006_widen_sync_queue",
     "007_clear_projected_convex_ids",
+    "008_sync_reconcile_indexes",
   ]);
 
   assertBackfill(db, "after first run");
@@ -980,6 +985,16 @@ function partD(db) {
 // against the migration and executes it.
 
 const MIRROR_TS = join(HERE, "..", "src", "db", "repos", "medication-mirror.ts");
+const MEDS_TS = join(HERE, "..", "src", "db", "repos", "medications.ts");
+const REMINDERS_TS = join(HERE, "..", "src", "db", "repos", "reminders.ts");
+const INSTANCES_TS = join(
+  HERE,
+  "..",
+  "src",
+  "db",
+  "repos",
+  "reminderInstances.ts"
+);
 
 /** Pulls a backtick template literal out of the TS source by its opening marker. */
 function template(source, marker) {
@@ -991,12 +1006,40 @@ function template(source, marker) {
   return source.slice(open + 1, close);
 }
 
+// The body of ONE function, brace-matched from its declaration.
+//
+// `template` above returns the first backtick literal after a marker, which for
+// these mirror functions is the SQL string -- it can never contain a call. An
+// earlier version of the enqueue checks below fell back to searching the whole
+// file, so deleting `mirrorMedication`'s enqueue still matched the one inside
+// `mirrorMedicationDelete` and the assertion passed against code that no longer
+// existed. Scoping to a single body is what makes those checks discriminating.
+//
+// Brace counting is sound on this source: the only braces inside these bodies
+// come from `${...}` interpolations, which are balanced. Pass the comment-
+// stripped text so prose braces cannot skew the count.
+function body(source, marker) {
+  const start = source.indexOf(marker);
+  if (start === -1) throw new Error(`marker not found: ${marker}`);
+  const open = source.indexOf("{", start);
+  if (open === -1) throw new Error(`no body after ${marker}`);
+  let depth = 0;
+  for (let i = open; i < source.length; i += 1) {
+    if (source[i] === "{") depth += 1;
+    else if (source[i] === "}") {
+      depth -= 1;
+      if (depth === 0) return source.slice(open + 1, i);
+    }
+  }
+  throw new Error(`unbalanced body for ${marker}`);
+}
+
 function partE() {
   section("Part E — repos/medication-mirror.ts projects medications -> reminders");
 
   const source = readFileSync(MIRROR_TS, "utf8");
   const select = template(source, "const MEDICATION_TO_REMINDER_SELECT");
-  const insert = template(source, "async function mirrorMedication(").replace(
+  const insert = template(source, "async function upsertProjection(").replace(
     "${MEDICATION_TO_REMINDER_SELECT}",
     select
   );
@@ -1031,14 +1074,56 @@ function partE() {
   // checked because a soft delete that stops propagating is just as silent.
   ok(
     "mirrorMedication enqueues a reminder sync entry",
-    /enqueueExternalWrite\(/.test(
-      template(source, "async function mirrorMedication(")
-    ) ||
-      /mirrorMedication\b[\s\S]*?enqueueExternalWrite\(/.test(code)
+    /remindersRepo\.enqueueExternalWrite\(/.test(
+      body(code, "async function mirrorMedication(")
+    )
   );
   ok(
     "mirrorMedicationDelete enqueues too",
-    /mirrorMedicationDelete\b[\s\S]*?enqueueExternalWrite\(/.test(code)
+    /remindersRepo\.enqueueExternalWrite\(/.test(
+      body(code, "async function mirrorMedicationDelete(")
+    )
+  );
+  // The pull-path variant must do NEITHER thing the write path does. Enqueuing
+  // here pushes the server's own data back, one entry per medication in the
+  // account on every `api.medications.list` fire; re-pending marks rows dirty
+  // that nothing made dirty. Both regressions are invisible at runtime -- they
+  // just cost traffic -- so they need a check that fails.
+  ok(
+    "mirrorMedicationRow does not enqueue (pull path must not push back)",
+    !/enqueueExternalWrite\(/.test(
+      body(code, "async function mirrorMedicationRow(")
+    )
+  );
+  ok(
+    "mirrorMedicationRow does not re-pend",
+    /upsertProjection\(\s*medicationId\s*,\s*false\s*\)/.test(
+      body(code, "async function mirrorMedicationRow(")
+    )
+  );
+  ok(
+    "mirrorMedication does re-pend",
+    /upsertProjection\(\s*medicationId\s*,\s*true\s*\)/.test(
+      body(code, "async function mirrorMedication(")
+    )
+  );
+
+  // Callers. `markSynced` mirroring was the write amplifier: recording a
+  // successful push re-pended the projection and enqueued another. With the
+  // sync columns no longer projected, these three have nothing to mirror.
+  const medsCode = readFileSync(MEDS_TS, "utf8")
+    .replace(/\/\*[\s\S]*?\*\//g, "")
+    .replace(/\/\/.*$/gm, "");
+  for (const fn of ["markSynced", "markError", "setConvexId"]) {
+    ok(
+      `${fn} does not mirror (projection derives nothing from sync columns)`,
+      !/mirrorMedication/.test(body(medsCode, `async function ${fn}(`))
+    );
+  }
+  ok(
+    "the remote pull refreshes the row without pushing it back",
+    /mirrorMedicationRow\(/.test(body(medsCode, "async function upsertMany(")) &&
+      !/mirrorMedication\(/.test(body(medsCode, "async function upsertMany("))
   );
   // It routes through the repo rather than calling `enqueue` itself, so the
   // reminder payload has exactly one definition. A direct `syncQueue` import
@@ -1216,6 +1301,105 @@ function partE() {
  * `api.reminders.update`. 007 is what makes those devices safe, so it is
  * tested against the pre-fix on-disk state rather than a clean one.
  */
+// ── Part G: the reconcile queries actually select the right rows ──────────
+//
+// `reconcilePending` is what drains migration 005's backfill: without it the
+// backfilled rows sit `pending` forever and the unified tables never reach
+// Convex, which is the whole defect M7 names. Both copies are checked because
+// the reminders half was fixed first and the instances half was missed.
+//
+// These run the REAL query text, sliced out of the two repos, against real
+// SQLite. A source-level check could not catch the failure that matters here:
+// a typo in the `entity_type` literal turns the `NOT EXISTS` into a tautology,
+// so every pending row is re-enqueued on every drain, unboundedly — and the
+// source still reads as though it were correct.
+function partG() {
+  section("Part G: reconcilePending selects exactly the unqueued pending rows");
+
+  const remindersSrc = readFileSync(REMINDERS_TS, "utf8");
+  const instancesSrc = readFileSync(INSTANCES_TS, "utf8");
+  const reminderQuery = template(
+    remindersSrc,
+    "export async function reconcilePending("
+  );
+  const instanceQuery = template(
+    instancesSrc,
+    "export async function reconcilePending("
+  );
+
+  const db = open();
+  applyMigrations(db, ALL);
+
+  const mkReminder = db.prepare(
+    `INSERT INTO reminders (id, user_id, kind, name, schedule, created_at,
+       updated_at, sync_status, convex_id)
+     VALUES (?, ?, 'medication', ?, '{"type":"daily","times":[]}', 1, 1, ?, ?)`
+  );
+  const mkInstance = db.prepare(
+    `INSERT INTO reminder_instances (id, reminder_id, user_id, reminder_kind,
+       scheduled_time, status, created_at, updated_at, sync_status, convex_id)
+     VALUES (?, ?, 'u1', 'medication', 1, 'pending', 1, 1, ?, ?)`
+  );
+  // `sync_queue.id` is an INTEGER rowid; let SQLite assign it.
+  const mkQueue = db.prepare(
+    `INSERT INTO sync_queue (entity_type, entity_id, operation, payload,
+       attempts, created_at, dead_letter)
+     VALUES (?, ?, 'create', '{}', 0, 1, ?)`
+  );
+
+  // r-backfill: what 005+007 leave behind — pending, nothing queued. MUST be picked up.
+  // r-queued:   already has a live entry. MUST NOT be re-enqueued (that is the duplicate bug).
+  // r-synced:   done. MUST NOT be touched.
+  // r-dead:     its only entry is dead-lettered, and `markSourceError` set it 'error',
+  //             so the status filter excludes it. Documents the real behaviour.
+  mkReminder.run("r-backfill", "u1", "Backfilled", "pending", null);
+  mkReminder.run("r-queued", "u1", "Queued", "pending", null);
+  mkReminder.run("r-synced", "u1", "Synced", "synced", "rem_real");
+  mkReminder.run("r-dead", "u1", "Dead", "error", null);
+  mkQueue.run("reminder", "r-queued", 0);
+  mkQueue.run("reminder", "r-dead", 1);
+
+  const picked = db
+    .prepare(reminderQuery)
+    .all()
+    .map((r) => r.id)
+    .sort();
+  eq("reminder reconcile picks only the unqueued pending row", picked, [
+    "r-backfill",
+  ]);
+
+  mkInstance.run("i-backfill", "r-synced", "pending", null);
+  mkInstance.run("i-queued", "r-synced", "pending", null);
+  mkInstance.run("i-synced", "r-synced", "synced", "inst_real");
+  mkQueue.run("reminder_instance", "i-queued", 0);
+
+  const pickedI = db
+    .prepare(instanceQuery)
+    .all()
+    .map((r) => r.id)
+    .sort();
+  eq("instance reconcile picks only the unqueued pending row", pickedI, [
+    "i-backfill",
+  ]);
+
+  // The tautology guard. A reminder entry must not satisfy an instance's
+  // NOT EXISTS, or the two entity types would mask each other.
+  mkInstance.run("i-crosstalk", "r-synced", "pending", null);
+  mkQueue.run("reminder", "i-crosstalk", 0);
+  const crosstalk = db
+    .prepare(instanceQuery)
+    .all()
+    .map((r) => r.id)
+    .sort();
+  ok(
+    "a `reminder` queue entry does not suppress a `reminder_instance` row",
+    crosstalk.includes("i-crosstalk"),
+    `\n    got ${JSON.stringify(crosstalk)}`
+  );
+
+  db.close();
+}
+
 function partF() {
   section("Part F: 007 clears cross-table convex ids");
 
@@ -1312,6 +1496,7 @@ partA();
 partD(partC(partB()));
 partE();
 partF();
+partG();
 
 console.log(
   `\n${checks - failures}/${checks} checks passed${failures === 0 ? "" : `, ${failures} FAILED`}`

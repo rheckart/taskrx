@@ -202,22 +202,32 @@ export class SyncWorker {
     if (this.draining) {
       return;
     }
+    // Claimed before the first await. `start()` fires `void this.drain()` while
+    // the NetInfo listener may fire another; with the flag set after the fetch,
+    // both cleared the guard and drained the same snapshot concurrently.
+    this.draining = true;
 
-    const state = await NetInfo.fetch();
-    if (!state.isConnected) {
-      this.setStatus("offline");
-      return;
+    try {
+      const state = await NetInfo.fetch();
+      if (!state.isConnected) {
+        this.setStatus("offline");
+        return;
+      }
+    } catch {
+      this.draining = false;
+      throw new Error("[sync] connectivity check failed");
     }
 
-    this.draining = true;
     this.setStatus("syncing");
 
     try {
       // Before reading the queue, give reminders that are pending but absent
       // from it a queue entry. Migration 005 backfilled them in SQL, which
       // cannot enqueue, and a best-effort enqueue can fail after its row
-      // write; in both cases nothing else would ever push the row. Cheap and
-      // indexed once the backlog is clear.
+      // write; in both cases nothing else would ever push the row. Migration
+      // 008 indexes both sides of that query, so it is cheap once the backlog
+      // is clear; without those indexes it full-scans `reminders` and rescans
+      // `sync_queue` per row, on every connectivity change.
       //
       // Failing here must not cost the drain: the queue as it already stands
       // is still worth draining, and the next drain retries the reconcile.
@@ -227,7 +237,28 @@ export class SyncWorker {
         console.error("[sync] reminder reconciliation failed", error);
       }
 
+      // Instances after reminders, never the other way round: an instance
+      // `create` resolves its parent through `resolveReminderId`, which throws
+      // while the reminder still has no `convex_id`, so the parent's entry has
+      // to be in the queue ahead of the child's. `syncQueueRepo.pending()`
+      // orders by `created_at` (served by `idx_sync_queue_created`) and these
+      // two passes enqueue in sequence, so a backfilled parent sorts ahead of
+      // its own children inside this drain.
+      //
+      // That ordering buys a clean first pass; it is not what keeps instances
+      // out of the dead-letter queue, and it should not be relied on as if it
+      // were. `created_at` is a millisecond stamp and both passes can land in
+      // the same one, and equal keys have no defined order. When it does not
+      // decide, the child fails once, `markFailed` spends one of five
+      // attempts, and the next drain finds the parent already synced.
+      try {
+        await reminderInstancesRepo.reconcilePending();
+      } catch (error) {
+        console.error("[sync] reminder instance reconciliation failed", error);
+      }
+
       const entries = await syncQueueRepo.pending();
+      let failed = false;
       for (const entry of entries) {
         const result = await this.processEntry(entry);
         if (!result.ok) {
@@ -236,6 +267,7 @@ export class SyncWorker {
             await this.markSourceError(entry, result.error);
             await syncQueueRepo.markDeadLettered(entry.id);
           }
+          failed = true;
           this.setStatus("error");
           await this.backoff(entry.attempts + 1);
           continue;
@@ -245,8 +277,11 @@ export class SyncWorker {
         await this.markSourceSynced(entry);
       }
 
-      const remaining = await syncQueueRepo.pending();
-      this.setStatus(remaining.length > 0 ? "error" : "idle");
+      // Derived from what this pass actually did, not from a fresh `pending()`
+      // read. Anything enqueued while the loop ran is new work for the next
+      // drain, not a failure of this one -- re-reading the queue reported
+      // `error` after a completely clean sync.
+      this.setStatus(failed ? "error" : "idle");
     } catch (error: unknown) {
       console.error("[sync] drain failed:", error);
       this.setStatus("error");

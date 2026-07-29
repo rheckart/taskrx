@@ -470,8 +470,16 @@ export async function enqueueExternalWrite(id: string): Promise<void> {
     return;
   }
 
-  const convexId = await getConvexId(id);
-  const rxcui = await getRxcui(id);
+  // One raw read rather than `getConvexId` + `getRxcui`. `get` maps to the
+  // domain shape, which carries neither column, and `reconcilePending` runs
+  // this over the whole backlog -- three round trips per row became 3N.
+  const db = await getDb();
+  const raw = await db.getFirstAsync<{
+    readonly convex_id: string | null;
+    readonly rxcui: string | null;
+  }>("SELECT convex_id, rxcui FROM reminders WHERE id = ?", id);
+  const convexId = raw?.convex_id ?? null;
+  const rxcui = raw?.rxcui ?? null;
 
   await enqueue("reminder", id, convexId === null ? "create" : "update", {
     localId: id,
@@ -512,9 +520,18 @@ export async function enqueueExternalWrite(id: string): Promise<void> {
  *
  * The `NOT EXISTS` is the whole safety argument: a row that already has a live
  * queue entry is skipped, so this cannot duplicate work, and running it on
- * every drain is a cheap indexed no-op once the backlog is clear. Dead-lettered
- * entries are deliberately not counted as live — an entry the worker has given
- * up on must not suppress a fresh attempt forever.
+ * every drain is a no-op once the backlog is clear — cheap because migration
+ * 008 indexes `reminders(sync_status)` and `sync_queue(entity_type, entity_id,
+ * dead_letter)`; without those it full-scans both.
+ *
+ * The `dead_letter = 0` clause is belt-and-braces, not a recovery path. Be
+ * clear about what this does NOT do: dead-lettering runs `markSourceError`
+ * first, which sets the reminder to `'error'`, and the `sync_status = 'pending'`
+ * filter then excludes it. So a reminder the worker gave up on is never
+ * reconciled — recovery needs a fresh local edit. Widening the filter to
+ * include `'error'` would be worse, not better: a dead-lettered entry has
+ * `dead_letter = 1`, so `NOT EXISTS` would hold and this would re-enqueue the
+ * same doomed write on every single drain, forever.
  */
 export async function reconcilePending(): Promise<number> {
   const db = await getDb();

@@ -359,6 +359,141 @@ export async function lastTakenFor(
 }
 
 /**
+ * Enqueue a sync entry for a `reminder_instances` row that was written
+ * *outside* this repo.
+ *
+ * Migration 005 backfilled instances from `dose_logs`, and a `.sql` file
+ * cannot call TypeScript, so not one of those rows ever produced a
+ * `sync_queue` entry. Migration 007 then cleared the `convex_id` values 005
+ * had copied across from `dose_logs` and returned the rows to `pending`. The
+ * result was that an existing install's entire pre-cutover dose history stayed
+ * on the device: the Convex `reminderInstances` table began at the cutover, so
+ * server-side adherence was computed over a history with its front half
+ * missing. This is the instance-side counterpart to
+ * `reminders.enqueueExternalWrite`, which covers the reminders half of the
+ * same backfill.
+ *
+ * The payload is built here rather than at the call sites so there is exactly
+ * one definition of an instance's sync shape. It matches what `create` and
+ * `updateStatus` enqueue field for field, because that is what
+ * `processReminderInstanceEntry` destructures — `reminderKind` included, even
+ * though `api.reminderInstances.create` re-reads it off the parent document
+ * rather than trusting the copy.
+ *
+ * The operation is chosen from `convex_id` rather than passed in: a row the
+ * server has never seen needs `create`, and one it has needs `update`. Getting
+ * this backwards is not a cosmetic error — the `update` branch resolves the
+ * document id first, and `resolveReminderInstanceId` throws when there is no
+ * document to resolve, so the entry burns all five attempts and dead-letters.
+ * A replayed `create` is cheap by comparison: `api.reminderInstances.create`
+ * patches on a `localId` hit instead of inserting a duplicate.
+ *
+ * There is no `delete` case, for the reason the header gives: an instance is
+ * never deleted, so a removal already arrives as an `update` carrying the new
+ * status.
+ *
+ * A no-op for an absent row: there is nothing to describe and no user to
+ * attribute it to.
+ */
+export async function enqueueExternalWrite(id: string): Promise<void> {
+  // One raw read of the whole row rather than `get` plus `getConvexId`:
+  // `reconcilePending` runs this across the entire backlog, so a second round
+  // trip per row is 2N. `reminders.ts` keeps its raw read alongside `get`
+  // because two storage-only columns feed its payload; here `convex_id` is the
+  // only column the domain shape drops, so a single `SELECT *` serves both the
+  // operation choice and the payload.
+  const db = await getDb();
+  const row = await db.getFirstAsync<ReminderInstanceRow>(
+    "SELECT * FROM reminder_instances WHERE id = ?",
+    id
+  );
+  if (row === null) {
+    return;
+  }
+
+  const existing = rowToInstance(row);
+  await enqueue(
+    "reminder_instance",
+    id,
+    row.convex_id === null ? "create" : "update",
+    {
+      localId: id,
+      userId: existing.userId,
+      reminderId: existing.reminderId,
+      reminderKind: existing.reminderKind,
+      scheduledTime: existing.scheduledTime,
+      status: existing.status,
+      takenAt: existing.takenAt ?? null,
+      snoozedUntil: existing.snoozedUntil ?? null,
+      snoozeCount: existing.snoozeCount,
+      notes: existing.notes ?? null,
+      createdAt: existing.createdAt,
+      updatedAt: existing.updatedAt,
+    }
+  );
+}
+
+/**
+ * Enqueue every instance that is `pending` but has nothing in the queue to
+ * make it un-pend, and return how many were enqueued.
+ *
+ * The instance half of `reminders.reconcilePending`, closing the same two
+ * gaps:
+ *
+ *   * Migration 005's backfill cannot enqueue and 007 re-pends what it wrote.
+ *     Without this pass those rows never sync, and unlike a reminder there is
+ *     no recovery by accident: an instance is append-only history, so there is
+ *     no "the user edits it again later" that would enqueue it after the fact.
+ *   * An enqueue that failed after its row write — the best-effort behaviour
+ *     the header describes — leaves a `pending` row with no queue entry.
+ *
+ * The `NOT EXISTS` is the whole safety argument: a row that already has a live
+ * queue entry is skipped, so this cannot duplicate work, and it costs nothing
+ * once the backlog is clear. That rests entirely on `entity_type` matching
+ * what `create` and `updateStatus` actually write — `'reminder_instance'`, the
+ * spelling the `sync_queue` CHECK admits. A value the queue never holds would
+ * make the subquery vacuously false, and this would re-enqueue every pending
+ * instance on every drain without bound. Migration 008 indexes both sides
+ * (`idx_reminder_instances_sync_status`, and `idx_sync_queue_entity` on
+ * `(entity_type, entity_id, dead_letter)`), so the subquery is an index-only
+ * seek instead of a scan of the queue per candidate row.
+ *
+ * `dead_letter = 0` is belt-and-braces, not a recovery path, exactly as in
+ * `reminders.ts`: dead-lettering runs `markSourceError` first, which sets the
+ * instance to `'error'`, and the `sync_status = 'pending'` filter then
+ * excludes it. Widening that filter to admit `'error'` would be worse than
+ * leaving it — a dead-lettered entry has `dead_letter = 1`, so `NOT EXISTS`
+ * would hold and the same doomed write would be re-enqueued forever.
+ *
+ * One state this cannot rescue: a row with a `convex_id` but a status still
+ * `'pending'` yields an `update` entry, and `processReminderInstanceEntry`
+ * refuses to sync a pending status, so it dead-letters. Reaching that needs a
+ * `setConvexId` that landed while the `markSynced` right behind it did not, so
+ * it is a symptom of a failing local database rather than of the backfill this
+ * pass exists for.
+ */
+export async function reconcilePending(): Promise<number> {
+  const db = await getDb();
+  const rows = await db.getAllAsync<{ readonly id: string }>(
+    `SELECT i.id
+     FROM reminder_instances i
+     WHERE i.sync_status = 'pending'
+       AND NOT EXISTS (
+         SELECT 1 FROM sync_queue q
+         WHERE q.entity_type = 'reminder_instance'
+           AND q.entity_id = i.id
+           AND q.dead_letter = 0
+       )`
+  );
+
+  for (const row of rows) {
+    await enqueueExternalWrite(row.id);
+  }
+
+  return rows.length;
+}
+
+/**
  * Mark an instance's sync status as `synced`.
  */
 export async function markSynced(id: string): Promise<void> {
