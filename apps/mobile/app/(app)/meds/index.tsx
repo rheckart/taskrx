@@ -25,9 +25,17 @@ const DAY_NAMES = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"] as const;
  *
  * Switching on the tagged union replaces the two `as` casts this held while it
  * read `medications`, where `scheduleTimes` was an untyped blob and the shape
- * had to be asserted per branch. The `weekly` arm is not new behaviour so much
- * as newly reachable: `medications` had no way to store one, so a weekly
- * reminder was previously invisible on this screen.
+ * had to be asserted per branch.
+ *
+ * The `weekly` arm does not render today, and an earlier version of this
+ * comment was wrong to say it was "newly reachable" — that implied weekly
+ * reminders existed and were being hidden. None can exist: `medications`
+ * constrains `schedule_type` to `('daily','interval')` by CHECK,
+ * `medication-mirror` is the only writer of reminder content and can only emit
+ * those two, `remindersRepo.create` has no callers, and there is no pull path
+ * for `reminders`. The arm exists because the switch must be total over the
+ * union, and it stays unreachable until something writes a weekly reminder —
+ * the same standing as the `snoozed` arm in `dose/history.tsx`.
  */
 function describeSchedule(reminder: Reminder): string {
   const schedule = reminder.schedule;

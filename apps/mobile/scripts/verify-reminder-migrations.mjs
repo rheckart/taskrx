@@ -1659,6 +1659,19 @@ function partH() {
   const claim = scan.indexOf("this.draining = true;");
   ok("drain() claims the flag", claim !== -1);
 
+  // The repair passes are only useful if something runs them, and the drain is
+  // the only caller. Medications must come first: an instance's insert is
+  // dropped by the EXISTS guard while its parent has no `reminders` row, so the
+  // reverse order costs a whole drain to repair both.
+  const medRepair = drain.indexOf("medicationMirror.repairMissingProjections(");
+  const doseRepair = drain.indexOf("doseLogMirror.repairMissingProjections(");
+  ok("drain() repairs medication projections", medRepair !== -1);
+  ok("drain() repairs dose log projections", doseRepair !== -1);
+  ok(
+    "drain() repairs medications before dose logs",
+    medRepair !== -1 && doseRepair !== -1 && medRepair < doseRepair
+  );
+
   // Ordering, not presence. The previous check here was `claim !== -1` under a
   // label that promised ordering, so inserting an `await` above the claim --
   // reintroducing precisely the race the claim exists to prevent -- passed.
@@ -2072,6 +2085,38 @@ function partI() {
   ok(
     "mirror never writes dose_logs.convex_id into the projection",
     !/d\.convex_id/.test(code) && !/COALESCE\(excluded\.convex_id/.test(code)
+  );
+
+  // Two independent reviews mutated this branch -- deleting the block outright,
+  // and downgrading it to console.log -- and the harness stayed at 193/193 both
+  // times. It is the only signal a maintainer gets that a dose log was never
+  // projected, and since the read cutover that means a dose missing from the
+  // user's history, so it gets a gate rather than a comment promising it
+  // matters.
+  const projectionBody = body(code, "async function upsertProjection(");
+  ok(
+    "a dropped projection is reported, at error level",
+    /result\.changes\s*===\s*0/.test(projectionBody) &&
+      /console\.error\(/.test(projectionBody)
+  );
+
+  // `doseLogs.upsertMany` updates `medication_id`, and the projection derives
+  // `reminder_id` from it. Dropping this one column from the conflict clause
+  // leaves an instance pointing at the medication it used to belong to, and
+  // every other check here passed with it deleted because the parity check
+  // exercises only the INSERT arm.
+  ok(
+    "the conflict clause re-points reminder_id",
+    /reminder_id\s*=\s*excluded\.reminder_id/.test(projectionBody)
+  );
+
+  // A mirror that throws is a projection lost for good: the conflict rules
+  // reject the re-pulled row and reconcilePending only re-enqueues rows that
+  // already exist. The repair pass is the only thing that closes that, so its
+  // absence should fail here rather than at a user's empty history screen.
+  ok(
+    "the mirror exposes a repair pass for lost projections",
+    /export async function repairMissingProjections\(/.test(code)
   );
 
   // The wiring. Without these the module is dead code and `reminder_instances`
