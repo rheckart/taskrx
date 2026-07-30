@@ -245,6 +245,11 @@ export async function create(input: CreateReminderRowInput): Promise<Reminder> {
     throw new Error("Failed to read inserted reminder");
   }
 
+  // The row above stores the defaults because the columns are NOT NULL; the
+  // payload does not, because `null` there means "the caller named no value"
+  // and the Convex `create` supplies the same defaults itself. Sending the
+  // local default instead would be indistinguishable from the caller choosing
+  // it, which is the confusion `enqueueExternalWrite` documents below.
   await enqueue("reminder", id, "create", {
     localId: id,
     userId: input.userId,
@@ -254,12 +259,12 @@ export async function create(input: CreateReminderRowInput): Promise<Reminder> {
     dosage: input.dosage ?? null,
     instructions: input.instructions ?? null,
     schedule: input.schedule,
-    priority: input.priority ?? "normal",
-    tags: input.tags ?? [],
+    priority: input.priority ?? null,
+    tags: input.tags ?? null,
     pillsRemaining: input.pillsRemaining ?? null,
     pillsPerDose: input.pillsPerDose ?? null,
     refillReminderDays: input.refillReminderDays ?? null,
-    caregiverIds: input.caregiverIds ?? [],
+    caregiverIds: input.caregiverIds ?? null,
     active: true,
     createdAt: now,
     updatedAt: now,
@@ -378,6 +383,11 @@ export async function update(
     throw new Error(`Reminder ${id} disappeared after update`);
   }
 
+  // `patch`, not `updated`, for the three server-owned fields: the patch is the
+  // only evidence that this caller meant to set one. `updated.priority` is the
+  // column, and on a mirrored row the column is migration 005's default, so
+  // reading it here would push `normal`/`[]`/`[]` over whatever the server
+  // holds on every unrelated edit.
   await enqueue("reminder", id, "update", {
     localId: id,
     userId: updated.userId,
@@ -387,12 +397,12 @@ export async function update(
     dosage: updated.dosage ?? null,
     instructions: updated.instructions ?? null,
     schedule: updated.schedule,
-    priority: updated.priority,
-    tags: updated.tags,
+    priority: patch.priority ?? null,
+    tags: patch.tags ?? null,
     pillsRemaining: updated.pillsRemaining ?? null,
     pillsPerDose: updated.pillsPerDose ?? null,
     refillReminderDays: updated.refillReminderDays ?? null,
-    caregiverIds: updated.caregiverIds,
+    caregiverIds: patch.caregiverIds ?? null,
     active: updated.active,
     createdAt: updated.createdAt,
     updatedAt: now,
@@ -461,6 +471,25 @@ export async function softDelete(id: string): Promise<void> {
  * 0 (the row is retained so dose history still resolves), and a `delete` entry
  * for a row that never synced would fail id resolution for no reason.
  *
+ * `priority`, `tags` and `caregiverIds` are sent as `null` — never read off the
+ * row — because this is by definition the path for a row *no local writer
+ * authored*. The two writers it exists for both write migration 004's column
+ * defaults: `medication-mirror`'s upsert omits the three from its conflict
+ * clause and its SELECT supplies `'normal'`/`'[]'`/`'[]'`, and 005's backfill
+ * does the same. Nothing local ever replaces them, since `create` and `update`
+ * above have no callers and there is no pull path that would refresh a
+ * `reminders` row from Convex. So reading the column here could only ever
+ * transmit a default, and `api.reminders.update` patches every field it
+ * receives: the effect was to reset the server's copy on every push, including
+ * the ones `reconcilePending` issues on later drains for rows `mirrorMedication`
+ * re-pended. A `null` says "no value to offer" and leaves the server's alone.
+ *
+ * The cost is real but currently unreachable: if `create`'s enqueue failed and
+ * `reconcilePending` recovers the row through here, a genuinely user-chosen
+ * priority is dropped from that recovery, because the column cannot distinguish
+ * a chosen `normal` from a defaulted one. Fixing that needs provenance the
+ * schema does not carry, and it costs nothing today — `create` has no callers.
+ *
  * A no-op for an absent row, matching `softDelete`: there is nothing to
  * describe and no user to attribute it to.
  */
@@ -490,12 +519,12 @@ export async function enqueueExternalWrite(id: string): Promise<void> {
     dosage: existing.dosage ?? null,
     instructions: existing.instructions ?? null,
     schedule: existing.schedule,
-    priority: existing.priority,
-    tags: existing.tags,
+    priority: null,
+    tags: null,
     pillsRemaining: existing.pillsRemaining ?? null,
     pillsPerDose: existing.pillsPerDose ?? null,
     refillReminderDays: existing.refillReminderDays ?? null,
-    caregiverIds: existing.caregiverIds,
+    caregiverIds: null,
     active: existing.active,
     createdAt: existing.createdAt,
     updatedAt: existing.updatedAt,

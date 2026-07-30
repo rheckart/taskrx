@@ -102,12 +102,12 @@ interface ReminderPayload {
   readonly dosage: string | null;
   readonly instructions: string | null;
   readonly schedule: ReminderSchedulePayload;
-  readonly priority: Priority;
-  readonly tags: string[];
+  readonly priority: Priority | null;
+  readonly tags: string[] | null;
   readonly pillsRemaining: number | null;
   readonly pillsPerDose: number | null;
   readonly refillReminderDays: number | null;
-  readonly caregiverIds: string[];
+  readonly caregiverIds: string[] | null;
   readonly active: boolean;
   readonly createdAt: number;
   readonly updatedAt: number;
@@ -492,6 +492,17 @@ export class SyncWorker {
    * That is the same limitation `processMedicationEntry` has for `rxcui` and
    * `dosage`, and fixing it means adding a nullable member to the Convex
    * validator, not changing this file.
+   *
+   * `priority`, `tags` and `caregiverIds` use that same omission encoding, but
+   * deliberately rather than by accident. They used to be sent unconditionally,
+   * and because nothing on this device can author them — `medication-mirror`
+   * and migration 005 write the column defaults, `remindersRepo.create` and
+   * `.update` have no callers, and there is no pull path that would refresh a
+   * `reminders` row from the server — every push reset the server's copy to
+   * `normal`/`[]`/`[]`. Not only on edit: `mirrorMedication` re-pends the row,
+   * so `reconcilePending` re-sent the same reset on later drains. A null here
+   * now means "this device has no value to offer", which is the truth on the
+   * mirror path, and `db/repos/reminders.ts` is where that null is decided.
    */
   private async processReminderEntry(
     entry: SyncQueueEntry
@@ -506,12 +517,14 @@ export class SyncWorker {
           kind: payload.kind,
           name: payload.name,
           schedule: payload.schedule,
-          priority: payload.priority,
-          tags: payload.tags,
-          caregiverIds: payload.caregiverIds,
           active: payload.active,
           createdAt: payload.createdAt,
           updatedAt: payload.updatedAt,
+          ...(payload.priority !== null ? { priority: payload.priority } : {}),
+          ...(payload.tags !== null ? { tags: payload.tags } : {}),
+          ...(payload.caregiverIds !== null
+            ? { caregiverIds: payload.caregiverIds }
+            : {}),
           ...(payload.rxcui !== null ? { rxcui: payload.rxcui } : {}),
           ...(payload.dosage !== null ? { dosage: payload.dosage } : {}),
           ...(payload.instructions !== null
@@ -536,11 +549,13 @@ export class SyncWorker {
           id: convexId,
           name: payload.name,
           schedule: payload.schedule,
-          priority: payload.priority,
-          tags: payload.tags,
-          caregiverIds: payload.caregiverIds,
           active: payload.active,
           updatedAt: payload.updatedAt,
+          ...(payload.priority !== null ? { priority: payload.priority } : {}),
+          ...(payload.tags !== null ? { tags: payload.tags } : {}),
+          ...(payload.caregiverIds !== null
+            ? { caregiverIds: payload.caregiverIds }
+            : {}),
           ...(payload.rxcui !== null ? { rxcui: payload.rxcui } : {}),
           ...(payload.dosage !== null ? { dosage: payload.dosage } : {}),
           ...(payload.instructions !== null

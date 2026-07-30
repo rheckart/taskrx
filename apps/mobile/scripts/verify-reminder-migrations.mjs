@@ -988,6 +988,16 @@ const MIRROR_TS = join(HERE, "..", "src", "db", "repos", "medication-mirror.ts")
 const MEDS_TS = join(HERE, "..", "src", "db", "repos", "medications.ts");
 const REMINDERS_TS = join(HERE, "..", "src", "db", "repos", "reminders.ts");
 const WORKER_TS = join(HERE, "..", "src", "sync", "worker.ts");
+const CONVEX_REMINDERS_TS = join(
+  HERE,
+  "..",
+  "..",
+  "..",
+  "packages",
+  "convex",
+  "convex",
+  "reminders.ts"
+);
 const INSTANCES_TS = join(
   HERE,
   "..",
@@ -2405,6 +2415,129 @@ function partI() {
   db.close();
 }
 
+/**
+ * Part J — a device edit must not overwrite what only the server can author.
+ *
+ * `priority`, `tags` and `caregiverIds` have no local writer. `medication-mirror`
+ * omits all three from its conflict clause and its SELECT supplies migration
+ * 004's defaults; 005's backfill does the same; `remindersRepo.create` and
+ * `.update` have no callers; and there is no pull path that would refresh a
+ * `reminders` row from Convex. The columns are therefore always
+ * `normal`/`[]`/`[]`, and `api.reminders.update` patches every field it is
+ * handed — so pushing the column reset the server's copy. Not only on edit:
+ * `mirrorMedication` re-pends the row, so `reconcilePending` re-sent the same
+ * reset on later drains, and `reminders.create`'s collision branch defaulted
+ * them a second time on any replayed create.
+ *
+ * These checks are static, and that is not a compromise. The failure needs a
+ * *second* writer — a web client, another device — to be observable at all, so
+ * no amount of on-device testing can produce the input. The payload shape is
+ * the thing to pin, and it is pinned on both sides of the wire.
+ */
+function partJ() {
+  section("Part J: the mirror path does not push server-owned reminder fields");
+
+  const strip = (src) =>
+    src.replace(/\/\*[\s\S]*?\*\//g, "").replace(/\/\/.*$/gm, "");
+  const count = (haystack, re) => (haystack.match(re) ?? []).length;
+
+  const SERVER_OWNED = ["priority", "tags", "caregiverIds"];
+  // The medication genuinely is the source of truth for these, so they must
+  // keep flowing. Without this half, deleting the payload entirely would pass.
+  const DEVICE_OWNED = ["name", "schedule", "active"];
+
+  // 1. The repo is where the null is decided.
+  const repo = strip(readFileSync(REMINDERS_TS, "utf8"));
+  const external = body(repo, "export async function enqueueExternalWrite(");
+  for (const field of SERVER_OWNED) {
+    ok(
+      `enqueueExternalWrite sends ${field} as null`,
+      new RegExp(`${field}:\\s*null`).test(external)
+    );
+    ok(
+      `enqueueExternalWrite does not read ${field} off the row`,
+      !new RegExp(`${field}:\\s*existing\\.`).test(external)
+    );
+  }
+  for (const field of DEVICE_OWNED) {
+    ok(
+      `enqueueExternalWrite still sends ${field} from the row`,
+      new RegExp(`${field}:\\s*existing\\.`).test(external)
+    );
+  }
+
+  // 2. The worker passes none of them unguarded, on either branch.
+  const worker = strip(readFileSync(WORKER_TS, "utf8"));
+  const reminderEntry = body(worker, "private async processReminderEntry(");
+  for (const field of SERVER_OWNED) {
+    const guards = count(
+      reminderEntry,
+      new RegExp(
+        `\\.\\.\\.\\(payload\\.${field}\\s*!==\\s*null\\s*\\?\\s*\\{\\s*${field}:\\s*payload\\.${field}\\s*\\}\\s*:\\s*\\{\\}\\)`,
+        "g"
+      )
+    );
+    ok(
+      `both reminder branches guard ${field}`,
+      guards === 2,
+      `\n    ${guards} guards, expected 2 (create and update)`
+    );
+    // Each guard names the field twice and nothing else may. A bare
+    // `${field}: payload.${field}` put back anywhere in either branch pushes
+    // the count past 2x and fails here rather than silently on a user's data.
+    const mentions = count(
+      reminderEntry,
+      new RegExp(`payload\\.${field}\\b`, "g")
+    );
+    ok(
+      `no unguarded use of payload.${field}`,
+      mentions === guards * 2,
+      `\n    ${mentions} mentions for ${guards} guards`
+    );
+  }
+  for (const field of DEVICE_OWNED) {
+    const bare = count(
+      reminderEntry,
+      new RegExp(`\\n\\s*${field}:\\s*payload\\.${field},`, "g")
+    );
+    ok(
+      `both reminder branches still send ${field} unguarded`,
+      bare === 2,
+      `\n    found ${bare}, expected 2`
+    );
+  }
+
+  // 3. The server's own upsert stops defaulting them over a live document.
+  const convex = strip(readFileSync(CONVEX_REMINDERS_TS, "utf8"));
+  for (const [field, fallback] of [
+    ["priority", '"normal"'],
+    ["tags", "\\[\\]"],
+    ["caregiverIds", "\\[\\]"],
+  ]) {
+    const defaulted = count(
+      convex,
+      new RegExp(`${field}:\\s*args\\.${field}\\s*\\?\\?\\s*${fallback}`, "g")
+    );
+    ok(
+      `reminders.create defaults ${field} on insert only`,
+      defaulted === 1,
+      `\n    found ${defaulted}, expected 1 (the insert)`
+    );
+    const guards = count(
+      convex,
+      new RegExp(
+        `\\.\\.\\.\\(args\\.${field}\\s*!==\\s*undefined\\s*\\?\\s*\\{\\s*${field}:\\s*args\\.${field}\\s*\\}\\s*:\\s*\\{\\}\\)`,
+        "g"
+      )
+    );
+    ok(
+      `an omitted ${field} is left alone by both the collision patch and update`,
+      guards === 2,
+      `\n    found ${guards}, expected 2 (create-collision and update)`
+    );
+  }
+}
+
 // ── run ───────────────────────────────────────────────────────────────────
 
 console.log(`node ${process.version}, node:sqlite`);
@@ -2416,6 +2549,7 @@ partF();
 partG();
 partH();
 partI();
+partJ();
 
 console.log(
   `\n${checks - failures}/${checks} checks passed${failures === 0 ? "" : `, ${failures} FAILED`}`

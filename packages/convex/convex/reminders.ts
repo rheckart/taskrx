@@ -129,16 +129,22 @@ export const create = mutation({
        * client marks the row synced and never re-sends, so a discontinued
        * medication would stay active on Convex forever.
        *
-       * The payload is applied with the same defaults as the insert below,
-       * rather than only where the client supplied a value. `enqueueExternalWrite`
-       * always sends the whole row — `schedule`, `priority`, `tags`,
-       * `caregiverIds` and `active` are never omitted — so the fallbacks are
+       * `schedule` and `active` are applied with the same defaults as the
+       * insert below rather than only where the client supplied a value:
+       * `enqueueExternalWrite` never omits either, so the fallbacks are
        * unreachable from the sync worker, and making both paths agree means the
-       * document ends up identical no matter which call landed first. The
-       * optionals keep the insert's conditional spreads, so an omitted one is
-       * left alone rather than cleared; that matches the worker, which encodes a
+       * document ends up identical no matter which call landed first.
+       *
+       * Every other field takes a conditional spread, so an omitted one is left
+       * alone rather than cleared; that matches the worker, which encodes a
        * cleared field as an omission and already documents that clearing does
-       * not round-trip. `localId`, `userId` and `createdAt` are identity, not
+       * not round-trip. `priority`, `tags` and `caregiverIds` were defaulted
+       * here until recently, and that was wrong for the reason it was wrong on
+       * the device: nothing on the client authors them, so a replayed create —
+       * which the paragraph above exists to make routine — reset whatever a
+       * client that *can* author them had set. The insert below keeps its
+       * defaults, because a document created for the first time has nothing to
+       * preserve. `localId`, `userId` and `createdAt` are identity, not
        * payload, and are never rewritten; `deletedAt` is likewise left in place
        * so a replayed create cannot resurrect a row deleted on this side.
        */
@@ -146,11 +152,13 @@ export const create = mutation({
         kind: args.kind,
         name: args.name,
         schedule: args.schedule ?? { type: "daily", times: [] },
-        priority: args.priority ?? "normal",
-        tags: args.tags ?? [],
-        caregiverIds: args.caregiverIds ?? [],
         active: args.active ?? true,
         updatedAt: args.updatedAt,
+        ...(args.priority !== undefined ? { priority: args.priority } : {}),
+        ...(args.tags !== undefined ? { tags: args.tags } : {}),
+        ...(args.caregiverIds !== undefined
+          ? { caregiverIds: args.caregiverIds }
+          : {}),
         ...(args.rxcui !== undefined ? { rxcui: args.rxcui } : {}),
         ...(args.dosage !== undefined ? { dosage: args.dosage } : {}),
         ...(args.instructions !== undefined
