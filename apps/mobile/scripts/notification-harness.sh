@@ -92,6 +92,13 @@
 # Case 5 is INTERACTIVE on a device with a screen lock: it reboots, then waits
 # for you to unlock before it can observe anything (constraint 7).
 #
+# The JSON report records a `provenance` block (commit, branch, dirty,
+# dirty_files) so a result can always be tied back to the code it tested. The
+# commit is the anchor rather than the APK because the debug build is an Expo
+# dev client that loads its JS from Metro — the behaviour under test is the
+# working tree. Treat a run with `"dirty": true` as evidence for that tree, not
+# for the named commit.
+#
 # Exit: 0 all passed | 1 a case failed | 2 precondition failure
 
 set -uo pipefail
@@ -118,6 +125,38 @@ fi
 adb_run() {
   if [[ "${VERBOSE:-0}" == "1" ]]; then printf '[adb] %s\n' "$*" >&2; fi
   adb "${adb_args[@]}" "$@"
+}
+
+# ── Provenance (which code was this run taken against?) ────────────────────
+#
+# A result is only evidence if you can say what it tested. The report used to
+# record the device and the wall-clock time but nothing about the code, so a
+# JSON artifact could not be tied back to a revision — which is exactly how
+# `docs/poc-results.md` ended up with device verdicts nobody could map onto a
+# commit.
+#
+# The commit is the right anchor rather than the APK: the debug build is an
+# Expo dev client that loads its JS from Metro at runtime, so the behaviour
+# under test is the WORKING TREE, not the installed binary. That also makes
+# `dirty` load-bearing — against a dirty tree the commit alone does not
+# identify what ran, so name the modified files too.
+git_in_repo() { git -C "$repo_root" rev-parse --git-dir >/dev/null 2>&1; }
+
+# Piping through `tr` would mask git's exit status (tr succeeds even when git
+# fails), so capture first and test the captured value instead.
+provenance_rev() {
+  local out
+  git_in_repo || { printf 'unknown'; return; }
+  out="$(git -C "$repo_root" rev-parse "$@" 2>/dev/null | tr -d '\r')"
+  printf '%s' "${out:-unknown}"
+}
+provenance_commit() { provenance_rev HEAD; }
+provenance_branch() { provenance_rev --abbrev-ref HEAD; }
+# Tracked, modified files only — untracked scratch and ignored evidence output
+# are not part of what ran. Bounded so a large diff cannot bloat the report.
+provenance_dirty_files() {
+  git_in_repo || { printf ''; return; }
+  git -C "$repo_root" diff --name-only HEAD 2>/dev/null | head -40 | tr '\n' ' ' | sed 's/ *$//'
 }
 adb_shell() { adb_run shell "$@"; }
 
@@ -752,7 +791,13 @@ done
 
 mkdir -p "$(dirname "$output")"
 {
+  dirty_files="$(provenance_dirty_files)"
   printf '{\n  "timestamp": "%s",\n  "package": "%s",\n' "$(date -u -Iseconds)" "$PKG"
+  printf '  "provenance": { "commit": "%s", "branch": "%s", "dirty": %s, "dirty_files": "%s" },\n' \
+    "$(provenance_commit)" \
+    "$(provenance_branch)" \
+    "$([[ -n "$dirty_files" ]] && printf 'true' || printf 'false')" \
+    "$dirty_files"
   printf '  "device": { "serial": "%s", "release": "%s", "sdk": "%s", "fingerprint": "%s" },\n' \
     "$(adb_shell getprop ro.serialno 2>/dev/null | tr -d '\r')" \
     "$(adb_shell getprop ro.build.version.release 2>/dev/null | tr -d '\r')" \

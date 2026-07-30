@@ -173,6 +173,27 @@ was correct. See `.omo/evidence/task-13-SUMMARY.md` for the full list.
 
 1. Plug in the physical Android 17 device with USB debugging enabled; confirm `adb devices` shows it.
 2. Install the debug APK: `adb -s <serial> install -r apps/mobile/android/app/build/outputs/apk/debug/app-debug.apk` (or rebuild via `./gradlew assembleDebug`).
+
+   `apps/mobile/android/local.properties` is not checked in, so a rebuild needs
+   the SDK path in the environment: `ANDROID_HOME=~/Android/Sdk ./gradlew
+   assembleDebug` from `apps/mobile/android`. Without it Gradle fails at
+   evaluation with "SDK location not found", which reads like a project fault
+   and is not one.
+
+   Only **native** inputs need a rebuild — `apps/mobile/android/**`, `app.json`,
+   or a dependency bump. JS changes do *not*: this is an Expo dev client and
+   loads its JS from Metro, which is also why the harness anchors its provenance
+   to the commit rather than to the binary.
+
+   Do **not** decide by comparing the APK's mtime against commit dates — a
+   change is typically built to verify it and committed minutes later, so the
+   binary legitimately predates the commit that contains it. Just run
+   `assembleDebug` and let Gradle's up-to-date check decide, or read the value
+   out of the binary:
+
+   ```bash
+   $ANDROID_HOME/build-tools/36.0.0/aapt2 dump badging <apk> | grep compileSdkVersion
+   ```
 3. Start Metro: `cd apps/mobile && npx expo start --dev-client`, then `adb -s <serial> reverse tcp:8081 tcp:8081`.
 4. **Disable the device's screen lock for the duration.** Case 3 needs screen-off to reach deep Doze, and screen-off engages the keyguard, which prevents foregrounding the app for the next case. This is a test-rig setting, not a product requirement — restore your PIN afterwards.
 5. Run the harness: `ANDROID_SERIAL=<serial> apps/mobile/scripts/notification-harness.sh --all --output .omo/evidence/<name>.json`. Takes ~16 minutes and reboots the device (case 5).
