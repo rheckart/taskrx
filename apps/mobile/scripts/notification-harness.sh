@@ -9,7 +9,10 @@
 # rather than by eyeballing the device.
 #
 # ── EMPIRICALLY-VALIDATED CONSTRAINTS ──────────────────────────────────────
-# Learned by running against a Pixel 8 Pro on Android 17 (API 37). Six constraints.
+# Learned by running against a Pixel 8 Pro on Android 17 (API 37). Nine
+# constraints: 1-7 below, then 8 (deep Doze is blocked by a pending
+# wake-from-idle alarm) and 9 (`dumpsys alarm` is mostly NOT pending alarms),
+# which are documented inline at their point of use.
 # Do not "simplify" these away; each one caused a real false result.
 #
 #  1. DEEP LINKS MUST CONTAIN A REAL PATH, NOT JUST A HOST.
@@ -88,6 +91,7 @@
 #
 # Env: TASKRX_PKG ANDROID_SERIAL METRO_URL VERBOSE=1 SKIP_DOZE=1 SKIP_REBOOT=1
 #      BOOT_UNLOCK_TIMEOUT_S (default 300) BOOT_REGISTER_TIMEOUT_S (default 300)
+#      BOOT_ALARM_COUNT (default 3)
 #
 # Case 5 is INTERACTIVE on a device with a screen lock: it reboots, then waits
 # for you to unlock before it can observe anything (constraint 7).
@@ -112,6 +116,9 @@ HARNESS_SETTLE_S=8
 # and how long to then wait for the boot receiver to re-arm the alarm.
 BOOT_UNLOCK_TIMEOUT_S="${BOOT_UNLOCK_TIMEOUT_S:-300}"
 BOOT_REGISTER_TIMEOUT_S="${BOOT_REGISTER_TIMEOUT_S:-300}"
+# Case 5 only. How many alarms to arm before the reboot. Must be >1 or a
+# partial restore cannot be detected — see the comment in case5_boot_reschedule.
+BOOT_ALARM_COUNT="${BOOT_ALARM_COUNT:-3}"
 
 script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 repo_root="$(cd "$script_dir/../../.." && pwd)"
@@ -142,8 +149,9 @@ adb_run() {
 # identify what ran, so name the modified files too.
 git_in_repo() { git -C "$repo_root" rev-parse --git-dir >/dev/null 2>&1; }
 
-# Piping through `tr` would mask git's exit status (tr succeeds even when git
-# fails), so capture first and test the captured value instead.
+# The `git_in_repo` guard plus the `${out:-unknown}` default are what make this
+# safe: the `| tr` pipeline would otherwise mask git's exit status, since tr
+# succeeds even when git does not.
 provenance_rev() {
   local out
   git_in_repo || { printf 'unknown'; return; }
@@ -152,12 +160,24 @@ provenance_rev() {
 }
 provenance_commit() { provenance_rev HEAD; }
 provenance_branch() { provenance_rev --abbrev-ref HEAD; }
-# Tracked, modified files only — untracked scratch and ignored evidence output
-# are not part of what ran. Bounded so a large diff cannot bloat the report.
+
+# Modified tracked files AND untracked ones. Untracked matters: Metro bundles
+# whatever is on disk, so a new-but-uncommitted source file is part of what ran
+# even though `git diff HEAD` cannot see it. Ignored paths stay excluded — the
+# evidence output itself lands in an ignored directory and would otherwise mark
+# every run dirty. Bounded so a large diff cannot bloat the report.
 provenance_dirty_files() {
   git_in_repo || { printf ''; return; }
-  git -C "$repo_root" diff --name-only HEAD 2>/dev/null | head -40 | tr '\n' ' ' | sed 's/ *$//'
+  {
+    git -C "$repo_root" diff --name-only HEAD 2>/dev/null
+    git -C "$repo_root" ls-files --others --exclude-standard 2>/dev/null
+  } | sort -u | head -40 | tr '\n' ' ' | sed 's/ *$//'
 }
+
+# git C-quotes paths containing non-ASCII or control characters ("src/café.ts"),
+# so the raw value can carry a double quote straight into the JSON string and
+# make the whole report unparseable. Escape backslash first, then quote.
+json_escape() { printf '%s' "$1" | sed 's/\\/\\\\/g; s/"/\\"/g'; }
 adb_shell() { adb_run shell "$@"; }
 
 nonce_counter=0
@@ -254,20 +274,51 @@ wait_for_app_ready() {
 # however perfectly the boot receiver did its job — which is precisely the
 # after<before pattern every archived case-5 artifact shows (14->2, 3->2,
 # 3->2). The case was reading history depth across a reboot, not rescheduling.
-# Scope every alarm read to the pending portion, and never grep the raw dump.
+#
+# The rule this yields is narrow, so state it precisely rather than as "never
+# grep the raw dump": reads of the ALARM STORE — counting alarms, reading their
+# windows — must go through `pending_dump`. The summary lines that live OUTSIDE
+# the store ("Next alarm clock information", "Pending alarms per uid") are not
+# part of it, and `next_alarm_clock` and `alarm_count_per_uid` read them
+# directly on purpose.
+#
+# The cut is a whitelist of the section headers that follow the store. If a
+# future Android build renames or reorders one so the FIRST line matches, awk
+# exits immediately and emits nothing — every alarm read silently becomes 0,
+# reporting a product FAIL for an instrument fault. That is the same inversion
+# this constraint exists to prevent, and it is the worse direction to fail in:
+# the old unscoped grep over-counted loudly, this would under-count quietly.
+# So emptiness is checked rather than trusted. An empty dump means the parse
+# broke; it never means "no alarms".
+#
+# The load-bearing check is the PRECONDITION at startup, not this warning: a
+# caller like `alarm_count` runs `pending_dump` inside a pipeline in a command
+# substitution, where the exit status is grep's and an `exit` would only end
+# the subshell — so a failure here cannot reliably abort the run from inside.
+# The format is verified once before any case runs; this warning is the
+# belt-and-braces signal if it somehow changes mid-run.
 pending_dump() {
-  adb_shell dumpsys alarm 2>/dev/null | awk '
+  local out
+  out="$(adb_shell dumpsys alarm 2>/dev/null | awk '
     /^[[:space:]]*(LazyAlarmStore stats|Pending user blocked background alarms|Pending alarms per uid|Scheduled user wakeups|App Alarm history|Next wake from idle|Removal history|Allow while idle)/ { exit }
     { print }
-  '
+  ')"
+  if [[ -z "$out" ]]; then
+    printf '[pending_dump] PARSE FAILED: the alarm-store section of `dumpsys alarm` came back empty. A section header in the cut whitelist has probably been renamed or reordered. Alarm counts from this run are not trustworthy.\n' >&2
+    return 1
+  fi
+  printf '%s\n' "$out"
 }
 
 alarm_lines()      { pending_dump | grep -A3 "walarm\*:${PKG}" || true; }
 alarm_count()      { pending_dump | grep -c "walarm\*:${PKG}" || true; }
 alarm_is_exact()   { alarm_lines | grep -c "window=0" || true; }
 
-# The OS's own tally, used to cross-check `alarm_count`. Independent parse of a
-# different line, so agreement between the two is real corroboration.
+# The OS's own tally. Read from a different line of the dump by a different
+# parse, so when it agrees with `alarm_count` that is genuine corroboration
+# rather than the same mistake made twice. Case 5 asserts the agreement,
+# because `alarm_count` silently returning a wrong number is precisely the
+# failure that made that case unfalsifiable for three runs.
 alarm_count_per_uid() {
   local uid token line
   # `appId=`/`uid=`, not `userId=` — Android 17's dumpsys package does not emit
@@ -568,12 +619,33 @@ case5_boot_reschedule() {
   require_reachable 5 boot_reschedule || return
   grant_exact
   harness cancel-all >/dev/null
-  harness schedule boot-test 900000 >/dev/null
-  local before after deadline
+  # Arm SEVERAL alarms, not one. The loss this case exists to detect is a
+  # PARTIAL restore — "armed 3, re-registered 2" — and at before=1 that cannot
+  # be expressed: 1 is the weakest value satisfying `after >= before`, so the
+  # case would pass without ever having been able to fail that way.
+  #
+  # All of them are placed far beyond the reboot window (15m+), which also
+  # removes the other half of the old ambiguity: an alarm that cannot come due
+  # during the reboot cannot have "legitimately fired" during it, so a missing
+  # alarm afterwards has only one explanation.
+  local i
+  for ((i = 0; i < BOOT_ALARM_COUNT; i++)); do
+    harness schedule "boot-test-$i" $((900000 + i * 60000)) >/dev/null
+  done
+  local before after deadline before_uid
   before="$(alarm_count)"
+  before_uid="$(alarm_count_per_uid)"
   if [[ "$before" -lt 1 ]]; then
     add_result 5 boot_reschedule false \
       "SETUP FAILED (not a product failure): no alarm was armed before the reboot (before=$before), so there was nothing for the boot receiver to restore. Not rebooting."
+    return
+  fi
+  # Two independent parses of the same fact. If they disagree, the instrument
+  # is wrong and no verdict from it should be believed — say so instead of
+  # rebooting the device to measure with a broken ruler.
+  if [[ "$before" != "$before_uid" ]]; then
+    add_result 5 boot_reschedule false \
+      "INSTRUMENT FAULT (not a product failure): the two independent alarm counts disagree before the reboot (alarm_count=$before, per-uid tally=$before_uid). One of the two parses of \`dumpsys alarm\` is wrong, so neither before nor after can be trusted. Not rebooting. This guard exists because an unscoped count silently made this case unfalsifiable for three runs."
     return
   fi
   adb_run reboot >/dev/null 2>&1
@@ -646,9 +718,9 @@ case5_boot_reschedule() {
   # following case would fail its harness call for reasons this case caused.
   wait_for_app_ready >/dev/null 2>&1 || true
   if [[ "$after" -ge "$before" ]]; then
-    add_result 5 boot_reschedule true "alarms re-registered after reboot (before=$before after=$after; receiver landed ~${waited_s}s after the first unlock, which is when ACTION_BOOT_COMPLETED is broadcast)"
+    add_result 5 boot_reschedule true "alarms re-registered after reboot (before=$before after=$after, cross-checked against the OS per-uid tally=$before_uid; all armed 15m+ out so none could have come due during the reboot; receiver landed ~${waited_s}s after the first unlock, which is when ACTION_BOOT_COMPLETED is broadcast)"
   elif [[ "$after" -ge 1 ]]; then
-    add_result 5 boot_reschedule false "INCONCLUSIVE — fewer alarms than before within ${BOOT_REGISTER_TIMEOUT_S}s of the first unlock (before=$before after=$after). Two readings fit this equally and a count cannot separate them: the boot receiver restored fewer alarms than were armed ($(( before - after )) dose(s) would never fire), OR that many alarms legitimately came due and fired during the reboot window. \`before\` is not under this case's control — \`harness\` self-heals by launching the app, and app foreground runs rescheduleAll(), which arms the user's real reminders at fire times this script neither chose nor knows. Resolve it by hand: diff \`harness pending-ids\` before against after, excluding any id whose fire time has elapsed. Do not record this as a product defect on the count alone."
+    add_result 5 boot_reschedule false "PARTIAL RESTORE — only $after of $before alarms came back within ${BOOT_REGISTER_TIMEOUT_S}s of the first unlock, so $(( before - after )) dose(s) would never fire. Unlike earlier revisions of this case, that is now a product defect rather than an ambiguity: every alarm was armed 15m+ out, so none could have come due during the reboot, and the count was cross-checked against the OS per-uid tally (=$before_uid) before rebooting. Identify the missing alarms with \`harness pending-ids\`."
   else
     add_result 5 boot_reschedule false "alarms NOT re-registered within ${BOOT_REGISTER_TIMEOUT_S}s of the first unlock (before=$before after=$after). The device WAS unlocked, so ACTION_BOOT_COMPLETED was broadcast and this is a real failure. Check that RECEIVE_BOOT_COMPLETED is granted and the package is not in the stopped state."
   fi
@@ -794,6 +866,18 @@ adb_shell pm path "$PKG" >/dev/null 2>&1 || {
   exit 2
 }
 
+# Verify the alarm-store parse BEFORE running anything. Every alarm assertion
+# in this script reads through `pending_dump`, and if its section whitelist no
+# longer matches this Android build it yields nothing — which would surface as
+# alarm counts of 0 and score product FAILs for an instrument that cannot read.
+# Checking once here is what makes that impossible; see constraint 9.
+if ! pending_dump >/dev/null; then
+  echo "cannot parse the alarm store out of 'dumpsys alarm' on this device." >&2
+  echo "Every alarm assertion depends on it, so no verdict would be trustworthy." >&2
+  echo "The section whitelist in pending_dump likely needs updating for this build." >&2
+  exit 2
+fi
+
 echo "waiting for app + Metro to be ready..."
 ready="$(wait_for_app_ready)" || {
   echo "app never became ready. Check:" >&2
@@ -831,12 +915,22 @@ done
 mkdir -p "$(dirname "$output")"
 {
   dirty_files="$(provenance_dirty_files)"
+  # Outside a git repo the tree was never inspected, so `false` would be a
+  # clean-tree claim about something unexamined — exactly the kind of
+  # unearned assertion this block exists to prevent. Say "unknown" instead.
+  if ! git_in_repo; then
+    dirty_json='"unknown"'
+  elif [[ -n "$dirty_files" ]]; then
+    dirty_json=true
+  else
+    dirty_json=false
+  fi
   printf '{\n  "timestamp": "%s",\n  "package": "%s",\n' "$(date -u -Iseconds)" "$PKG"
   printf '  "provenance": { "commit": "%s", "branch": "%s", "dirty": %s, "dirty_files": "%s" },\n' \
     "$(provenance_commit)" \
     "$(provenance_branch)" \
-    "$([[ -n "$dirty_files" ]] && printf 'true' || printf 'false')" \
-    "$dirty_files"
+    "$dirty_json" \
+    "$(json_escape "$dirty_files")"
   printf '  "device": { "serial": "%s", "release": "%s", "sdk": "%s", "fingerprint": "%s" },\n' \
     "$(adb_shell getprop ro.serialno 2>/dev/null | tr -d '\r')" \
     "$(adb_shell getprop ro.build.version.release 2>/dev/null | tr -d '\r')" \
