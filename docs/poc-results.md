@@ -2,15 +2,22 @@
 
 This document tracks the 13 success criteria from the POC plan §3. Each row shows the criterion, the expected result, the actual result, and a pass/fail verdict.
 
-**Status:** 2026-07-27, Phase 1 gate **PASS**. Code-level fixes committed on `main`; the notification harness reported **6/6 on a physical Pixel 8 Pro (Android 17, API 37)** in a single end-to-end run, closing criteria #5, #5a, #11 and #12. The remaining criteria are the auth / RxNorm / sync / cross-device ones, which need a signed-in Clerk + Convex session.
+**Status:** 2026-07-30, Phase 1 gate **PASS**. The notification harness reports **7/7 on a physical Pixel 8 Pro (Android 17, API 37)** in a single end-to-end `--all` invocation (`exit 0`), taken against commit `0e2d47a` with a clean working tree, closing criteria #5, #5a, #11 and #12. The remaining criteria are the auth / RxNorm / sync / cross-device ones, which need a signed-in Clerk + Convex session.
 
-> **Staleness warning (2026-07-30).** The device results below were captured on
-> 2026-07-27/28. Since then the harness gained a seventh case and tightened
-> case 5's gate, and `apps/mobile` + `packages/shared` have taken further
-> commits. **No device run has been performed against the current code**, and
-> the "6/6 in one run" tally is no longer reproducible as written — see the
-> harness case tally. Treat every ✅ in this document as "passed on the date in
-> its row", not as "passes today".
+> **Baseline (2026-07-30).** All seven cases have been run against current
+> `main` on the physical Pixel 8 Pro, in one sweep, and all seven passed.
+> Evidence: `.omo/evidence/issue-5-baseline-all-cases.json`, which records the
+> commit it was taken against in its `provenance` block. This supersedes the
+> earlier standing note that no device run had been performed against current
+> code.
+>
+> This baseline exists so that the fused-timeline work — which adds a second
+> delivery Tier for tasks — can be checked against a known-good starting point.
+> "Did this change break delivery?" is now an answerable question.
+>
+> Two independent instrument defects were fixed to get here, one of them the
+> cause of every historical case-5 ambiguity. See "Case 5 was measuring the
+> wrong thing" below before reading any pre-2026-07-30 verdict in this file.
 
 ## Success criteria
 
@@ -20,7 +27,7 @@ This document tracks the 13 success criteria from the POC plan §3. Each row sho
 | 2 | User can search "metformin" → RxNorm returns matches → user selects one | RxNorm search returns relevant results | Convex Action `rxnorm.search` implemented and typed against the real NLM `approximateTerm.json` endpoint; UI debounces + guards stale responses | ⏸️ Pending (device test) |
 | 3 | User can save medication with schedule ("daily at 09:00" or "every 8 hours") | Medication saved locally with correct schedule | SQLite repo + schedule picker implemented; 23 vitest cases on the schedule engine pass; no device verification yet | ⏸️ Pending (device test) |
 | 4 | Medication persists in local SQLite across app restart | Medication list survives force-stop | `expo-sqlite` repo persists to device storage; migrations 001–003 apply cleanly on boot; no runtime restart test yet | ⏸️ Pending (device test) |
-| 5 | Local notification fires at scheduled time on a physical Android device, app closed, not in foreground, surviving Doze + battery optimization | Notification fires within 1 minute of scheduled time | **VERIFIED on Pixel 8 Pro / Android 17 / API 37.** Uses `AlarmType.SET_ALARM_CLOCK`. Delivered with the app process dead (`am kill`, 0 processes, `stopped=false`) across **three independent runs: 34 ms, 94 ms, and 31 ms late** — all far inside the 1-minute budget. Full chain in logcat: `Start proc ... for broadcast {NotificationAlarmReceiver}` → `NotifeeHeadlessJS: launched taskId: 1` → notification posted with correct title + `medicationId`. Primitive confirmed at OS level, not inferred: `window=0`, `exactAllowReason=permission`, `whenElapsed == maxWhenElapsed`, and the alarm registered as the device's *next alarm clock* with a timestamp exactly matching the scheduled one. The Doze clause is verified in criterion 5a below. Evidence: `.omo/evidence/task-13-all-cases-final.json` (6/6, single run), `.omo/evidence/task-13-SUMMARY.md`, `task-13-cases-1-4.json`, `task-13-cases-6-2.json`. | ✅ **PASS** |
+| 5 | Local notification fires at scheduled time on a physical Android device, app closed, not in foreground, surviving Doze + battery optimization | Notification fires within 1 minute of scheduled time | **VERIFIED on Pixel 8 Pro / Android 17 / API 37.** Uses `AlarmType.SET_ALARM_CLOCK`. Delivered with the app process dead (`am kill`, 0 processes, `stopped=false`) across **three independent runs: 34 ms, 94 ms, and 31 ms late** — all far inside the 1-minute budget. Full chain in logcat: `Start proc ... for broadcast {NotificationAlarmReceiver}` → `NotifeeHeadlessJS: launched taskId: 1` → notification posted with correct title + `medicationId`. Primitive confirmed at OS level, not inferred: `window=0`, `exactAllowReason=permission`, `whenElapsed == maxWhenElapsed`, and the alarm registered as the device's *next alarm clock* with a timestamp exactly matching the scheduled one. The Doze clause is verified in criterion 5a below. **Re-verified 2026-07-30 against `0e2d47a`** in a 7/7 single `--all` run — evidence `.omo/evidence/issue-5-baseline-all-cases.json`. Earlier evidence: `.omo/evidence/task-13-all-cases-final.json`, `.omo/evidence/task-13-SUMMARY.md`, `task-13-cases-1-4.json`, `task-13-cases-6-2.json` (all taken before the alarm-scoping fix; their `exact_windows` counts are inflated by `dumpsys` history — see "Case 5 was measuring the wrong thing"). | ✅ **PASS** |
 | 5a | *(sub-criterion)* Notification survives **deep Doze** specifically | Fires while device is in deep IDLE | **VERIFIED on Pixel 8 Pro / Android 17.** With the app process killed and the device on simulated battery, it entered deep `IDLE` with the alarm pending and dozed continuously — observed cycle `IDLE → IDLE_MAINTENANCE → IDLE → IDLE_MAINTENANCE → QUICK_DOZE_DELAY`, never returning to `ACTIVE` before the alarm fired — and the notification still posted. `dumpsys alarm` shows Doze imposes **zero deferral**: `policyWhenElapsed: requester=+2m22s657ms … device_idle=-1m21s983ms` (device_idle resolves earlier than the request) with `whenElapsed == maxWhenElapsed`. **Finding:** Android refuses to enter deep Doze at all while a wake-from-idle alarm is due within `min_time_to_alarm` (default **1 hour**) — `force-idle` reports `Unable to go deep idle; stopped at QUICK_DOZE_DELAY`. That refusal is itself evidence the alarm is classified wake-from-idle. **Accommodation:** `min_time_to_alarm` was lowered to 30s for this case only and stock constants restored afterwards (verified `device_idle_constants = null`); no battery-optimization exemption was granted. Evidence: `.omo/evidence/task-13-case-3-deep-idle.json`, `.omo/evidence/task-13-all-cases-final.json`. | ✅ **PASS** |
 | 6 | Tapping notification opens the dose logging screen pre-filled with the right med + scheduled time | Correct medication and time shown | Tap handler + deep-link routing implemented (`src/notifications/tap-handler.ts`); notification data includes `medicationId` and `scheduledTime` for the dose-log deep link; no device verification yet | ⏸️ Pending (device test) |
 | 7 | Marking dose "taken" writes a `dose_logs` row in local SQLite | Row exists with status `taken` | Dose log repo + UI implemented; 10 vitest cases on conflict resolution guarantee a locally `taken` dose is never overwritten by a remote pull; no device verification yet | ⏸️ Pending (device test) |
@@ -64,12 +71,12 @@ See `docs/poc-notification-tests.md` for the (now-executable) test cases. The ma
 | Scenario | Result | Notes |
 |---|---|---|
 | App closed, normal mode | ✅ Pass | Case 1 — posted with the app backgrounded then killed |
-| Force-killed | ✅ Pass | Case 1 — `am kill`, `procs_after_kill=0`, `stopped=false`, `exact_windows=2`. Note: the harness deliberately does **not** use `am force-stop`; that sets the package `stopped=true` flag and Android then drops broadcasts to its receivers by OS contract, which is not an app defect |
+| Force-killed | ✅ Pass | Case 1 — `am kill`, `procs_after_kill=0`, `stopped=false`, `exact_windows=1` (2026-07-30; earlier runs read `2` off an unscoped `dumpsys` grep). Note: the harness deliberately does **not** use `am force-stop`; that sets the package `stopped=true` flag and Android then drops broadcasts to its receivers by OS contract, which is not an app defect |
 | Do Not Disturb | ⏸️ Pending | Manual — harness verifies delivery only, not DND channel behaviour |
 | Low Power Mode | ⏸️ Pending | Doze is verified (case 3), but battery-saver mode itself was not separately exercised |
 | Doze mode | ✅ Pass | Case 3 — deep `IDLE` reached with the alarm pending, dozed continuously, notification still posted |
-| Boot reschedule | ✅ Pass | Case 5 — alarms re-registered ~62-66s after `sys.boot_completed` |
-| Exact-alarm denied fallback | ✅ Pass | Case 4 — reported denied AND still delivered inexactly (`window=+33s716ms`) |
+| Boot reschedule | ✅ Pass | Case 5 — `before=1 after=1`, receiver landing ~61s after the first unlock (2026-07-30, first clean pass; see "Case 5 was measuring the wrong thing") |
+| Exact-alarm denied fallback | ✅ Pass | Case 4 — reported denied AND still delivered inexactly (`window=+33s718ms`) |
 | `SET_ALARM_CLOCK` primitive in dumpsys | ✅ Pass | Case 2 — `window=0`, `exactAllowReason=permission`, registered as the device's next alarm clock with a matching timestamp |
 
 ### Day 8 — Stress tests
@@ -79,7 +86,7 @@ See `docs/poc-stress-tests.md`. Also superseded by the harness.
 | Scenario | Result | Notes |
 |---|---|---|
 | 30-medication rolling horizon | ✅ Pass | Case 6 — `pending_count=30`, within the [1,64] cap, no drops |
-| Doze force-idle | ✅ Pass | Case 3 — via `dumpsys deviceidle force-idle deep` after `step deep` stalls at `QUICK_DOZE_DELAY` |
+| Doze force-idle | ✅ Pass | Case 3 — on 2026-07-30 deep IDLE was reached by **stepping**, with no `force-idle` fallback needed (both runs that day); the 2026-07-27 run had required `dumpsys deviceidle force-idle deep` after `step deep` stalled at `QUICK_DOZE_DELAY`. The fallback remains in the harness for when stepping stalls |
 | Force-stop then next dose | ✅ Pass | Case 1 — via `am kill` (see the force-stop note in the Day 6 table) |
 | Offline-first 3 meds + 5 doses | ⏸️ Pending | Not yet in harness — manual test |
 | Restore network sync within 60s | ⏸️ Pending | Not yet in harness — manual test |
@@ -90,13 +97,16 @@ See `docs/poc-stress-tests.md`. Also superseded by the harness.
 |---|---|---|
 | Local debug APK builds | ✅ Verified | `./gradlew assembleDebug` produces `app-debug.apk` (260MB) |
 | APK installs on emulator | ✅ Verified | `emulator-5554` (Android 16, API 36) |
-| APK installs on physical device | ✅ Verified | Pixel 8 Pro, Android 17 / API 37, serial 38220DLJG000JK — installed, launched, and ran the full 6-case harness |
+| APK installs on physical device | ✅ Verified | Pixel 8 Pro, Android 17 / API 37, serial 38220DLJG000JK — installed, launched, and ran the full 7-case harness (2026-07-30) |
 | EAS preview APK builds | ⏸️ Pending | `./apps/mobile/scripts/build-production-apk.sh` (requires EAS account) |
 
 ## Summary
 
-Verified on a physical Pixel 8 Pro (Android 17, API 37) on 2026-07-27.
-Full evidence: `.omo/evidence/task-13-SUMMARY.md`.
+Verified on a physical Pixel 8 Pro (Android 17, API 37) on 2026-07-30 against
+commit `0e2d47a` with a clean working tree.
+Full evidence: `.omo/evidence/issue-5-baseline-all-cases.json` (7/7, single
+`--all` invocation, `exit 0`); historical narrative in
+`.omo/evidence/task-13-SUMMARY.md`.
 
 - **Passed: 4/13** — #5 (killed-app exact delivery, 31-94 ms across 3 runs, plus
   sub-criterion #5a deep-Doze survival), #11 (30-med horizon cap, no drops),
@@ -115,59 +125,85 @@ Full evidence: `.omo/evidence/task-13-SUMMARY.md`.
 - **Blockers:** none for the Phase 1 gate. The load-bearing question — does an
   exact `SET_ALARM_CLOCK` notification fire on Android 17 with the app killed,
   in deep Doze, and after a reboot — is answered **YES**, with the harness
-  reporting 6/6 in a single end-to-end run (`exit 0`) *against the harness
-  revision of 2026-07-27*. That exact tally is no longer reproducible; the case
-  table below explains why, and it is a harness change rather than a regression.
+  reporting **7/7 in a single end-to-end `--all` run (`exit 0`)** against
+  `0e2d47a` on 2026-07-30. The reboot leg of that question (case 5) is answered
+  cleanly for the first time; see "Case 5 was measuring the wrong thing".
 
 ### Harness case tally
 
-> **Read the dates before quoting this table.** Every verdict below was measured
-> against the harness as it stood on the date in its row, and `--all` has since
-> grown a seventh case. No run has produced a single-invocation 7/7, and none of
-> these results has been reproduced against the current code. See "Why 6/6 is not
-> reproducible as written" immediately after the table.
+All seven measured in a single `--all` invocation on 2026-07-30 against commit
+`0e2d47a`, clean tree, Pixel 8 Pro / Android 17 / API 37, serial 38220DLJG000JK.
+Evidence for every row: `.omo/evidence/issue-5-baseline-all-cases.json`.
 
-| # | Case | Verdict | Measured | Evidence |
-|---|------|---------|----------|----------|
-| 1 | killed_app_delivery | ✅ PASS | 2026-07-27 | `task-13-all-cases-final.json` |
-| 2 | alarm_clock_primitive | ✅ PASS | 2026-07-27 | `task-13-all-cases-final.json` |
-| 3 | doze_deep_idle | ✅ PASS | 2026-07-27 | `task-13-all-cases-final.json` |
-| 4 | exact_denied_degrades | ✅ PASS | 2026-07-28 | `harness-todo19-cases-4-6-7.json` |
-| 5 | boot_reschedule | ⚠️ PASS under the *then*-current gate | 2026-07-27 | `task-13-case-5-boot.json` |
-| 6 | stress_horizon_cap | ✅ PASS | 2026-07-28 | `harness-todo19-cases-4-6-7.json` |
-| 7 | weekly_schedule | ✅ PASS | 2026-07-28 | `harness-todo19-cases-4-6-7.json` |
+| # | Case | Verdict | Measured | Detail |
+|---|------|---------|----------|--------|
+| 1 | killed_app_delivery | ✅ PASS | 2026-07-30 | posted after `am kill`; `procs_after_kill=0`, `stopped=false` |
+| 2 | alarm_clock_primitive | ✅ PASS | 2026-07-30 | `window=0`, `exactAllowReason=permission`, registered as the device's next alarm clock with a matching timestamp |
+| 3 | doze_deep_idle | ✅ PASS | 2026-07-30 | reached deep IDLE by stepping; cycle `IDLE→IDLE_MAINTENANCE→IDLE→IDLE_MAINTENANCE→QUICK_DOZE_DELAY`; never returned to ACTIVE before fire |
+| 4 | exact_denied_degrades | ✅ PASS | 2026-07-30 | reported denied AND still delivered inexactly (`window=+33s718ms`) |
+| 5 | boot_reschedule | ✅ PASS | 2026-07-30 | `before=1 after=1`; receiver landed ~61s after the first unlock |
+| 6 | stress_horizon_cap | ✅ PASS | 2026-07-30 | 30 scheduled → `pending_count=30`, within [1,64] |
+| 7 | weekly_schedule | ✅ PASS | 2026-07-30 | 3 alarms, all Mon/Wed/Fri 09:00 in America/New_York |
 
-Case 7 — "3 alarms, all Mon/Wed/Fri 09:00 in America/New_York" — passed on the
-Pixel 8 Pro in a partial `--case 4 --case 6 --case 7` invocation, not in a full
-sweep.
+This is the first single-invocation 7/7. Case 7 had previously only ever passed
+inside a partial `--case 4 --case 6 --case 7` invocation.
 
-#### Why 6/6 is not reproducible as written
+#### Case 5 was measuring the wrong thing
 
-The headline "6/6 in one end-to-end run, exit 0" was true of the harness on
-2026-07-27 and is **not** attainable from the current script. Two independent
-reasons, neither of them a product defect:
+Case 5 had never cleanly passed. Every archived artifact recorded `after <
+before` (`task-13-all-cases-final.json` 14→2; `task-13-case-5-boot.json` and
+`harness-todo19-case-5-rerun.json` both 3→2), which tripped the `after >=
+before` gate introduced in `ae455d0` and scored INCONCLUSIVE. The standing
+reading was that a count cannot separate "the boot receiver under-restored"
+from "those alarms legitimately fired during the reboot".
 
-1. **Case 5's gate was tightened afterwards.** `notification-harness.sh:570` now
-   requires `after >= before`, and scores the middle branch INCONCLUSIVE at
-   `:572`. All three archived case-5 artifacts record `after < before`
-   (`task-13-all-cases-final.json` 14→2; `task-13-case-5-boot.json` and
-   `harness-todo19-case-5-rerun.json` both 3→2), so every one of them fails
-   today's gate, and `:745-751` couples that to `exit 1`. Commit `ae455d0` states
-   the reasoning: `after >= before` is not a sound invariant, and a reading that
-   trips it must not be recorded as a product defect.
-2. **`--all` now runs seven cases** (`:703`), so a six-case tally can no longer
-   be the output of the documented command.
+Neither reading was right. **The count was not counting pending alarms.**
 
-Nothing here should be re-marked ✅ without a fresh run on hardware. See
-"Outstanding verification" at the end of this document.
+`dumpsys alarm` prints the live alarm store first and then a run of history and
+statistics sections — `Removal history`, `Allow while idle history`, `Next wake
+from idle` — and those also carry `*walarm*:<pkg>` tags, for alarms that have
+already fired or been cancelled. Every alarm helper grepped the whole dump.
+Measured on the Pixel 8 Pro with exactly 3 alarms armed, the unscoped grep
+counted **14** (3 pending + 1 `Next wake from idle` duplicate + 10
+removal-history entries) while the OS's own `Pending alarms per uid` line read
+`u0a221:3`.
 
-Nine false-result bugs were found and fixed *in the harness itself* during this
-verification — including a fixed 20s boot grace against a boot receiver that
-actually lands at ~62-66s, a 60s wait against an inexact alarm window of up to
-~79s, `adb reverse` not surviving case 5's reboot, and deep links into an app a
-previous case had killed being treated as "false" rather than "unreachable".
-Each of these had previously reported a FAIL or INCONCLUSIVE for behaviour that
-was correct. See `.omo/evidence/task-13-SUMMARY.md` for the full list.
+That made the case unfalsifiable rather than merely noisy: **a reboot clears the
+removal history**, so `after` came out structurally smaller than `before`
+however perfectly the boot receiver did its job. The `after < before` pattern in
+all three archived artifacts is that artifact, not a product signal — and the
+tightened gate could never have been satisfied.
+
+With alarm reads scoped to the pending portion of the dump, case 5 passes on the
+first attempt: `before=1 after=1`. The fix adds an independent cross-check that
+parses the OS's own per-uid tally; the two agree at 3/3 armed and 0/0 after
+`cancel-all`.
+
+Cases 2 and 4 read alarm windows through the same helpers, so their pre-fix
+verdicts were also taken with a contaminated instrument. Both were re-measured
+and both still pass — case 2 now reports `window=0 (x1)` rather than `(x2)`, and
+case 4's `+33s718ms` matches the pre-fix `+33s722ms`, confirming that particular
+read had been genuine.
+
+**Ten false-result bugs have now been found and fixed in the harness itself.**
+Nine came out of the 2026-07-27/28 verification — a fixed 20s boot grace against
+a boot receiver that actually lands at ~62-66s, a 60s wait against an inexact
+alarm window of up to ~79s, `adb reverse` not surviving case 5's reboot, and
+deep links into an app a previous case had killed being treated as "false"
+rather than "unreachable". Each had reported a FAIL or INCONCLUSIVE for
+behaviour that was correct. See `.omo/evidence/task-13-SUMMARY.md` for the full
+list.
+
+The tenth is the alarm-scoping defect above, and it is the most consequential of
+them: the other nine reported an environmental fault as a product one, which is
+noisy but self-announcing. This one silently made a safety-critical verdict
+unobtainable, and did so in a way that looked like a genuine product ambiguity
+for three separate runs.
+
+The pattern is worth stating plainly, because it will recur when the Task Tier
+adds cases: **a device harness that reads OS state is only as good as its
+understanding of what that state means.** Every assertion here should name the
+section of `dumpsys` it trusts and why.
 
 ## Reproducing the device run
 
@@ -201,21 +237,23 @@ was correct. See `.omo/evidence/task-13-SUMMARY.md` for the full list.
 
 ## Outstanding verification
 
-Recorded here so the ⏸️ markers above are not mistaken for oversight. As of
-2026-07-30 this document carries **14 `⏸️ Pending` rows**, against a plan
-criterion (`.omo/plans/convex-expo-revisit.md` todo 14, Success criterion 6)
-that requires zero. They are deliberately *not* being converted to ❌: none of
-them failed. They were never run, and recording an unrun check as a failure
-would be its own false claim. The criterion is unmeetable until the two
-blockers below clear, and should be restated rather than satisfied on paper.
+Recorded here so the ⏸️ markers above are not mistaken for oversight. This
+document still carries `⏸️ Pending` rows, against a plan criterion
+(`.omo/plans/convex-expo-revisit.md` todo 14, Success criterion 6) that requires
+zero. They are deliberately *not* being converted to ❌: none of them failed.
+They were never run, and recording an unrun check as a failure would be its own
+false claim. Blocker 2 is now cleared; the criterion remains unmeetable until
+Blocker 1 clears, and should be restated rather than satisfied on paper.
 
 **Blocker 1 — no signed-in session.** Criteria 1, 2, 3, 4, 6, 7, 8, 9 and 10
 need Clerk + Convex credentials on a device. Nine of the thirteen numbered
 criteria are undischarged for this one reason.
 
-**Blocker 2 — no device attached.** `adb devices` is empty, so nothing in the
-harness can be re-run, including the four cases whose evidence predates the
-current code and case 7, which has never run in a full sweep.
+**Blocker 2 — no device attached.** ✅ **Cleared 2026-07-30.** The Pixel 8 Pro
+was attached and all seven cases were run against current `main` in a single
+sweep, 7/7. Evidence: `.omo/evidence/issue-5-baseline-all-cases.json`. Note that
+the notification-harness criteria are the only ones this cleared; the nine
+criteria under Blocker 1 still need a signed-in session and remain ⏸️.
 
 Two further gaps, neither device-dependent:
 
@@ -230,4 +268,5 @@ Two further gaps, neither device-dependent:
 1. Set up Clerk + Convex accounts and populate `apps/mobile/.env` if not already.
 2. Deploy Convex backend (`npx convex dev` or `npx convex deploy`).
 3. Work the remaining pending criteria, which all require a signed-in session (auth, RxNorm, sync, cross-device) and are orthogonal to the notification question Phase 1 answered.
-4. Re-run the harness with `--all` (now seven cases) against current code, and restate F3's acceptance from "6/6" to "7/7" before doing so — the old wording cannot be satisfied by the current script.
+4. ✅ Done 2026-07-30 — the harness was re-run with `--all` against current code and reports 7/7 in one invocation. Any acceptance wording still phrased as "6/6" should be restated as "7/7".
+5. Re-run this baseline after the fused-timeline notification changes land (the Task Tier of ADR 0003), and diff against `.omo/evidence/issue-5-baseline-all-cases.json`. That comparison is the reason this baseline was taken.
