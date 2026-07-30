@@ -237,9 +237,48 @@ wait_for_app_ready() {
 
 # ── OS state helpers ───────────────────────────────────────────────────────
 
-alarm_lines()      { adb_shell dumpsys alarm 2>/dev/null | grep -A3 "walarm\*:${PKG}" || true; }
-alarm_count()      { adb_shell dumpsys alarm 2>/dev/null | grep -c "walarm\*:${PKG}" || true; }
+# ── Constraint 9: `dumpsys alarm` IS MOSTLY NOT PENDING ALARMS. ────────────
+# It prints the live alarm store FIRST, then a run of history and statistics
+# sections — "Removal history", "Allow while idle history", "Next wake from
+# idle", the per-uid stats — and those ALSO carry `*walarm*:<pkg>` tags, for
+# alarms that already fired or were cancelled. Grepping the whole dump mixes
+# live alarms with dead ones.
+#
+# Measured on a Pixel 8 Pro / Android 17 with exactly 3 alarms armed: the
+# unscoped grep counted 14 (3 pending + 1 "Next wake from idle" duplicate of a
+# pending one + 10 removal-history entries), while the OS's own
+# "Pending alarms per uid" line read `u0a221:3`.
+#
+# This is what made case 5 unfalsifiable, and it is not a small error. A reboot
+# CLEARS the removal history, so `after` was structurally smaller than `before`
+# however perfectly the boot receiver did its job — which is precisely the
+# after<before pattern every archived case-5 artifact shows (14->2, 3->2,
+# 3->2). The case was reading history depth across a reboot, not rescheduling.
+# Scope every alarm read to the pending portion, and never grep the raw dump.
+pending_dump() {
+  adb_shell dumpsys alarm 2>/dev/null | awk '
+    /^[[:space:]]*(LazyAlarmStore stats|Pending user blocked background alarms|Pending alarms per uid|Scheduled user wakeups|App Alarm history|Next wake from idle|Removal history|Allow while idle)/ { exit }
+    { print }
+  '
+}
+
+alarm_lines()      { pending_dump | grep -A3 "walarm\*:${PKG}" || true; }
+alarm_count()      { pending_dump | grep -c "walarm\*:${PKG}" || true; }
 alarm_is_exact()   { alarm_lines | grep -c "window=0" || true; }
+
+# The OS's own tally, used to cross-check `alarm_count`. Independent parse of a
+# different line, so agreement between the two is real corroboration.
+alarm_count_per_uid() {
+  local uid token line
+  # `appId=`/`uid=`, not `userId=` — Android 17's dumpsys package does not emit
+  # the latter, and grepping for it silently yielded an empty uid and a 0 count.
+  uid="$(adb_shell dumpsys package "$PKG" 2>/dev/null | grep -oE '\b(appId|uid)=[0-9]+' | head -1 | cut -d= -f2 | tr -d '\r')"
+  [[ -z "$uid" ]] && { printf '0'; return; }
+  if (( uid >= 10000 )); then token="u0a$((uid - 10000))"; else token="$uid"; fi
+  line="$(adb_shell dumpsys alarm 2>/dev/null | grep -m1 'Pending alarms per uid:' | tr -d '\r')"
+  # Anchor on the delimiter so u0a221 cannot match inside u0a2210.
+  printf '%s' "$line" | grep -oE "[][, ]${token}:[0-9]+" | head -1 | grep -oE '[0-9]+$' || printf '0'
+}
 next_alarm_clock() { adb_shell dumpsys alarm 2>/dev/null | grep -A1 "Next alarm clock information" | tail -1 | tr -d '\r'; }
 notification_has() { adb_shell dumpsys notification --noredact 2>/dev/null | grep -c "$1" || true; }
 grant_exact()      { adb_shell cmd appops set "$PKG" SCHEDULE_EXACT_ALARM allow >/dev/null 2>&1 || true; }
