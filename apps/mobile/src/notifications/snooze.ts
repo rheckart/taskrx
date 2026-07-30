@@ -11,6 +11,7 @@ import * as remindersRepo from "../db/repos/reminders";
 import {
   buildNotificationId as buildBaseNotificationId,
   MEDICATION_REMINDER_CHANNEL_ID,
+  SNOOZE_NOTIFICATION_ID_PREFIX,
 } from "./scheduler";
 
 /**
@@ -65,7 +66,14 @@ export async function snoozeDose(
     type: TriggerType.TIMESTAMP,
     timestamp: snoozeTime,
     alarmManager: {
-      type: AlarmType.SET_EXACT_AND_ALLOW_WHILE_IDLE,
+      // The same primitive `scheduler.ts` arms, and for the same reason it
+      // documents at length there. This was the last `SET_EXACT_AND_ALLOW_WHILE_IDLE`
+      // in the app: todo 7 moved the scheduler off it and never reached this
+      // file, leaving the invariant `README.md` states unqualified — "do not
+      // revert the notification AlarmType" — true everywhere except the one
+      // path a user reaches by asking to be reminded again. Doze is the lesser
+      // risk for an alarm 15 minutes out; OEM aggressive-kill is the real one.
+      type: AlarmType.SET_ALARM_CLOCK,
     },
   };
 
@@ -82,5 +90,5 @@ function buildSnoozeNotificationId(
   scheduledTime: number,
   snoozeTime: number
 ): string {
-  return `snooze-${buildBaseNotificationId(medicationId, scheduledTime)}-${String(snoozeTime)}`;
+  return `${SNOOZE_NOTIFICATION_ID_PREFIX}${buildBaseNotificationId(medicationId, scheduledTime)}-${String(snoozeTime)}`;
 }

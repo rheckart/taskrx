@@ -72,6 +72,24 @@ export function buildNotificationId(
   return `${reminderId}-${String(scheduledTime)}`;
 }
 
+/**
+ * Namespace marker for snooze alarms, owned here rather than in `snooze.ts`
+ * because `rescheduleAll` is the code that has to recognise one.
+ *
+ * A snooze is armed by the user, not derived from a schedule, so it can never
+ * appear in the desired set `rescheduleAll` computes — and the cancel pass
+ * below removes everything not in that set. Without this exclusion, snoozing a
+ * dose and then merely backgrounding and reopening the app silently cancelled
+ * the deferred alarm: no error, no status change, and the reminder simply never
+ * fired. `_layout.tsx` calls `rescheduleAll` on every transition to `active`,
+ * so the window between arming a snooze and losing it was one app switch wide.
+ *
+ * Keeping the constant next to `buildNotificationId` is the point: the two id
+ * spaces have to stay disjoint, and that is easier to hold true when they are
+ * declared together.
+ */
+export const SNOOZE_NOTIFICATION_ID_PREFIX = "snooze-";
+
 function buildNotification(occurrence: ScheduledOccurrence): Notification {
   const dosageLabel =
     occurrence.dosage !== undefined ? ` (${occurrence.dosage})` : "";
@@ -224,7 +242,10 @@ export async function rescheduleAll(userId: string): Promise<void> {
 
   const toCancel: string[] = [];
   for (const id of currentIds) {
-    if (!desiredIds.has(id)) {
+    // Snoozes live in the same Notifee namespace but are not schedule-derived,
+    // so they are never in `desiredIds` and must be excluded explicitly rather
+    // than swept up as stale. See `SNOOZE_NOTIFICATION_ID_PREFIX`.
+    if (!desiredIds.has(id) && !id.startsWith(SNOOZE_NOTIFICATION_ID_PREFIX)) {
       toCancel.push(id);
     }
   }

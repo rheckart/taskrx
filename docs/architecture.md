@@ -203,8 +203,10 @@ The `checkExactAlarmPermission()` function reads the real notify-kit `getNotific
 
 ## Testing
 
-- `packages/shared` — 54 vitest cases (23 schedule engine + 10 global horizon + 10 conflict + 11 permission state).
-- `apps/mobile/scripts/notification-harness.sh` — adb-driven bash script; 6 cases (killed-app, `SET_ALARM_CLOCK` primitive in use, Doze, exact-alarm-denied fallback, boot reschedule, 30-med stress). Emits JSON to `.omo/evidence/`.
+- `packages/shared` — 255 vitest cases, the only workspace with a coverage gate (100% across statements/branches/functions/lines). Note the gate's `include[]` does not list `src/sync/conflict.ts` or `src/notifications/permission-state.ts`, so both are specced but unmeasured.
+- `packages/convex` — 79 `convex-test` cases covering all 21 exported functions across `reminders`, `medications`, `doseLogs` and `reminderInstances`, run against an in-memory deployment.
+- `apps/mobile` — 12 vitest cases: `SyncWorker.drain()` re-entrancy, and `rescheduleAll`'s cancel pass (snooze preservation, stale-alarm cancellation, diff idempotence).
+- `apps/mobile/scripts/notification-harness.sh` — adb-driven bash script; **7 cases** (killed-app, `SET_ALARM_CLOCK` primitive in use, Doze, exact-alarm-denied fallback, boot reschedule, 30-med stress, weekly schedule). Emits JSON to `.omo/evidence/`. See `docs/poc-results.md` for which cases have run against current code — as of 2026-07-30, none have.
 - Hidden `/harness` deep-link route in the app (`apps/mobile/app/harness.tsx`) is invoked by the harness via `adb shell am start`. Security carve-out in `AuthRedirectGate` bypasses the sign-in redirect for that route only — notifications are local, so the harness must work on a fresh install.
 
 ## Security

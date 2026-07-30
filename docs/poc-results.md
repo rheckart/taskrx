@@ -2,7 +2,15 @@
 
 This document tracks the 13 success criteria from the POC plan §3. Each row shows the criterion, the expected result, the actual result, and a pass/fail verdict.
 
-**Status:** 2026-07-27, Phase 1 gate **PASS**. Code-level fixes committed on `main`; the notification harness reports **6/6 on a physical Pixel 8 Pro (Android 17, API 37)** in a single end-to-end run, closing criteria #5, #5a, #11 and #12. The remaining criteria are the auth / RxNorm / sync / cross-device ones, which need a signed-in Clerk + Convex session.
+**Status:** 2026-07-27, Phase 1 gate **PASS**. Code-level fixes committed on `main`; the notification harness reported **6/6 on a physical Pixel 8 Pro (Android 17, API 37)** in a single end-to-end run, closing criteria #5, #5a, #11 and #12. The remaining criteria are the auth / RxNorm / sync / cross-device ones, which need a signed-in Clerk + Convex session.
+
+> **Staleness warning (2026-07-30).** The device results below were captured on
+> 2026-07-27/28. Since then the harness gained a seventh case and tightened
+> case 5's gate, and `apps/mobile` + `packages/shared` have taken further
+> commits. **No device run has been performed against the current code**, and
+> the "6/6 in one run" tally is no longer reproducible as written — see the
+> harness case tally. Treat every ✅ in this document as "passed on the date in
+> its row", not as "passes today".
 
 ## Success criteria
 
@@ -106,22 +114,52 @@ Full evidence: `.omo/evidence/task-13-SUMMARY.md`.
 - **Failed: 0**
 - **Blockers:** none for the Phase 1 gate. The load-bearing question — does an
   exact `SET_ALARM_CLOCK` notification fire on Android 17 with the app killed,
-  in deep Doze, and after a reboot — is answered **YES**, with the full harness
-  reporting **6/6 in a single end-to-end run** (`exit 0`).
+  in deep Doze, and after a reboot — is answered **YES**, with the harness
+  reporting 6/6 in a single end-to-end run (`exit 0`) *against the harness
+  revision of 2026-07-27*. That exact tally is no longer reproducible; the case
+  table below explains why, and it is a harness change rather than a regression.
 
 ### Harness case tally
 
-| # | Case | Verdict |
-|---|------|---------|
-| 1 | killed_app_delivery | ✅ PASS |
-| 2 | alarm_clock_primitive | ✅ PASS |
-| 3 | doze_deep_idle | ✅ PASS |
-| 4 | exact_denied_degrades | ✅ PASS |
-| 5 | boot_reschedule | ✅ PASS |
-| 6 | stress_horizon_cap | ✅ PASS |
+> **Read the dates before quoting this table.** Every verdict below was measured
+> against the harness as it stood on the date in its row, and `--all` has since
+> grown a seventh case. No run has produced a single-invocation 7/7, and none of
+> these results has been reproduced against the current code. See "Why 6/6 is not
+> reproducible as written" immediately after the table.
 
-**6/6 in one end-to-end run**, exit 0 — `.omo/evidence/task-13-all-cases-final.json`
-(`"passed": 6, "failed": 0`), Pixel 8 Pro / Android 17 / API 37, 2026-07-27.
+| # | Case | Verdict | Measured | Evidence |
+|---|------|---------|----------|----------|
+| 1 | killed_app_delivery | ✅ PASS | 2026-07-27 | `task-13-all-cases-final.json` |
+| 2 | alarm_clock_primitive | ✅ PASS | 2026-07-27 | `task-13-all-cases-final.json` |
+| 3 | doze_deep_idle | ✅ PASS | 2026-07-27 | `task-13-all-cases-final.json` |
+| 4 | exact_denied_degrades | ✅ PASS | 2026-07-28 | `harness-todo19-cases-4-6-7.json` |
+| 5 | boot_reschedule | ⚠️ PASS under the *then*-current gate | 2026-07-27 | `task-13-case-5-boot.json` |
+| 6 | stress_horizon_cap | ✅ PASS | 2026-07-28 | `harness-todo19-cases-4-6-7.json` |
+| 7 | weekly_schedule | ✅ PASS | 2026-07-28 | `harness-todo19-cases-4-6-7.json` |
+
+Case 7 — "3 alarms, all Mon/Wed/Fri 09:00 in America/New_York" — passed on the
+Pixel 8 Pro in a partial `--case 4 --case 6 --case 7` invocation, not in a full
+sweep.
+
+#### Why 6/6 is not reproducible as written
+
+The headline "6/6 in one end-to-end run, exit 0" was true of the harness on
+2026-07-27 and is **not** attainable from the current script. Two independent
+reasons, neither of them a product defect:
+
+1. **Case 5's gate was tightened afterwards.** `notification-harness.sh:570` now
+   requires `after >= before`, and scores the middle branch INCONCLUSIVE at
+   `:572`. All three archived case-5 artifacts record `after < before`
+   (`task-13-all-cases-final.json` 14→2; `task-13-case-5-boot.json` and
+   `harness-todo19-case-5-rerun.json` both 3→2), so every one of them fails
+   today's gate, and `:745-751` couples that to `exit 1`. Commit `ae455d0` states
+   the reasoning: `after >= before` is not a sound invariant, and a reading that
+   trips it must not be recorded as a product defect.
+2. **`--all` now runs seven cases** (`:703`), so a six-case tally can no longer
+   be the output of the documented command.
+
+Nothing here should be re-marked ✅ without a fresh run on hardware. See
+"Outstanding verification" at the end of this document.
 
 Nine false-result bugs were found and fixed *in the harness itself* during this
 verification — including a fixed 20s boot grace against a boot receiver that
@@ -140,8 +178,35 @@ was correct. See `.omo/evidence/task-13-SUMMARY.md` for the full list.
 5. Run the harness: `ANDROID_SERIAL=<serial> apps/mobile/scripts/notification-harness.sh --all --output .omo/evidence/<name>.json`. Takes ~16 minutes and reboots the device (case 5).
 6. The harness restores all mutated device state on exit (`deviceidle`, simulated battery, and `device_idle_constants`) via an EXIT/INT/TERM trap. Verify with `adb shell settings get global device_idle_constants` → `null`.
 
+## Outstanding verification
+
+Recorded here so the ⏸️ markers above are not mistaken for oversight. As of
+2026-07-30 this document carries **14 `⏸️ Pending` rows**, against a plan
+criterion (`.omo/plans/convex-expo-revisit.md` todo 14, Success criterion 6)
+that requires zero. They are deliberately *not* being converted to ❌: none of
+them failed. They were never run, and recording an unrun check as a failure
+would be its own false claim. The criterion is unmeetable until the two
+blockers below clear, and should be restated rather than satisfied on paper.
+
+**Blocker 1 — no signed-in session.** Criteria 1, 2, 3, 4, 6, 7, 8, 9 and 10
+need Clerk + Convex credentials on a device. Nine of the thirteen numbered
+criteria are undischarged for this one reason.
+
+**Blocker 2 — no device attached.** `adb devices` is empty, so nothing in the
+harness can be re-run, including the four cases whose evidence predates the
+current code and case 7, which has never run in a full sweep.
+
+Two further gaps, neither device-dependent:
+
+- The claim at criterion 9 that dead-lettered rows "can be requeued via debug
+  UI" is not implemented: `syncQueue.deadLettered()` and `syncQueue.requeue()`
+  have no call sites, and neither debug screen imports `syncQueue`.
+- `.omo/evidence/task-14-*` — the log todo 14's acceptance requires — was never
+  produced, so todo 14's own criteria have not been machine-checked.
+
 ## Next actions
 
 1. Set up Clerk + Convex accounts and populate `apps/mobile/.env` if not already.
 2. Deploy Convex backend (`npx convex dev` or `npx convex deploy`).
-3. Work the remaining 8 pending criteria, which all require a signed-in session (auth, RxNorm, sync, cross-device) and are orthogonal to the notification question Phase 1 answered.
+3. Work the remaining pending criteria, which all require a signed-in session (auth, RxNorm, sync, cross-device) and are orthogonal to the notification question Phase 1 answered.
+4. Re-run the harness with `--all` (now seven cases) against current code, and restate F3's acceptance from "6/6" to "7/7" before doing so — the old wording cannot be satisfied by the current script.
