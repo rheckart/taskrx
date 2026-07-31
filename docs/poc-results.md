@@ -2,7 +2,7 @@
 
 This document tracks the 13 success criteria from the POC plan §3. Each row shows the criterion, the expected result, the actual result, and a pass/fail verdict.
 
-**Status:** 2026-07-30, Phase 1 gate **PASS**. The notification harness reports **7/7 on a physical Pixel 8 Pro (Android 17, API 37)** in a single end-to-end `--all` invocation (`exit 0`), taken against commit `0e2d47a` with a clean working tree, closing criteria #5, #5a, #11 and #12. The remaining criteria are the auth / RxNorm / sync / cross-device ones, which need a signed-in Clerk + Convex session.
+**Status:** 2026-07-30, Phase 1 gate **PASS**. The notification harness reports **7/7 on a physical Pixel 8 Pro (Android 17, API 37)** in a single end-to-end `--all` invocation (`exit 0`), taken against commit `a931bbf` with a clean working tree, closing criteria #5, #5a, #11 and #12. The remaining criteria are the auth / RxNorm / sync / cross-device ones, which need a signed-in Clerk + Convex session.
 
 > **Baseline (2026-07-30).** All seven cases have been run against current
 > `main` on the physical Pixel 8 Pro, in one sweep, and all seven passed.
@@ -15,9 +15,9 @@ This document tracks the 13 success criteria from the POC plan §3. Each row sho
 > delivery Tier for tasks — can be checked against a known-good starting point.
 > "Did this change break delivery?" is now an answerable question.
 >
-> Two independent instrument defects were fixed to get here, one of them the
-> cause of every historical case-5 ambiguity. See "Case 5 was measuring the
-> wrong thing" below before reading any pre-2026-07-30 verdict in this file.
+> Instrument defects were fixed to get here, one of them the cause of every
+> historical case-5 ambiguity. See "Case 5 was measuring the wrong thing" below
+> before reading any pre-2026-07-30 verdict in this file.
 
 ## Success criteria
 
@@ -27,7 +27,7 @@ This document tracks the 13 success criteria from the POC plan §3. Each row sho
 | 2 | User can search "metformin" → RxNorm returns matches → user selects one | RxNorm search returns relevant results | Convex Action `rxnorm.search` implemented and typed against the real NLM `approximateTerm.json` endpoint; UI debounces + guards stale responses | ⏸️ Pending (device test) |
 | 3 | User can save medication with schedule ("daily at 09:00" or "every 8 hours") | Medication saved locally with correct schedule | SQLite repo + schedule picker implemented; 23 vitest cases on the schedule engine pass; no device verification yet | ⏸️ Pending (device test) |
 | 4 | Medication persists in local SQLite across app restart | Medication list survives force-stop | `expo-sqlite` repo persists to device storage; migrations 001–003 apply cleanly on boot; no runtime restart test yet | ⏸️ Pending (device test) |
-| 5 | Local notification fires at scheduled time on a physical Android device, app closed, not in foreground, surviving Doze + battery optimization | Notification fires within 1 minute of scheduled time | **VERIFIED on Pixel 8 Pro / Android 17 / API 37.** Uses `AlarmType.SET_ALARM_CLOCK`. Delivered with the app process dead (`am kill`, 0 processes, `stopped=false`) across **three independent runs: 34 ms, 94 ms, and 31 ms late** — all far inside the 1-minute budget. Full chain in logcat: `Start proc ... for broadcast {NotificationAlarmReceiver}` → `NotifeeHeadlessJS: launched taskId: 1` → notification posted with correct title + `medicationId`. Primitive confirmed at OS level, not inferred: `window=0`, `exactAllowReason=permission`, `whenElapsed == maxWhenElapsed`, and the alarm registered as the device's *next alarm clock* with a timestamp exactly matching the scheduled one. The Doze clause is verified in criterion 5a below. **Re-verified 2026-07-30 against `0e2d47a`** in a 7/7 single `--all` run — evidence `.omo/evidence/issue-5-baseline-all-cases.json`. Earlier evidence: `.omo/evidence/task-13-all-cases-final.json`, `.omo/evidence/task-13-SUMMARY.md`, `task-13-cases-1-4.json`, `task-13-cases-6-2.json` (all taken before the alarm-scoping fix; their `exact_windows` counts are inflated by `dumpsys` history — see "Case 5 was measuring the wrong thing"). | ✅ **PASS** |
+| 5 | Local notification fires at scheduled time on a physical Android device, app closed, not in foreground, surviving Doze + battery optimization | Notification fires within 1 minute of scheduled time | **VERIFIED on Pixel 8 Pro / Android 17 / API 37.** Uses `AlarmType.SET_ALARM_CLOCK`. Delivered with the app process dead (`am kill`, 0 processes, `stopped=false`) across **three independent runs: 34 ms, 94 ms, and 31 ms late** — all far inside the 1-minute budget. Full chain in logcat: `Start proc ... for broadcast {NotificationAlarmReceiver}` → `NotifeeHeadlessJS: launched taskId: 1` → notification posted with correct title + `medicationId`. Primitive confirmed at OS level, not inferred: `window=0`, `exactAllowReason=permission`, `whenElapsed == maxWhenElapsed`, and the alarm registered as the device's *next alarm clock* with a timestamp exactly matching the scheduled one. The Doze clause is verified in criterion 5a below. **Re-verified 2026-07-30 against `a931bbf`** in a 7/7 single `--all` run — evidence `.omo/evidence/issue-5-baseline-all-cases.json`. Earlier evidence: `.omo/evidence/task-13-all-cases-final.json`, `.omo/evidence/task-13-SUMMARY.md`, `task-13-cases-1-4.json`, `task-13-cases-6-2.json` (all taken before the alarm-scoping fix; their `exact_windows` counts are inflated by `dumpsys` history — see "Case 5 was measuring the wrong thing"). | ✅ **PASS** |
 | 5a | *(sub-criterion)* Notification survives **deep Doze** specifically | Fires while device is in deep IDLE | **VERIFIED on Pixel 8 Pro / Android 17.** With the app process killed and the device on simulated battery, it entered deep `IDLE` with the alarm pending and dozed continuously — observed cycle `IDLE → IDLE_MAINTENANCE → IDLE → IDLE_MAINTENANCE → QUICK_DOZE_DELAY`, never returning to `ACTIVE` before the alarm fired — and the notification still posted. `dumpsys alarm` shows Doze imposes **zero deferral**: `policyWhenElapsed: requester=+2m22s657ms … device_idle=-1m21s983ms` (device_idle resolves earlier than the request) with `whenElapsed == maxWhenElapsed`. **Finding:** Android refuses to enter deep Doze at all while a wake-from-idle alarm is due within `min_time_to_alarm` (default **1 hour**) — `force-idle` reports `Unable to go deep idle; stopped at QUICK_DOZE_DELAY`. That refusal is itself evidence the alarm is classified wake-from-idle. **Accommodation:** `min_time_to_alarm` was lowered to 30s for this case only and stock constants restored afterwards (verified `device_idle_constants = null`); no battery-optimization exemption was granted. Evidence: `.omo/evidence/task-13-case-3-deep-idle.json`, `.omo/evidence/task-13-all-cases-final.json`. | ✅ **PASS** |
 | 6 | Tapping notification opens the dose logging screen pre-filled with the right med + scheduled time | Correct medication and time shown | Tap handler + deep-link routing implemented (`src/notifications/tap-handler.ts`); notification data includes `medicationId` and `scheduledTime` for the dose-log deep link; no device verification yet | ⏸️ Pending (device test) |
 | 7 | Marking dose "taken" writes a `dose_logs` row in local SQLite | Row exists with status `taken` | Dose log repo + UI implemented; 10 vitest cases on conflict resolution guarantee a locally `taken` dose is never overwritten by a remote pull; no device verification yet | ⏸️ Pending (device test) |
@@ -75,7 +75,7 @@ See `docs/poc-notification-tests.md` for the (now-executable) test cases. The ma
 | Do Not Disturb | ⏸️ Pending | Manual — harness verifies delivery only, not DND channel behaviour |
 | Low Power Mode | ⏸️ Pending | Doze is verified (case 3), but battery-saver mode itself was not separately exercised |
 | Doze mode | ✅ Pass | Case 3 — deep `IDLE` reached with the alarm pending, dozed continuously, notification still posted |
-| Boot reschedule | ✅ Pass | Case 5 — `before=1 after=1`, receiver landing ~61s after the first unlock (2026-07-30, first clean pass; see "Case 5 was measuring the wrong thing") |
+| Boot reschedule | ✅ Pass | Case 5 — `before=3 after=3`, receiver landing ~61s after the first unlock (2026-07-30; see "Case 5 was measuring the wrong thing") |
 | Exact-alarm denied fallback | ✅ Pass | Case 4 — reported denied AND still delivered inexactly (`window=+33s718ms`) |
 | `SET_ALARM_CLOCK` primitive in dumpsys | ✅ Pass | Case 2 — `window=0`, `exactAllowReason=permission`, registered as the device's next alarm clock with a matching timestamp |
 
@@ -103,7 +103,7 @@ See `docs/poc-stress-tests.md`. Also superseded by the harness.
 ## Summary
 
 Verified on a physical Pixel 8 Pro (Android 17, API 37) on 2026-07-30 against
-commit `0e2d47a` with a clean working tree.
+commit `a931bbf` with a clean working tree.
 Full evidence: `.omo/evidence/issue-5-baseline-all-cases.json` (7/7, single
 `--all` invocation, `exit 0`); historical narrative in
 `.omo/evidence/task-13-SUMMARY.md`.
@@ -126,13 +126,13 @@ Full evidence: `.omo/evidence/issue-5-baseline-all-cases.json` (7/7, single
   exact `SET_ALARM_CLOCK` notification fire on Android 17 with the app killed,
   in deep Doze, and after a reboot — is answered **YES**, with the harness
   reporting **7/7 in a single end-to-end `--all` run (`exit 0`)** against
-  `0e2d47a` on 2026-07-30. The reboot leg of that question (case 5) is answered
+  `a931bbf` on 2026-07-30. The reboot leg of that question (case 5) is answered
   cleanly for the first time; see "Case 5 was measuring the wrong thing".
 
 ### Harness case tally
 
 All seven measured in a single `--all` invocation on 2026-07-30 against commit
-`0e2d47a`, clean tree, Pixel 8 Pro / Android 17 / API 37, serial 38220DLJG000JK.
+`a931bbf`, clean tree, Pixel 8 Pro / Android 17 / API 37, serial 38220DLJG000JK.
 Evidence for every row: `.omo/evidence/issue-5-baseline-all-cases.json`.
 
 | # | Case | Verdict | Measured | Detail |
@@ -141,7 +141,7 @@ Evidence for every row: `.omo/evidence/issue-5-baseline-all-cases.json`.
 | 2 | alarm_clock_primitive | ✅ PASS | 2026-07-30 | `window=0`, `exactAllowReason=permission`, registered as the device's next alarm clock with a matching timestamp |
 | 3 | doze_deep_idle | ✅ PASS | 2026-07-30 | reached deep IDLE by stepping; cycle `IDLE→IDLE_MAINTENANCE→IDLE→IDLE_MAINTENANCE→QUICK_DOZE_DELAY`; never returned to ACTIVE before fire |
 | 4 | exact_denied_degrades | ✅ PASS | 2026-07-30 | reported denied AND still delivered inexactly (`window=+33s718ms`) |
-| 5 | boot_reschedule | ✅ PASS | 2026-07-30 | `before=1 after=1`; receiver landed ~61s after the first unlock |
+| 5 | boot_reschedule | ✅ PASS | 2026-07-30 | `before=3 after=3`, cross-checked against the OS per-uid tally (=3); all armed 15m+ out so none could have come due during the reboot; receiver landed ~61s after the first unlock |
 | 6 | stress_horizon_cap | ✅ PASS | 2026-07-30 | 30 scheduled → `pending_count=30`, within [1,64] |
 | 7 | weekly_schedule | ✅ PASS | 2026-07-30 | 3 alarms, all Mon/Wed/Fri 09:00 in America/New_York |
 
@@ -174,10 +174,26 @@ however perfectly the boot receiver did its job. The `after < before` pattern in
 all three archived artifacts is that artifact, not a product signal — and the
 tightened gate could never have been satisfied.
 
-With alarm reads scoped to the pending portion of the dump, case 5 passes on the
-first attempt: `before=1 after=1`. The fix adds an independent cross-check that
-parses the OS's own per-uid tally; the two agree at 3/3 armed and 0/0 after
-`cancel-all`.
+With alarm reads scoped to the pending portion of the dump, case 5 passed on the
+first attempt at `before=1 after=1`.
+
+It was then hardened further, because `before=1` is the weakest value that
+can satisfy `after >= before` — the partial-restore loss the case exists to
+catch ("armed 3, re-registered 2") cannot occur at a count of one. It now arms
+`BOOT_ALARM_COUNT` (default 3) alarms, all 15m+ out so none can come due during
+the reboot, which removes the "or they legitimately fired" reading entirely; a
+missing alarm afterwards has one explanation and is reported as a product
+defect rather than an ambiguity. It also asserts, before rebooting, that the
+scoped count agrees with an independent parse of the OS's own per-uid tally —
+if the two disagree the instrument is at fault and the case says so instead of
+measuring with a broken ruler. In the recorded baseline all three signals
+agree: `before=3 after=3`, per-uid tally 3. A partial restore was detectable
+there and did not occur, which the `before=1` form could not have established.
+
+The alarm-store parse is additionally checked once as a startup precondition.
+An empty parse means the section whitelist no longer matches the Android build,
+and would otherwise read as "zero alarms" and score product FAILs; the run now
+aborts with exit 2 instead.
 
 Cases 2 and 4 read alarm windows through the same helpers, so their pre-fix
 verdicts were also taken with a contaminated instrument. Both were re-measured
@@ -194,16 +210,10 @@ rather than "unreachable". Each had reported a FAIL or INCONCLUSIVE for
 behaviour that was correct. See `.omo/evidence/task-13-SUMMARY.md` for the full
 list.
 
-The tenth is the alarm-scoping defect above, and it is the most consequential of
-them: the other nine reported an environmental fault as a product one, which is
-noisy but self-announcing. This one silently made a safety-critical verdict
-unobtainable, and did so in a way that looked like a genuine product ambiguity
-for three separate runs.
-
-The pattern is worth stating plainly, because it will recur when the Task Tier
-adds cases: **a device harness that reads OS state is only as good as its
-understanding of what that state means.** Every assertion here should name the
-section of `dumpsys` it trusts and why.
+The tenth is the alarm-scoping defect above. It differs from the other nine in
+direction: they reported environmental faults as product ones, which is noisy
+but self-announcing, whereas this one made a safety-critical verdict
+unobtainable and looked like a genuine product ambiguity for three runs.
 
 ## Reproducing the device run
 

@@ -22,7 +22,15 @@ apps/mobile/dist
 # packages/convex/convex/_generated is committed (see api.d.ts header)
 
 # OMO planning workspace (evidence artifacts only — plans and drafts are tracked)
-.omo/evidence/
+# Must exclude the CONTENTS, not the directory: git does not descend into an
+# excluded directory, so `.omo/evidence/` would make the negation below
+# unreachable.
+.omo/evidence/*
+# Exception: the device notification baseline. Later work adds a second
+# delivery Tier (ADR 0003) and must be diffed against a known-good starting
+# point, so this artifact has to exist in a clean checkout rather than only on
+# the machine that produced it. Everything else under evidence/ stays ignored.
+!.omo/evidence/issue-5-baseline-all-cases.json
 
 # Agent tooling scratch state (written anywhere in the tree, not just the root)
 .omc/

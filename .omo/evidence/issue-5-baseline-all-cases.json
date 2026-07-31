@@ -1,0 +1,16 @@
+{
+  "timestamp": "2026-07-30T23:07:56+00:00",
+  "package": "com.taskrx.mobile",
+  "provenance": { "commit": "a931bbfe1163d42b367e7129ffcb366b8b03face", "branch": "main", "dirty": false, "dirty_files": "" },
+  "device": { "serial": "38220DLJG000JK", "release": "17", "sdk": "37", "fingerprint": "google/husky/husky:17/CP2A.260705.006/15641320:user/release-keys" },
+  "summary": { "passed": 7, "failed": 0 },
+  "cases": [
+    {"case":1,"name":"killed_app_delivery","pass":true,"detail":"posted after am kill; [harness] result: scheduled id=kill-test at=1785451929430 delayMs=60000; exact_windows=1; procs_after_kill=0; stopped=false"},
+    {"case":2,"name":"alarm_clock_primitive","pass":true,"detail":"window=0 (x1), exactAllowReason=permission, registered as next alarm clock:     user:0 pendingSend:false time:1785452086654 = 2026-07-30 18:54:46.654 = +1m51s612ms"},
+    {"case":3,"name":"doze_deep_idle","pass":true,"detail":"posted after the device entered deep IDLE with the alarm pending and dozed continuously until it fired (entered via stepped; min_time_to_alarm=+30s0ms [lowered for the run, then restored]; doze cycle observed: IDLE>IDLE_MAINTENANCE; never returned to ACTIVE before fire; state after delivery=QUICK_DOZE_DELAY); [harness] result: scheduled id=doze-test at=1785452224203 delayMs=240000"},
+    {"case":4,"name":"exact_denied_degrades","pass":true,"detail":"reported denied AND still delivered inexactly (window=+33s722ms, polled to end of window); [harness] result: scheduled id=denied-test at=1785452335490 delayMs=45000"},
+    {"case":5,"name":"boot_reschedule","pass":true,"detail":"alarms re-registered after reboot (before=3 after=3, cross-checked against the OS per-uid tally=3; all armed 15m+ out so none could have come due during the reboot; receiver landed ~61s after the first unlock, which is when ACTION_BOOT_COMPLETED is broadcast)"},
+    {"case":6,"name":"stress_horizon_cap","pass":true,"detail":"pending_count=30 within [1,64]"},
+    {"case":7,"name":"weekly_schedule","pass":true,"detail":"3 alarms, all Mon/Wed/Fri 09:00 in America/New_York (1785502800000,1785762000000,1785934800000)"}
+  ]
+}
