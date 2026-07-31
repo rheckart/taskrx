@@ -13,8 +13,6 @@ import {
 } from "react-native";
 
 import { useToast } from "../../../src/components/useToast";
-import * as doseLogMirror from "../../../src/db/repos/dose-log-mirror";
-import * as doseLogsRepo from "../../../src/db/repos/doseLogs";
 import * as instancesRepo from "../../../src/db/repos/reminderInstances";
 import * as remindersRepo from "../../../src/db/repos/reminders";
 import { snoozeDose } from "../../../src/notifications/snooze";
@@ -22,13 +20,28 @@ import { snoozeDose } from "../../../src/notifications/snooze";
 type ActionStatus = "idle" | "taking" | "skipping" | "snoozing" | "done";
 
 /**
- * Reads come from the unified tables; writes still go to `dose_logs`.
+ * Reads and writes both go to the unified tables.
  *
- * That split is the cutover as `db/repos/medication-mirror.ts` frames it — the
- * POC tables stay the source of truth, the unified ones are the projection the
- * screens read, and rolling back is repointing the reads. The two rows share an
- * id by construction (`db/repos/dose-log-mirror.ts`), so `instance.id` is the
- * dose log's id and the write repo takes it unchanged.
+ * Before the write-path cutover this screen read `reminder_instances` and
+ * wrote `dose_logs`, leaning on `dose-log-mirror.ts` to reconcile the two. That
+ * split is what the dedupe dance here existed for: the screen had to look for
+ * an existing dose log rather than an existing instance, because a dose log
+ * whose projection had failed would otherwise be duplicated on every retry.
+ *
+ * With the instance written directly there is one row and one place to look
+ * for it, so `findPendingForOccurrence` is both the dedupe and the load.
+ *
+ * What still has to hold for a pre-cutover dose to resolve is the *pairing*,
+ * not the instance id the deleted `instancesRepo.get(doseLog.id)` needed:
+ * migration 005 and `medication-mirror.ts` preserve the medication's primary
+ * key as the reminder's, and project `dose_logs.medication_id` into
+ * `reminder_instances.reminder_id` unchanged. So the `medicationId` an alarm
+ * armed by an older build carries still names the reminder, and the projected
+ * instance still sits at the same `(reminder, scheduled time)`.
+ *
+ * The route param is still `medicationId` — it is the key the alarms already
+ * armed on the device carry (`notifications/scheduler.ts`), and renaming it
+ * would drop taps on those.
  */
 interface LoadedState {
   readonly kind: "loaded";
@@ -114,63 +127,41 @@ export default function DoseLogScreen(): ReactElement {
         return;
       }
 
-      let instance = await instancesRepo.findPendingForOccurrence(
-        userId,
-        parsedParams.medicationId,
-        parsedParams.scheduledTime
-      );
-      if (instance === null) {
-        // Deduplicate against `dose_logs`, the write table — never against the
-        // projection alone. The two disagree exactly when a previous attempt
-        // created the dose log and then failed to project it, and that is the
-        // case that reaches this branch. Keying the decision off the missing
-        // projection would create a *second* dose log, and a third on the next
-        // retry: each one is a real row plus a real `sync_queue` entry, and
-        // those entries do sync, so the duplicates reach the server and stay
-        // there. The error message below invites the retry, which is what
-        // turns the leak into a loop.
-        //
-        // Create through the POC table and read the projection back rather
-        // than inserting an instance directly: `dose_logs` is still the write
-        // source of truth, and its mirror is what produces the instance.
-        const doseLog =
-          (await doseLogsRepo.findPendingForDose(
-            userId,
-            parsedParams.medicationId,
-            parsedParams.scheduledTime
-          )) ??
-          (await doseLogsRepo.create({
-            userId,
-            medicationId: parsedParams.medicationId,
-            scheduledTime: parsedParams.scheduledTime,
-          }));
-
-        instance = await instancesRepo.get(doseLog.id);
-
-        if (instance === null) {
-          // Try once to repair it here instead of making the user wait for a
-          // drain. This is the same call the create path just made, so it only
-          // succeeds when the failure was transient — if the medication has no
-          // `reminders` row the EXISTS guard drops it again and we fall
-          // through to the error.
-          await doseLogMirror.mirrorDoseLog(doseLog.id);
-          instance = await instancesRepo.get(doseLog.id);
-        }
-      }
-
-      if (instance === null) {
-        // The mirror's EXISTS guard dropped the projection, so the medication
-        // has no `reminders` row. Saying so beats rendering a screen whose
-        // buttons write to a dose the rest of the app cannot see. Retrying is
-        // sound advice now: the dose log above is reused rather than
-        // duplicated, and the drain's `repairMissingProjections` may have
-        // rebuilt the parent reminder in the meantime.
-        setState({
-          kind: "error",
-          message: "This dose could not be prepared. Try again after a sync.",
-        });
-        return;
-      }
+      // One lookup, not two: the pending instance for this exact
+      // `(reminder, scheduled time)` pairing is the row the buttons below act
+      // on. Minting it here rather than at alarm time is what keeps the table a
+      // record of what the user did rather than a materialized copy of the
+      // schedule.
+      //
+      // Be precise about what a miss means, because it is narrower than it
+      // looks: `findPendingForOccurrence` filters `status = 'pending'`, so a
+      // null is "no *unanswered* instance", not "this occurrence has never been
+      // answered". Reopening an occurrence already taken or skipped therefore
+      // mints a second, pending instance beside the answered one — reachable by
+      // tapping the same alarm twice, since `autoCancel` does not retract an
+      // alarm the user already acted on from a different surface.
+      //
+      // Carried over deliberately rather than introduced here: the dose-log
+      // path this replaces filtered identically (`findPendingForDose`), so the
+      // behaviour is unchanged, which is what this ticket asks for. The fix
+      // belongs with the timeline projection, which deduplicates on exactly
+      // this pairing across every status.
+      const instance =
+        (await instancesRepo.findPendingForOccurrence(
+          userId,
+          parsedParams.medicationId,
+          parsedParams.scheduledTime
+        )) ??
+        (await instancesRepo.create({
+          userId,
+          reminderId: parsedParams.medicationId,
+          // Off the reminder, never hardcoded: the same occurrence pairing
+          // reaches this screen for a `task` reminder once the timeline
+          // lands, and `reminder_kind` is what decides whether the instance
+          // counts toward Adherence.
+          reminderKind: medication.kind,
+          scheduledTime: parsedParams.scheduledTime,
+        }));
 
       setState({
         kind: "loaded",
@@ -199,7 +190,7 @@ export default function DoseLogScreen(): ReactElement {
     setError(null);
     try {
       const now = Date.now();
-      await doseLogsRepo.markTaken(state.instance.id, now);
+      await instancesRepo.markTaken(state.instance.id, now);
       setCompletedAt(now);
       setActionStatus("done");
       showToast.success("Dose recorded");
@@ -219,7 +210,7 @@ export default function DoseLogScreen(): ReactElement {
     setActionStatus("skipping");
     setError(null);
     try {
-      await doseLogsRepo.markSkipped(state.instance.id);
+      await instancesRepo.markSkipped(state.instance.id);
       setCompletedAt(Date.now());
       setActionStatus("done");
       showToast.success("Dose skipped");

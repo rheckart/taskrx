@@ -9,24 +9,27 @@ import * as instancesRepo from "./reminderInstances";
  * The instance-side counterpart to `medication-mirror.ts`, and it exists for
  * the same reason, one table over. Migration 005 copies `dose_logs` into
  * `reminder_instances` once, at upgrade time. Nothing kept them together
- * afterwards: every dose logged *after* that boot landed in `dose_logs` alone,
- * so the unified table stopped being a projection of the dose history and
- * became a snapshot of it, accurate only as of the upgrade.
+ * afterwards, so the unified table stopped being a projection of the dose
+ * history and became a snapshot of it, accurate only as of the upgrade.
  *
- * Be precise about why that matters, because an earlier version of this
- * comment was not. It claimed the damage was server-side: that the screens
- * read `dose_logs` while `api.reminderInstances` was "what the server computes
- * adherence from". Both halves were false. There is no server-side adherence
- * computation — `computeAdherence` in
+ * ## What still writes `dose_logs`, after the write-path cutover
+ *
+ * Not the UI. `dose/log.tsx` calls `instancesRepo` directly, so a dose a person
+ * records on this device is an instance and nothing else. The remaining writer
+ * is the legacy pull path — `useDoseLogsSync` hands `doseLogsRepo.upsertMany`
+ * whatever `api.doseLogs.list` last emitted — which is how a dose recorded by a
+ * pre-cutover build still arrives. Without this module such a row would sit in
+ * `dose_logs` while `app/(app)/dose/history.tsx`, which reads
+ * `instancesRepo.list`, showed nothing.
+ *
+ * Be precise about the stakes, because an earlier version of this comment was
+ * not. It claimed the damage was server-side: that `api.reminderInstances` was
+ * "what the server computes adherence from". That was false. There is no
+ * server-side adherence computation — `computeAdherence` in
  * `packages/shared/src/adherence/calculator.ts` has no call site outside
  * `packages/shared/src`, and nothing anywhere reads the Convex
- * `reminderInstances` table.
- *
- * The damage is local, and it arrived with the read cutover.
- * `app/(app)/dose/history.tsx` reads `instancesRepo.list`, so an unmirrored
- * dose log is a dose the user recorded and then cannot find in their history.
- * The table it was written to still holds it; the screen that displays history
- * no longer looks there.
+ * `reminderInstances` table. The damage is local: a pulled dose the user cannot
+ * find in their own history.
  *
  * ## Parity with migration 005
  *
@@ -65,9 +68,11 @@ import * as instancesRepo from "./reminderInstances";
  * has no correct value to offer, and must not disturb the one a real
  * `api.reminderInstances.create` resolved.
  *
- * The cost is the same deliberate dual-write `medication-mirror.ts` accepts:
- * one dose log pushes twice, creating a document in each Convex table. It ends
- * when `dose_logs` is retired.
+ * The dual-write this used to describe — one dose log pushing a document into
+ * each Convex table — is gone from the local path with the write cutover, for
+ * the reason `medication-mirror.ts` gives. What remains is one push per
+ * *pulled* legacy dose log whose projection was missing, via
+ * `repairMissingProjections`. It ends when `dose_logs` is retired.
  */
 
 /**

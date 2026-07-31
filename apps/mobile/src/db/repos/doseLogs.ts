@@ -18,6 +18,14 @@ import { enqueue } from "./syncQueue";
  * push the change to Convex later. The enqueue is best-effort: a failure
  * to enqueue does not roll back the local write (the row's `sync_status`
  * stays `pending` and a future reconciliation pass can re-enqueue).
+ *
+ * Since the write-path cutover this is a legacy repository. `dose/log.tsx`
+ * records a dose as a `reminder_instances` row (`reminderInstances.ts`), so
+ * `create`, `markTaken`, `markSkipped`, `markMissed`, `deleteDoseLog` and
+ * `findPendingForDose` have no callers; what still runs is the pull path
+ * (`upsertMany`, `selectAll`) and the sync-worker accessors it feeds. The
+ * unused half is retained deliberately — the cutover ticket deletes nothing —
+ * and goes when `dose_logs` is retired.
  */
 
 interface DoseLogRow {

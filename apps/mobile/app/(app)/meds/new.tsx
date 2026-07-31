@@ -1,5 +1,6 @@
 import { useUser } from "@clerk/clerk-expo";
-import type { ScheduleType } from "@taskrx/shared";
+import type { ScheduleTimes, ScheduleType } from "@taskrx/shared";
+import { dailyTimes, intervalTimes } from "@taskrx/shared";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { useCallback, useMemo, useState } from "react";
 import type { ReactElement } from "react";
@@ -18,7 +19,23 @@ import {
   type ScheduleValue,
 } from "../../../src/components/SchedulePicker";
 import { useToast } from "../../../src/components/useToast";
-import * as medicationsRepo from "../../../src/db/repos/medications";
+import * as remindersRepo from "../../../src/db/repos/reminders";
+
+/**
+ * Writes a `medication`-kind Reminder, not a `medications` row.
+ *
+ * This is the medication half of the write-path cutover. Before it, the form
+ * wrote `medications` and `medication-mirror.ts` projected a `reminders` row
+ * behind it, which is the direction that cannot carry a Task — a Task has no
+ * legacy row to project from. The mirror stays in place for the rows that
+ * still arrive through the legacy pull path; nothing on this screen produces
+ * one any more.
+ *
+ * The form's own state is unchanged: `SchedulePicker` still speaks the POC
+ * `(ScheduleType, ScheduleValue)` pair, and `toScheduleTimes` converts once at
+ * save. Rewriting the picker is not this ticket's job and would be a change a
+ * person can see.
+ */
 
 const TIME_PATTERN = /^([01]\d|2[0-3]):([0-5]\d)$/;
 
@@ -44,6 +61,44 @@ function isValidSchedule(type: ScheduleType, value: ScheduleValue): boolean {
     return false;
   }
   return value.hours > 0 && Number.isFinite(value.startAt);
+}
+
+/**
+ * The form's `(scheduleType, value)` pair as the unified tagged union.
+ *
+ * Deliberately the same mapping migration 005 and `medication-mirror.ts` apply
+ * in SQL: same discriminator, same member names, and the same degradation to
+ * `[]` / `0` when the value does not match its declared type. A medication
+ * saved here must land in `reminders.schedule` identical to one the mirror
+ * would have projected, because that column is what
+ * `notifications/scheduler.ts` arms alarms from — a different blob is a
+ * different set of alarms from the ones the device baseline was taken against.
+ *
+ * Say the cost plainly: this is a third copy of one mapping, in a third
+ * language, and the parity above is asserted by reading the two SQL copies, not
+ * by a test — `scripts/verify-reminder-migrations.mjs` pins the migration
+ * against the mirror but cannot reach TypeScript. Adding a `weekly` option to
+ * `SchedulePicker` therefore means editing here, in `005_backfill_reminders.
+ * sql`, and in `medication-mirror.ts`. The two SQL copies die with
+ * `medications`; this one becomes the only mapping and the duplication goes
+ * with them, which is why it is not worth extracting first.
+ *
+ * The degraded arms are unreachable from this screen (`onChangeType` replaces
+ * the value whenever the type changes, and `canSave` rejects a mismatch before
+ * `onSave` runs). They exist because `ScheduleValue` carries no discriminator
+ * of its own, so the narrowing has to be written out.
+ */
+function toScheduleTimes(
+  type: ScheduleType,
+  value: ScheduleValue
+): ScheduleTimes {
+  if (type === "daily") {
+    return dailyTimes("times" in value ? value.times : []);
+  }
+  return intervalTimes(
+    "hours" in value ? value.hours : 0,
+    "startAt" in value ? value.startAt : 0
+  );
 }
 
 export default function NewMedicationScreen(): ReactElement {
@@ -97,13 +152,13 @@ export default function NewMedicationScreen(): ReactElement {
       const trimmedDosage = dosage.trim();
       const dosageArg = trimmedDosage.length > 0 ? trimmedDosage : undefined;
 
-      await medicationsRepo.create({
+      await remindersRepo.create({
         userId,
+        kind: "medication",
         name: trimmedName,
+        schedule: toScheduleTimes(scheduleType, schedule),
         ...(initialRxcui !== undefined ? { rxcui: initialRxcui } : {}),
         ...(dosageArg !== undefined ? { dosage: dosageArg } : {}),
-        scheduleType,
-        scheduleTimes: scheduleType === "daily" ? schedule : schedule,
       });
       showToast.success("Medication added");
       router.replace("/meds");

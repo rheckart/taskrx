@@ -6,18 +6,30 @@ import * as remindersRepo from "./reminders";
  * Keeps the unified `reminders` table in step with writes to the POC
  * `medications` table.
  *
- * Why this exists: `notifications/scheduler.ts` now reads `reminders`, because
- * that is the only table with a shape for a `weekly` schedule. Migration 005
- * backfills it once, at upgrade time. Without this mirror a medication created
- * *after* that boot would have no `reminders` row and would therefore never
- * produce an alarm — a silent, total failure of the app's one job.
+ * Why this exists: `notifications/scheduler.ts` reads `reminders`, because that
+ * is the only table with a shape for a `weekly` schedule. Migration 005
+ * backfills it once, at upgrade time. Without this mirror a medication written
+ * to `medications` *after* that boot would have no `reminders` row and would
+ * therefore never produce an alarm — a silent, total failure of the app's one
+ * job.
  *
- * Why not just move the UI to `remindersRepo`: that is the real cutover, and
- * it touches the med list, the dose log, and the dose history alongside the
- * write path. This module is the reversible half — `medications` stays the
- * source of truth the screens read, `reminders` becomes a derived projection
- * of it, and deleting this file plus repointing the scheduler is a complete
- * rollback.
+ * ## What still writes `medications`, after the write-path cutover
+ *
+ * Not the UI. `meds/new.tsx` and the stress-seed screen call
+ * `remindersRepo.create` directly, so a medication a person adds on this device
+ * never produces a `medications` row and never reaches this module. The one
+ * remaining writer is the legacy pull path — `useMedicationsSync` hands
+ * `medicationsRepo.upsertMany` whatever `api.medications.list` last emitted,
+ * which is how a row created by a pre-cutover build (on this device or another)
+ * still arrives. That path is why this module stays: it is the only thing that
+ * gives such a row an alarm.
+ *
+ * It follows that `mirrorMedication` — the re-pending, enqueuing variant — is
+ * now reached only through `repairMissingProjections`. Its other two call sites
+ * are still there in `medications.ts` (`create` and `update`); it is those two
+ * that no longer have callers. The ordinary pull uses `mirrorMedicationRow`,
+ * and `mirrorMedicationDelete` is likewise reachable only through
+ * `medications.softDelete`, which nothing calls.
  *
  * ## Parity with migration 005
  *
@@ -58,12 +70,13 @@ import * as remindersRepo from "./reminders";
  * does not mention `convex_id` at all — the mirror has no correct value to
  * offer, and must not disturb the one a real sync resolved.
  *
- * The cost is that one medication write now pushes twice: a `medication` entry
- * and a `reminder` entry, creating a document in each Convex table. That is
- * deliberate dual-write. It is the price of having the unified model populated
- * and current *before* the cutover, so the cutover is a read-path change
- * rather than a big-bang server migration. It ends when `medications` is
- * retired.
+ * The dual-write this used to describe — one medication write pushing both a
+ * `medication` entry and a `reminder` entry — is gone from the local path with
+ * the write cutover, because nothing local writes `medications` any more. What
+ * remains is one push per *pulled* legacy medication, and only when the
+ * projection was missing: `mirrorMedicationRow` does not enqueue, and
+ * `repairMissingProjections` is enqueuing a row the server has genuinely never
+ * seen. It ends when `medications` is retired.
  */
 
 /**

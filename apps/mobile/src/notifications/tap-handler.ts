@@ -28,8 +28,9 @@ function extractDoseData(
     return null;
   }
 
-  // The route param stays `medicationId`: `/dose/log` still reads through
-  // `medicationsRepo`, which the unified cutover deliberately left in place.
+  // The route param stays `medicationId` even though `/dose/log` reads and
+  // writes the unified tables: it is the name the alarms already armed on the
+  // device carry, and renaming it would drop a tap on any of them.
   return { medicationId: reminderId, scheduledTime };
 }
 

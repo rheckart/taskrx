@@ -495,14 +495,16 @@ export class SyncWorker {
    *
    * `priority`, `tags` and `caregiverIds` use that same omission encoding, but
    * deliberately rather than by accident. They used to be sent unconditionally,
-   * and because nothing on this device can author them — `medication-mirror`
-   * and migration 005 write the column defaults, `remindersRepo.create` and
-   * `.update` have no callers, and there is no pull path that would refresh a
-   * `reminders` row from the server — every push reset the server's copy to
-   * `normal`/`[]`/`[]`. Not only on edit: `mirrorMedication` re-pends the row,
-   * so `reconcilePending` re-sent the same reset on later drains. A null here
-   * now means "this device has no value to offer", which is the truth on the
-   * mirror path, and `db/repos/reminders.ts` is where that null is decided.
+   * and because nothing on this device authored them — `medication-mirror` and
+   * migration 005 write the column defaults, and there is no pull path that
+   * would refresh a `reminders` row from the server — every push reset the
+   * server's copy to `normal`/`[]`/`[]`. Not only on edit: `mirrorMedication`
+   * re-pends the row, so `reconcilePending` re-sent the same reset on later
+   * drains. A null here means "this device has no value to offer", and
+   * `db/repos/reminders.ts` is where that null is decided. That still holds
+   * after the write cutover: `remindersRepo.create` has gained callers, but
+   * neither `meds/new.tsx` nor the stress-seed screen sets any of the three, so
+   * every push this file makes still has nothing to offer for them.
    */
   private async processReminderEntry(
     entry: SyncQueueEntry

@@ -16,9 +16,10 @@ import { enqueue } from "./syncQueue";
  * Local SQLite repository for unified reminders.
  *
  * The row shape is snake_case (matching `004_unified_reminders.sql`); this
- * module returns the camelCase `Reminder` from `@taskrx/shared`. It is the
- * unified counterpart to `medications.ts`, which stays in place for the POC
- * tables until the cutover completes.
+ * module returns the camelCase `Reminder` from `@taskrx/shared`. Since the
+ * write-path cutover this is where a reminder a person creates on this device
+ * is written: `meds/new.tsx` calls `create` here, and `medications.ts` is
+ * reached only by the legacy pull path.
  *
  * Every write enqueues a `sync_queue` row with entity_type='reminder' so the
  * sync worker can push it to Convex, exactly as `medications.ts` does. This
@@ -476,19 +477,22 @@ export async function softDelete(id: string): Promise<void> {
  * authored*. The two writers it exists for both write migration 004's column
  * defaults: `medication-mirror`'s upsert omits the three from its conflict
  * clause and its SELECT supplies `'normal'`/`'[]'`/`'[]'`, and 005's backfill
- * does the same. Nothing local ever replaces them, since `create` and `update`
- * above have no callers and there is no pull path that would refresh a
- * `reminders` row from Convex. So reading the column here could only ever
- * transmit a default, and `api.reminders.update` patches every field it
- * receives: the effect was to reset the server's copy on every push, including
- * the ones `reconcilePending` issues on later drains for rows `mirrorMedication`
+ * does the same. So reading the column here could only ever transmit a default
+ * for those rows, and `api.reminders.update` patches every field it receives:
+ * the effect was to reset the server's copy on every push, including the ones
+ * `reconcilePending` issues on later drains for rows `mirrorMedication`
  * re-pended. A `null` says "no value to offer" and leaves the server's alone.
  *
- * The cost is real but currently unreachable: if `create`'s enqueue failed and
- * `reconcilePending` recovers the row through here, a genuinely user-chosen
- * priority is dropped from that recovery, because the column cannot distinguish
- * a chosen `normal` from a defaulted one. Fixing that needs provenance the
- * schema does not carry, and it costs nothing today — `create` has no callers.
+ * The cost is real and, since the write-path cutover, no longer merely
+ * theoretical: `create` above now has callers (`meds/new.tsx`, the stress-seed
+ * screen). If one of their enqueues failed after the row write and
+ * `reconcilePending` recovered the row through here, a user-chosen `priority`
+ * would be dropped from that recovery, because the column cannot distinguish a
+ * chosen `normal` from a defaulted one. It stays unreachable in practice only
+ * because neither caller sets any of the three — the medication form has no
+ * field for them. The moment one does, this needs provenance the schema does
+ * not carry, and a `sync_status`-style "authored locally" marker is the cheapest
+ * shape for it.
  *
  * A no-op for an absent row, matching `softDelete`: there is nothing to
  * describe and no user to attribute it to.

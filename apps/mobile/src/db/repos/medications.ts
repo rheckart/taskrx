@@ -27,6 +27,14 @@ import { enqueue } from "./syncQueue";
  * push the change to Convex later. The enqueue is best-effort: a failure
  * to enqueue does not roll back the local write (the row's `sync_status`
  * stays `pending` and a future reconciliation pass can re-enqueue).
+ *
+ * Since the write-path cutover this is a legacy repository. `meds/new.tsx` and
+ * the stress-seed screen write a `medication`-kind Reminder through
+ * `reminders.ts`, so `create`, `update`, `softDelete`, `list` and `get` have no
+ * callers; what still runs is the pull path (`upsertMany`, `selectAll`,
+ * `localIdForConvexId`) and the sync-worker accessors it feeds. The unused half
+ * is retained deliberately — the cutover ticket deletes nothing — and goes when
+ * `medications` is retired.
  */
 
 interface MedicationRow {

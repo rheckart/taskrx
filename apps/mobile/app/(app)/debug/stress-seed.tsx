@@ -1,4 +1,5 @@
 import { useUser } from "@clerk/clerk-expo";
+import { dailyTimes } from "@taskrx/shared";
 import { Stack } from "expo-router";
 import { useCallback, useEffect, useState } from "react";
 import type { ReactElement } from "react";
@@ -11,8 +12,34 @@ import {
   View,
 } from "react-native";
 
-import * as medicationsRepo from "../../../src/db/repos/medications";
+import * as remindersRepo from "../../../src/db/repos/reminders";
 import { getPendingCount, rescheduleAll } from "../../../src/notifications";
+
+/**
+ * Seeds through `remindersRepo`, the same write path `meds/new.tsx` uses.
+ *
+ * That matters for what this screen is for: `docs/poc-stress-tests.md` drives
+ * it to prove the 64-alarm horizon holds under 30 active medications, and
+ * `rescheduleAll` selects that horizon from `reminders`. Seeding the legacy
+ * table and relying on the mirror to project it would leave the stress case
+ * measuring the projection rather than the path a person's medication now
+ * takes.
+ *
+ * `kind: "medication"` throughout, so the seeded rows count as medications on
+ * the list screen and against the medication Tier, exactly as before.
+ *
+ * One gap this leaves, and it only bites a device seeded by a pre-cutover
+ * build: "Clear All Test Meds" now soft-deletes reminders only, so a legacy
+ * `medications` row survives it. That is enough to stop the alarms — the
+ * scheduler selects from `reminders` — but it is not durable while signed in.
+ * `useMedicationsSync` on the medications list hands `api.medications.list`
+ * back to `mirrorMedicationRow`, whose conflict clause writes
+ * `active = excluded.active`, so the server's still-active copy re-activates
+ * the projection and the alarms return. Clearing the legacy rows from here
+ * would mean re-introducing a `medications` write to a screen, which is the
+ * direction this ticket exists to reverse; wiping app storage is the honest
+ * reset, and the whole problem goes when `medications` is retired.
+ */
 
 function padTwo(value: number): string {
   return value.toString().padStart(2, "0");
@@ -50,7 +77,7 @@ export default function StressSeedDebugScreen(): ReactElement {
     setLoading(true);
     try {
       const [meds, count] = await Promise.all([
-        medicationsRepo.list(userId),
+        remindersRepo.list(userId, "medication"),
         getPendingCount(),
       ]);
       setMedCount(meds.length);
@@ -76,12 +103,12 @@ export default function StressSeedDebugScreen(): ReactElement {
     try {
       const times = buildStaggeredDailyTimes(new Date());
       for (let i = 0; i < 30; i += 1) {
-        await medicationsRepo.create({
+        await remindersRepo.create({
           userId,
+          kind: "medication",
           name: `Stress Test Med ${String(i + 1)}`,
           dosage: "1 tablet",
-          scheduleType: "daily",
-          scheduleTimes: { times: [times[i] ?? "09:00"] },
+          schedule: dailyTimes([times[i] ?? "09:00"]),
         });
       }
       await rescheduleAll(userId);
@@ -105,12 +132,12 @@ export default function StressSeedDebugScreen(): ReactElement {
     }
     setLoading(true);
     try {
-      const meds = await medicationsRepo.list(userId);
+      const meds = await remindersRepo.list(userId, "medication");
       const testMeds = meds.filter((med) =>
         med.name.startsWith("Stress Test Med")
       );
       for (const med of testMeds) {
-        await medicationsRepo.softDelete(med.id);
+        await remindersRepo.softDelete(med.id);
       }
       await rescheduleAll(userId);
       const count = await getPendingCount();
