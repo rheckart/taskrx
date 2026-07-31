@@ -19,6 +19,37 @@ This document tracks the 13 success criteria from the POC plan §3. Each row sho
 > historical case-5 ambiguity. See "Case 5 was measuring the wrong thing" below
 > before reading any pre-2026-07-30 verdict in this file.
 
+> **Write-path cutover checked against that baseline (2026-07-31, issue #6).**
+> All seven cases pass again at commit `1bb8928` with a clean tree, on the same
+> Pixel 8 Pro and the same OS build, and every verdict matches the baseline.
+> The measurements match too, not just the pass/fail: case 6 `pending_count`
+> 30 → 30, case 1 `exact_windows` 1 → 1, case 5 alarms before reboot 3 → 3.
+> Evidence: `.omo/evidence/issue-6-cutover-verification.json`.
+>
+> Read as an answer to one narrow question — "did moving the device write path
+> onto the unified Reminder tables break delivery?" — the answer is no. Do not
+> read it more widely than that. The app runs **unauthenticated** under the
+> harness (logcat: `[config] running local-only: clerk=false convex=false`),
+> and every case drives `scheduleForReminder` with an in-memory reminder, so
+> none of them touches SQLite, `rescheduleAll(userId)`, or any of the cutover
+> code. What is verified is that the notification layer beneath it is
+> undisturbed. This is the same caveat criterion #11 already carries.
+>
+> It took three invocations rather than one, and the reason is worth recording
+> because it will recur: case 3 forces deep Doze by turning the screen off,
+> which re-locks the keyguard, and a locked device cannot foreground the app —
+> so cases 4, 5 and 6 reported UNREACHABLE behind it. That is the two-pass
+> split the harness header documents under constraint 5, not a product finding.
+>
+> One instrument defect found and **not** fixed, so that the comparison ran on
+> the same instrument as the baseline: when the device drops off USB, every
+> `dumpsys` returns empty and the harness infers *device state* from that
+> silence. It recorded "the device rebooted into the lock screen and was never
+> unlocked within 300s" while `adb devices` was empty, and blamed the empty
+> alarm dump on a renamed section header. A poll that cannot reach the device
+> should report an unreachable *instrument*, not a device state. Same family as
+> "Case 5 was measuring the wrong thing" below.
+
 ## Success criteria
 
 | # | Criterion | Expected | Actual | Pass/Fail |
