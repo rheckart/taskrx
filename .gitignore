@@ -31,6 +31,13 @@ apps/mobile/dist
 # point, so this artifact has to exist in a clean checkout rather than only on
 # the machine that produced it. Everything else under evidence/ stays ignored.
 !.omo/evidence/issue-5-baseline-all-cases.json
+# Exception: the write-path cutover run diffed against that baseline. Tracked
+# for the same reason and by the same rule — `docs/poc-results.md` cites it as
+# the evidence closing issue #6, and a citation to a file that exists only on
+# one machine is not evidence. The three per-pass reports it was merged from
+# stay ignored: this one records which pass evaluated each case, so they add
+# nothing a clean checkout needs.
+!.omo/evidence/issue-6-cutover-verification.json
 
 # Agent tooling scratch state (written anywhere in the tree, not just the root)
 .omc/
