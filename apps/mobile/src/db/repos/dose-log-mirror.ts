@@ -12,15 +12,20 @@ import * as instancesRepo from "./reminderInstances";
  * afterwards, so the unified table stopped being a projection of the dose
  * history and became a snapshot of it, accurate only as of the upgrade.
  *
- * ## What still writes `dose_logs`, after the write-path cutover
+ * ## What still writes `dose_logs`, after both cutovers
  *
- * Not the UI. `dose/log.tsx` calls `instancesRepo` directly, so a dose a person
- * records on this device is an instance and nothing else. The remaining writer
- * is the legacy pull path — `useDoseLogsSync` hands `doseLogsRepo.upsertMany`
- * whatever `api.doseLogs.list` last emitted — which is how a dose recorded by a
- * pre-cutover build still arrives. Without this module such a row would sit in
- * `dose_logs` while `app/(app)/dose/history.tsx`, which reads
- * `instancesRepo.list`, showed nothing.
+ * Nothing does. The write cutover took the UI — `dose/log.tsx` calls
+ * `instancesRepo` directly, so a dose a person records here is an instance and
+ * nothing else. The sync cutover then took the pull: `pull.ts` no longer calls
+ * `useDoseLogsSync`, so nothing hands `doseLogsRepo.upsertMany` anything, and
+ * `mirrorDoseLogRow` — whose sole caller lives inside it — is unreachable.
+ *
+ * This module survives for one job: projecting rows a PRE-CUTOVER build already
+ * left in the local `dose_logs` table, so an upgraded install can still find
+ * them in its history. Without it such a row would sit in `dose_logs` while
+ * `app/(app)/dose/history.tsx`, which reads `instancesRepo.list`, showed
+ * nothing. That runs through `repairMissingProjections` below, now
+ * `mirrorDoseLog`'s only reachable caller.
  *
  * Be precise about the stakes, because an earlier version of this comment was
  * not. It claimed the damage was server-side: that `api.reminderInstances` was

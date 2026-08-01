@@ -19,13 +19,28 @@ import { enqueue } from "./syncQueue";
  * to enqueue does not roll back the local write (the row's `sync_status`
  * stays `pending` and a future reconciliation pass can re-enqueue).
  *
- * Since the write-path cutover this is a legacy repository. `dose/log.tsx`
- * records a dose as a `reminder_instances` row (`reminderInstances.ts`), so
- * `create`, `markTaken`, `markSkipped`, `markMissed`, `deleteDoseLog` and
- * `findPendingForDose` have no callers; what still runs is the pull path
- * (`upsertMany`, `selectAll`) and the sync-worker accessors it feeds. The
- * unused half is retained deliberately — the cutover ticket deletes nothing —
- * and goes when `dose_logs` is retired.
+ * Since the two cutovers, most of this repository is unreachable — but not all
+ * of it, so be precise about which half.
+ *
+ * The write cutover took the content half: `dose/log.tsx` records a taking as a
+ * `reminder_instances` row (`reminderInstances.ts`), so `create`, `markTaken`,
+ * `markSkipped`, `markMissed`, `deleteDoseLog` and `findPendingForDose` went
+ * quiet. The sync cutover took the pull half — `pull.ts` no longer calls
+ * `useDoseLogsSync`, so `upsertMany` and `selectAll` are unreachable, and with
+ * them `mirrorDoseLogRow`, whose only call site is inside `upsertMany` below.
+ *
+ * Still live: the sync-worker accessors — `setConvexId`, `getConvexId`,
+ * `markSynced`, `markError`. `worker.ts` calls all four while draining a
+ * `dose_log` queue entry, and an upgraded device can still hold pre-cutover
+ * entries that nothing has drained yet. Nothing enqueues new ones, so the
+ * backlog empties and never refills, but it is not empty by construction.
+ *
+ * What still touches the `dose_logs` TABLE, rather than coming through here, is
+ * `dose-log-mirror.repairMissingProjections`, run by the sync drain to project
+ * any pre-cutover row that never got an instance.
+ *
+ * Retained deliberately: neither cutover ticket deletes anything. The whole
+ * file goes when `dose_logs` is retired.
  */
 
 interface DoseLogRow {

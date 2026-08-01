@@ -22,6 +22,11 @@ export default defineConfig({
         "src/domain/enums.ts",
         "src/domain/reminder.ts",
         "src/domain/schedule-times.ts",
+        // The sync conflict rules carry the safety-critical "a taken dose
+        // stays taken" guard, and the pull path added in #7 is their first
+        // real caller. Gated at 100% so a branch cannot be added to them
+        // without a case pinning it.
+        "src/sync/conflict.ts",
       ],
       exclude: ["src/**/*.test.ts", "src/**/index.ts"],
       thresholds: {

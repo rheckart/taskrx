@@ -13,22 +13,25 @@ import * as remindersRepo from "./reminders";
  * therefore never produce an alarm — a silent, total failure of the app's one
  * job.
  *
- * ## What still writes `medications`, after the write-path cutover
+ * ## What still writes `medications`, after both cutovers
  *
- * Not the UI. `meds/new.tsx` and the stress-seed screen call
- * `remindersRepo.create` directly, so a medication a person adds on this device
- * never produces a `medications` row and never reaches this module. The one
- * remaining writer is the legacy pull path — `useMedicationsSync` hands
- * `medicationsRepo.upsertMany` whatever `api.medications.list` last emitted,
- * which is how a row created by a pre-cutover build (on this device or another)
- * still arrives. That path is why this module stays: it is the only thing that
- * gives such a row an alarm.
+ * Nothing does. The write cutover took the UI — `meds/new.tsx` and the
+ * stress-seed screen call `remindersRepo.create`, so a medication a person adds
+ * here never produces a `medications` row. The sync cutover then took the pull:
+ * `pull.ts` no longer calls `useMedicationsSync`, so nothing hands
+ * `medicationsRepo.upsertMany` anything either.
  *
- * It follows that `mirrorMedication` — the re-pending, enqueuing variant — is
- * now reached only through `repairMissingProjections`. Its other two call sites
- * are still there in `medications.ts` (`create` and `update`); it is those two
- * that no longer have callers. The ordinary pull uses `mirrorMedicationRow`,
- * and `mirrorMedicationDelete` is likewise reachable only through
+ * This module therefore survives for exactly one job: projecting rows that a
+ * PRE-CUTOVER build already left in the local `medications` table, so an
+ * upgraded install does not lose their alarms. That happens through
+ * `repairMissingProjections` below, which the sync drain runs and which is now
+ * `mirrorMedication`'s only reachable caller — its other two call sites are
+ * still there in `medications.ts` (`create`, `update`), but those two have no
+ * callers themselves.
+ *
+ * `mirrorMedicationRow` is unreachable: its sole caller is
+ * `medications.upsertMany`, which the sync cutover retired.
+ * `mirrorMedicationDelete` is likewise reachable only through
  * `medications.softDelete`, which nothing calls.
  *
  * ## Parity with migration 005

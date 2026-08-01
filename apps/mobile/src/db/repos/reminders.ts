@@ -5,7 +5,12 @@ import type {
   ScheduleTimes,
   Weekday,
 } from "@taskrx/shared";
-import { PRIORITIES, REMINDER_KINDS, dailyTimes } from "@taskrx/shared";
+import {
+  PRIORITIES,
+  REMINDER_KINDS,
+  dailyTimes,
+  shouldApplyRemoteReminder,
+} from "@taskrx/shared";
 
 import { getDb } from "../index";
 
@@ -652,4 +657,128 @@ export async function getConvexId(localId: string): Promise<string | null> {
     localId
   );
   return row?.convex_id ?? null;
+}
+
+/**
+ * Look up the local reminder id for a Convex document id. Served by
+ * `idx_reminders_convex_id` (migration 004).
+ *
+ * The inverse of `getConvexId`, and it exists for the pull path: a pulled
+ * instance carries its parent as an `Id<"reminders">`, and every local producer
+ * of `reminder_instances.reminder_id` writes a local UUID. Storing the Convex
+ * id there would break the foreign key and orphan the row from the reminder it
+ * belongs to — the defect `medications.localIdForConvexId` was written to undo
+ * one table over.
+ *
+ * Returns `null` when this device has not pulled the parent reminder yet, which
+ * is ordinary rather than exceptional: the two subscriptions land independently
+ * and the instances can arrive first.
+ */
+export async function localIdForConvexId(
+  convexId: string
+): Promise<string | null> {
+  const db = await getDb();
+  const row = await db.getFirstAsync<{ id: string }>(
+    "SELECT id FROM reminders WHERE convex_id = ?",
+    convexId
+  );
+  return row?.id ?? null;
+}
+
+/**
+ * A reminder as it arrives from a remote pull: the domain shape plus the two
+ * columns the domain type does not carry. `rxcui` is storage-only (see the
+ * module header) and `convexId` is this device's handle on the server
+ * document.
+ */
+export interface PulledReminder {
+  readonly reminder: Reminder;
+  readonly convexId: string;
+  readonly rxcui: string | null;
+}
+
+/**
+ * Apply a batch of reminders from a remote pull, returning how many were
+ * written.
+ *
+ * Rows the local copy already beats are skipped by `shouldApplyRemoteReminder`
+ * — last-write-wins, local winning ties, the same rule `medications.upsertMany`
+ * applies one table over.
+ *
+ * Two things this does that its legacy twin does not, both deliberate:
+ *
+ *   * It writes `convex_id` from the pulled document. `medications.upsertMany`
+ *     leaves that column alone, so on a device that has only ever *received* a
+ *     medication the column stays NULL — and `localIdForConvexId` then fails to
+ *     resolve, which is why `useDoseLogsSync` can skip a pulled dose log
+ *     indefinitely rather than transiently. Writing it here is what makes the
+ *     instance pull resolve its parent on a second device at all.
+ *   * It writes `kind`. The mirror excludes that column because a projected row
+ *     is always a medication and rewriting it could clobber a converted row;
+ *     a genuine pull has the server's own value and is authoritative.
+ *
+ * No enqueue, and `sync_status = 'synced'`: this content arrived *from* the
+ * server, so marking it pending would push it straight back, one entry per
+ * reminder on every subscription fire.
+ */
+export async function upsertMany(
+  rows: readonly PulledReminder[]
+): Promise<number> {
+  const db = await getDb();
+  let applied = 0;
+
+  for (const { reminder, convexId, rxcui } of rows) {
+    const local = await get(reminder.id);
+    if (!shouldApplyRemoteReminder(local, reminder)) {
+      continue;
+    }
+
+    await db.runAsync(
+      `INSERT INTO reminders (
+        id, user_id, kind, name, rxcui, dosage, instructions, schedule,
+        priority, tags, pills_remaining, pills_per_dose, refill_reminder_days,
+        caregiver_ids, active, created_at, updated_at, sync_status, convex_id
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'synced', ?)
+      ON CONFLICT(id) DO UPDATE SET
+        user_id              = excluded.user_id,
+        kind                 = excluded.kind,
+        name                 = excluded.name,
+        rxcui                = excluded.rxcui,
+        dosage               = excluded.dosage,
+        instructions         = excluded.instructions,
+        schedule             = excluded.schedule,
+        priority             = excluded.priority,
+        tags                 = excluded.tags,
+        pills_remaining      = excluded.pills_remaining,
+        pills_per_dose       = excluded.pills_per_dose,
+        refill_reminder_days = excluded.refill_reminder_days,
+        caregiver_ids        = excluded.caregiver_ids,
+        active               = excluded.active,
+        created_at           = excluded.created_at,
+        updated_at           = excluded.updated_at,
+        sync_status          = 'synced',
+        convex_id            = excluded.convex_id`,
+      reminder.id,
+      reminder.userId,
+      reminder.kind,
+      reminder.name,
+      rxcui,
+      reminder.dosage ?? null,
+      reminder.instructions ?? null,
+      JSON.stringify(reminder.schedule),
+      reminder.priority,
+      JSON.stringify(reminder.tags),
+      reminder.pillsRemaining ?? null,
+      reminder.pillsPerDose ?? null,
+      reminder.refillReminderDays ?? null,
+      JSON.stringify(reminder.caregiverIds),
+      reminder.active ? 1 : 0,
+      reminder.createdAt,
+      reminder.updatedAt,
+      convexId
+    );
+    applied += 1;
+  }
+
+  return applied;
 }

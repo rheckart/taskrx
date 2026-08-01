@@ -28,13 +28,29 @@ import { enqueue } from "./syncQueue";
  * to enqueue does not roll back the local write (the row's `sync_status`
  * stays `pending` and a future reconciliation pass can re-enqueue).
  *
- * Since the write-path cutover this is a legacy repository. `meds/new.tsx` and
- * the stress-seed screen write a `medication`-kind Reminder through
- * `reminders.ts`, so `create`, `update`, `softDelete`, `list` and `get` have no
- * callers; what still runs is the pull path (`upsertMany`, `selectAll`,
- * `localIdForConvexId`) and the sync-worker accessors it feeds. The unused half
- * is retained deliberately — the cutover ticket deletes nothing — and goes when
- * `medications` is retired.
+ * Since the two cutovers, most of this repository is unreachable — but not all
+ * of it, so be precise about which half.
+ *
+ * The write cutover took the content half: `meds/new.tsx` and the stress-seed
+ * screen write a `medication`-kind Reminder through `reminders.ts`, so
+ * `create`, `update`, `softDelete`, `list` and `get` went quiet. The sync
+ * cutover took the pull half — `pull.ts` no longer calls `useMedicationsSync`,
+ * so `upsertMany`, `selectAll` and `localIdForConvexId` are unreachable too,
+ * and with them `mirrorMedicationRow`, whose only call site is inside
+ * `upsertMany` below.
+ *
+ * Still live: the sync-worker accessors — `setConvexId`, `getConvexId`,
+ * `markSynced`, `markError`. `worker.ts` calls all four while draining a
+ * `medication` queue entry, and an upgraded device can still hold pre-cutover
+ * entries that nothing has drained yet. Nothing enqueues new ones, so this is a
+ * backlog that empties and never refills, but it is not empty by construction.
+ *
+ * What still touches the `medications` TABLE, rather than coming through here,
+ * is `medication-mirror.repairMissingProjections`, which the sync drain runs to
+ * project any pre-cutover row that never got a `reminders` row.
+ *
+ * Retained deliberately: neither cutover ticket deletes anything. The whole
+ * file goes when `medications` is retired.
  */
 
 interface MedicationRow {

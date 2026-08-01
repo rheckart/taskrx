@@ -29,16 +29,17 @@ import { getPendingCount, rescheduleAll } from "../../../src/notifications";
  * the list screen and against the medication Tier, exactly as before.
  *
  * One gap this leaves, and it only bites a device seeded by a pre-cutover
- * build: "Clear All Test Meds" now soft-deletes reminders only, so a legacy
- * `medications` row survives it. That is enough to stop the alarms — the
- * scheduler selects from `reminders` — but it is not durable while signed in.
- * `useMedicationsSync` on the medications list hands `api.medications.list`
- * back to `mirrorMedicationRow`, whose conflict clause writes
- * `active = excluded.active`, so the server's still-active copy re-activates
- * the projection and the alarms return. Clearing the legacy rows from here
- * would mean re-introducing a `medications` write to a screen, which is the
- * direction this ticket exists to reverse; wiping app storage is the honest
- * reset, and the whole problem goes when `medications` is retired.
+ * build: "Clear All Test Meds" soft-deletes reminders only, so a legacy
+ * `medications` row survives it. That is enough to stop the alarms, because the
+ * scheduler selects from `reminders`.
+ *
+ * An earlier version of this note claimed the clear was not durable while
+ * signed in — that `useMedicationsSync` would hand the server's still-active
+ * medication back through `mirrorMedicationRow` and re-activate the projection.
+ * The sync cutover removed that path: nothing calls `useMedicationsSync`, and
+ * `mirrorMedicationRow` is unreachable. The surviving legacy row is now inert.
+ * Wiping app storage is still the honest full reset, and the leftover goes when
+ * `medications` is retired.
  */
 
 function padTwo(value: number): string {

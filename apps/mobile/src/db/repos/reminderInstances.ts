@@ -3,7 +3,10 @@ import type {
   ReminderInstance,
   ReminderKind,
 } from "@taskrx/shared";
-import { INSTANCE_STATUSES } from "@taskrx/shared";
+import {
+  INSTANCE_STATUSES,
+  shouldApplyRemoteReminderInstance,
+} from "@taskrx/shared";
 
 import { getDb } from "../index";
 
@@ -544,6 +547,91 @@ export async function setConvexId(
     convexId,
     localId
   );
+}
+
+/**
+ * An instance as it arrives from a remote pull.
+ *
+ * `instance.reminderId` is already the LOCAL reminder id: the caller resolves
+ * the document's `Id<"reminders">` through `remindersRepo.localIdForConvexId`
+ * before handing it over, and drops the row when the parent has not landed
+ * yet. Doing it here instead would put the decision "skip or invent a parent"
+ * inside a repository, and a Convex id written into `reminder_id` breaks the
+ * foreign key.
+ */
+export interface PulledReminderInstance {
+  readonly instance: ReminderInstance;
+  readonly convexId: string;
+}
+
+/**
+ * Apply a batch of instances from a remote pull, returning how many were
+ * written.
+ *
+ * `shouldApplyRemoteReminderInstance` carries the safety-critical rule: a local
+ * row already `taken` is never overwritten, however new the remote copy is. An
+ * Instance the person recorded on this device is not erased by a stale copy
+ * from another. Everything else is last-write-wins, local winning ties.
+ *
+ * As on the reminder side, `convex_id` is written from the pulled document and
+ * `sync_status` is `'synced'` with no enqueue — the content came from the
+ * server, so re-pending it would push it straight back.
+ *
+ * `reminder_kind` is written from the remote row rather than preserved. It is
+ * denormalized from the parent, and `api.reminderInstances.create` reads it off
+ * the parent document rather than trusting the client, so the server's copy is
+ * the authoritative one.
+ */
+export async function upsertMany(
+  rows: readonly PulledReminderInstance[]
+): Promise<number> {
+  const db = await getDb();
+  let applied = 0;
+
+  for (const { instance, convexId } of rows) {
+    const local = await get(instance.id);
+    if (!shouldApplyRemoteReminderInstance(local, instance)) {
+      continue;
+    }
+
+    await db.runAsync(
+      `INSERT INTO reminder_instances (
+        id, reminder_id, user_id, reminder_kind, scheduled_time,
+        status, taken_at, snoozed_until, snooze_count, notes,
+        created_at, updated_at, sync_status, convex_id
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'synced', ?)
+      ON CONFLICT(id) DO UPDATE SET
+        reminder_id    = excluded.reminder_id,
+        user_id        = excluded.user_id,
+        reminder_kind  = excluded.reminder_kind,
+        scheduled_time = excluded.scheduled_time,
+        status         = excluded.status,
+        taken_at       = excluded.taken_at,
+        snoozed_until  = excluded.snoozed_until,
+        snooze_count   = excluded.snooze_count,
+        notes          = excluded.notes,
+        created_at     = excluded.created_at,
+        updated_at     = excluded.updated_at,
+        sync_status    = 'synced',
+        convex_id      = excluded.convex_id`,
+      instance.id,
+      instance.reminderId,
+      instance.userId,
+      instance.reminderKind,
+      instance.scheduledTime,
+      instance.status,
+      instance.takenAt ?? null,
+      instance.snoozedUntil ?? null,
+      instance.snoozeCount,
+      instance.notes ?? null,
+      instance.createdAt,
+      instance.updatedAt,
+      convexId
+    );
+    applied += 1;
+  }
+
+  return applied;
 }
 
 /**

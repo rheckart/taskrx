@@ -16,7 +16,7 @@ import {
 import { SkeletonList } from "../../../src/components/Skeleton";
 import * as instancesRepo from "../../../src/db/repos/reminderInstances";
 import * as remindersRepo from "../../../src/db/repos/reminders";
-import { useMedicationsSync } from "../../../src/sync/pull";
+import { useUnifiedSync } from "../../../src/sync/pull";
 
 const DAY_NAMES = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"] as const;
 
@@ -110,7 +110,9 @@ export default function MedsListScreen(): ReactElement {
   const [refreshing, setRefreshing] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
 
-  useMedicationsSync(userId);
+  // Both halves: this screen reads reminders for the list and instances for
+  // each row's "last taken".
+  useUnifiedSync(userId);
 
   const load = useCallback(async (): Promise<void> => {
     if (userId === undefined) {

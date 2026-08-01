@@ -15,7 +15,7 @@ import {
 import { SkeletonList } from "../../../src/components/Skeleton";
 import * as instancesRepo from "../../../src/db/repos/reminderInstances";
 import * as remindersRepo from "../../../src/db/repos/reminders";
-import { useDoseLogsSync } from "../../../src/sync/pull";
+import { useUnifiedSync } from "../../../src/sync/pull";
 
 interface HistoryItem {
   readonly instance: ReminderInstance;
@@ -168,7 +168,10 @@ export default function DoseHistoryScreen(): ReactElement {
   const { isLoaded, isSignedIn, user } = useUser();
   const userId = user?.id;
 
-  useDoseLogsSync(userId);
+  // Both halves: the rows are instances, and each one is titled from its
+  // parent reminder — which also has to be present for the instance pull to
+  // resolve a parent at all.
+  useUnifiedSync(userId);
 
   const [items, setItems] = useState<readonly HistoryItem[]>([]);
   const [loading, setLoading] = useState<boolean>(true);

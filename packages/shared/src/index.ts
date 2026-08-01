@@ -161,10 +161,14 @@ export type {
 export {
   shouldApplyRemoteDoseLog,
   shouldApplyRemoteMedication,
+  shouldApplyRemoteReminder,
+  shouldApplyRemoteReminderInstance,
 } from "./sync/conflict";
 export type {
   DoseLogWithConflictFields,
   MedicationWithTimestamps,
+  ReminderInstanceWithConflictFields,
+  ReminderWithTimestamps,
 } from "./sync/conflict";
 
 export {
