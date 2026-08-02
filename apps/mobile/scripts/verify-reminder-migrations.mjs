@@ -1798,8 +1798,69 @@ function partJ() {
 // a Convex function that no longer exists, so draining it could only burn five
 // attempts and dead-letter — noise that looks like a sync fault. It is deleted
 // rather than left, and this pins that.
+/**
+ * A FRESH install, 001 straight through 009, ends with the unified schema and
+ * nothing else.
+ *
+ * This is the acceptance criterion the decision NOT to squash the migrations
+ * turns on, so it is asserted rather than argued. A squashed schema would
+ * describe a fresh install directly, but it can never run on an install that
+ * already recorded 001-008 in `_migrations` — leaving that database's legacy
+ * tables alive, which is the one case a drop has to reach. Dropping forward
+ * converges both, at the cost of a fresh install creating two tables at 001
+ * and dropping them at 009. That cost is invisible in the end state, and this
+ * is what proves it.
+ */
+function partKFresh() {
+  section("Part K1 — a fresh install lands on the unified schema alone");
+
+  const db = open();
+  eq(
+    "every migration applies to an empty database",
+    applyMigrations(db, ALL),
+    ALL
+  );
+
+  const tables = db
+    .prepare(
+      "SELECT name FROM sqlite_master WHERE type = 'table' ORDER BY name"
+    )
+    .all()
+    .map((row) => row.name)
+    .filter((name) => !name.startsWith("sqlite_"));
+  eq("a fresh install has only the unified tables", tables, [
+    "_migrations",
+    "reminder_instances",
+    "reminders",
+    "sync_queue",
+  ]);
+
+  // The transient legacy tables must not leave anything behind either — an
+  // index or trigger outliving its table would be a silent schema wart.
+  const leftovers = db
+    .prepare(
+      `SELECT name FROM sqlite_master
+       WHERE tbl_name IN ('medications', 'dose_logs')`
+    )
+    .all();
+  eq("no index or trigger outlives the dropped tables", leftovers, []);
+
+  // A fresh queue is usable, not merely present.
+  db.prepare(
+    `INSERT INTO sync_queue (entity_type, entity_id, operation, payload, created_at)
+     VALUES ('reminder', 'r1', 'create', '{}', 1)`
+  ).run();
+  eq(
+    "the queue accepts a unified entry on a fresh install",
+    db.prepare("SELECT entity_type, entity_id FROM sync_queue").all(),
+    [{ entity_type: "reminder", entity_id: "r1" }]
+  );
+
+  db.close();
+}
+
 function partK() {
-  section("Part K — 009 drops the legacy generation");
+  section("Part K2 — 009 drops the legacy generation on an upgraded install");
 
   const db = open();
   applyMigrations(db, THROUGH_008);
@@ -1941,6 +2002,7 @@ partF();
 partG();
 partH();
 partJ();
+partKFresh();
 partK();
 
 console.log(
