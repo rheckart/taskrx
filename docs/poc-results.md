@@ -2,7 +2,7 @@
 
 This document tracks the 13 success criteria from the POC plan §3. Each row shows the criterion, the expected result, the actual result, and a pass/fail verdict.
 
-**Status:** 2026-07-30, Phase 1 gate **PASS**. The notification harness reports **7/7 on a physical Pixel 8 Pro (Android 17, API 37)** in a single end-to-end `--all` invocation (`exit 0`), taken against commit `a931bbf` with a clean working tree, closing criteria #5, #5a, #11 and #12. The remaining criteria are the auth / RxNorm / sync / cross-device ones, which need a signed-in Clerk + Convex session.
+**Status:** 2026-07-30, Phase 1 gate **PASS**. The notification harness reports **7/7 on a physical Pixel 8 Pro (Android 17, API 37)** in a single end-to-end `--all` invocation (`exit 0`), taken against commit `a931bbf` with a clean working tree, closing criteria #5, #5a, #11 and #12. **Updated 2026-08-02:** the auth / RxNorm / sync / cross-device criteria that were waiting on a signed-in Clerk + Convex session were exercised during the issue #7 round trip — 8 pass, 3 are partial on a latency or variant qualifier, and only #6 (notification tap) and #9 (airplane mode) remain untouched.
 
 > **Baseline (2026-07-30).** All seven cases have been run against current
 > `main` on the physical Pixel 8 Pro, in one sweep, and all seven passed.
@@ -111,10 +111,10 @@ This document tracks the 13 success criteria from the POC plan §3. Each row sho
 
 | # | Criterion | Expected | Actual | Pass/Fail |
 |---|---|---|---|---|
-| 1 | Magic-link sign-in completes; user ID persists across app restarts | User can sign in and remains signed in after force-stop | Clerk `@clerk/clerk-expo` wired end-to-end incl. token cache; duplicate `@clerk/expo` package removed; no runtime device verification yet | ⏸️ Pending (device test) |
-| 2 | User can search "metformin" → RxNorm returns matches → user selects one | RxNorm search returns relevant results | Convex Action `rxnorm.search` implemented and typed against the real NLM `approximateTerm.json` endpoint; UI debounces + guards stale responses | ⏸️ Pending (device test) |
-| 3 | User can save medication with schedule ("daily at 09:00" or "every 8 hours") | Medication saved locally with correct schedule | SQLite repo + schedule picker implemented; 23 vitest cases on the schedule engine pass; no device verification yet | ⏸️ Pending (device test) |
-| 4 | Medication persists in local SQLite across app restart | Medication list survives force-stop | `expo-sqlite` repo persists to device storage; migrations 001–003 apply cleanly on boot; no runtime restart test yet | ⏸️ Pending (device test) |
+| 1 | Magic-link sign-in completes; user ID persists across app restarts | User can sign in and remains signed in after force-stop | **VERIFIED on Pixel 8 Pro (2026-08-02, incidental to issue #7).** Signed in end-to-end; the resulting Clerk subject `user_3FwrkTUn9wXOhD2fZ0w8veUdq7y` is stamped on every `reminders` / `reminderInstances` document the device pushed, so the identity reached the backend rather than only the UI. Persistence held across three `am force-stop` + relaunch cycles and a device reboot — the app returned to the signed-in home screen each time without re-authenticating. **Narrower than the criterion's wording on one point:** the sign-in screen offers *both* a passcode and a magic link, and which one was used was not observed, so "magic-link specifically" is unproven — what is proven is that the email sign-in flow completes and the session persists. A second sign-in was also completed from scratch after `pm clear` wiped the token cache. | ✅ **PASS** (sign-in method not distinguished) |
+| 2 | User can search "metformin" → RxNorm returns matches → user selects one | RxNorm search returns relevant results | **VERIFIED on Pixel 8 Pro (2026-08-02, incidental to issue #7).** Typing `metformin` returned six live matches from the real NLM endpoint — four spellings at RxCUI 6809, plus `metformin Pill` (1161611) and `metformin Oral Tablet [Metforming]` (583194). Selecting one carried its RxCUI into the New Medication form, and `rxcui: "1161611"` then survived all the way to the Convex document. **Defect found, not fixed:** the result list keys rows by RxCUI, so the four 6809 rows trigger `Encountered two children with the same key`, and the LogBox overlay that warning raises blocked the first selection tap outright — the same overlay-blocks-navigation failure the harness header documents under constraint 5. | ✅ **PASS** (with a duplicate-key defect) |
+| 3 | User can save medication with schedule ("daily at 09:00" or "every 8 hours") | Medication saved locally with correct schedule | **VERIFIED on Pixel 8 Pro for the daily variant (2026-08-02, incidental to issue #7).** Saved `metformin Pill` with dosage `500mg-roundtrip`, daily at 09:00. Read back out of the device's own SQLite: `schedule = {"times":["09:00"],"type":"daily"}` — the tagged-union shape, not the POC's untyped blob. **Only one of the two variants in the criterion was exercised:** the `interval` form ("every 8 hours") was never selected on-device, so it remains covered by the schedule-engine unit tests alone. | ⚠️ **PARTIAL** — daily verified, interval not exercised on device |
+| 4 | Medication persists in local SQLite across app restart | Medication list survives force-stop | **VERIFIED on Pixel 8 Pro (2026-08-02, incidental to issue #7).** The saved medication survived repeated `am force-stop` + relaunch cycles and a full device reboot, still rendering in My Medications. Confirmed below the UI as well, by pulling `files/SQLite/taskrx.db` off the device and reading the row directly rather than trusting the screen. Migrations 001→010 (not just 001–003) apply on a fresh boot; see the round-trip note above for the `pm clear` run. | ✅ **PASS** |
 | 5 | Local notification fires at scheduled time on a physical Android device, app closed, not in foreground, surviving Doze + battery optimization | Notification fires within 1 minute of scheduled time | **VERIFIED on Pixel 8 Pro / Android 17 / API 37.** Uses `AlarmType.SET_ALARM_CLOCK`. Delivered with the app process dead (`am kill`, 0 processes, `stopped=false`) across **three independent runs: 34 ms, 94 ms, and 31 ms late** — all far inside the 1-minute budget. Full chain in logcat: `Start proc ... for broadcast {NotificationAlarmReceiver}` → `NotifeeHeadlessJS: launched taskId: 1` → notification posted with correct title + `medicationId`. Primitive confirmed at OS level, not inferred: `window=0`, `exactAllowReason=permission`, `whenElapsed == maxWhenElapsed`, and the alarm registered as the device's *next alarm clock* with a timestamp exactly matching the scheduled one. The Doze clause is verified in criterion 5a below. **Re-verified 2026-07-30 against `a931bbf`** in a 7/7 single `--all` run — evidence `.omo/evidence/issue-5-baseline-all-cases.json`. Earlier evidence: `.omo/evidence/task-13-all-cases-final.json`, `.omo/evidence/task-13-SUMMARY.md`, `task-13-cases-1-4.json`, `task-13-cases-6-2.json` (all taken before the alarm-scoping fix; their `exact_windows` counts are inflated by `dumpsys` history — see "Case 5 was measuring the wrong thing"). | ✅ **PASS** |
 | 5a | *(sub-criterion)* Notification survives **deep Doze** specifically | Fires while device is in deep IDLE | **VERIFIED on Pixel 8 Pro / Android 17.** With the app process killed and the device on simulated battery, it entered deep `IDLE` with the alarm pending and dozed continuously — observed cycle `IDLE → IDLE_MAINTENANCE → IDLE → IDLE_MAINTENANCE → QUICK_DOZE_DELAY`, never returning to `ACTIVE` before the alarm fired — and the notification still posted. `dumpsys alarm` shows Doze imposes **zero deferral**: `policyWhenElapsed: requester=+2m22s657ms … device_idle=-1m21s983ms` (device_idle resolves earlier than the request) with `whenElapsed == maxWhenElapsed`. **Finding:** Android refuses to enter deep Doze at all while a wake-from-idle alarm is due within `min_time_to_alarm` (default **1 hour**) — `force-idle` reports `Unable to go deep idle; stopped at QUICK_DOZE_DELAY`. That refusal is itself evidence the alarm is classified wake-from-idle. **Accommodation:** `min_time_to_alarm` was lowered to 30s for this case only and stock constants restored afterwards (verified `device_idle_constants = null`); no battery-optimization exemption was granted. Evidence: `.omo/evidence/task-13-case-3-deep-idle.json`, `.omo/evidence/task-13-all-cases-final.json`. | ✅ **PASS** |
 | 6 | Tapping notification opens the dose logging screen pre-filled with the right med + scheduled time | Correct medication and time shown | Tap handler + deep-link routing implemented (`src/notifications/tap-handler.ts`); notification data includes `medicationId` and `scheduledTime` for the dose-log deep link; no device verification yet | ⏸️ Pending (device test) |
@@ -196,16 +196,33 @@ Full evidence: `.omo/evidence/issue-5-baseline-all-cases.json` (7/7, single
 `--all` invocation, `exit 0`); historical narrative in
 `.omo/evidence/task-13-SUMMARY.md`.
 
-- **Passed: 4/13** — #5 (killed-app exact delivery, 31-94 ms across 3 runs, plus
-  sub-criterion #5a deep-Doze survival), #11 (30-med horizon cap, no drops),
-  #12 (APK builds + installs + runs on hardware), #13 (git + docs). The
+The counts below were rewritten on 2026-08-02. The nine "pending" criteria were
+pending on one thing — a signed-in Clerk + Convex session on real hardware —
+and the issue #7 round trip established exactly that, so seven of them were
+answered as a side effect of verifying the sync cutover rather than by a
+campaign aimed at them.
+
+- **Passed: 8/13** — #1 (sign-in completes, session survives force-stop and
+  reboot), #2 (RxNorm returns live matches, selection carries the RxCUI to the
+  backend), #4 (medication survives force-stop and reboot, confirmed in the
+  device's own SQLite), #5 (killed-app exact delivery, 31-94 ms across 3 runs,
+  plus sub-criterion #5a deep-Doze survival), #7 (an answered Occurrence writes
+  a `reminder_instances` row), #11 (30-med horizon cap, no drops), #12 (APK
+  builds + installs + runs on hardware), #13 (git + docs). The
   graceful-degradation contract (harness case 4) and the `SET_ALARM_CLOCK`
   primitive proven at OS level (harness case 2) are supporting evidence for #5,
   not separate criteria.
-- **Pending: 9/13** — #1, #2, #3, #4, #6, #7, #8, #9, #10 all require a
-  signed-in session (Clerk + Convex `.env`), which is orthogonal to the
-  notification question Phase 1 set out to answer. Phase 1's gate was the
-  notification stack, not these; they are Phase 2 work.
+- **Partial: 3/13** — each one arrives but misses a qualifier in its own
+  wording, so none is claimed as a pass: #3 (the `daily` schedule is verified
+  on-device, the `interval` variant never was), #8 (rows reach Convex, but not
+  "within 60s" — the worker drains only on sign-in and on NetInfo changes),
+  #10 (rows reach a second install, but not "within 10s" — the list reads
+  SQLite once on mount and does not notice a pull landing afterwards).
+- **Pending: 2/13** — #6 (tapping a notification opens a pre-filled dose log)
+  and #9 (airplane-mode accumulation then drain). Neither was exercised: the
+  round trip drove the UI directly rather than through a notification tap, and
+  connectivity was never cut. Both are now cheap to run — the blocker was the
+  signed-in session, and that is set up.
 - **Inconclusive: 0** — deep-Doze survival (criterion 5a) is now **verified**;
   see that row for the observed doze cycle, the `dumpsys alarm` zero-deferral
   policy line, and the `min_time_to_alarm` accommodation it required.
