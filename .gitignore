@@ -38,6 +38,17 @@ apps/mobile/dist
 # stay ignored: this one records which pass evaluated each case, so they add
 # nothing a clean checkout needs.
 !.omo/evidence/issue-6-cutover-verification.json
+# Exception: the legacy-deletion run, 7/7 merged from three passes and diffed
+# against the #5 baseline. Same rule again — it closes issue #8's device
+# criterion and records which pass evaluated each case, so the three per-pass
+# reports it merges stay ignored.
+!.omo/evidence/issue-8-legacy-deletion-verification.json
+# Exception: the issue #7 round trip. Not a harness report — a hand-driven
+# create/push/wipe/pull across two installs on one account, recording what the
+# Convex documents and the device's own SQLite rows held at each step. Tracked
+# because it is the only evidence that the pull path works on a real device,
+# and because its `not_verified` list is the honest boundary of that claim.
+!.omo/evidence/issue-7-round-trip-verification.json
 
 # Agent tooling scratch state (written anywhere in the tree, not just the root)
 .omc/

@@ -1,0 +1,130 @@
+{
+  "issue": 7,
+  "criterion": "Round-trip verified across two devices, or two installs, on the same account",
+  "method": "two installs on one device: create -> push -> `pm clear` (genuine fresh install) -> re-auth -> pull",
+  "provenance": {
+    "commit": "46e27f4d8350cdf84c1d823aa2984608e0bbb1b7",
+    "dirty_files": [
+      "apps/mobile/src/sync/pull.ts",
+      "apps/mobile/src/sync/pull.test.ts",
+      "apps/mobile/src/sync/worker.test.ts"
+    ],
+    "note": "the three dirty files are the sync tests plus the applyRemotePull extraction under test here"
+  },
+  "device": {
+    "serial": "38220DLJG000JK",
+    "model": "Pixel 8 Pro",
+    "release": "17",
+    "sdk": "37"
+  },
+  "backend": {
+    "deployment": "local:local-rob_heckart-taskrx_a9f8e",
+    "url": "http://127.0.0.1:3210",
+    "reachable_from_device_via": "adb reverse tcp:3210"
+  },
+  "account": {
+    "clerk_subject": "user_3FwrkTUn9wXOhD2fZ0w8veUdq7y",
+    "email": "rob@heckart.me"
+  },
+  "push": {
+    "verified": true,
+    "reminder_on_convex": {
+      "_id": "jh7ekp6se0heah6qm2ry4767d58bq633",
+      "localId": "817d0b4c-798f-4a78-906b-ecd8e997064f",
+      "kind": "medication",
+      "name": "metformin Pill",
+      "dosage": "500mg-roundtrip",
+      "rxcui": "1161611",
+      "schedule": {
+        "type": "daily",
+        "times": [
+          "09:00"
+        ]
+      },
+      "priority": "normal",
+      "tags": [],
+      "caregiverIds": []
+    },
+    "instances_on_convex": [
+      {
+        "_id": "jd768kct4zhpxcd3bnkcmttjg98bqktz",
+        "status": "completed",
+        "completedAt": 1785706608106,
+        "reminderId": "jh7ekp6se0heah6qm2ry4767d58bq633"
+      },
+      {
+        "_id": "jd77mgr7vjssc8yhg8aad8zdjh8bpad6",
+        "status": "pending",
+        "reminderId": "jh7ekp6se0heah6qm2ry4767d58bq633"
+      }
+    ],
+    "notes": [
+      "priority/tags/caregiverIds carry SERVER defaults, not values reset by the push -- the e371caa fix holding",
+      "both instances resolved their parent local UUID to the parent's Convex id before create"
+    ]
+  },
+  "fresh_install": {
+    "wiped_with": "adb shell pm clear com.taskrx.mobile",
+    "migrations_applied": [
+      "001_init",
+      "002_add_convex_id",
+      "003_sync_queue_dead_letter",
+      "004_unified_reminders",
+      "005_backfill_reminders",
+      "006_widen_sync_queue",
+      "007_clear_projected_convex_ids",
+      "008_sync_reconcile_indexes",
+      "009_drop_legacy_generation",
+      "010_kind_neutral_instance_status"
+    ],
+    "tables_after_migration": [
+      "_migrations",
+      "reminder_instances",
+      "reminders",
+      "sqlite_sequence",
+      "sync_queue"
+    ],
+    "legacy_tables_present": false,
+    "note": "issue #8's 'a fresh install creates only the unified schema' confirmed on a REAL device, not only node:sqlite"
+  },
+  "pull": {
+    "verified": true,
+    "reminder_row": {
+      "id": "817d0b4c-798f-4a78-906b-ecd8e997064f",
+      "convex_id": "jh7ekp6se0heah6qm2ry4767d58bq633",
+      "sync_status": "synced",
+      "dosage": "500mg-roundtrip"
+    },
+    "instance_rows": [
+      {
+        "id": "26c6e6ea-4e92-45c2-b2b4-2a26cb0689ea",
+        "reminder_id": "817d0b4c-798f-4a78-906b-ecd8e997064f",
+        "status": "completed",
+        "completed_at": 1785706608106,
+        "sync_status": "synced"
+      },
+      {
+        "id": "60cadb46-47ff-43f8-af03-d13fb77207df",
+        "reminder_id": "817d0b4c-798f-4a78-906b-ecd8e997064f",
+        "status": "pending",
+        "sync_status": "synced"
+      }
+    ],
+    "sync_queue_rows": 0,
+    "assertions": [
+      "reminder.id is the ORIGINAL device UUID, not the Convex _id -- no second row minted",
+      "reminder_instances.reminder_id holds the LOCAL parent UUID, not the Convex id (the eecee06 poisoning check) ",
+      "the completed instance kept status='completed' and its completed_at through the round trip",
+      "sync_queue is empty: upsertMany writes sync_status='synced' without re-enqueuing a push"
+    ]
+  },
+  "not_verified": [
+    "The safety rule under CONTENTION. A locally completed instance meeting a NEWER remote row of a different status was never staged on-device. It is also less covered by tests than it looks: shouldApplyRemoteReminderInstance runs as a pure function in packages/shared/src/sync/conflict.test.ts, and apps/mobile/src/sync/pull.test.ts mocks the repository wholesale, so the guard's call site inside reminderInstancesRepo.upsertMany is executed by nothing. Proven of the decision and of the pass, never of the pair.",
+    "The rule also has a server-side hole, pre-existing rather than introduced here: packages/convex/convex/reminderInstances.ts markMissed and markSkipped patch status unconditionally, with no check for an already-completed document. A stale push from a second device flips the server copy, and a third install then pulls 'missed' for a dose that was taken."
+  ],
+  "observations": [
+    "The push drains only on syncWorker.start() (sign-in) and NetInfo connectivity changes. A reminder created while the app is already running and online sits in sync_queue until one of those fires; the AppState 'active' handler reschedules notifications but does not drain. Both pushes here needed an app restart.",
+    "The meds list reads SQLite once on mount, so a pull landing after that read is invisible until the screen is remounted. Showed as 'No medications yet' on the fresh install until re-entry.",
+    "The RxNorm result list warns 'Encountered two children with the same key' -- four results share RxCUI 6809 -- and the LogBox overlay blocked the first navigation attempt."
+  ]
+}

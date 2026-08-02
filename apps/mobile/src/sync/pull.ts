@@ -128,6 +128,47 @@ function convexDocToInstance(
 }
 
 /**
+ * The ordered merge pass, extracted from the effect below so it can be run by
+ * a test rather than only reasoned about.
+ *
+ * Everything in the effect's comment about ordering is a property of THIS
+ * function: parents are written and awaited before any instance resolves its
+ * parent, and an instance whose parent is absent is skipped rather than written
+ * with a foreign key it cannot honour. `src/sync/pull.test.ts` executes both.
+ *
+ * It is exported for that reason alone; `useUnifiedSync` is its only production
+ * caller, and callers that want the subscriptions should use the hook.
+ */
+export async function applyRemotePull(
+  remoteReminders: readonly ConvexReminderDoc[],
+  remoteInstances: readonly ConvexReminderInstanceDoc[]
+): Promise<void> {
+  // Parents first, and awaited: everything below reads the table this writes.
+  await remindersRepo.upsertMany(remoteReminders.map(convexDocToReminder));
+
+  const resolved: instancesRepo.PulledReminderInstance[] = [];
+  for (const doc of remoteInstances) {
+    const localReminderId = await remindersRepo.localIdForConvexId(
+      doc.reminderId
+    );
+    if (localReminderId === null) {
+      // Reachable even after the awaited write above: the parent may be
+      // soft-deleted, which `api.reminders.list` filters out, so no amount of
+      // waiting produces it. Skipping is the honest outcome — there is no local
+      // UUID to write, and both alternatives (inventing one, or storing the
+      // Convex id) corrupt a foreign key. The row is not lost; it stays on the
+      // server, and any later delivery of either subscription re-runs this pass.
+      console.warn(
+        `[sync] instance ${doc.localId} skipped: reminder ${doc.reminderId} not pulled yet`
+      );
+      continue;
+    }
+    resolved.push(convexDocToInstance(doc, localReminderId));
+  }
+  await instancesRepo.upsertMany(resolved);
+}
+
+/**
  * The unified pull: both subscriptions, one ordered effect.
  *
  * ## Why one hook and not two
@@ -151,9 +192,9 @@ function convexDocToInstance(
  *     version of this comment claimed "the next delivery of either subscription
  *     applies it"; that was true of neither.
  *
- * Awaiting the reminder write before resolving parents fixes the first, and
- * depending on both query results fixes the second: any delivery of either
- * subscription re-runs the whole ordered pass.
+ * `applyRemotePull` awaiting the reminder write before resolving parents fixes
+ * the first; depending on both query results here fixes the second, since any
+ * delivery of either subscription re-runs the whole ordered pass.
  *
  * Re-running it is cheap and idempotent. `shouldApplyRemoteReminder` rejects a
  * row whose local copy is already at the same `updatedAt`, so after the first
@@ -183,35 +224,11 @@ export function useUnifiedSync(userId: string | undefined): void {
       return;
     }
 
-    void (async (): Promise<void> => {
-      // Parents first, and awaited: everything below reads the table this
-      // writes.
-      await remindersRepo.upsertMany(remoteReminders.map(convexDocToReminder));
-
-      const resolved: instancesRepo.PulledReminderInstance[] = [];
-      for (const doc of remoteInstances) {
-        const localReminderId = await remindersRepo.localIdForConvexId(
-          doc.reminderId
-        );
-        if (localReminderId === null) {
-          // Reachable even after the awaited write above: the parent may be
-          // soft-deleted, which `api.reminders.list` filters out, so no amount
-          // of waiting produces it. Skipping is the honest outcome — there is
-          // no local UUID to write, and both alternatives (inventing one, or
-          // storing the Convex id) corrupt a foreign key. The row is not lost;
-          // it stays on the server, and any later delivery of either
-          // subscription re-runs this pass.
-          console.warn(
-            `[sync] instance ${doc.localId} skipped: reminder ${doc.reminderId} not pulled yet`
-          );
-          continue;
-        }
-        resolved.push(convexDocToInstance(doc, localReminderId));
+    void applyRemotePull(remoteReminders, remoteInstances).catch(
+      (error: unknown) => {
+        console.error("[sync] unified pull failed:", error);
       }
-      await instancesRepo.upsertMany(resolved);
-    })().catch((error: unknown) => {
-      console.error("[sync] unified pull failed:", error);
-    });
+    );
   }, [remoteReminders, remoteInstances, userId]);
 }
 

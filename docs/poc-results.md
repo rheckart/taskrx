@@ -50,6 +50,63 @@ This document tracks the 13 success criteria from the POC plan §3. Each row sho
 > should report an unreachable *instrument*, not a device state. Same family as
 > "Case 5 was measuring the wrong thing" below.
 
+> **Legacy deletion checked against the same baseline (2026-08-02, issue #8).**
+> All seven cases pass again, on the same Pixel 8 Pro and the same OS build,
+> and every verdict matches the baseline — case 4 `window=+33s726ms`, case 6
+> `pending_count` 30 → 30, case 7 three alarms on Mon/Wed/Fri. Evidence:
+> `.omo/evidence/issue-8-legacy-deletion-verification.json`, merged from three
+> passes for the keyguard reason above. Case 5 needed a second attempt: the
+> first reported UNREACHABLE because nobody unlocked the device inside the 300s
+> window, which is Android withholding `ACTION_BOOT_COMPLETED` until first
+> unlock, not a product failure. The same narrow reading applies as for #6 —
+> the harness runs unauthenticated and never touches SQLite.
+>
+> The tree was **not** clean for this run: three sync files were modified (the
+> `applyRemotePull` extraction and its two test files). No harness case loads
+> them — every case drives `scheduleForReminder` with an in-memory reminder and
+> the app runs signed-out — but the provenance block records it rather than
+> claiming a clean checkout.
+
+> **Round trip verified (2026-08-02, issue #7).** A medication created on the
+> device reached Convex, survived `pm clear` — a genuine fresh install, which
+> replayed migrations 001→010 and produced the unified schema *only* — and came
+> back down after re-authenticating on the same account. Evidence:
+> `.omo/evidence/issue-7-round-trip-verification.json`.
+>
+> The two assertions worth naming, because both are regressions this repo has
+> actually shipped: the pulled reminder landed under its **original device
+> UUID** rather than the Convex `_id`, and `reminder_instances.reminder_id`
+> held the **local** parent UUID, not the Convex id (`eecee06`). The `completed`
+> instance kept its status and `completed_at` across the trip, and `sync_queue`
+> was empty afterwards — the pull writes `sync_status = 'synced'` without
+> re-enqueuing a push.
+>
+> Three things this did **not** verify.
+>
+> **The safety rule under contention.** A completed local row surviving a pull
+> is not the same as one refusing a newer remote row of a different status, and
+> that case was never staged. Nor is it covered by tests as fully as it looks:
+> `shouldApplyRemoteReminderInstance` is exercised as a *pure function* by
+> `packages/shared/src/sync/conflict.test.ts`, and the pull pass is exercised by
+> `apps/mobile/src/sync/pull.test.ts` with the repository **mocked**, so the
+> guard's actual call site — inside `reminderInstancesRepo.upsertMany` — is run
+> by nothing. The rule is proven of the decision and of the pass, never of the
+> pair.
+>
+> **The rule has a server-side hole regardless.**
+> `packages/convex/convex/reminderInstances.ts` `markMissed` and `markSkipped`
+> patch `status` unconditionally — neither checks whether the stored document is
+> already `completed`. The device that recorded the dose is protected by its own
+> local guard, but a stale push from a second device flips the *server* copy,
+> and any third install then pulls `missed` for a dose that was taken. Pre-existing
+> and not introduced by the cutover, so "the rule survives untouched" holds
+> literally, but the rule is narrower than its wording suggests.
+>
+> **Prompt delivery.** The push drains only on `syncWorker.start()` and on
+> NetInfo connectivity changes — the `AppState` "active" handler reschedules
+> notifications but does not drain — so both pushes here needed an app restart
+> before they left the queue.
+
 ## Success criteria
 
 | # | Criterion | Expected | Actual | Pass/Fail |
@@ -61,10 +118,10 @@ This document tracks the 13 success criteria from the POC plan §3. Each row sho
 | 5 | Local notification fires at scheduled time on a physical Android device, app closed, not in foreground, surviving Doze + battery optimization | Notification fires within 1 minute of scheduled time | **VERIFIED on Pixel 8 Pro / Android 17 / API 37.** Uses `AlarmType.SET_ALARM_CLOCK`. Delivered with the app process dead (`am kill`, 0 processes, `stopped=false`) across **three independent runs: 34 ms, 94 ms, and 31 ms late** — all far inside the 1-minute budget. Full chain in logcat: `Start proc ... for broadcast {NotificationAlarmReceiver}` → `NotifeeHeadlessJS: launched taskId: 1` → notification posted with correct title + `medicationId`. Primitive confirmed at OS level, not inferred: `window=0`, `exactAllowReason=permission`, `whenElapsed == maxWhenElapsed`, and the alarm registered as the device's *next alarm clock* with a timestamp exactly matching the scheduled one. The Doze clause is verified in criterion 5a below. **Re-verified 2026-07-30 against `a931bbf`** in a 7/7 single `--all` run — evidence `.omo/evidence/issue-5-baseline-all-cases.json`. Earlier evidence: `.omo/evidence/task-13-all-cases-final.json`, `.omo/evidence/task-13-SUMMARY.md`, `task-13-cases-1-4.json`, `task-13-cases-6-2.json` (all taken before the alarm-scoping fix; their `exact_windows` counts are inflated by `dumpsys` history — see "Case 5 was measuring the wrong thing"). | ✅ **PASS** |
 | 5a | *(sub-criterion)* Notification survives **deep Doze** specifically | Fires while device is in deep IDLE | **VERIFIED on Pixel 8 Pro / Android 17.** With the app process killed and the device on simulated battery, it entered deep `IDLE` with the alarm pending and dozed continuously — observed cycle `IDLE → IDLE_MAINTENANCE → IDLE → IDLE_MAINTENANCE → QUICK_DOZE_DELAY`, never returning to `ACTIVE` before the alarm fired — and the notification still posted. `dumpsys alarm` shows Doze imposes **zero deferral**: `policyWhenElapsed: requester=+2m22s657ms … device_idle=-1m21s983ms` (device_idle resolves earlier than the request) with `whenElapsed == maxWhenElapsed`. **Finding:** Android refuses to enter deep Doze at all while a wake-from-idle alarm is due within `min_time_to_alarm` (default **1 hour**) — `force-idle` reports `Unable to go deep idle; stopped at QUICK_DOZE_DELAY`. That refusal is itself evidence the alarm is classified wake-from-idle. **Accommodation:** `min_time_to_alarm` was lowered to 30s for this case only and stock constants restored afterwards (verified `device_idle_constants = null`); no battery-optimization exemption was granted. Evidence: `.omo/evidence/task-13-case-3-deep-idle.json`, `.omo/evidence/task-13-all-cases-final.json`. | ✅ **PASS** |
 | 6 | Tapping notification opens the dose logging screen pre-filled with the right med + scheduled time | Correct medication and time shown | Tap handler + deep-link routing implemented (`src/notifications/tap-handler.ts`); notification data includes `medicationId` and `scheduledTime` for the dose-log deep link; no device verification yet | ⏸️ Pending (device test) |
-| 7 | Marking dose "taken" writes a `dose_logs` row in local SQLite | Row exists with status `taken` | Dose log repo + UI implemented; 10 vitest cases on conflict resolution guarantee a locally `taken` dose is never overwritten by a remote pull; no device verification yet | ⏸️ Pending (device test) |
-| 8 | When online, `dose_logs` rows sync to Convex (visible in Convex dashboard) | Row appears in Convex within 60s | Sync worker + Convex mutations implemented; requires deployed backend + device test | ⏸️ Pending (Day 7 / device test) |
+| 7 | Marking dose "taken" writes a `dose_logs` row in local SQLite | Row exists with status `taken` | **VERIFIED on Pixel 8 Pro (2026-08-02, issue #7).** The criterion's vocabulary is legacy on both nouns: `dose_logs` was dropped in migration 009 and `taken` was renamed `completed` in ADR 0001, so what was checked is a `reminder_instances` row with `status = 'completed'`, read out of the device's own SQLite. It also carried `completed_at` and `reminder_kind = 'medication'`. Conflict resolution is still test-only — see the round-trip note above on what contention was *not* exercised. Evidence: `.omo/evidence/issue-7-round-trip-verification.json`. | ✅ **PASS** |
+| 8 | When online, `dose_logs` rows sync to Convex (visible in Convex dashboard) | Row appears in Convex within 60s | **VERIFIED against the local deployment (2026-08-02, issue #7).** Two `reminderInstances` documents reached Convex through the unified `api.reminderInstances.create`, each with its parent resolved from the local UUID to the parent's Convex id. **But not within 60s, so the criterion is not met as written:** the worker drains on `syncWorker.start()` and on NetInfo changes only, and the `AppState` "active" handler does not drain, so the push left the queue only after an app restart. Routing is verified; unprompted timeliness is not. Evidence: `.omo/evidence/issue-7-round-trip-verification.json`. | ⚠️ **PARTIAL** — routes correctly, no 60s guarantee |
 | 9 | When offline (airplane mode), dose logs accumulate in `sync_queue`; when back online, they sync within 60s | Queue drains and rows appear in Convex | Sync queue + retry logic implemented; MAX_ATTEMPTS=5, exponential backoff to 30s cap. **Phase 1 fix**: dead-letter state (migration 003) ensures failed rows no longer retry forever; retained rows can be requeued via debug UI. Requires device test. | ⏸️ Pending (device test) |
-| 10 | Same user logged in on Device B sees the medication + dose log within 10s of Device A's action | Realtime pull updates Device B | Realtime pull hooks implemented; requires two-device test | ⏸️ Pending (device test) |
+| 10 | Same user logged in on Device B sees the medication + dose log within 10s of Device A's action | Realtime pull updates Device B | **VERIFIED as two installs, not two devices (2026-08-02, issue #7).** Only one Pixel was available, so "Device B" was the same handset after `pm clear` and re-authentication — the substitution issue #7 explicitly allows. The medication and both instances came down. **But not within 10s, so the criterion is not met as written:** the meds list reads SQLite once on mount, so the pulled rows stayed invisible until the screen was remounted — the data arrives, the screen does not notice. Arrival is verified; latency to the eye is not. Evidence: `.omo/evidence/issue-7-round-trip-verification.json`. | ⚠️ **PARTIAL** — arrives, but the screen needs a remount |
 | 11 | Adding 30 meds with daily schedules: rolling scheduler keeps notifications firing without dropping any | All 30 notifications fire in observation window | **Phase 1 fix**: scheduler now uses a **global 64-dose priority queue** across all active meds (`selectUpcomingDoses` in `@taskrx/shared`, 10 vitest cases), not 10 per med. Diff-based reschedule is idempotent. **VERIFIED on device** via harness case 6: 30 scheduled → `pending_count=30`, within the [1,64] cap, no drops. Evidence: `.omo/evidence/task-13-cases-6-2.json`. Note: this exercises harness-direct scheduling; the full `rescheduleAll(userId)` path from SQLite still needs a signed-in run. | ✅ **PASS** (cap + no-drop verified) |
 | 12 | EAS Build produces a sideloadable Android APK that installs and runs on a physical device | APK installs and app launches | ✅ **VERIFIED on physical device.** `./gradlew assembleDebug` produces a 260MB debug APK (Node 26 + Expo SDK 56 + notify-kit New Arch, BUILD SUCCESSFUL in 4m 25s); installed and launched on the Pixel 8 Pro (Android 17) with Metro tunnelled over USB via `adb reverse tcp:8081 tcp:8081`. Entry bundle confirmed as `apps/mobile/index.ts` (1991 modules). EAS cloud build still unused. | ✅ **PASS** |
 | 13 | Code is in git with clean, atomic commits; `README.md` documents local run + deploy | Conventional commits; README complete | ✅ Verified (autonomous) — 20+ conventional commits on `main` since POC tag; `archive/dotnet-maui` branch preserves the parallel .NET line of work; README rewritten to reflect the current stack (Expo SDK 56, react-native-notify-kit, SET_ALARM_CLOCK, harness script); CHANGELOG, architecture, and this document updated | ✅ Pass |
