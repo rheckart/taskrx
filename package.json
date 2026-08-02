@@ -24,7 +24,8 @@
     "rebuild-apk": "cd apps/mobile/android && ./gradlew assembleDebug",
     "prepare": "husky",
     "verify:migrations": "node apps/mobile/scripts/verify-reminder-migrations.mjs",
-    "verify": "npm run typecheck && npm run lint && npm test && npm run verify:migrations"
+    "verify:harness": "apps/mobile/scripts/verify-harness-guards.sh",
+    "verify": "npm run typecheck && npm run lint && npm test && npm run verify:migrations && npm run verify:harness"
   },
   "devDependencies": {
     "@eslint/js": "^9.0.0",

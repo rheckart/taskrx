@@ -9,10 +9,11 @@
 # rather than by eyeballing the device.
 #
 # ── EMPIRICALLY-VALIDATED CONSTRAINTS ──────────────────────────────────────
-# Learned by running against a Pixel 8 Pro on Android 17 (API 37). Nine
+# Learned by running against a Pixel 8 Pro on Android 17 (API 37). Ten
 # constraints: 1-7 below, then 8 (deep Doze is blocked by a pending
-# wake-from-idle alarm) and 9 (`dumpsys alarm` is mostly NOT pending alarms),
-# which are documented inline at their point of use.
+# wake-from-idle alarm), 9 (`dumpsys alarm` is mostly NOT pending alarms), and
+# 10 (silence from adb is not a fact about the device), which are documented
+# inline at their point of use.
 # Do not "simplify" these away; each one caused a real false result.
 #
 #  1. DEEP LINKS MUST CONTAIN A REAL PATH, NOT JUST A HOST.
@@ -103,7 +104,10 @@
 # working tree. Treat a run with `"dirty": true` as evidence for that tree, not
 # for the named commit.
 #
-# Exit: 0 all passed | 1 a case failed | 2 precondition failure
+# Exit: 0 all passed | 1 a case RAN and FAILED (a product verdict) | 2 no
+# product failures but at least one case was never evaluated, or a precondition
+# was not met — either way, no trustworthy verdict. See `usage()` and the
+# `add_result` / `add_unevaluated` pair: a case has three fates, not two.
 
 set -uo pipefail
 
@@ -180,6 +184,55 @@ provenance_dirty_files() {
 json_escape() { printf '%s' "$1" | sed 's/\\/\\\\/g; s/"/\\"/g'; }
 adb_shell() { adb_run shell "$@"; }
 
+# ── Is there still a device? (constraint 10) ───────────────────────────────
+#
+# Every `adb_shell` in this script swallows stderr and yields an empty string
+# when the device is gone. That is indistinguishable, at the call site, from a
+# device that answered with nothing — so a caller that reads emptiness as a
+# FACT ABOUT THE DEVICE will state something it cannot know.
+#
+# It has already happened. During the issue #6 verification the phone dropped
+# off USB mid-run and the harness reported "the device rebooted into the lock
+# screen and was never unlocked within 300s, so Android never broadcast
+# ACTION_BOOT_COMPLETED (user 0 stayed RUNNING_LOCKED)" — four specific claims
+# about a device that was not attached — and blamed the empty `dumpsys alarm`
+# on a renamed section header. That verdict went into a JSON evidence file,
+# which is where these artifacts get committed and cited from.
+#
+# The startup preconditions below already refuse to begin without a device. The
+# gap is losing one MID-RUN, which a reboot makes routine: case 5 reboots by
+# design, and a phone can come back on a different USB enumeration or not at
+# all.
+#
+# The guards are at CHOKE POINTS, not at each case, because per-case entry
+# checks miss the mid-case loss that is the likelier failure — cases 1, 2 and 3
+# never call `require_reachable` at all, and the four that do call it only on
+# the way in. Three places cover the script:
+#
+#   * `harness_once` — every case drives the app through it, and it ends in
+#     `adb logcat`, which BLOCKS on a missing device rather than failing. It
+#     bails first, so a disconnect returns instead of hanging the run.
+#   * `add_result`   — every verdict is recorded through it, so a product FAIL
+#     cannot be asserted about a device that was not there to fail.
+#   * `pending_dump` — every alarm read goes through it, so an empty dump is
+#     attributed to the missing device rather than to the section whitelist.
+#
+# `require_reachable` also checks, which is redundant with the above but keeps
+# the wasted probe out of the four cases that call it.
+#
+# One deliberate exception, documented at its site: the post-reboot
+# `boot_completed` poll, where the device is SUPPOSED to be absent.
+#
+# `get-state` rather than `adb devices`: it honours `$ANDROID_SERIAL` through
+# `adb_args`, and prints exactly `device` only when the device is present AND
+# authorized — an unauthorized phone reports `unauthorized` and is correctly
+# treated as absent, since nothing can be read from it either.
+device_attached() {
+  local state
+  state="$(adb_run get-state 2>/dev/null | tr -d '\r')"
+  [[ "$state" == "device" ]]
+}
+
 nonce_counter=0
 next_nonce() { nonce_counter=$((nonce_counter + 1)); printf 'n%s' "$nonce_counter"; }
 
@@ -188,6 +241,19 @@ next_nonce() { nonce_counter=$((nonce_counter + 1)); printf 'n%s' "$nonce_counte
 harness_once() {
   local action="$1" id="${2:-x}" delay="${3:-0}"
   local nonce
+  # Bail before touching adb at all. `adb logcat` BLOCKS waiting for a device
+  # rather than failing, so with no device this function does not return an
+  # empty string — it hangs the whole run, indefinitely, in whichever case was
+  # in flight. Every case funnels through here, so this one check is what keeps
+  # a mid-run disconnect from freezing cases 1, 2, 3, 6 and 7 as well as the
+  # ones that guard on entry.
+  #
+  # Returning empty is the right shape: callers already treat emptiness as "the
+  # app did not answer", `harness()` retries once, and `add_result` refuses to
+  # turn the resulting non-answer into a product FAIL.
+  if ! device_attached; then
+    return 0
+  fi
   nonce="$(next_nonce)"
   adb_run logcat -c >/dev/null 2>&1
   adb_shell am start -a android.intent.action.VIEW \
@@ -304,7 +370,15 @@ pending_dump() {
     { print }
   ')"
   if [[ -z "$out" ]]; then
-    printf '[pending_dump] PARSE FAILED: the alarm-store section of `dumpsys alarm` came back empty. A section header in the cut whitelist has probably been renamed or reordered. Alarm counts from this run are not trustworthy.\n' >&2
+    # Establish WHY it is empty before naming a cause. A detached device makes
+    # every `adb_shell` return nothing, so the whitelist explanation below —
+    # which sends the reader off to diff Android dump formats across builds —
+    # is exactly wrong when the real answer is that the cable came out.
+    if ! device_attached; then
+      printf '[pending_dump] NO DEVICE: `dumpsys alarm` returned nothing because no device is attached (adb get-state is not "device"). This says nothing about the alarm store or the section whitelist. Reconnect the device and re-run.\n' >&2
+      return 1
+    fi
+    printf '[pending_dump] PARSE FAILED: the device is attached but the alarm-store section of `dumpsys alarm` came back empty. A section header in the cut whitelist has probably been renamed or reordered. Alarm counts from this run are not trustworthy.\n' >&2
     return 1
   fi
   printf '%s\n' "$out"
@@ -364,14 +438,73 @@ note() {
   if [[ "${VERBOSE:-0}" == "1" ]]; then printf '  [note] %s\n' "$*" >&2; fi
 }
 
+# A case has three possible fates, not two, and flattening them is what made a
+# missing cable readable as a product failure.
+#
+#   pass / fail       — the app was driven and gave an answer. A verdict.
+#   unreachable       — the device was there but the case could not be run
+#                       (keyguard up, app not foregroundable). Environmental.
+#   no_device         — there was no device to run it against. Instrumental.
+#
+# The last two are NOT verdicts, and `pass` is `null` for both so that a
+# consumer reading only that field cannot mistake "never measured" for
+# "measured and failed". `outcome` carries the distinction; `summary` counts all
+# three; and the exit status separates "something is broken" from "we did not
+# find out".
+# The one place a result becomes JSON, so the escaping is defined once.
+#
+# `detail` is built from `dumpsys` output — alarm dumps, notification dumps,
+# deviceidle traces — which is arbitrary text this script does not control. Both
+# writers previously escaped only the double quote, while `json_escape` right
+# above exists precisely because a BACKSLASH has to be escaped first: `\` then
+# `"` , never the other way round. A single backslash out of dumpsys therefore
+# produced a report that would not parse — and this file's whole purpose is
+# emitting evidence artifacts that get committed and cited.
+#
+# Newlines are flattened before escaping because a raw newline inside a JSON
+# string is invalid regardless of quoting.
+record_case() {
+  local n="$1" name="$2" pass="$3" outcome="$4" label="$5" detail="$6"
+  local d
+  d="$(json_escape "$(printf '%s' "$detail" | tr '\n' ' ')")"
+  results+=("{\"case\":${n},\"name\":\"${name}\",\"pass\":${pass},\"outcome\":\"${outcome}\",\"detail\":\"${d}\"}")
+  printf '  [%s] case %s: %s — %s\n' "$label" "$n" "$name" "$d"
+}
+
 add_result() {
   local n="$1" name="$2" pass="$3" detail="$4"
-  local d
-  d="$(printf '%s' "$detail" | tr '\n' ' ' | sed 's/"/\\"/g')"
-  results+=("{\"case\":${n},\"name\":\"${name}\",\"pass\":${pass},\"detail\":\"${d}\"}")
-  local verdict=FAIL
-  [[ "$pass" == true ]] && verdict=PASS
-  printf '  [%s] case %s: %s — %s\n' "$verdict" "$n" "$name" "$d"
+  local outcome verdict
+  # THE choke point, and the reason the guard lives here rather than at each
+  # case's entry. Cases 1, 2 and 3 never call `require_reachable` at all, and
+  # the four that do call it only on the way IN — so a device lost part-way
+  # through (case 3 spends minutes in forced Doze; case 5 deliberately reboots)
+  # still landed on `add_result … false` and scored a product FAIL built on
+  # readings from nothing.
+  #
+  # A failure can only be asserted about a device that is there to have failed.
+  # When it is not, this is downgraded to "never evaluated" and the original
+  # detail is kept but explicitly disowned. Only failures are converted: a PASS
+  # cannot be manufactured out of silence in the first place, since every
+  # passing assertion requires reading a real value.
+  if [[ "$pass" != true ]] && ! device_attached; then
+    add_unevaluated "$n" "$name" no_device \
+      "NO DEVICE (instrument, not product): the device was lost before this case could be judged (adb get-state is not \"device\"), so what follows is NOT a verdict and the readings behind it came from an absent device: ${detail}"
+    return
+  fi
+  if [[ "$pass" == true ]]; then
+    outcome=pass; verdict=PASS
+  else
+    outcome=fail; verdict=FAIL
+  fi
+  record_case "$n" "$name" "$pass" "$outcome" "$verdict" "$detail"
+}
+
+# Record a case that was never evaluated. `kind` is `unreachable` (the device
+# was present and uncooperative) or `no_device` (there was nothing to talk to).
+add_unevaluated() {
+  local n="$1" name="$2" kind="$3" detail="$4"
+  record_case "$n" "$name" null "$kind" \
+    "$(printf '%s' "$kind" | tr '[:lower:]' '[:upper:]')" "$detail"
 }
 
 # An empty harness reply means the app could not be reached, which is NOT the
@@ -388,16 +521,33 @@ add_result() {
 # device to sleep, which re-arms it for everything that follows.
 require_reachable() {
   local n="$1" name="$2"
+  # BEFORE the probe, not after. Two reasons, and the second is not cosmetic:
+  #
+  #   * Silence from the app and silence from an absent device are identical at
+  #     this call site, so the cause has to be established before it is
+  #     described. Reading the keyguard off a detached device yields an empty
+  #     string, which the defaults below would dress up as
+  #     "isKeyguardShowing=unknown" — a claim about a phone that is not there.
+  #   * `harness_once` ends in `adb logcat -d`, and `adb logcat` BLOCKS waiting
+  #     for a device rather than failing. Probing first therefore does not
+  #     return a wrong answer, it hangs the run indefinitely. Measured while
+  #     fixing this: the probe never came back with the cable out.
+  if ! device_attached; then
+    add_unevaluated "$n" "$name" no_device \
+      "NO DEVICE (instrument, not product): no device is attached (adb get-state is not \"device\"), so this case was never run. Nothing here is a statement about the app or the phone. Reconnect the device and re-run this case."
+    return 1
+  fi
   local probe
   probe="$(harness pending-count reachability 0)"
   if [[ -n "$probe" ]]; then
     return 0
   fi
+  # The device is attached and still did not answer — genuinely environmental.
   local keyguard wakefulness
   keyguard="$(adb_shell dumpsys window 2>/dev/null | grep -oE 'isKeyguardShowing=[a-z]+' | head -1 | tr -d '\r')"
   wakefulness="$(screen_wakefulness)"
-  add_result "$n" "$name" false \
-    "UNREACHABLE (not a product failure): the app never answered a deep link, so this case could not be evaluated. ${keyguard:-isKeyguardShowing=unknown} mWakefulness=${wakefulness:-unknown}. If the keyguard is showing, unlock the device and re-run this case."
+  add_unevaluated "$n" "$name" unreachable \
+    "UNREACHABLE (not a product failure): the device is attached but the app never answered a deep link, so this case could not be evaluated. ${keyguard:-isKeyguardShowing=unknown} mWakefulness=${wakefulness:-unknown}. If the keyguard is showing, unlock the device and re-run this case."
   return 1
 }
 
@@ -636,7 +786,7 @@ case5_boot_reschedule() {
   before="$(alarm_count)"
   before_uid="$(alarm_count_per_uid)"
   if [[ "$before" -lt 1 ]]; then
-    add_result 5 boot_reschedule false \
+    add_unevaluated 5 boot_reschedule setup_failed \
       "SETUP FAILED (not a product failure): no alarm was armed before the reboot (before=$before), so there was nothing for the boot receiver to restore. Not rebooting."
     return
   fi
@@ -644,13 +794,23 @@ case5_boot_reschedule() {
   # is wrong and no verdict from it should be believed — say so instead of
   # rebooting the device to measure with a broken ruler.
   if [[ "$before" != "$before_uid" ]]; then
-    add_result 5 boot_reschedule false \
+    add_unevaluated 5 boot_reschedule instrument_fault \
       "INSTRUMENT FAULT (not a product failure): the two independent alarm counts disagree before the reboot (alarm_count=$before, per-uid tally=$before_uid). One of the two parses of \`dumpsys alarm\` is wrong, so neither before nor after can be trusted. Not rebooting. This guard exists because an unscoped count silently made this case unfalsifiable for three runs."
     return
   fi
   adb_run reboot >/dev/null 2>&1
   sleep 10
   deadline=$(( $(date +%s) + 180 ))
+  # Deliberately NO `device_attached` bail inside this loop, unlike everywhere
+  # else in this script. Here the device is SUPPOSED to be missing: it is
+  # rebooting, and adb loses it for most of this window. A guard here would fire
+  # on the normal path and report "no device" for a phone that is merely
+  # restarting — inverting the very defect constraint 10 exists to prevent.
+  #
+  # Nothing is lost by waiting it out. Reaching `boot_completed=1` proves the
+  # device is back, so the unlock wait below starts from a known-attached state
+  # and any absence IT sees is genuine loss. A device that never returns simply
+  # burns this budget and is then correctly reported there.
   while (( $(date +%s) < deadline )); do
     [[ "$(adb_shell getprop sys.boot_completed 2>/dev/null | tr -d '\r')" == "1" ]] && break
     sleep 3
@@ -675,14 +835,28 @@ case5_boot_reschedule() {
   if ! adb_shell dumpsys user 2>/dev/null | grep -q RUNNING_UNLOCKED; then
     printf '  [note] device rebooted into the lock screen. ACTION_BOOT_COMPLETED is withheld until the first unlock — UNLOCK THE DEVICE NOW (waiting up to %ss).\n' "$BOOT_UNLOCK_TIMEOUT_S"
   fi
+  # A reboot is exactly when a phone goes missing: it can come back on a
+  # different USB enumeration, or not at all. Give up early on a device that has
+  # gone rather than spending the whole budget polling nothing and then blaming
+  # the user for not unlocking — the false verdict that motivated constraint 10.
+  local device_lost=0
   while (( $(date +%s) < unlock_deadline )); do
     adb_shell dumpsys user 2>/dev/null | grep -q RUNNING_UNLOCKED && break
+    if ! device_attached; then
+      device_lost=1
+      break
+    fi
     sleep 5
   done
+  if (( device_lost )) || ! device_attached; then
+    add_unevaluated 5 boot_reschedule no_device \
+      "NO DEVICE (instrument, not product): the device did not come back on adb after the reboot (adb get-state is not \"device\"), so this case was never evaluated. Whether the boot receiver re-registered the alarms is unknown — this is not a claim that it did not. Reconnect the device and re-run case 5."
+    return
+  fi
   if ! adb_shell dumpsys user 2>/dev/null | grep -q RUNNING_UNLOCKED; then
     ensure_reverse
-    add_result 5 boot_reschedule false \
-      "UNREACHABLE (not a product failure): the device rebooted into the lock screen and was never unlocked within ${BOOT_UNLOCK_TIMEOUT_S}s, so Android never broadcast ACTION_BOOT_COMPLETED (user 0 stayed RUNNING_LOCKED) and the boot receiver could not have run. Re-run and unlock when prompted."
+    add_unevaluated 5 boot_reschedule unreachable \
+      "UNREACHABLE (not a product failure): the device is attached but rebooted into the lock screen and was never unlocked within ${BOOT_UNLOCK_TIMEOUT_S}s, so Android never broadcast ACTION_BOOT_COMPLETED (user 0 stayed RUNNING_LOCKED) and the boot receiver could not have run. Re-run and unlock when prompted."
     return
   fi
   # The reboot dropped the adb reverse tunnel with it. Restore it now, or every
@@ -821,6 +995,14 @@ notification-harness.sh — adb-driven notification test harness
 
 Env: TASKRX_PKG ANDROID_SERIAL METRO_URL VERBOSE=1 SKIP_DOZE=1 SKIP_REBOOT=1
 
+Exit codes — a case has three fates, so do not read exit != 0 as "broken":
+  0  every case ran and passed
+  1  at least one case RAN and FAILED. A product verdict.
+  2  no product failures, but at least one case was never evaluated, or a
+     startup precondition was not met. Either way no trustworthy verdict was
+     produced. In the report those cases carry "pass": null and an "outcome"
+     of "unreachable" (device present, app not driveable) or "no_device".
+
 Before running:
   adb reverse tcp:8081 tcp:8081
   (cd apps/mobile && npx expo start --dev-client)
@@ -839,6 +1021,20 @@ list_cases() {
 7  weekly_schedule          Mon/Wed/Fri weekly reminder arms 3 alarms at 09:00 device-local
 EOF
 }
+
+# ── Main ───────────────────────────────────────────────────────────────────
+#
+# Everything below runs only when this file is EXECUTED, not when it is
+# sourced. `scripts/verify-harness-guards.sh` sources it to call
+# `device_attached`, `pending_dump` and `require_reachable` directly, which is
+# the only way to assert what they do with no device attached — the exact
+# condition under which this script previously invented a device state (see
+# constraint 10). Without this guard, sourcing runs the argument parser, prints
+# usage and exits, so the check had to slice the file at a line number and
+# broke whenever anything above moved.
+if [[ "${BASH_SOURCE[0]}" != "${0}" ]]; then
+  return 0
+fi
 
 command -v adb >/dev/null 2>&1 || { echo "adb not found on PATH" >&2; exit 2; }
 [[ $# -eq 0 ]] && { usage; exit 2; }
@@ -904,11 +1100,16 @@ restore_device
 
 pass_count=0
 fail_count=0
+unevaluated_count=0
 for r in "${results[@]}"; do
-  if printf '%s' "$r" | grep -q '"pass":true'; then
+  if printf '%s' "$r" | grep -q '"outcome":"pass"'; then
     pass_count=$((pass_count + 1))
-  else
+  elif printf '%s' "$r" | grep -q '"outcome":"fail"'; then
     fail_count=$((fail_count + 1))
+  else
+    # `unreachable` or `no_device`. Counted apart from failures on purpose:
+    # rolling them in is what let a missing cable read as broken delivery.
+    unevaluated_count=$((unevaluated_count + 1))
   fi
 done
 
@@ -936,7 +1137,8 @@ mkdir -p "$(dirname "$output")"
     "$(adb_shell getprop ro.build.version.release 2>/dev/null | tr -d '\r')" \
     "$(adb_shell getprop ro.build.version.sdk 2>/dev/null | tr -d '\r')" \
     "$(adb_shell getprop ro.build.fingerprint 2>/dev/null | tr -d '\r')"
-  printf '  "summary": { "passed": %d, "failed": %d },\n  "cases": [\n' "$pass_count" "$fail_count"
+  printf '  "summary": { "passed": %d, "failed": %d, "unevaluated": %d },\n  "cases": [\n' \
+    "$pass_count" "$fail_count" "$unevaluated_count"
   for ((i = 0; i < ${#results[@]}; i++)); do
     if (( i == ${#results[@]} - 1 )); then
       printf '    %s\n' "${results[$i]}"
@@ -948,9 +1150,23 @@ mkdir -p "$(dirname "$output")"
 } >"$output"
 echo "wrote $output"
 
+# Three exit codes for the three fates, so a caller can tell "the product is
+# broken" from "we did not find out". Previously both were 1, which is how an
+# unplugged cable came back looking like a delivery regression.
+#
+#   0  every case ran and passed
+#   1  at least one case ran and FAILED — a product verdict
+#   2  no product failures, but at least one case was never evaluated. Also the
+#      startup-precondition code, and for the same reason: no trustworthy
+#      verdict was produced.
 if (( fail_count > 0 )); then
   echo "$fail_count case(s) failed" >&2
+  (( unevaluated_count > 0 )) && echo "$unevaluated_count case(s) were never evaluated" >&2
   exit 1
+fi
+if (( unevaluated_count > 0 )); then
+  echo "$unevaluated_count case(s) were never evaluated — no product failures, but this run is INCOMPLETE" >&2
+  exit 2
 fi
 echo "all cases passed"
 exit 0
