@@ -91,6 +91,8 @@ async function runSchedule(spec: HarnessSpec): Promise<string> {
       android: {
         channelId: MEDICATION_REMINDER_CHANNEL_ID,
         smallIcon: "ic_launcher",
+        // Not renamed with ADR 0001 — see `scheduler.ts` for why this string
+        // is frozen.
         pressAction: { id: "mark-taken", launchActivity: "default" },
         importance: AndroidImportance.HIGH,
         autoCancel: true,

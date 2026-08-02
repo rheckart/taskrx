@@ -91,7 +91,7 @@ export interface ReminderInstance {
   readonly reminderKind: ReminderKind;
   readonly scheduledTime: number;
   readonly status: InstanceStatus;
-  readonly takenAt: number | undefined;
+  readonly completedAt: number | undefined;
   readonly snoozedUntil: number | undefined;
   readonly snoozeCount: number;
   readonly notes: string | undefined;
@@ -108,7 +108,7 @@ export interface CreateReminderInstanceInput {
   readonly createdAt: number;
   readonly updatedAt: number;
   readonly status?: InstanceStatus;
-  readonly takenAt?: number;
+  readonly completedAt?: number;
   readonly snoozedUntil?: number;
   readonly snoozeCount?: number;
   readonly notes?: string;
@@ -129,7 +129,7 @@ export function createReminderInstance(
     reminderKind: input.reminderKind,
     scheduledTime: input.scheduledTime,
     status: input.status ?? "pending",
-    takenAt: input.takenAt,
+    completedAt: input.completedAt,
     snoozedUntil: input.snoozedUntil,
     snoozeCount: input.snoozeCount ?? 0,
     notes: input.notes,

@@ -24,16 +24,24 @@ export const PRIORITIES = ["critical", "high", "normal", "low"] as const;
 export type Priority = (typeof PRIORITIES)[number];
 
 /**
- * `TaskRx.Core.InstanceStatus`.
+ * `TaskRx.Core.InstanceStatus`, with one member renamed.
+ *
+ * `completed` is what the C# called `Taken`. Both Kinds share this list and a
+ * task is never "taken", so keeping the medication spelling would have pushed a
+ * Kind check into every surface that displays a status — the per-consumer cost
+ * a unified timeline exists to remove. See ADR 0001, which also records why
+ * relabelling in the UI, or adding `done` alongside `taken`, were rejected. A
+ * medication is still *shown* as taken; only the stored vocabulary is
+ * Kind-neutral.
  *
  * `snoozed` is deliberately distinct from `skipped` and `missed`: the adherence
- * calculator (todo 18) filters non-`pending` instances and then counts only
- * taken/missed/skipped, which is what makes a snooze affect a medication streak
- * without counting as a miss.
+ * calculator filters non-`pending` instances and then counts only
+ * completed/missed/skipped, which is what makes a snooze affect a medication
+ * streak without counting as a miss.
  */
 export const INSTANCE_STATUSES = [
   "pending",
-  "taken",
+  "completed",
   "snoozed",
   "skipped",
   "missed",
@@ -41,7 +49,15 @@ export const INSTANCE_STATUSES = [
 
 export type InstanceStatus = (typeof INSTANCE_STATUSES)[number];
 
-/** `TaskRx.Core.NotificationType`, used by the notification log. */
+/**
+ * `TaskRx.Core.NotificationType`, used by the notification log.
+ *
+ * `taken` here is NOT the `InstanceStatus` member ADR 0001 renamed. This enum
+ * records what happened to a notification, not what became of an Instance, and
+ * the rename deliberately did not reach it. `reminder.test.ts` pins both lists
+ * so the difference cannot be "tidied away" by a blanket search-and-replace —
+ * which is exactly how it was nearly lost.
+ */
 export const NOTIFICATION_TYPES = [
   "fired",
   "taken",

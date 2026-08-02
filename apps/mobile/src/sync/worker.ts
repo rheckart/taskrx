@@ -90,7 +90,7 @@ interface ReminderInstancePayload {
   readonly reminderKind: ReminderKind;
   readonly scheduledTime: number;
   readonly status: InstanceStatus;
-  readonly takenAt: number | null;
+  readonly completedAt: number | null;
   readonly snoozedUntil: number | null;
   readonly snoozeCount: number;
   readonly notes: string | null;
@@ -423,7 +423,9 @@ export class SyncWorker {
             snoozeCount: payload.snoozeCount,
             createdAt: payload.createdAt,
             updatedAt: payload.updatedAt,
-            ...(payload.takenAt !== null ? { takenAt: payload.takenAt } : {}),
+            ...(payload.completedAt !== null
+              ? { completedAt: payload.completedAt }
+              : {}),
             ...(payload.snoozedUntil !== null
               ? { snoozedUntil: payload.snoozedUntil }
               : {}),
@@ -436,10 +438,12 @@ export class SyncWorker {
       case "update": {
         const convexId = await this.resolveReminderInstanceId(payload.localId);
         switch (payload.status) {
-          case "taken": {
-            await this.client.mutation(api.reminderInstances.markTaken, {
+          case "completed": {
+            await this.client.mutation(api.reminderInstances.markCompleted, {
               id: convexId,
-              ...(payload.takenAt !== null ? { takenAt: payload.takenAt } : {}),
+              ...(payload.completedAt !== null
+                ? { completedAt: payload.completedAt }
+                : {}),
             });
             break;
           }

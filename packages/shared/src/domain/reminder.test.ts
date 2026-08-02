@@ -21,11 +21,15 @@ describe("enums", () => {
     expect(PRIORITIES).toEqual(["critical", "high", "normal", "low"]);
     expect(INSTANCE_STATUSES).toEqual([
       "pending",
-      "taken",
+      "completed",
       "snoozed",
       "skipped",
       "missed",
     ]);
+    // `taken`, not `completed`. ADR 0001 renamed the member on
+    // `InstanceStatus`, which both Kinds share; `NotificationType` is a
+    // separate enum recording what happened to a notification, and the rename
+    // deliberately did not reach it.
     expect(NOTIFICATION_TYPES).toEqual([
       "fired",
       "taken",
@@ -185,7 +189,7 @@ describe("createReminderInstance", () => {
       reminderKind: "medication",
       scheduledTime: CREATED_AT,
       status: "pending",
-      takenAt: undefined,
+      completedAt: undefined,
       snoozedUntil: undefined,
       snoozeCount: 0,
       notes: undefined,
@@ -202,7 +206,7 @@ describe("createReminderInstance", () => {
       reminderKind: "task",
       scheduledTime: CREATED_AT,
       status: "snoozed",
-      takenAt: CREATED_AT + 60_000,
+      completedAt: CREATED_AT + 60_000,
       snoozedUntil: CREATED_AT + 600_000,
       snoozeCount: 2,
       notes: "after lunch",
@@ -211,7 +215,7 @@ describe("createReminderInstance", () => {
     });
 
     expect(instance.status).toBe("snoozed");
-    expect(instance.takenAt).toBe(CREATED_AT + 60_000);
+    expect(instance.completedAt).toBe(CREATED_AT + 60_000);
     expect(instance.snoozedUntil).toBe(CREATED_AT + 600_000);
     expect(instance.snoozeCount).toBe(2);
     expect(instance.notes).toBe("after lunch");

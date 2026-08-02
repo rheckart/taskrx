@@ -111,6 +111,11 @@ function buildNotification(occurrence: ScheduledOccurrence): Notification {
       channelId: MEDICATION_REMINDER_CHANNEL_ID,
       smallIcon: "ic_launcher",
       pressAction: {
+        // Not renamed with ADR 0001's `taken` -> `completed`. This is an
+        // Android identifier baked into every trigger already pending on the
+        // device, exactly like the channel id above: changing the string
+        // orphans the alarms armed under the old one. It is also never read
+        // back — `tap-handler.ts` matches on `EventType.PRESS`, not on this id.
         id: "mark-taken",
         launchActivity: "default",
       },

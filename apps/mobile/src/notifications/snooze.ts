@@ -55,6 +55,8 @@ export async function snoozeDose(
       channelId: MEDICATION_REMINDER_CHANNEL_ID,
       smallIcon: "ic_launcher",
       pressAction: {
+        // Not renamed with ADR 0001 — see `scheduler.ts` for why this string
+        // is frozen.
         id: "mark-taken",
         launchActivity: "default",
       },

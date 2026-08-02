@@ -190,7 +190,7 @@ export default function DoseLogScreen(): ReactElement {
     setError(null);
     try {
       const now = Date.now();
-      await instancesRepo.markTaken(state.instance.id, now);
+      await instancesRepo.markCompleted(state.instance.id, now);
       setCompletedAt(now);
       setActionStatus("done");
       showToast.success("Dose recorded");

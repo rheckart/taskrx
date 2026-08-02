@@ -36,12 +36,15 @@ export const priorityValidator = v.union(
 );
 
 /**
- * `InstanceStatus`. `snoozed` is deliberately distinct from `skipped` and
- * `missed` so a deferred dose does not count against adherence.
+ * `InstanceStatus`. `completed` is what a medication-only model would have
+ * called "taken"; both Kinds share this list and a task is never taken, so the
+ * stored vocabulary is Kind-neutral (ADR 0001). `snoozed` is deliberately
+ * distinct from `skipped` and `missed` so a deferred dose does not count
+ * against adherence.
  */
 export const instanceStatusValidator = v.union(
   v.literal("pending"),
-  v.literal("taken"),
+  v.literal("completed"),
   v.literal("snoozed"),
   v.literal("skipped"),
   v.literal("missed")
@@ -141,7 +144,7 @@ export const reminderInstanceFields = {
   reminderKind: reminderKindValidator,
   scheduledTime: v.number(),
   status: instanceStatusValidator,
-  takenAt: v.optional(v.number()),
+  completedAt: v.optional(v.number()),
   snoozedUntil: v.optional(v.number()),
   snoozeCount: v.number(),
   notes: v.optional(v.string()),

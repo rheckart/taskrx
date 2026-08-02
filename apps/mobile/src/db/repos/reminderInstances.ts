@@ -42,7 +42,7 @@ interface ReminderInstanceRow {
   readonly reminder_kind: ReminderKind;
   readonly scheduled_time: number;
   readonly status: string;
-  readonly taken_at: number | null;
+  readonly completed_at: number | null;
   readonly snoozed_until: number | null;
   readonly snooze_count: number;
   readonly notes: string | null;
@@ -81,7 +81,7 @@ function rowToInstance(row: ReminderInstanceRow): ReminderInstance {
     reminderKind: row.reminder_kind,
     scheduledTime: row.scheduled_time,
     status: parseStatus(row.status),
-    takenAt: row.taken_at ?? undefined,
+    completedAt: row.completed_at ?? undefined,
     snoozedUntil: row.snoozed_until ?? undefined,
     snoozeCount: row.snooze_count,
     notes: row.notes ?? undefined,
@@ -104,7 +104,7 @@ export async function create(
   await db.runAsync(
     `INSERT INTO reminder_instances (
       id, reminder_id, user_id, reminder_kind, scheduled_time,
-      status, taken_at, snoozed_until, snooze_count, notes,
+      status, completed_at, snoozed_until, snooze_count, notes,
       created_at, updated_at, sync_status
     ) VALUES (?, ?, ?, ?, ?, 'pending', NULL, NULL, 0, NULL, ?, ?, 'pending')`,
     id,
@@ -128,7 +128,7 @@ export async function create(
     reminderKind: input.reminderKind,
     scheduledTime: input.scheduledTime,
     status: "pending",
-    takenAt: null,
+    completedAt: null,
     snoozedUntil: null,
     snoozeCount: 0,
     notes: null,
@@ -216,7 +216,7 @@ async function updateStatus(
   id: string,
   status: InstanceStatus,
   fields: {
-    readonly takenAt?: number;
+    readonly completedAt?: number;
     readonly snoozedUntil?: number;
     readonly notes?: string;
     readonly incrementSnooze?: boolean;
@@ -231,12 +231,12 @@ async function updateStatus(
   const now = Date.now();
   await db.runAsync(
     `UPDATE reminder_instances
-     SET status = ?, taken_at = ?, snoozed_until = ?,
+     SET status = ?, completed_at = ?, snoozed_until = ?,
          snooze_count = snooze_count + ?, notes = ?,
          updated_at = ?, sync_status = 'pending'
      WHERE id = ?`,
     status,
-    fields.takenAt ?? null,
+    fields.completedAt ?? null,
     fields.snoozedUntil ?? null,
     fields.incrementSnooze === true ? 1 : 0,
     fields.notes ?? existing.notes ?? null,
@@ -259,7 +259,7 @@ async function updateStatus(
     reminderKind: updated.reminderKind,
     scheduledTime: updated.scheduledTime,
     status: updated.status,
-    takenAt: updated.takenAt ?? null,
+    completedAt: updated.completedAt ?? null,
     snoozedUntil: updated.snoozedUntil ?? null,
     snoozeCount: updated.snoozeCount,
     notes: updated.notes ?? null,
@@ -271,15 +271,18 @@ async function updateStatus(
 }
 
 /**
- * Mark an instance taken at `takenAt`, with optional notes.
+ * Mark an instance completed at `completedAt`, with optional notes.
+ *
+ * Named for the status, not for medication: a task completes through this same
+ * function. The screens still SAY "taken" for a medication (ADR 0001).
  */
-export async function markTaken(
+export async function markCompleted(
   id: string,
-  takenAt: number,
+  completedAt: number,
   notes?: string
 ): Promise<ReminderInstance> {
-  return updateStatus(id, "taken", {
-    takenAt,
+  return updateStatus(id, "completed", {
+    completedAt,
     ...(notes === undefined ? {} : { notes }),
   });
 }
@@ -288,7 +291,7 @@ export async function markTaken(
  * Snooze an instance until `snoozedUntil` and increment `snooze_count`.
  *
  * The status is 'snoozed', not 'skipped' or 'missed': the adherence
- * calculator counts taken/missed/skipped and a snooze is none of those, so a
+ * calculator counts completed/missed/skipped and a snooze is none of those, so a
  * snoozed dose does not break a streak.
  */
 export async function markSnoozed(
@@ -343,18 +346,18 @@ export async function findPendingForOccurrence(
 }
 
 /**
- * The most recent taken instance for a reminder, or `null` if it has never
- * been marked taken.
+ * The most recent completed instance for a reminder, or `null` if it has never
+ * been completed.
  */
-export async function lastTakenFor(
+export async function lastCompletedFor(
   userId: string,
   reminderId: string
 ): Promise<ReminderInstance | null> {
   const db = await getDb();
   const row = await db.getFirstAsync<ReminderInstanceRow>(
     `SELECT * FROM reminder_instances
-     WHERE user_id = ? AND reminder_id = ? AND status = 'taken'
-     ORDER BY taken_at DESC, scheduled_time DESC
+     WHERE user_id = ? AND reminder_id = ? AND status = 'completed'
+     ORDER BY completed_at DESC, scheduled_time DESC
      LIMIT 1`,
     userId,
     reminderId
@@ -437,7 +440,7 @@ export async function enqueueExternalWrite(id: string): Promise<void> {
       reminderKind: existing.reminderKind,
       scheduledTime: existing.scheduledTime,
       status: existing.status,
-      takenAt: existing.takenAt ?? null,
+      completedAt: existing.completedAt ?? null,
       snoozedUntil: existing.snoozedUntil ?? null,
       snoozeCount: existing.snoozeCount,
       notes: existing.notes ?? null,
@@ -570,7 +573,7 @@ export interface PulledReminderInstance {
  * written.
  *
  * `shouldApplyRemoteReminderInstance` carries the safety-critical rule: a local
- * row already `taken` is never overwritten, however new the remote copy is. An
+ * row already `completed` is never overwritten, however new the remote copy is. An
  * Instance the person recorded on this device is not erased by a stale copy
  * from another. Everything else is last-write-wins, local winning ties.
  *
@@ -598,7 +601,7 @@ export async function upsertMany(
     await db.runAsync(
       `INSERT INTO reminder_instances (
         id, reminder_id, user_id, reminder_kind, scheduled_time,
-        status, taken_at, snoozed_until, snooze_count, notes,
+        status, completed_at, snoozed_until, snooze_count, notes,
         created_at, updated_at, sync_status, convex_id
       ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'synced', ?)
       ON CONFLICT(id) DO UPDATE SET
@@ -607,7 +610,7 @@ export async function upsertMany(
         reminder_kind  = excluded.reminder_kind,
         scheduled_time = excluded.scheduled_time,
         status         = excluded.status,
-        taken_at       = excluded.taken_at,
+        completed_at   = excluded.completed_at,
         snoozed_until  = excluded.snoozed_until,
         snooze_count   = excluded.snooze_count,
         notes          = excluded.notes,
@@ -621,7 +624,7 @@ export async function upsertMany(
       instance.reminderKind,
       instance.scheduledTime,
       instance.status,
-      instance.takenAt ?? null,
+      instance.completedAt ?? null,
       instance.snoozedUntil ?? null,
       instance.snoozeCount,
       instance.notes ?? null,

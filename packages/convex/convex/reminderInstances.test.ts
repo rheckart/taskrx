@@ -106,7 +106,7 @@ describe("reminderInstances.create", () => {
         userId: OTHER,
         reminderId,
         scheduledTime: NOW,
-        status: "taken",
+        status: "completed",
         createdAt: NOW,
         updatedAt: NOW,
       })
@@ -159,7 +159,7 @@ describe("reminderInstances.create", () => {
       localId: instance.localId,
     });
     expect(row).toMatchObject({ status: "pending", snoozeCount: 0 });
-    expect(row).not.toHaveProperty("takenAt");
+    expect(row).not.toHaveProperty("completedAt");
     expect(row).not.toHaveProperty("snoozedUntil");
     expect(row).not.toHaveProperty("notes");
   });
@@ -173,8 +173,8 @@ describe("reminderInstances.create replayed for the same localId", () => {
 
     const second = await owner.mutation(api.reminderInstances.create, {
       ...instance,
-      status: "taken",
-      takenAt: NOW + 5 * 60_000,
+      status: "completed",
+      completedAt: NOW + 5 * 60_000,
       updatedAt: NOW + 5 * 60_000,
     });
 
@@ -183,7 +183,7 @@ describe("reminderInstances.create replayed for the same localId", () => {
       await owner.query(api.reminderInstances.getByLocalId, {
         localId: instance.localId,
       })
-    ).toMatchObject({ status: "taken", takenAt: NOW + 5 * 60_000 });
+    ).toMatchObject({ status: "completed", completedAt: NOW + 5 * 60_000 });
   });
 
   /**
@@ -239,9 +239,9 @@ describe("reminderInstances.create replayed for the same localId", () => {
     const { owner } = deployment();
     const { instance } = await seed(owner, OWNER);
     const id = await owner.mutation(api.reminderInstances.create, instance);
-    await owner.mutation(api.reminderInstances.markTaken, {
+    await owner.mutation(api.reminderInstances.markCompleted, {
       id,
-      takenAt: NOW + 60_000,
+      completedAt: NOW + 60_000,
     });
 
     const { status: _dropped, ...withoutStatus } = instance;
@@ -257,20 +257,20 @@ describe("reminderInstances.create replayed for the same localId", () => {
     ).toMatchObject({ status: "pending" });
   });
 
-  it("leaves an omitted takenAt, snoozedUntil and notes alone", async () => {
+  it("leaves an omitted completedAt, snoozedUntil and notes alone", async () => {
     const { owner } = deployment();
     const { instance } = await seed(owner, OWNER);
     await owner.mutation(api.reminderInstances.create, {
       ...instance,
-      status: "taken",
-      takenAt: NOW + 60_000,
+      status: "completed",
+      completedAt: NOW + 60_000,
       snoozedUntil: NOW + HOUR,
       notes: "with breakfast",
     });
 
     await owner.mutation(api.reminderInstances.create, {
       ...instance,
-      status: "taken",
+      status: "completed",
       updatedAt: NOW + 120_000,
     });
 
@@ -279,7 +279,7 @@ describe("reminderInstances.create replayed for the same localId", () => {
         localId: instance.localId,
       })
     ).toMatchObject({
-      takenAt: NOW + 60_000,
+      completedAt: NOW + 60_000,
       snoozedUntil: NOW + HOUR,
       notes: "with breakfast",
     });
@@ -345,7 +345,7 @@ describe("reminderInstances.list", () => {
       ...med.instance,
       localId: "local-instance-2",
       scheduledTime: NOW + 2 * HOUR,
-      status: "taken",
+      status: "completed",
     });
     await owner.mutation(api.reminderInstances.create, {
       ...task.instance,
@@ -356,7 +356,7 @@ describe("reminderInstances.list", () => {
       ...med.instance,
       localId: "local-instance-4",
       scheduledTime: NOW + 6 * HOUR,
-      status: "taken",
+      status: "completed",
     });
     return { med, task };
   }
@@ -387,7 +387,7 @@ describe("reminderInstances.list", () => {
       { localId: "local-instance-3" },
     ]);
     expect(
-      await owner.query(api.reminderInstances.list, { status: "taken" })
+      await owner.query(api.reminderInstances.list, { status: "completed" })
     ).toMatchObject([
       { localId: "local-instance-2" },
       { localId: "local-instance-4" },
@@ -433,7 +433,7 @@ describe("reminderInstances.list", () => {
     // the status index.
     expect(
       await owner.query(api.reminderInstances.list, {
-        status: "taken",
+        status: "completed",
         since: NOW + HOUR,
         until: NOW + 3 * HOUR,
       })
@@ -505,14 +505,14 @@ describe("reminderInstances.getByLocalId", () => {
   });
 });
 
-describe("reminderInstances.markTaken", () => {
+describe("reminderInstances.markCompleted", () => {
   it("refuses an instance belonging to someone else", async () => {
     const { owner, other } = deployment();
     const { instance } = await seed(owner, OWNER);
     const id = await owner.mutation(api.reminderInstances.create, instance);
 
     await expect(
-      other.mutation(api.reminderInstances.markTaken, { id })
+      other.mutation(api.reminderInstances.markCompleted, { id })
     ).rejects.toThrow(/Reminder instance not found/);
     expect(
       await owner.query(api.reminderInstances.getByLocalId, {
@@ -521,37 +521,37 @@ describe("reminderInstances.markTaken", () => {
     ).toMatchObject({ status: "pending" });
   });
 
-  it("honours an explicit takenAt", async () => {
+  it("honours an explicit completedAt", async () => {
     const { owner } = deployment();
     const { instance } = await seed(owner, OWNER);
     const id = await owner.mutation(api.reminderInstances.create, instance);
 
-    await owner.mutation(api.reminderInstances.markTaken, {
+    await owner.mutation(api.reminderInstances.markCompleted, {
       id,
-      takenAt: NOW + 60_000,
+      completedAt: NOW + 60_000,
     });
 
     expect(
       await owner.query(api.reminderInstances.getByLocalId, {
         localId: instance.localId,
       })
-    ).toMatchObject({ status: "taken", takenAt: NOW + 60_000 });
+    ).toMatchObject({ status: "completed", completedAt: NOW + 60_000 });
   });
 
-  it("falls back to wall-clock time when takenAt is omitted", async () => {
+  it("falls back to wall-clock time when completedAt is omitted", async () => {
     const { owner } = deployment();
     const { instance } = await seed(owner, OWNER);
     const id = await owner.mutation(api.reminderInstances.create, instance);
 
     const before = Date.now();
-    await owner.mutation(api.reminderInstances.markTaken, { id });
+    await owner.mutation(api.reminderInstances.markCompleted, { id });
     const after = Date.now();
 
     const row = await owner.query(api.reminderInstances.getByLocalId, {
       localId: instance.localId,
     });
-    expect(row?.takenAt).toBeGreaterThanOrEqual(before);
-    expect(row?.takenAt).toBeLessThanOrEqual(after);
+    expect(row?.completedAt).toBeGreaterThanOrEqual(before);
+    expect(row?.completedAt).toBeLessThanOrEqual(after);
   });
 });
 

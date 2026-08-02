@@ -62,10 +62,10 @@ function describeSchedule(reminder: Reminder): string {
 }
 
 function formatLastTaken(instance: ReminderInstance | null): string {
-  if (instance?.takenAt === undefined) {
+  if (instance?.completedAt === undefined) {
     return "Never";
   }
-  const date = new Date(instance.takenAt);
+  const date = new Date(instance.completedAt);
   return date.toLocaleString([], {
     month: "short",
     day: "numeric",
@@ -127,7 +127,10 @@ export default function MedsListScreen(): ReactElement {
       const rows = await remindersRepo.list(userId, "medication");
       const lastTakenEntries = await Promise.all(
         rows.map(async (med) => {
-          const lastTaken = await instancesRepo.lastTakenFor(userId, med.id);
+          const lastTaken = await instancesRepo.lastCompletedFor(
+            userId,
+            med.id
+          );
           return [med.id, lastTaken] as const;
         })
       );

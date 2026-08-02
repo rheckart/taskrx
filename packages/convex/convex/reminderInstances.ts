@@ -129,7 +129,7 @@ export const create = mutation({
     reminderId: v.id("reminders"),
     scheduledTime: v.number(),
     status: v.optional(instanceStatusValidator),
-    takenAt: v.optional(v.number()),
+    completedAt: v.optional(v.number()),
     snoozedUntil: v.optional(v.number()),
     snoozeCount: v.optional(v.number()),
     notes: v.optional(v.string()),
@@ -162,7 +162,7 @@ export const create = mutation({
       /**
        * A repeated `create` for the same `localId` is an upsert, not a no-op,
        * for the reason spelled out in `reminders.ts`: the device picks `create`
-       * whenever its local row still has no `convex_id`, so an instance taken
+       * whenever its local row still has no `convex_id`, so an instance completed
        * or snoozed while its first create is still queued enqueues a *second*
        * create carrying the newer status. Returning `existing._id` without
        * writing dropped that status on the floor, and the client marks the row
@@ -198,7 +198,9 @@ export const create = mutation({
         ...(args.snoozeCount !== undefined
           ? { snoozeCount: args.snoozeCount }
           : {}),
-        ...(args.takenAt !== undefined ? { takenAt: args.takenAt } : {}),
+        ...(args.completedAt !== undefined
+          ? { completedAt: args.completedAt }
+          : {}),
         ...(args.snoozedUntil !== undefined
           ? { snoozedUntil: args.snoozedUntil }
           : {}),
@@ -218,7 +220,9 @@ export const create = mutation({
       snoozeCount: args.snoozeCount ?? 0,
       createdAt: args.createdAt,
       updatedAt: args.updatedAt,
-      ...(args.takenAt !== undefined ? { takenAt: args.takenAt } : {}),
+      ...(args.completedAt !== undefined
+        ? { completedAt: args.completedAt }
+        : {}),
       ...(args.snoozedUntil !== undefined
         ? { snoozedUntil: args.snoozedUntil }
         : {}),
@@ -227,10 +231,14 @@ export const create = mutation({
   },
 });
 
-export const markTaken = mutation({
+/**
+ * Named for the status it writes, not for medication. A task completes through
+ * this same mutation; ADR 0001 is why there is only one.
+ */
+export const markCompleted = mutation({
   args: {
     id: v.id("reminderInstances"),
-    takenAt: v.optional(v.number()),
+    completedAt: v.optional(v.number()),
   },
   returns: v.id("reminderInstances"),
   handler: async (ctx, args) => {
@@ -241,8 +249,8 @@ export const markTaken = mutation({
     }
 
     await ctx.db.patch(args.id, {
-      status: "taken",
-      takenAt: args.takenAt ?? Date.now(),
+      status: "completed",
+      completedAt: args.completedAt ?? Date.now(),
       updatedAt: Date.now(),
     });
 

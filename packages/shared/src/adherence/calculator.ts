@@ -28,7 +28,7 @@
  * surfaced as its own field on `AdherenceStats` — counting only the
  * medication snoozes that actually affected `total` — so the treatment is
  * visible in the output rather than an implicit side effect of the
- * taken/missed/skipped math.
+ * completed/missed/skipped math.
  *
  * Local-calendar-date grouping follows the pattern established in
  * `../schedule/occurrences.ts`: built from `Date.getFullYear()` /
@@ -43,7 +43,7 @@ import type { ReminderInstance } from "../domain/reminder";
 /** `TaskRx.Core.DayAdherence`. `date` is a `DateOnly` day key, `"YYYY-MM-DD"`. */
 export interface DayAdherence {
   readonly date: string;
-  readonly taken: number;
+  readonly completed: number;
   readonly total: number;
   readonly percent: number;
 }
@@ -51,10 +51,15 @@ export interface DayAdherence {
 /**
  * `TaskRx.Core.AdherenceStats`, plus `snoozed` — see the file header for why
  * that field exists here but not on the C# record.
+ *
+ * `completed` is what the C# record calls `Taken`. Renamed with the status it
+ * counts (ADR 0001): the glossary lists "Taken" under _Avoid_ for the Completed
+ * concept, and Adherence has no carve-out from that. Adherence being a
+ * medication-only concept makes the medication word defensible, not correct.
  */
 export interface AdherenceStats {
   readonly percent: number;
-  readonly taken: number;
+  readonly completed: number;
   readonly missed: number;
   readonly skipped: number;
   readonly snoozed: number;
@@ -87,13 +92,13 @@ function localDateKey(ms: number): string {
   return `${year}-${month}-${day}`;
 }
 
-/** `taken / total * 100`, or `0` when `total` is `0` — `AdherenceCalculator.cs:15,25`. */
-function percentOf(taken: number, total: number): number {
-  return total > 0 ? (taken / total) * 100 : 0;
+/** `completed / total * 100`, or `0` when `total` is `0` — `AdherenceCalculator.cs:15,25`. */
+function percentOf(completed: number, total: number): number {
+  return total > 0 ? (completed / total) * 100 : 0;
 }
 
 interface DayBucket {
-  taken: number;
+  completed: number;
   total: number;
 }
 
@@ -114,8 +119,8 @@ export function computeAdherence(
       countsTowardTotal(instance)
   );
 
-  const taken = counted.filter(
-    (instance) => instance.status === "taken"
+  const completed = counted.filter(
+    (instance) => instance.status === "completed"
   ).length;
   const missed = counted.filter(
     (instance) => instance.status === "missed"
@@ -127,14 +132,14 @@ export function computeAdherence(
     (instance) => instance.status === "snoozed"
   ).length;
   const total = counted.length;
-  const percent = percentOf(taken, total);
+  const percent = percentOf(completed, total);
 
   const buckets = new Map<string, DayBucket>();
   for (const instance of counted) {
     const key = localDateKey(instance.scheduledTime);
-    const bucket = buckets.get(key) ?? { taken: 0, total: 0 };
+    const bucket = buckets.get(key) ?? { completed: 0, total: 0 };
     bucket.total += 1;
-    if (instance.status === "taken") bucket.taken += 1;
+    if (instance.status === "completed") bucket.completed += 1;
     buckets.set(key, bucket);
   }
 
@@ -145,11 +150,11 @@ export function computeAdherence(
     .map(
       ([date, bucket]): DayAdherence => ({
         date,
-        taken: bucket.taken,
+        completed: bucket.completed,
         total: bucket.total,
-        percent: percentOf(bucket.taken, bucket.total),
+        percent: percentOf(bucket.completed, bucket.total),
       })
     );
 
-  return { percent, taken, missed, skipped, snoozed, total, daily };
+  return { percent, completed, missed, skipped, snoozed, total, daily };
 }

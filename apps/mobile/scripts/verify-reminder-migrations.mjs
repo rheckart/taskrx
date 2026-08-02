@@ -84,6 +84,7 @@ const MIGRATION_FILES = [
   ["007_clear_projected_convex_ids", "007_clear_projected_convex_ids.sql"],
   ["008_sync_reconcile_indexes", "008_sync_reconcile_indexes.sql"],
   ["009_drop_legacy_generation", "009_drop_legacy_generation.sql"],
+  ["010_kind_neutral_instance_status", "010_kind_neutral_instance_status.sql"],
 ];
 
 /**
@@ -98,6 +99,13 @@ const MIGRATION_FILES = [
  * covers 009 itself.
  */
 const THROUGH_008 = MIGRATION_FILES.slice(0, 8).map(([name]) => name);
+
+/**
+ * Through 009 — the legacy generation dropped, but before 010 renames the
+ * instance status vocabulary. Part K asserts what 009 leaves behind, so it has
+ * to stop before the next migration edits the same table.
+ */
+const THROUGH_009 = MIGRATION_FILES.slice(0, 9).map(([name]) => name);
 
 const sqlByName = new Map(
   MIGRATION_FILES.map(([name, file]) => [
@@ -1902,9 +1910,11 @@ function partK() {
     .prepare("SELECT seq FROM sqlite_sequence WHERE name = 'sync_queue'")
     .get();
 
-  eq("009 is the only migration left to apply", applyMigrations(db, ALL), [
-    "009_drop_legacy_generation",
-  ]);
+  eq(
+    "009 is the only migration left to apply",
+    applyMigrations(db, THROUGH_009),
+    ["009_drop_legacy_generation"]
+  );
 
   const tables = db
     .prepare(
@@ -1987,7 +1997,263 @@ function partK() {
     `before ${JSON.stringify(seqBefore)}, after ${JSON.stringify(seqAfter)}`
   );
 
-  eq("re-running 009 is a no-op", applyMigrations(db, ALL), []);
+  eq("re-running 009 is a no-op", applyMigrations(db, THROUGH_009), []);
+
+  db.close();
+}
+
+// ── Part L: 010 renames the instance status vocabulary ────────────────────
+//
+// ADR 0001: 'taken' becomes 'completed' and taken_at becomes completed_at.
+// Nothing observable changes, which is exactly why this needs asserting — a
+// rename that silently drops rows looks identical to one that worked, until
+// somebody opens their history.
+//
+// The table is REBUILT (SQLite cannot alter a CHECK), so every row is copied by
+// hand and every index recreated by hand. Both are places to lose something.
+function partL() {
+  section("Part L — 010 renames the instance status vocabulary");
+
+  const db = open();
+  applyMigrations(db, THROUGH_009);
+
+  db.prepare(
+    `INSERT INTO reminders (id, user_id, kind, name, schedule, created_at,
+       updated_at, sync_status)
+     VALUES ('rem-1', 'u1', 'medication', 'Metformin',
+       '{"type":"daily","times":["09:00"]}', 1, 1, 'synced')`
+  ).run();
+
+  // One row per status, so the CASE cannot quietly rewrite the wrong one.
+  const mk = db.prepare(
+    `INSERT INTO reminder_instances (id, reminder_id, user_id, reminder_kind,
+       scheduled_time, status, taken_at, snoozed_until, snooze_count, notes,
+       created_at, updated_at, sync_status, convex_id)
+     VALUES (?, 'rem-1', 'u1', 'medication', ?, ?, ?, ?, 0, ?, 1, 1, ?, ?)`
+  );
+  mk.run("i-taken", 100, "taken", 150, null, "with notes", "synced", "cx-1");
+  mk.run("i-pending", 200, "pending", null, null, null, "pending", null);
+  mk.run("i-snoozed", 300, "snoozed", null, 350, null, "pending", null);
+  mk.run("i-skipped", 400, "skipped", null, null, null, "synced", null);
+  mk.run("i-missed", 500, "missed", null, null, null, "synced", null);
+
+  // Queue entries frozen under the old vocabulary, plus one that must not be
+  // touched. `q-pending` has an explicit null completion time, which is what
+  // the repo actually enqueues — the translation must preserve the key rather
+  // than drop it, or the worker's `!== null` guard spreads `undefined`.
+  const enqueue = db.prepare(
+    `INSERT INTO sync_queue (entity_type, entity_id, operation, payload, created_at)
+     VALUES (?,?,?,?,?)`
+  );
+  enqueue.run(
+    "reminder_instance",
+    "q-taken",
+    "update",
+    JSON.stringify({
+      localId: "q-taken",
+      status: "taken",
+      takenAt: 150,
+      snoozeCount: 0,
+    }),
+    1
+  );
+  enqueue.run(
+    "reminder_instance",
+    "q-pending",
+    "create",
+    JSON.stringify({ localId: "q-pending", status: "pending", takenAt: null }),
+    2
+  );
+  enqueue.run(
+    "reminder",
+    "q-rem",
+    "create",
+    JSON.stringify({ localId: "q-rem", name: "Metformin" }),
+    3
+  );
+
+  eq("010 is the only migration left to apply", applyMigrations(db, ALL), [
+    "010_kind_neutral_instance_status",
+  ]);
+
+  eq(
+    "taken_at is gone; completed_at replaces it",
+    columns(db, "reminder_instances"),
+    [
+      "id",
+      "reminder_id",
+      "user_id",
+      "reminder_kind",
+      "scheduled_time",
+      "status",
+      "completed_at",
+      "snoozed_until",
+      "snooze_count",
+      "notes",
+      "created_at",
+      "updated_at",
+      "sync_status",
+      "convex_id",
+    ]
+  );
+
+  // The translation, and the four statuses that must NOT have been touched.
+  eq(
+    "every row survives with its status translated exactly once",
+    db
+      .prepare(
+        "SELECT id, status FROM reminder_instances ORDER BY scheduled_time"
+      )
+      .all(),
+    [
+      { id: "i-taken", status: "completed" },
+      { id: "i-pending", status: "pending" },
+      { id: "i-snoozed", status: "snoozed" },
+      { id: "i-skipped", status: "skipped" },
+      { id: "i-missed", status: "missed" },
+    ]
+  );
+
+  // The rebuild copies fifteen columns by hand. A dropped one is a lost dose.
+  eq(
+    "the completed row keeps every other column through the rebuild",
+    db
+      .prepare(
+        `SELECT completed_at, snoozed_until, snooze_count, notes, sync_status,
+                convex_id, reminder_id, reminder_kind, scheduled_time
+         FROM reminder_instances WHERE id = 'i-taken'`
+      )
+      .get(),
+    {
+      completed_at: 150,
+      snoozed_until: null,
+      snooze_count: 0,
+      notes: "with notes",
+      sync_status: "synced",
+      convex_id: "cx-1",
+      reminder_id: "rem-1",
+      reminder_kind: "medication",
+      scheduled_time: 100,
+    }
+  );
+  eq(
+    "a snoozed row keeps snoozed_until",
+    db
+      .prepare(
+        "SELECT snoozed_until FROM reminder_instances WHERE id = 'i-snoozed'"
+      )
+      .get(),
+    { snoozed_until: 350 }
+  );
+
+  // The CHECK moved with the data. Both directions: the new value in, the old
+  // value out. Only the second catches a rebuild that forgot the constraint.
+  const tryStatus = (status) => {
+    try {
+      db.prepare(
+        `INSERT INTO reminder_instances (id, reminder_id, user_id, reminder_kind,
+           scheduled_time, status, created_at, updated_at)
+         VALUES (?, 'rem-1', 'u1', 'medication', 900, ?, 1, 1)`
+      ).run(`probe-${status}`, status);
+      return null;
+    } catch (e) {
+      return e;
+    }
+  };
+  ok("the CHECK accepts 'completed'", tryStatus("completed") === null);
+  ok("the CHECK now rejects 'taken'", tryStatus("taken") !== null);
+
+  // Indexes do not survive DROP TABLE. Losing the partial index is invisible
+  // until the pending lookup that runs on every foreground turns into a scan.
+  eq(
+    "every index is recreated by the rebuild",
+    indexes(db, "reminder_instances"),
+    [
+      "idx_reminder_instances_convex_id",
+      "idx_reminder_instances_pending",
+      "idx_reminder_instances_reminder",
+      "idx_reminder_instances_sync_status",
+      "idx_reminder_instances_user_scheduled",
+    ]
+  );
+
+  // Names are not enough, and the comment above is why. `PRAGMA index_list`
+  // reports only names, so an index recreated WITHOUT its WHERE clause passes
+  // the check above while being a different index — and the whole point of this
+  // one is that it stays small by excluding the answered rows, which accumulate
+  // forever. Assert the definition SQLite actually stored.
+  const pendingDef = db
+    .prepare(
+      `SELECT sql FROM sqlite_master
+       WHERE type = 'index' AND name = 'idx_reminder_instances_pending'`
+    )
+    .get();
+  ok(
+    "the pending index keeps its partial WHERE clause",
+    typeof pendingDef?.sql === "string" &&
+      /where\s+status\s*=\s*'pending'/i.test(pendingDef.sql),
+    `got ${JSON.stringify(pendingDef)}`
+  );
+
+  // The FK to `reminders` has to survive the rebuild, or an orphaned instance
+  // becomes insertable.
+  db.exec("PRAGMA foreign_keys = ON");
+  let orphanRejected = false;
+  try {
+    db.prepare(
+      `INSERT INTO reminder_instances (id, reminder_id, user_id, reminder_kind,
+         scheduled_time, status, created_at, updated_at)
+       VALUES ('orphan', 'no-such-reminder', 'u1', 'medication', 999, 'pending', 1, 1)`
+    ).run();
+  } catch {
+    orphanRejected = true;
+  }
+  ok("the foreign key to reminders survives the rebuild", orphanRejected);
+
+  // The QUEUE carries the old vocabulary too, and it is the half that fails
+  // silently. `sync_queue.payload` is a JSON snapshot frozen at enqueue time,
+  // so a device that upgrades with an un-drained queue -- offline when a dose
+  // was logged, which is what the queue is for -- still holds
+  // {"status":"taken"}. The worker has no 'taken' arm, so that entry burns five
+  // attempts and dead-letters: a recorded dose that never reaches the server,
+  // looking like a sync fault rather than a rename.
+  const queued = db
+    .prepare(`SELECT entity_type, payload FROM sync_queue ORDER BY created_at`)
+    .all()
+    .map((row) => ({
+      entity_type: row.entity_type,
+      // Key order is whatever `json_set` chose — it appends the new key rather
+      // than replacing in place. No consumer reads order (the worker
+      // destructures by name), so sort to assert content instead.
+      payload: Object.fromEntries(
+        Object.entries(JSON.parse(row.payload)).sort(([a], [b]) =>
+          a < b ? -1 : 1
+        )
+      ),
+    }));
+
+  eq(
+    "a queued 'taken' instance payload is translated",
+    queued.find((r) => r.payload.localId === "q-taken")?.payload,
+    {
+      completedAt: 150,
+      localId: "q-taken",
+      snoozeCount: 0,
+      status: "completed",
+    }
+  );
+  eq(
+    "a queued payload with no completion time keeps a null, not undefined",
+    queued.find((r) => r.payload.localId === "q-pending")?.payload,
+    { completedAt: null, localId: "q-pending", status: "pending" }
+  );
+  eq(
+    "a reminder payload is left alone -- it carries no status",
+    queued.find((r) => r.entity_type === "reminder")?.payload,
+    { localId: "q-rem", name: "Metformin" }
+  );
+
+  eq("re-running 010 is a no-op", applyMigrations(db, ALL), []);
 
   db.close();
 }
@@ -2004,6 +2270,7 @@ partH();
 partJ();
 partKFresh();
 partK();
+partL();
 
 console.log(
   `\n${checks - failures}/${checks} checks passed${failures === 0 ? "" : `, ${failures} FAILED`}`

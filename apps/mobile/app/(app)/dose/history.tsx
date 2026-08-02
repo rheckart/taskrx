@@ -29,16 +29,20 @@ interface DayGroup {
 }
 
 /**
- * `snoozed` exists in `InstanceStatus`, so switching over that union obliges
- * this arm to exist.
+ * "Taken", not "Completed", for the `completed` status.
  *
- * It does not yet render for anything this app writes. `dose/log.tsx` writes
- * instance status directly but only ever `taken` or `skipped`, and
+ * ADR 0001 made the STORED vocabulary Kind-neutral and explicitly kept the
+ * medication word in the UI: "a medication is still *shown* as taken". This
+ * screen lists medication instances, so that is what it shows, and the rename
+ * is invisible here — which is what the ticket asked for.
+ *
+ * `snoozed` exists in `InstanceStatus`, so switching over that union obliges
+ * that arm to exist too. It does not yet render for anything this app writes:
+ * `dose/log.tsx` writes only `completed` or `skipped`, and
  * `reminderInstances.markSnoozed` still has no callers — `snooze.ts`
  * reschedules the notification without recording an instance. The pull path
  * could deliver a snoozed instance authored elsewhere; nothing here creates
- * one. This arm stops being forward-looking when the snooze path writes
- * status.
+ * one.
  *
  * When it does become reachable it must not be folded into `skipped` or
  * `missed`: the adherence calculator counts those against the user and a
@@ -47,7 +51,7 @@ interface DayGroup {
  */
 function statusLabel(status: ReminderInstance["status"]): string {
   switch (status) {
-    case "taken":
+    case "completed":
       return "Taken";
     case "snoozed":
       return "Snoozed";
@@ -62,7 +66,7 @@ function statusLabel(status: ReminderInstance["status"]): string {
 
 function statusColor(status: ReminderInstance["status"]): string {
   switch (status) {
-    case "taken":
+    case "completed":
       return "#34c759";
     case "snoozed":
       return "#8e8e93";
@@ -129,8 +133,10 @@ function groupByDay(items: readonly HistoryItem[]): readonly DayGroup[] {
 function HistoryRow({ item }: { readonly item: HistoryItem }): ReactElement {
   const { instance, medicationName, dosage } = item;
   const scheduled = new Date(instance.scheduledTime);
-  const takenAt =
-    instance.takenAt !== undefined ? new Date(instance.takenAt) : null;
+  // Named for the field, labelled for the reader: the row still says "Taken"
+  // because this screen lists medications (ADR 0001).
+  const completedAt =
+    instance.completedAt !== undefined ? new Date(instance.completedAt) : null;
 
   return (
     <View style={styles.row}>
@@ -146,8 +152,8 @@ function HistoryRow({ item }: { readonly item: HistoryItem }): ReactElement {
         <Text style={styles.rowDosage}>{dosage}</Text>
       ) : null}
       <Text style={styles.rowTime}>Scheduled: {formatTime(scheduled)}</Text>
-      {takenAt !== null ? (
-        <Text style={styles.rowTime}>Taken: {formatTime(takenAt)}</Text>
+      {completedAt !== null ? (
+        <Text style={styles.rowTime}>Taken: {formatTime(completedAt)}</Text>
       ) : null}
       {instance.notes !== undefined && instance.notes.length > 0 ? (
         <Text style={styles.rowNotes}>{instance.notes}</Text>

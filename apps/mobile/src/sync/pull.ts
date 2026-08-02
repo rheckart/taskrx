@@ -64,7 +64,7 @@ interface ConvexReminderInstanceDoc {
   readonly reminderKind: ReminderInstance["reminderKind"];
   readonly scheduledTime: number;
   readonly status: ReminderInstance["status"];
-  readonly takenAt?: number;
+  readonly completedAt?: number;
   readonly snoozedUntil?: number;
   readonly snoozeCount: number;
   readonly notes?: string;
@@ -117,7 +117,7 @@ function convexDocToInstance(
       reminderKind: doc.reminderKind,
       scheduledTime: doc.scheduledTime,
       status: doc.status,
-      takenAt: doc.takenAt,
+      completedAt: doc.completedAt,
       snoozedUntil: doc.snoozedUntil,
       snoozeCount: doc.snoozeCount,
       notes: doc.notes,

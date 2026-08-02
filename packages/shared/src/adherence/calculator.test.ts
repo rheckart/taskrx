@@ -47,7 +47,7 @@ function dayDate(stats: AdherenceStats, index: number): string {
   return stats.daily[index]?.date ?? "";
 }
 function dayTaken(stats: AdherenceStats, index: number): number {
-  return stats.daily[index]?.taken ?? Number.NaN;
+  return stats.daily[index]?.completed ?? Number.NaN;
 }
 function dayTotal(stats: AdherenceStats, index: number): number {
   return stats.daily[index]?.total ?? Number.NaN;
@@ -62,14 +62,14 @@ describe("computeAdherence", () => {
     const from = local(2026, 7, 1);
     const to = from + MS_PER_DAY;
     const instances = [
-      instance(from + 8 * MS_PER_HOUR, "taken"),
-      instance(from + 14 * MS_PER_HOUR, "taken"),
+      instance(from + 8 * MS_PER_HOUR, "completed"),
+      instance(from + 14 * MS_PER_HOUR, "completed"),
     ];
 
     const stats = computeAdherence(instances, from, to);
 
     expect(stats.percent).toBe(100);
-    expect(stats.taken).toBe(2);
+    expect(stats.completed).toBe(2);
     expect(stats.missed).toBe(0);
     expect(stats.skipped).toBe(0);
     expect(stats.snoozed).toBe(0);
@@ -88,7 +88,7 @@ describe("computeAdherence", () => {
     const stats = computeAdherence(instances, from, to);
 
     expect(stats.percent).toBe(0);
-    expect(stats.taken).toBe(0);
+    expect(stats.completed).toBe(0);
     expect(stats.missed).toBe(2);
     expect(stats.skipped).toBe(0);
     expect(stats.total).toBe(2);
@@ -99,8 +99,8 @@ describe("computeAdherence", () => {
     const from = local(2026, 7, 1);
     const to = from + MS_PER_DAY;
     const instances = [
-      instance(from + 8 * MS_PER_HOUR, "taken"),
-      instance(from + 10 * MS_PER_HOUR, "taken"),
+      instance(from + 8 * MS_PER_HOUR, "completed"),
+      instance(from + 10 * MS_PER_HOUR, "completed"),
       instance(from + 12 * MS_PER_HOUR, "missed"),
       instance(from + 14 * MS_PER_HOUR, "skipped"),
     ];
@@ -108,7 +108,7 @@ describe("computeAdherence", () => {
     const stats = computeAdherence(instances, from, to);
 
     expect(stats.percent).toBe(50);
-    expect(stats.taken).toBe(2);
+    expect(stats.completed).toBe(2);
     expect(stats.missed).toBe(1);
     expect(stats.skipped).toBe(1);
     expect(stats.total).toBe(4);
@@ -128,7 +128,7 @@ describe("computeAdherence", () => {
     const stats = computeAdherence(instances, from, to);
 
     expect(stats.percent).toBe(0);
-    expect(stats.taken).toBe(0);
+    expect(stats.completed).toBe(0);
     expect(stats.missed).toBe(0);
     expect(stats.skipped).toBe(0);
     expect(stats.snoozed).toBe(0);
@@ -141,15 +141,15 @@ describe("computeAdherence", () => {
     const from = local(2026, 7, 2);
     const to = from + MS_PER_DAY;
     const instances = [
-      instance(from - MS_PER_DAY + 8 * MS_PER_HOUR, "taken"),
+      instance(from - MS_PER_DAY + 8 * MS_PER_HOUR, "completed"),
       instance(from + 8 * MS_PER_HOUR, "missed"),
-      instance(to + MS_PER_DAY + 8 * MS_PER_HOUR, "taken"),
+      instance(to + MS_PER_DAY + 8 * MS_PER_HOUR, "completed"),
     ];
 
     const stats = computeAdherence(instances, from, to);
 
     expect(stats.percent).toBe(0);
-    expect(stats.taken).toBe(0);
+    expect(stats.completed).toBe(0);
     expect(stats.missed).toBe(1);
     expect(stats.skipped).toBe(0);
     expect(stats.total).toBe(1);
@@ -162,9 +162,9 @@ describe("computeAdherence", () => {
     const from = local(2026, 7, 1);
     const to = from + 2 * MS_PER_DAY;
     const instances = [
-      instance(from + MS_PER_DAY + 9 * MS_PER_HOUR, "taken"),
+      instance(from + MS_PER_DAY + 9 * MS_PER_HOUR, "completed"),
       instance(from + MS_PER_DAY + 21 * MS_PER_HOUR, "skipped"),
-      instance(from + 8 * MS_PER_HOUR, "taken"),
+      instance(from + 8 * MS_PER_HOUR, "completed"),
       instance(from + 14 * MS_PER_HOUR, "missed"),
     ];
 
@@ -187,8 +187,8 @@ describe("computeAdherence", () => {
     const from = local(2026, 7, 1);
     const to = from + 2 * MS_PER_DAY;
     const instances = [
-      instance(from + 8 * MS_PER_HOUR, "taken"),
-      instance(from + MS_PER_DAY + 9 * MS_PER_HOUR, "taken"),
+      instance(from + 8 * MS_PER_HOUR, "completed"),
+      instance(from + MS_PER_DAY + 9 * MS_PER_HOUR, "completed"),
     ];
 
     const stats = computeAdherence(instances, from, to);
@@ -208,7 +208,7 @@ describe("computeAdherence", () => {
     const stats = computeAdherence([], from, to);
 
     expect(stats.percent).toBe(0);
-    expect(stats.taken).toBe(0);
+    expect(stats.completed).toBe(0);
     expect(stats.missed).toBe(0);
     expect(stats.skipped).toBe(0);
     expect(stats.snoozed).toBe(0);
@@ -221,7 +221,7 @@ describe("computeAdherence", () => {
       const from = local(2026, 7, 1);
       const to = from + MS_PER_DAY;
       const instances = [
-        instance(from + 8 * MS_PER_HOUR, "taken"),
+        instance(from + 8 * MS_PER_HOUR, "completed"),
         instance(from + 14 * MS_PER_HOUR, "snoozed"), // medication, default kind
       ];
 
@@ -230,7 +230,7 @@ describe("computeAdherence", () => {
       // Fixed behaviour: the snooze counts in total (2) but not in taken (1),
       // giving 50%.
       expect(stats.total).toBe(2);
-      expect(stats.taken).toBe(1);
+      expect(stats.completed).toBe(1);
       expect(stats.snoozed).toBe(1);
       expect(stats.percent).toBe(50);
 
@@ -247,14 +247,14 @@ describe("computeAdherence", () => {
       const from = local(2026, 7, 1);
       const to = from + MS_PER_DAY;
       const instances = [
-        instance(from + 8 * MS_PER_HOUR, "taken"),
+        instance(from + 8 * MS_PER_HOUR, "completed"),
         instance(from + 14 * MS_PER_HOUR, "snoozed", "task"),
       ];
 
       const stats = computeAdherence(instances, from, to);
 
       expect(stats.total).toBe(1);
-      expect(stats.taken).toBe(1);
+      expect(stats.completed).toBe(1);
       expect(stats.snoozed).toBe(0);
       expect(stats.percent).toBe(100);
     });
@@ -263,7 +263,7 @@ describe("computeAdherence", () => {
       const from = local(2026, 7, 1);
       const to = from + MS_PER_DAY;
       const instances = [
-        instance(from + 6 * MS_PER_HOUR, "taken"),
+        instance(from + 6 * MS_PER_HOUR, "completed"),
         instance(from + 8 * MS_PER_HOUR, "snoozed"), // medication: counts in the denominator
         instance(from + 10 * MS_PER_HOUR, "snoozed", "task"), // excluded entirely
         instance(from + 12 * MS_PER_HOUR, "missed"),
@@ -274,7 +274,7 @@ describe("computeAdherence", () => {
       // Overall: taken(1) + medication-snoozed(1) + missed(1) = 3; the
       // task-snoozed instance is excluded entirely, like Pending.
       expect(stats.total).toBe(3);
-      expect(stats.taken).toBe(1);
+      expect(stats.completed).toBe(1);
       expect(stats.missed).toBe(1);
       expect(stats.snoozed).toBe(1);
 

@@ -5,15 +5,15 @@ import type { Reminder, ReminderInstance } from "../index";
  * SQLite store.
  *
  * Two rules, and only the second is interesting: last-write-wins with the LOCAL
- * row winning ties, and — for an Instance — a locally `taken` row is never
+ * row winning ties, and — for an Instance — a locally `completed` row is never
  * overwritten at all.
  *
  * A medication/dose-log pair used to sit alongside these, written first and
  * copied here deliberately rather than generalized, on the reasoning that the
  * legacy pair was scheduled for deletion and ADR 0001 would rename `taken` to
- * `completed` on the unified side alone. The deletion has now happened, leaving
- * these as the only copy — which is what that reasoning predicted, and why
- * there was never an abstraction to unpick.
+ * `completed` on the unified side alone. Both have now happened, leaving these
+ * as the only copy — which is what that reasoning predicted, and why there was
+ * never an abstraction to unpick.
  */
 
 export type ReminderWithTimestamps = Pick<Reminder, "updatedAt">;
@@ -40,7 +40,7 @@ export function shouldApplyRemoteReminder(
 /**
  * Decide whether an incoming remote instance should overwrite the local row.
  *
- * A locally `taken` instance is NEVER overwritten by a remote pull — the
+ * A locally `completed` instance is NEVER overwritten by a remote pull — the
  * safety-critical rule, and the whole reason this is a separate function from
  * `shouldApplyRemoteReminder`. A taking the person recorded on this device must
  * not be erased by a stale copy arriving from another one. Everything else is
@@ -49,9 +49,9 @@ export function shouldApplyRemoteReminder(
  * `snoozed` gets no such protection: a deferral is not an answer, so a later
  * remote answer legitimately replaces it.
  *
- * When ADR 0001 renames the status to `completed`, this guard is the line that
- * has to move with it. It is the one place in the sync layer where the status
- * string is load-bearing rather than merely carried.
+ * This guard is the one place in the sync layer where the status string is
+ * load-bearing rather than merely carried, which is why ADR 0001's rename of
+ * `taken` to `completed` had to move this line with it.
  */
 export function shouldApplyRemoteReminderInstance(
   local: ReminderInstanceWithConflictFields | null,
@@ -60,7 +60,7 @@ export function shouldApplyRemoteReminderInstance(
   if (local === null) {
     return true;
   }
-  if (local.status === "taken") {
+  if (local.status === "completed") {
     return false;
   }
   return remote.updatedAt > local.updatedAt;
