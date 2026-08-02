@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * Data-survival check for migrations 004/005/006.
+ * Data-survival check for the reminder migrations.
  *
  * `apps/mobile` has no test runner (the only vitest project in the repo is
  * `packages/shared`), so this is a standalone script rather than a spec file.
@@ -17,8 +17,10 @@
  *   Part 0 — the SQL inlined in `src/db/index.ts` (what actually runs on the
  *            device) has not drifted from the `.sql` files (what gets
  *            reviewed).
- *   Part A — a fresh database applies 001 -> 006 and lands on the expected
+ *   Part A — a fresh database applies 001 -> 008 and lands on the expected
  *            schema, including the widened `sync_queue.entity_type` CHECK.
+ *            Stops at 008 because 009 then drops the legacy generation; Part K
+ *            covers that.
  *   Part B — a database seeded with 3 medications, 5 dose logs, and 4 pending
  *            sync_queue rows under 001/002/003 keeps all 12 rows, with the
  *            right field mapping, after 004/005/006. Values are asserted, not
@@ -29,6 +31,8 @@
  *   Part D — after the rebuild the queue still behaves: the two new entity
  *            types insert, a bogus one is still rejected, and AUTOINCREMENT
  *            continues from the preserved high-water mark.
+ *   Part K — 009 drops the legacy tables, deletes their queue entries, narrows
+ *            the CHECK, and leaves every unified row untouched.
  *
  * Uses `node:sqlite`, so it needs Node 22+. This is NOT the same SQLite build
  * that ships in expo-sqlite; it proves the SQL is correct, not that a
@@ -46,6 +50,30 @@ const HERE = dirname(fileURLToPath(import.meta.url));
 const MIGRATIONS_DIR = join(HERE, "..", "src", "db", "migrations");
 const DB_INDEX = join(HERE, "..", "src", "db", "index.ts");
 
+// Sources the later parts read to extract SQL or assert code shape. Declared
+// here rather than beside the medication-mirror checks that first needed them,
+// because those are gone and these outlived them.
+const REMINDERS_TS = join(HERE, "..", "src", "db", "repos", "reminders.ts");
+const INSTANCES_TS = join(
+  HERE,
+  "..",
+  "src",
+  "db",
+  "repos",
+  "reminderInstances.ts"
+);
+const WORKER_TS = join(HERE, "..", "src", "sync", "worker.ts");
+const CONVEX_REMINDERS_TS = join(
+  HERE,
+  "..",
+  "..",
+  "..",
+  "packages",
+  "convex",
+  "convex",
+  "reminders.ts"
+);
+
 const MIGRATION_FILES = [
   ["001_init", "001_init.sql"],
   ["002_add_convex_id", "002_add_convex_id.sql"],
@@ -55,7 +83,21 @@ const MIGRATION_FILES = [
   ["006_widen_sync_queue", "006_widen_sync_queue.sql"],
   ["007_clear_projected_convex_ids", "007_clear_projected_convex_ids.sql"],
   ["008_sync_reconcile_indexes", "008_sync_reconcile_indexes.sql"],
+  ["009_drop_legacy_generation", "009_drop_legacy_generation.sql"],
 ];
+
+/**
+ * Migrations up to and including 008 — the state in which the legacy
+ * `medications` and `dose_logs` tables still exist.
+ *
+ * Parts A-D exercise the projection machinery that ran while both generations
+ * were live. That history is still worth testing: an install upgrading from a
+ * pre-cutover build replays exactly these steps, and 005's backfill is what
+ * carries its data into the unified tables. But every one of those assertions
+ * is about tables 009 then drops, so they run against this prefix. Part K
+ * covers 009 itself.
+ */
+const THROUGH_008 = MIGRATION_FILES.slice(0, 8).map(([name]) => name);
 
 const sqlByName = new Map(
   MIGRATION_FILES.map(([name, file]) => [
@@ -68,6 +110,249 @@ function sql(name) {
   const text = sqlByName.get(name);
   if (text === undefined) throw new Error(`No SQL loaded for ${name}`);
   return text;
+}
+
+// ── source-reading helpers ────────────────────────────────────────────────
+//
+// Several parts assert on the SHAPE of TypeScript source rather than against a
+// database: pulling a SQL template literal out of a repo, or a function body to
+// check what it does and does not reference. These lived beside the mirror
+// checks that first needed them; those are deleted and these are not.
+
+/** Pulls a backtick template literal out of the TS source by its opening marker. */
+function template(source, marker) {
+  const start = source.indexOf(marker);
+  if (start === -1) throw new Error(`marker not found: ${marker}`);
+  const open = source.indexOf("`", start);
+  const close = source.indexOf("`", open + 1);
+  if (open === -1 || close === -1)
+    throw new Error(`no template after ${marker}`);
+  return source.slice(open + 1, close);
+}
+
+// The body of ONE function, brace-matched from its declaration.
+//
+// `template` above returns the first backtick literal after a marker, which for
+// a SQL-carrying function is the query string -- it can never contain a call.
+// An earlier version of the checks that used this fell back to searching the
+// whole file, so deleting one function's enqueue still matched an identical
+// call in its neighbour and the assertion passed against code that no longer
+// existed. Scoping to a single body is what makes such checks discriminating.
+//
+// String contents are blanked before counting. Relying on "these bodies happen
+// to contain no braces in literals" is exactly the kind of assumption that
+// rots -- the deleted mirror carried `ELSE '{}'` inside its SQL -- and a single
+// `"}"` in a body truncates the slice. That failure is silent for the
+// negative `!/.../` checks -- they pass because the call moved outside the
+// truncated window -- which is the same disease this extractor exists to cure.
+//
+// A regex-based blanker is not enough, and the gap was exploitable. An earlier
+// version matched only `"`, `'` and `` ` ``, so a REGEX literal containing a
+// brace -- `const stripBrace = /[}]/g;` -- still truncated the slice, and a real
+// call added below it passed its `!/.../` check vacuously.
+// That is the identical failure the string case was fixed for, one literal type
+// over. This is a single pass over the text instead, blanking the contents of
+// strings, template literals, regex literals AND comments, so callers no longer
+// have to strip comments first either.
+//
+// Fixing that one literal spelling was not enough either. Deciding regex-vs-
+// division from the previous character alone left `if (c) /[}]/.exec(x)` and
+// `} \n /[}]/` unblanked, and the keyword list was anchored against text ending
+// in the space before the `/`, so even `return /[}]/` never matched. Each was
+// the same truncation with a different token in front of it. The decision is
+// made against the last non-space character AND its index now, so:
+//
+//   * a keyword match tolerates the whitespace between it and the `/`;
+//   * `)` is resolved by matching back to its `(` -- regex only when that paren
+//     opened an `if`/`while`/`for`/`with` head, division otherwise;
+//   * `}` closes a block, and `} / 2` is not a thing, so it is regex position;
+//   * `]` stays division: `arr[0] /re/` does not parse, so it is not a shape a
+//     mutation can hide behind.
+//
+// Length is preserved exactly (newlines included) so every offset computed on
+// the blanked copy still indexes the original.
+const REGEX_CAN_FOLLOW = /[([{,;:=!&|?+\-*%^~<>]$/;
+const REGEX_CAN_FOLLOW_WORD =
+  /\b(return|typeof|case|in|of|do|else|yield|await|new|delete|void|instanceof)\s*$/;
+const CONTROL_HEAD = /\b(if|while|for|with)\s*$/;
+
+function blankLiterals(text) {
+  const out = text.split("");
+  const blank = (from, to) => {
+    for (let k = from; k < to && k < out.length; k += 1) {
+      if (out[k] !== "\n") out[k] = " ";
+    }
+  };
+  // The last non-space character seen in code position, and where it sits.
+  // Together these decide whether a `/` opens a regex or is a division operator.
+  let before = "";
+  let beforeIdx = -1;
+  let i = 0;
+
+  // Walks back over the already-blanked prefix to the `(` that `)` at `from`
+  // closes. Literals before `from` are blanked by now, so parens inside them
+  // cannot skew the depth count.
+  const matchBackParen = (from) => {
+    let depth = 0;
+    for (let k = from; k >= 0; k -= 1) {
+      if (out[k] === ")") depth += 1;
+      else if (out[k] === "(") {
+        depth -= 1;
+        if (depth === 0) return k;
+      }
+    }
+    return -1;
+  };
+
+  const stringEnd = (from, quote) => {
+    let j = from + 1;
+    while (j < text.length) {
+      if (text[j] === "\\") {
+        j += 2;
+        continue;
+      }
+      if (text[j] === quote) return j;
+      j += 1;
+    }
+    return text.length;
+  };
+
+  // The backtick that closes the template opening at `from`. Interpolations are
+  // skipped by brace count, recursing through nested templates and strings,
+  // because scanning for "the next backtick" closed the OUTER literal of
+  // `` `a${ `in}ner` }b` `` on the INNER one -- leaving a `}` visible with no
+  // `{` to match it. Same truncation as the regex case, one nesting level down.
+  const templateEnd = (from) => {
+    let j = from + 1;
+    while (j < text.length) {
+      const d = text[j];
+      if (d === "\\") {
+        j += 2;
+        continue;
+      }
+      if (d === "`") return j;
+      if (d === "$" && text[j + 1] === "{") {
+        let depth = 1;
+        j += 2;
+        while (j < text.length && depth > 0) {
+          const e = text[j];
+          if (e === "\\") {
+            j += 2;
+            continue;
+          }
+          if (e === "`") {
+            j = templateEnd(j) + 1;
+            continue;
+          }
+          if (e === '"' || e === "'") {
+            j = stringEnd(j, e) + 1;
+            continue;
+          }
+          if (e === "{") depth += 1;
+          else if (e === "}") depth -= 1;
+          j += 1;
+        }
+        continue;
+      }
+      j += 1;
+    }
+    return text.length;
+  };
+
+  const atRegexPosition = () => {
+    if (before === "") return true;
+    if (REGEX_CAN_FOLLOW.test(before)) return true;
+    if (REGEX_CAN_FOLLOW_WORD.test(text.slice(0, beforeIdx + 1))) return true;
+    if (before === "}") return true;
+    if (before === ")") {
+      const open = matchBackParen(beforeIdx);
+      return open !== -1 && CONTROL_HEAD.test(out.slice(0, open).join(""));
+    }
+    return false;
+  };
+
+  while (i < text.length) {
+    const c = text[i];
+    const next = text[i + 1];
+
+    if (c === "/" && next === "/") {
+      const nl = text.indexOf("\n", i);
+      const end = nl === -1 ? text.length : nl;
+      blank(i, end);
+      i = end;
+      continue;
+    }
+    if (c === "/" && next === "*") {
+      const close = text.indexOf("*/", i + 2);
+      const end = close === -1 ? text.length : close + 2;
+      blank(i, end);
+      i = end;
+      continue;
+    }
+    if (c === '"' || c === "'" || c === "`") {
+      const j = c === "`" ? templateEnd(i) : stringEnd(i, c);
+      blank(i + 1, j);
+      before = c;
+      beforeIdx = i;
+      i = Math.min(j + 1, text.length);
+      continue;
+    }
+    if (c === "/" && atRegexPosition()) {
+      let j = i + 1;
+      let inClass = false;
+      let closed = false;
+      while (j < text.length) {
+        const d = text[j];
+        if (d === "\\") {
+          j += 2;
+          continue;
+        }
+        // An unescaped newline means this was never a regex -- fall through and
+        // treat the `/` as division rather than eating the rest of the file.
+        if (d === "\n") break;
+        if (d === "[") inClass = true;
+        else if (d === "]") inClass = false;
+        else if (d === "/" && !inClass) {
+          closed = true;
+          break;
+        }
+        j += 1;
+      }
+      if (closed) {
+        blank(i + 1, j);
+        before = "/";
+        beforeIdx = j;
+        i = j + 1;
+        continue;
+      }
+    }
+    if (!/\s/.test(c)) {
+      before = c;
+      beforeIdx = i;
+    }
+    i += 1;
+  }
+
+  return out.join("");
+}
+
+function body(source, marker) {
+  const start = source.indexOf(marker);
+  if (start === -1) throw new Error(`marker not found: ${marker}`);
+  const open = source.indexOf("{", start);
+  if (open === -1) throw new Error(`no body after ${marker}`);
+  // Count over a literal-blanked copy, but slice from the original so callers
+  // still see real code. Offsets are preserved because blanking is same-length.
+  const scan = blankLiterals(source);
+  let depth = 0;
+  for (let i = open; i < scan.length; i += 1) {
+    if (scan[i] === "{") depth += 1;
+    else if (scan[i] === "}") {
+      depth -= 1;
+      if (depth === 0) return source.slice(open + 1, i);
+    }
+  }
+  throw new Error(`unbalanced body for ${marker}`);
 }
 
 // ── assertions ────────────────────────────────────────────────────────────
@@ -185,10 +470,10 @@ function indexes(db, table) {
 }
 
 function partA() {
-  section("Part A — fresh database, 001 -> 006");
+  section("Part A — fresh database, 001 -> 008 (both generations live)");
   const db = open();
-  const applied = applyMigrations(db, ALL);
-  eq("all six migrations applied", applied, ALL);
+  const applied = applyMigrations(db, THROUGH_008);
+  eq("every migration through 008 applied", applied, THROUGH_008);
 
   const tables = db
     .prepare(
@@ -856,7 +1141,7 @@ function partB() {
   }
   ok("before 006 the narrow CHECK rejects entity_type 'reminder'", !seededWide);
 
-  const applied = applyMigrations(db, ALL);
+  const applied = applyMigrations(db, THROUGH_008);
   eq("only 004/005/006 applied to the seeded db", applied, [
     "004_unified_reminders",
     "005_backfill_reminders",
@@ -876,7 +1161,7 @@ function partC(db) {
   section("Part C — re-running is idempotent");
 
   // C1: the runner's _migrations guard makes a second pass a no-op.
-  const reapplied = applyMigrations(db, ALL);
+  const reapplied = applyMigrations(db, THROUGH_008);
   eq("_migrations guard skips everything on a second pass", reapplied, []);
 
   // C2: force-execute 004, 005 and 006 again with the guard bypassed. This is
@@ -975,647 +1260,6 @@ function partD(db) {
   db.close();
 }
 
-// ── Part E: repos/medication-mirror.ts keeps `reminders` in step ──────────
-//
-// The scheduler reads `reminders`, so a medication written after the 005 boot
-// needs a projection or it silently never alarms. `medication-mirror.ts`
-// claims parity with 005 "by construction" — it reuses 005's SELECT rather
-// than re-deriving the mapping. This part holds that claim to account: it
-// extracts the real SQL out of the TS source (not a copy) and both diffs it
-// against the migration and executes it.
-
-const MIRROR_TS = join(HERE, "..", "src", "db", "repos", "medication-mirror.ts");
-const MEDS_TS = join(HERE, "..", "src", "db", "repos", "medications.ts");
-const REMINDERS_TS = join(HERE, "..", "src", "db", "repos", "reminders.ts");
-const WORKER_TS = join(HERE, "..", "src", "sync", "worker.ts");
-const CONVEX_REMINDERS_TS = join(
-  HERE,
-  "..",
-  "..",
-  "..",
-  "packages",
-  "convex",
-  "convex",
-  "reminders.ts"
-);
-const INSTANCES_TS = join(
-  HERE,
-  "..",
-  "src",
-  "db",
-  "repos",
-  "reminderInstances.ts"
-);
-
-/** Pulls a backtick template literal out of the TS source by its opening marker. */
-function template(source, marker) {
-  const start = source.indexOf(marker);
-  if (start === -1) throw new Error(`marker not found: ${marker}`);
-  const open = source.indexOf("`", start);
-  const close = source.indexOf("`", open + 1);
-  if (open === -1 || close === -1) throw new Error(`no template after ${marker}`);
-  return source.slice(open + 1, close);
-}
-
-// The body of ONE function, brace-matched from its declaration.
-//
-// `template` above returns the first backtick literal after a marker, which for
-// these mirror functions is the SQL string -- it can never contain a call. An
-// earlier version of the enqueue checks below fell back to searching the whole
-// file, so deleting `mirrorMedication`'s enqueue still matched the one inside
-// `mirrorMedicationDelete` and the assertion passed against code that no longer
-// existed. Scoping to a single body is what makes those checks discriminating.
-//
-// String contents are blanked before counting. Relying on "these bodies happen
-// to contain no braces in literals" is exactly the kind of assumption that
-// rots: `medication-mirror.ts` already carries `ELSE '{}'` inside its SQL, and
-// a single `"}"` in a body truncates the slice. That failure is silent for the
-// negative `!/.../` checks -- they pass because the call moved outside the
-// truncated window -- which is the same disease this extractor exists to cure.
-//
-// A regex-based blanker is not enough, and the gap was exploitable. An earlier
-// version matched only `"`, `'` and `` ` ``, so a REGEX literal containing a
-// brace -- `const stripBrace = /[}]/g;` -- still truncated the slice, and a real
-// `mirrorMedication` call added below it passed `!/mirrorMedication/` vacuously.
-// That is the identical failure the string case was fixed for, one literal type
-// over. This is a single pass over the text instead, blanking the contents of
-// strings, template literals, regex literals AND comments, so callers no longer
-// have to strip comments first either.
-//
-// Fixing that one literal spelling was not enough either. Deciding regex-vs-
-// division from the previous character alone left `if (c) /[}]/.exec(x)` and
-// `} \n /[}]/` unblanked, and the keyword list was anchored against text ending
-// in the space before the `/`, so even `return /[}]/` never matched. Each was
-// the same truncation with a different token in front of it. The decision is
-// made against the last non-space character AND its index now, so:
-//
-//   * a keyword match tolerates the whitespace between it and the `/`;
-//   * `)` is resolved by matching back to its `(` -- regex only when that paren
-//     opened an `if`/`while`/`for`/`with` head, division otherwise;
-//   * `}` closes a block, and `} / 2` is not a thing, so it is regex position;
-//   * `]` stays division: `arr[0] /re/` does not parse, so it is not a shape a
-//     mutation can hide behind.
-//
-// Length is preserved exactly (newlines included) so every offset computed on
-// the blanked copy still indexes the original.
-const REGEX_CAN_FOLLOW = /[([{,;:=!&|?+\-*%^~<>]$/;
-const REGEX_CAN_FOLLOW_WORD =
-  /\b(return|typeof|case|in|of|do|else|yield|await|new|delete|void|instanceof)\s*$/;
-const CONTROL_HEAD = /\b(if|while|for|with)\s*$/;
-
-function blankLiterals(text) {
-  const out = text.split("");
-  const blank = (from, to) => {
-    for (let k = from; k < to && k < out.length; k += 1) {
-      if (out[k] !== "\n") out[k] = " ";
-    }
-  };
-  // The last non-space character seen in code position, and where it sits.
-  // Together these decide whether a `/` opens a regex or is a division operator.
-  let before = "";
-  let beforeIdx = -1;
-  let i = 0;
-
-  // Walks back over the already-blanked prefix to the `(` that `)` at `from`
-  // closes. Literals before `from` are blanked by now, so parens inside them
-  // cannot skew the depth count.
-  const matchBackParen = (from) => {
-    let depth = 0;
-    for (let k = from; k >= 0; k -= 1) {
-      if (out[k] === ")") depth += 1;
-      else if (out[k] === "(") {
-        depth -= 1;
-        if (depth === 0) return k;
-      }
-    }
-    return -1;
-  };
-
-  const stringEnd = (from, quote) => {
-    let j = from + 1;
-    while (j < text.length) {
-      if (text[j] === "\\") {
-        j += 2;
-        continue;
-      }
-      if (text[j] === quote) return j;
-      j += 1;
-    }
-    return text.length;
-  };
-
-  // The backtick that closes the template opening at `from`. Interpolations are
-  // skipped by brace count, recursing through nested templates and strings,
-  // because scanning for "the next backtick" closed the OUTER literal of
-  // `` `a${ `in}ner` }b` `` on the INNER one -- leaving a `}` visible with no
-  // `{` to match it. Same truncation as the regex case, one nesting level down.
-  const templateEnd = (from) => {
-    let j = from + 1;
-    while (j < text.length) {
-      const d = text[j];
-      if (d === "\\") {
-        j += 2;
-        continue;
-      }
-      if (d === "`") return j;
-      if (d === "$" && text[j + 1] === "{") {
-        let depth = 1;
-        j += 2;
-        while (j < text.length && depth > 0) {
-          const e = text[j];
-          if (e === "\\") {
-            j += 2;
-            continue;
-          }
-          if (e === "`") {
-            j = templateEnd(j) + 1;
-            continue;
-          }
-          if (e === '"' || e === "'") {
-            j = stringEnd(j, e) + 1;
-            continue;
-          }
-          if (e === "{") depth += 1;
-          else if (e === "}") depth -= 1;
-          j += 1;
-        }
-        continue;
-      }
-      j += 1;
-    }
-    return text.length;
-  };
-
-  const atRegexPosition = () => {
-    if (before === "") return true;
-    if (REGEX_CAN_FOLLOW.test(before)) return true;
-    if (REGEX_CAN_FOLLOW_WORD.test(text.slice(0, beforeIdx + 1))) return true;
-    if (before === "}") return true;
-    if (before === ")") {
-      const open = matchBackParen(beforeIdx);
-      return open !== -1 && CONTROL_HEAD.test(out.slice(0, open).join(""));
-    }
-    return false;
-  };
-
-  while (i < text.length) {
-    const c = text[i];
-    const next = text[i + 1];
-
-    if (c === "/" && next === "/") {
-      const nl = text.indexOf("\n", i);
-      const end = nl === -1 ? text.length : nl;
-      blank(i, end);
-      i = end;
-      continue;
-    }
-    if (c === "/" && next === "*") {
-      const close = text.indexOf("*/", i + 2);
-      const end = close === -1 ? text.length : close + 2;
-      blank(i, end);
-      i = end;
-      continue;
-    }
-    if (c === '"' || c === "'" || c === "`") {
-      const j = c === "`" ? templateEnd(i) : stringEnd(i, c);
-      blank(i + 1, j);
-      before = c;
-      beforeIdx = i;
-      i = Math.min(j + 1, text.length);
-      continue;
-    }
-    if (c === "/" && atRegexPosition()) {
-      let j = i + 1;
-      let inClass = false;
-      let closed = false;
-      while (j < text.length) {
-        const d = text[j];
-        if (d === "\\") {
-          j += 2;
-          continue;
-        }
-        // An unescaped newline means this was never a regex -- fall through and
-        // treat the `/` as division rather than eating the rest of the file.
-        if (d === "\n") break;
-        if (d === "[") inClass = true;
-        else if (d === "]") inClass = false;
-        else if (d === "/" && !inClass) {
-          closed = true;
-          break;
-        }
-        j += 1;
-      }
-      if (closed) {
-        blank(i + 1, j);
-        before = "/";
-        beforeIdx = j;
-        i = j + 1;
-        continue;
-      }
-    }
-    if (!/\s/.test(c)) {
-      before = c;
-      beforeIdx = i;
-    }
-    i += 1;
-  }
-
-  return out.join("");
-}
-
-function body(source, marker) {
-  const start = source.indexOf(marker);
-  if (start === -1) throw new Error(`marker not found: ${marker}`);
-  const open = source.indexOf("{", start);
-  if (open === -1) throw new Error(`no body after ${marker}`);
-  // Count over a literal-blanked copy, but slice from the original so callers
-  // still see real code. Offsets are preserved because blanking is same-length.
-  const scan = blankLiterals(source);
-  let depth = 0;
-  for (let i = open; i < scan.length; i += 1) {
-    if (scan[i] === "{") depth += 1;
-    else if (scan[i] === "}") {
-      depth -= 1;
-      if (depth === 0) return source.slice(open + 1, i);
-    }
-  }
-  throw new Error(`unbalanced body for ${marker}`);
-}
-
-function partE() {
-  section("Part E — repos/medication-mirror.ts projects medications -> reminders");
-
-  const source = readFileSync(MIRROR_TS, "utf8");
-  const select = template(source, "const MEDICATION_TO_REMINDER_SELECT");
-  const insert = template(source, "async function upsertProjection(").replace(
-    "${MEDICATION_TO_REMINDER_SELECT}",
-    select
-  );
-  const softDelete = template(source, "async function mirrorMedicationDelete(");
-
-  // The drift guard. 005's SELECT runs from `SELECT src.id,` to `AS src;`; the
-  // mirror's is the same text plus a `WHERE src.id = ?`. If someone edits the
-  // schedule mapping in one place and not the other, this fails — which is the
-  // whole reason the mirror reuses the migration's SQL instead of its own.
-  const migration = sql("005_backfill_reminders");
-  const from = migration.indexOf("SELECT\n  src.id,");
-  const to = migration.indexOf("AS src;");
-  const migrationSelect = normalize(migration.slice(from, to + "AS src".length));
-  const mirrorSelect = normalize(select).replace(/ WHERE src\.id = \?$/, "");
-  ok(
-    "mirror SELECT is 005's SELECT verbatim (schedule mapping cannot drift)",
-    mirrorSelect === migrationSelect,
-    `\n    mirror:    ${mirrorSelect}\n    migration: ${migrationSelect}`
-  );
-  ok(
-    "mirror scopes the backfill SELECT to one medication",
-    /WHERE src\.id = \?\s*$/.test(select)
-  );
-  // Code only — the module's doc comment discusses enqueuing at length, so a
-  // bare substring search would match the prose.
-  const code = source
-    .replace(/\/\*[\s\S]*?\*\//g, "")
-    .replace(/\/\/.*$/gm, "");
-  // The mirror MUST enqueue. Migration 005 backfills in SQL and cannot; if the
-  // mirror does not either, no medication ever reaches the Convex `reminders`
-  // table and the unified model stays permanently empty. Both write paths are
-  // checked because a soft delete that stops propagating is just as silent.
-  ok(
-    "mirrorMedication enqueues a reminder sync entry",
-    /remindersRepo\.enqueueExternalWrite\(/.test(
-      body(code, "async function mirrorMedication(")
-    )
-  );
-  ok(
-    "mirrorMedicationDelete enqueues too",
-    /remindersRepo\.enqueueExternalWrite\(/.test(
-      body(code, "async function mirrorMedicationDelete(")
-    )
-  );
-  // The pull-path variant must do NEITHER thing the write path does. Enqueuing
-  // here pushes the server's own data back, one entry per medication in the
-  // account on every `api.medications.list` fire; re-pending marks rows dirty
-  // that nothing made dirty. Both regressions are invisible at runtime -- they
-  // just cost traffic -- so they need a check that fails.
-  ok(
-    "mirrorMedicationRow does not enqueue (pull path must not push back)",
-    !/enqueueExternalWrite\(/.test(
-      body(code, "async function mirrorMedicationRow(")
-    )
-  );
-  ok(
-    "mirrorMedicationRow does not re-pend",
-    /upsertProjection\(\s*medicationId\s*,\s*false\s*\)/.test(
-      body(code, "async function mirrorMedicationRow(")
-    )
-  );
-  ok(
-    "mirrorMedication does re-pend",
-    /upsertProjection\(\s*medicationId\s*,\s*true\s*\)/.test(
-      body(code, "async function mirrorMedication(")
-    )
-  );
-
-  // Callers. `markSynced` mirroring was the write amplifier: recording a
-  // successful push re-pended the projection and enqueued another. With the
-  // sync columns no longer projected, these three have nothing to mirror.
-  const medsCode = readFileSync(MEDS_TS, "utf8")
-    .replace(/\/\*[\s\S]*?\*\//g, "")
-    .replace(/\/\/.*$/gm, "");
-  for (const fn of ["markSynced", "markError", "setConvexId"]) {
-    ok(
-      `${fn} does not mirror (projection derives nothing from sync columns)`,
-      !/mirrorMedication/.test(body(medsCode, `async function ${fn}(`))
-    );
-  }
-  ok(
-    "the remote pull refreshes the row without pushing it back",
-    /mirrorMedicationRow\(/.test(body(medsCode, "async function upsertMany(")) &&
-      !/mirrorMedication\(/.test(body(medsCode, "async function upsertMany("))
-  );
-  // It routes through the repo rather than calling `enqueue` itself, so the
-  // reminder payload has exactly one definition. A direct `syncQueue` import
-  // here would be a second copy of that contract, free to drift.
-  ok(
-    "mirror does not hand-roll the payload (no direct syncQueue import)",
-    !/from\s+"\.\/syncQueue"/.test(code)
-  );
-  // `convex_id` must be absent from the projection entirely: the mirror has no
-  // `Id<"reminders">` to offer, and copying the medication's aimed a
-  // wrong-table document id at the sync worker. This is the M2 source guard —
-  // Part F covers the repair, this covers the regression.
-  ok(
-    "mirror never writes medications.convex_id into the projection",
-    !/src\.convex_id/.test(code) && !/COALESCE\(excluded\.convex_id/.test(code)
-  );
-
-  const db = open();
-  applyMigrations(db, ALL);
-
-  const insertMed = db.prepare(
-    `INSERT INTO medications (
-       id, user_id, convex_id, name, rxcui, dosage,
-       schedule_type, schedule_times, active, created_at, updated_at, sync_status
-     ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
-  );
-  // `REPEND_CLAUSE` is concatenated onto the statement *outside* the template
-  // literal, so `template()` cannot see it -- every check that runs `insert`
-  // alone is exercising the pull-path variant. An audit made that clause
-  // syntactically invalid, inverted it to `'synced'`, and deleted it outright,
-  // and the suite stayed green all three times.
-  //
-  // Preparing `insert + rependClause` here closed that, but only halfway: the
-  // harness was then asserting against its OWN concatenation, and nothing
-  // observed which variant `upsertProjection` actually selects. Swapping the
-  // source's ternary to `(repend ? "" : REPEND_CLAUSE)` -- a live bug that stops
-  // local edits re-pending and starts pull writes doing it -- still passed every
-  // check. So the argument expression is lifted out of the source and evaluated
-  // for both values of `repend`: the wiring is executed, not restated.
-  const rependClause = template(source, "const REPEND_CLAUSE");
-  const upsertBody = body(source, "async function upsertProjection(");
-  const sqlArgExpr = (() => {
-    const blanked = blankLiterals(upsertBody);
-    // The extraction takes the FIRST `db.runAsync` in the function, so it is
-    // only the executed one while there is exactly one. A correct copy parked
-    // in a dead branch, with the live call inverted to
-    // `(repend ? "" : REPEND_CLAUSE)`, otherwise reinstates the whole bug
-    // behind an expression the harness happily evaluates and approves.
-    const calls = blanked.split("db.runAsync(").length - 1;
-    ok(
-      "upsertProjection issues exactly one db.runAsync (the one extracted below)",
-      calls === 1,
-      `\n    found ${calls}`
-    );
-    const callAt = blanked.indexOf("db.runAsync(");
-    const open = blanked.indexOf("(", callAt);
-    let depth = 0;
-    let close = -1;
-    const commas = [];
-    for (let i = open; i < blanked.length; i += 1) {
-      const ch = blanked[i];
-      if (ch === "(" || ch === "[" || ch === "{") depth += 1;
-      else if (ch === ")" || ch === "]" || ch === "}") {
-        depth -= 1;
-        if (depth === 0) {
-          close = i;
-          break;
-        }
-      } else if (ch === "," && depth === 1) commas.push(i);
-    }
-    // Everything up to the last top-level comma: the SQL argument, whatever
-    // shape it has. `medicationId` is what follows it.
-    const lastComma = commas[commas.length - 1];
-    return upsertBody.slice(open + 1, lastComma === undefined ? close : lastComma);
-  })();
-
-  let buildSql;
-  try {
-    buildSql = new Function(
-      "MEDICATION_TO_REMINDER_SELECT",
-      "REPEND_CLAUSE",
-      "repend",
-      // Parenthesised: the extracted expression starts on the next line, and a
-      // bare `return` followed by a newline is an ASI hazard that silently
-      // returns undefined.
-      `return (${sqlArgExpr});`
-    );
-  } catch (err) {
-    ok("the mirror's SQL argument expression parses", false, `\n    ${err.message}`);
-    buildSql = (sel, clause, repend) => insert + (repend ? clause : "");
-  }
-
-  const prepared = (repend, label) => {
-    try {
-      const stmt = db.prepare(buildSql(select, rependClause, repend));
-      ok(`the ${label} variant is valid SQL`, true);
-      return stmt;
-    } catch (err) {
-      // Reported rather than thrown: a prepare failure here is the finding, and
-      // aborting would skip every remaining check in the file.
-      ok(`the ${label} variant is valid SQL`, false, `\n    ${err.message}`);
-      return db.prepare(insert);
-    }
-  };
-  const runMirror = prepared(true, "re-pend");
-  const runMirrorRow = prepared(false, "pull-path");
-  const runMirrorDelete = db.prepare(softDelete);
-  const reminder = (id) =>
-    db.prepare("SELECT * FROM reminders WHERE id = ?").get(id);
-
-  // A medication created *after* the migration — the case that has no backfill
-  // and is the entire reason this module exists.
-  insertMed.run(
-    "post-1", "user-1", null, "Sertraline", "36437", "50mg",
-    "daily", '{"times":["09:00","21:00"]}', 1, 1000, 1000, "pending"
-  );
-  runMirror.run("post-1");
-  const r1 = reminder("post-1");
-  ok("post-migration daily medication produces a reminders row", r1 !== undefined);
-  eq("  kind", r1?.kind, "medication");
-  eq("  name", r1?.name, "Sertraline");
-  eq("  rxcui survives (storage-only, as 005 preserves it)", r1?.rxcui, "36437");
-  eq("  dosage", r1?.dosage, "50mg");
-  eq("  schedule is the tagged daily union", r1?.schedule, '{"type":"daily","times":["09:00","21:00"]}');
-  eq("  priority defaults to normal", r1?.priority, "normal");
-  eq("  tags default to []", r1?.tags, "[]");
-  eq("  caregiver_ids default to []", r1?.caregiver_ids, "[]");
-  eq("  instructions has no POC source", r1?.instructions, null);
-  eq("  active", r1?.active, 1);
-  eq("  created_at is the medication's, not now()", r1?.created_at, 1000);
-  eq("  sync_status is forced to pending, not inherited", r1?.sync_status, "pending");
-
-  insertMed.run(
-    "post-2", "user-1", null, "Ibuprofen", null, "200mg",
-    "interval", '{"hours":8,"startAt":1700000000000}', 1, 2000, 2000, "pending"
-  );
-  runMirror.run("post-2");
-  eq(
-    "interval schedule maps to the tagged interval union",
-    reminder("post-2")?.schedule,
-    '{"type":"interval","hours":8,"startAt":1700000000000}'
-  );
-
-  // Same degrade 005 applies: a malformed blob becomes an empty schedule rather
-  // than throwing and taking the write down with it.
-  insertMed.run(
-    "post-3", "user-1", null, "Broken", null, null,
-    "daily", "not json at all", 1, 3000, 3000, "pending"
-  );
-  runMirror.run("post-3");
-  eq(
-    "an unparseable schedule_times degrades to an empty schedule, not an error",
-    reminder("post-3")?.schedule,
-    '{"type":"daily","times":[]}'
-  );
-
-  // Idempotency: the mirror runs on every write, including repeat writes.
-  runMirror.run("post-1");
-  runMirror.run("post-1");
-  eq(
-    "re-mirroring is idempotent (no duplicate rows)",
-    db.prepare("SELECT COUNT(*) AS n FROM reminders WHERE id = 'post-1'").get()
-      ?.n,
-    1
-  );
-
-  // An edit must reach the projection, or the alarm keeps firing on the old
-  // schedule after the user changed it.
-  db.prepare(
-    `UPDATE medications
-     SET name = 'Sertraline XR', schedule_times = '{"times":["08:00"]}',
-         updated_at = 4000, sync_status = 'pending'
-     WHERE id = 'post-1'`
-  ).run();
-  runMirror.run("post-1");
-  const r1b = reminder("post-1");
-  eq("an edit propagates: name", r1b?.name, "Sertraline XR");
-  eq("an edit propagates: schedule", r1b?.schedule, '{"type":"daily","times":["08:00"]}');
-  eq("an edit propagates: updated_at", r1b?.updated_at, 4000);
-
-  // `convex_id` is not in the conflict clause at all. A Convex document id is
-  // scoped to its table, so a medication's id (`Id<"medications">`) is not a
-  // legal value for `reminders.convex_id` (`Id<"reminders">`) no matter what
-  // either column currently holds. The mirror has no correct value to offer.
-  db.prepare("UPDATE reminders SET convex_id = 'cx-1' WHERE id = 'post-1'").run();
-  runMirror.run("post-1");
-  eq(
-    "mirroring does not erase a resolved reminder convex_id",
-    reminder("post-1")?.convex_id,
-    "cx-1"
-  );
-  // This is the M2 regression guard. The mirror used to COALESCE the
-  // medication's convex_id in, which aimed an `Id<"medications">` at
-  // `api.reminders.update` and at `api.reminderInstances.create`'s parent
-  // lookup. It must now be ignored.
-  db.prepare("UPDATE medications SET convex_id = 'cx-2' WHERE id = 'post-1'").run();
-  runMirror.run("post-1");
-  eq(
-    "a medication convex_id never reaches the reminder",
-    reminder("post-1")?.convex_id,
-    "cx-1"
-  );
-
-  // The re-pend clause, behaviorally. It fires only on ON CONFLICT, so a fresh
-  // insert cannot observe it -- the row has to be marked synced first. Without
-  // this, a local edit to an already-synced medication leaves the projection
-  // `synced`, `reconcilePending` never collects it, and the edit reaches the
-  // server for the medication but never for the reminder.
-  db.prepare(
-    "UPDATE reminders SET sync_status = 'synced' WHERE id = 'post-1'"
-  ).run();
-  db.prepare(
-    "UPDATE medications SET name = 'Sertraline ER' WHERE id = 'post-1'"
-  ).run();
-  runMirror.run("post-1");
-  eq(
-    "the local-write path re-pends an already-synced projection",
-    reminder("post-1")?.sync_status,
-    "pending"
-  );
-
-  // And the pull path must not, or every `api.medications.list` fire marks the
-  // whole account dirty and pushes the server's own rows straight back at it.
-  db.prepare(
-    "UPDATE reminders SET sync_status = 'synced' WHERE id = 'post-1'"
-  ).run();
-  db.prepare(
-    "UPDATE medications SET name = 'Sertraline SR' WHERE id = 'post-1'"
-  ).run();
-  runMirrorRow.run("post-1");
-  eq(
-    "the pull path leaves sync_status alone on conflict",
-    reminder("post-1")?.sync_status,
-    "synced"
-  );
-  eq(
-    "  but still refreshes the content",
-    reminder("post-1")?.name,
-    "Sertraline SR"
-  );
-
-  // Soft delete deactivates rather than removes: `selectUpcomingOccurrences`
-  // skips inactive reminders, and dose history still has to resolve the row.
-  runMirrorDelete.run(9000, "post-2");
-  const r2 = reminder("post-2");
-  eq("soft delete deactivates the projection", r2?.active, 0);
-  eq("soft delete keeps the row for dose history", r2 !== undefined, true);
-  eq("soft delete bumps updated_at", r2?.updated_at, 9000);
-
-  // Mirroring an id with no medication is a no-op, not a crash or a phantom row.
-  runMirror.run("does-not-exist");
-  eq(
-    "mirroring an unknown medication inserts nothing",
-    reminder("does-not-exist"),
-    undefined
-  );
-
-  // The backfilled and mirrored paths must be indistinguishable. Insert the
-  // same medication twice under different ids, backfill one via 005's own SQL
-  // and project the other via the mirror, then diff every column.
-  insertMed.run(
-    "parity-a", "user-9", "cx-9", "Parity", "111", "10mg",
-    "interval", '{"hours":6,"startAt":123}', 1, 5000, 6000, "synced"
-  );
-  insertMed.run(
-    "parity-b", "user-9", "cx-9", "Parity", "111", "10mg",
-    "interval", '{"hours":6,"startAt":123}', 1, 5000, 6000, "synced"
-  );
-  db.exec(sql("005_backfill_reminders")); // INSERT OR IGNORE — backfills parity-a and parity-b
-  db.prepare("DELETE FROM reminders WHERE id = 'parity-b'").run();
-  runMirror.run("parity-b");
-  const a = reminder("parity-a");
-  const b = reminder("parity-b");
-  const strip = (row) =>
-    Object.fromEntries(Object.entries(row ?? {}).filter(([k]) => k !== "id"));
-  eq(
-    "a mirrored row is column-for-column identical to a backfilled one",
-    strip(b),
-    strip(a)
-  );
-
-  db.close();
-}
-
 // ── Part F: 007 repairs devices that already applied the old 005 ──────────
 
 /**
@@ -1669,18 +1313,14 @@ function partH() {
   const claim = scan.indexOf("this.draining = true;");
   ok("drain() claims the flag", claim !== -1);
 
-  // The repair passes are only useful if something runs them, and the drain is
-  // the only caller. Medications must come first: an instance's insert is
-  // dropped by the EXISTS guard while its parent has no `reminders` row, so the
-  // reverse order costs a whole drain to repair both.
-  const medRepair = drain.indexOf("medicationMirror.repairMissingProjections(");
-  const doseRepair = drain.indexOf("doseLogMirror.repairMissingProjections(");
-  ok("drain() repairs medication projections", medRepair !== -1);
-  ok("drain() repairs dose log projections", doseRepair !== -1);
-  ok(
-    "drain() repairs medications before dose logs",
-    medRepair !== -1 && doseRepair !== -1 && medRepair < doseRepair
-  );
+  // The projection-repair assertions that used to sit here checked that the
+  // drain ran `medicationMirror.repairMissingProjections()` before the dose-log
+  // one. Both mirrors went with the legacy generation, and with a single
+  // generation of tables there is nothing left to project between.
+  //
+  // The reconcile ordering below is the surviving instance of the same rule and
+  // is still asserted: an instance's push resolves its parent, so the parent's
+  // queue entry has to be created first.
 
   // Ordering, not presence. The previous check here was `claim !== -1` under a
   // label that promised ordering, so inserting an `await` above the claim --
@@ -1691,7 +1331,9 @@ function partH() {
   // field has no other reader, which is not a property to lean on.
   ok(
     "drain() short-circuits on the flag before claiming it",
-    /if\s*\(\s*this\.draining\s*\)\s*\{?\s*return\b/.test(scan.slice(0, claim === -1 ? 0 : claim))
+    /if\s*\(\s*this\.draining\s*\)\s*\{?\s*return\b/.test(
+      scan.slice(0, claim === -1 ? 0 : claim)
+    )
   );
 
   const firstAwait = scan.search(/\bawait\b/);
@@ -1739,7 +1381,9 @@ function partH() {
   }
 
   const releasing = tries.filter(
-    (t) => t.fin && /this\.draining\s*=\s*false\s*;/.test(scan.slice(t.fin.open, t.fin.close))
+    (t) =>
+      t.fin &&
+      /this\.draining\s*=\s*false\s*;/.test(scan.slice(t.fin.open, t.fin.close))
   );
   ok(
     "exactly one try releases the flag in a finally",
@@ -1751,7 +1395,9 @@ function partH() {
   // Unconditionally. `finally { if (this.status !== "error") this.draining =
   // false; }` satisfies any "the finally mentions the release" pattern while
   // leaking the flag on every errored drain.
-  const finallyBody = guard ? scan.slice(guard.fin.open + 1, guard.fin.close) : "";
+  const finallyBody = guard
+    ? scan.slice(guard.fin.open + 1, guard.fin.close)
+    : "";
   ok(
     "that finally releases the flag unconditionally",
     guard !== undefined &&
@@ -2009,425 +1655,22 @@ function partF() {
   db.close();
 }
 
-// ── Part I: repos/dose-log-mirror.ts keeps `reminder_instances` in step ────
-//
-// Part E's twin, one table over, and the failure it guards is quieter. A
-// medication that stops projecting stops alarming, and the user notices. A dose
-// log that stops projecting changes nothing on the device -- the screens read
-// `dose_logs` -- while the server computes adherence from
-// `api.reminderInstances`. So the symptom is a server-side history that
-// silently stops growing, which is exactly the shape of bug that survives
-// manual QA. Everything here is the Part E check with the nouns changed,
-// deliberately: the two mirrors make the same claim and must be held to it the
-// same way.
-
-const DOSE_MIRROR_TS = join(
-  HERE,
-  "..",
-  "src",
-  "db",
-  "repos",
-  "dose-log-mirror.ts"
-);
-const DOSE_LOGS_TS = join(HERE, "..", "src", "db", "repos", "doseLogs.ts");
-
-function partI() {
-  section(
-    "Part I — repos/dose-log-mirror.ts projects dose_logs -> reminder_instances"
-  );
-
-  const source = readFileSync(DOSE_MIRROR_TS, "utf8");
-  const select = template(source, "const DOSE_LOG_TO_INSTANCE_SELECT");
-  const insert = template(source, "async function upsertProjection(").replace(
-    "${DOSE_LOG_TO_INSTANCE_SELECT}",
-    select
-  );
-
-  // The drift guard, as in Part E. 005's instance SELECT runs from
-  // `SELECT d.id,` to the end of its EXISTS clause; the mirror's is the same
-  // text plus `AND d.id = ?`.
-  const migration = sql("005_backfill_reminders");
-  const from = migration.indexOf("SELECT\n  d.id,");
-  const marker = "r.id = d.medication_id)";
-  const to = migration.indexOf(marker, from);
-  const migrationSelect = normalize(migration.slice(from, to + marker.length));
-  const mirrorSelect = normalize(select).replace(/ AND d\.id = \?$/, "");
-  ok(
-    "mirror SELECT is 005's instance SELECT verbatim (mapping cannot drift)",
-    mirrorSelect === migrationSelect,
-    `\n    mirror:    ${mirrorSelect}\n    migration: ${migrationSelect}`
-  );
-  ok(
-    "mirror scopes the backfill SELECT to one dose log",
-    /AND d\.id = \?\s*$/.test(select)
-  );
-
-  const code = source.replace(/\/\*[\s\S]*?\*\//g, "").replace(/\/\/.*$/gm, "");
-  ok(
-    "mirrorDoseLog enqueues an instance sync entry",
-    /instancesRepo\.enqueueExternalWrite\(/.test(
-      body(code, "async function mirrorDoseLog(")
-    )
-  );
-  ok(
-    "mirrorDoseLogRow does not enqueue (pull path must not push back)",
-    !/enqueueExternalWrite\(/.test(body(code, "async function mirrorDoseLogRow("))
-  );
-  ok(
-    "mirrorDoseLogRow does not re-pend",
-    /upsertProjection\(\s*doseLogId\s*,\s*false\s*\)/.test(
-      body(code, "async function mirrorDoseLogRow(")
-    )
-  );
-  ok(
-    "mirrorDoseLog does re-pend",
-    /upsertProjection\(\s*doseLogId\s*,\s*true\s*\)/.test(
-      body(code, "async function mirrorDoseLog(")
-    )
-  );
-  ok(
-    "mirror does not hand-roll the payload (no direct syncQueue import)",
-    !/from\s+"\.\/syncQueue"/.test(code)
-  );
-  // `dose_logs.convex_id` is an `Id<"doseLogs">`. Projecting it aims a
-  // wrong-table document id at `resolveReminderInstanceId` -- the defect
-  // migration 007 exists to clean up after 005 did it.
-  ok(
-    "mirror never writes dose_logs.convex_id into the projection",
-    !/d\.convex_id/.test(code) && !/COALESCE\(excluded\.convex_id/.test(code)
-  );
-
-  // Two independent reviews mutated this branch -- deleting the block outright,
-  // and downgrading it to console.log -- and the harness stayed at 193/193 both
-  // times. It is the only signal a maintainer gets that a dose log was never
-  // projected, and since the read cutover that means a dose missing from the
-  // user's history, so it gets a gate rather than a comment promising it
-  // matters.
-  const projectionBody = body(code, "async function upsertProjection(");
-  ok(
-    "a dropped projection is reported, at error level",
-    /result\.changes\s*===\s*0/.test(projectionBody) &&
-      /console\.error\(/.test(projectionBody)
-  );
-
-  // `doseLogs.upsertMany` updates `medication_id`, and the projection derives
-  // `reminder_id` from it. Dropping this one column from the conflict clause
-  // leaves an instance pointing at the medication it used to belong to, and
-  // every other check here passed with it deleted because the parity check
-  // exercises only the INSERT arm.
-  ok(
-    "the conflict clause re-points reminder_id",
-    /reminder_id\s*=\s*excluded\.reminder_id/.test(projectionBody)
-  );
-
-  // A mirror that throws is a projection lost for good: the conflict rules
-  // reject the re-pulled row and reconcilePending only re-enqueues rows that
-  // already exist. The repair pass is the only thing that closes that, so its
-  // absence should fail here rather than at a user's empty history screen.
-  ok(
-    "the mirror exposes a repair pass for lost projections",
-    /export async function repairMissingProjections\(/.test(code)
-  );
-
-  // The wiring. Without these the module is dead code and `reminder_instances`
-  // goes back to being frozen at the 005 boot -- the whole defect this part
-  // exists for, reachable by deleting three call sites and nothing else.
-  const doseCode = readFileSync(DOSE_LOGS_TS, "utf8")
-    .replace(/\/\*[\s\S]*?\*\//g, "")
-    .replace(/\/\/.*$/gm, "");
-  ok(
-    "doseLogs.create mirrors the new row",
-    /mirrorDoseLog\(/.test(body(doseCode, "export async function create("))
-  );
-  // Every status change -- taken, skipped, missed, and the soft delete -- funnels
-  // through `updateStatus`, so this one call site covers all four.
-  ok(
-    "doseLogs.updateStatus mirrors the status change",
-    /mirrorDoseLog\(/.test(body(doseCode, "async function updateStatus("))
-  );
-  ok(
-    "the remote pull refreshes the row without pushing it back",
-    /mirrorDoseLogRow\(/.test(body(doseCode, "async function upsertMany(")) &&
-      !/mirrorDoseLog\(/.test(body(doseCode, "async function upsertMany("))
-  );
-  for (const fn of ["markSynced", "markError", "setConvexId"]) {
-    ok(
-      `${fn} does not mirror (projection derives nothing from sync columns)`,
-      !/mirrorDoseLog/.test(body(doseCode, `export async function ${fn}(`))
-    );
-  }
-
-  // The re-pend wiring is executed rather than restated, for the reason Part E
-  // documents at length: asserting against the harness's own concatenation let
-  // an inverted ternary pass every check.
-  const rependClause = template(source, "const REPEND_CLAUSE");
-  const upsertBody = body(source, "async function upsertProjection(");
-  const sqlArgExpr = (() => {
-    const blanked = blankLiterals(upsertBody);
-    const calls = blanked.split("db.runAsync(").length - 1;
-    ok(
-      "upsertProjection issues exactly one db.runAsync (the one extracted below)",
-      calls === 1,
-      `\n    found ${calls}`
-    );
-    const callAt = blanked.indexOf("db.runAsync(");
-    const open = blanked.indexOf("(", callAt);
-    let depth = 0;
-    let close = -1;
-    const commas = [];
-    for (let i = open; i < blanked.length; i += 1) {
-      const ch = blanked[i];
-      if (ch === "(" || ch === "[" || ch === "{") depth += 1;
-      else if (ch === ")" || ch === "]" || ch === "}") {
-        depth -= 1;
-        if (depth === 0) {
-          close = i;
-          break;
-        }
-      } else if (ch === "," && depth === 1) commas.push(i);
-    }
-    const lastComma = commas[commas.length - 1];
-    return upsertBody.slice(
-      open + 1,
-      lastComma === undefined ? close : lastComma
-    );
-  })();
-
-  let buildSql;
-  try {
-    buildSql = new Function(
-      "DOSE_LOG_TO_INSTANCE_SELECT",
-      "REPEND_CLAUSE",
-      "repend",
-      `return (${sqlArgExpr});`
-    );
-  } catch (err) {
-    ok(
-      "the mirror's SQL argument expression parses",
-      false,
-      `\n    ${err.message}`
-    );
-    buildSql = (sel, clause, repend) => insert + (repend ? clause : "");
-  }
-
-  const db = open();
-  applyMigrations(db, ALL);
-  // The EXISTS guard's stated job is keeping `reminder_instances.reminder_id`
-  // satisfiable, and that claim is vacuous unless the constraint is armed.
-  db.exec("PRAGMA foreign_keys = ON");
-
-  const prepared = (repend, label) => {
-    try {
-      const stmt = db.prepare(buildSql(select, rependClause, repend));
-      ok(`the ${label} variant is valid SQL`, true);
-      return stmt;
-    } catch (err) {
-      ok(`the ${label} variant is valid SQL`, false, `\n    ${err.message}`);
-      return db.prepare(insert);
-    }
-  };
-  const runMirror = prepared(true, "re-pend");
-  const runMirrorRow = prepared(false, "pull-path");
-
-  const insertMed = db.prepare(
-    `INSERT INTO medications (
-       id, user_id, convex_id, name, rxcui, dosage,
-       schedule_type, schedule_times, active, created_at, updated_at, sync_status
-     ) VALUES (?, ?, NULL, 'Med', NULL, NULL, 'daily', '{"times":[]}', 1, 1, 1, 'synced')`
-  );
-  const insertReminder = db.prepare(
-    `INSERT INTO reminders (
-       id, user_id, kind, name, schedule, priority, tags, caregiver_ids,
-       active, created_at, updated_at, sync_status, convex_id
-     ) VALUES (?, ?, 'medication', 'Med', '{"type":"daily","times":[]}',
-               'normal', '[]', '[]', 1, 1, 1, 'synced', NULL)`
-  );
-  const insertDose = db.prepare(
-    `INSERT INTO dose_logs (
-       id, user_id, convex_id, medication_id, scheduled_time,
-       taken_at, status, notes, created_at, updated_at, sync_status
-     ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
-  );
-  const instance = (id) =>
-    db.prepare("SELECT * FROM reminder_instances WHERE id = ?").get(id);
-
-  insertMed.run("med-1", "user-1");
-  insertReminder.run("med-1", "user-1");
-
-  // A dose logged *after* the migration -- the case with no backfill, and the
-  // entire reason this module exists.
-  insertDose.run(
-    "dose-1", "user-1", null, "med-1", 7000,
-    null, "pending", null, 7000, 7000, "pending"
-  );
-  runMirror.run("dose-1");
-  const i1 = instance("dose-1");
-  ok("post-migration dose log produces a reminder_instances row", i1 !== undefined);
-  eq("  reminder_id is the medication id", i1?.reminder_id, "med-1");
-  eq("  reminder_kind", i1?.reminder_kind, "medication");
-  eq("  scheduled_time", i1?.scheduled_time, 7000);
-  eq("  status", i1?.status, "pending");
-  eq("  snoozed_until defaults to NULL", i1?.snoozed_until, null);
-  eq("  snooze_count defaults to 0", i1?.snooze_count, 0);
-  eq("  created_at is the dose log's, not now()", i1?.created_at, 7000);
-  eq("  sync_status is forced to pending, not inherited", i1?.sync_status, "pending");
-  eq("  convex_id starts NULL", i1?.convex_id, null);
-
-  // A status change must reach the projection, or the server's adherence
-  // numbers keep counting a taken dose as pending.
-  db.prepare(
-    `UPDATE dose_logs
-     SET status = 'taken', taken_at = 8100, notes = 'with food', updated_at = 8100
-     WHERE id = 'dose-1'`
-  ).run();
-  runMirror.run("dose-1");
-  const i1b = instance("dose-1");
-  eq("a status change propagates: status", i1b?.status, "taken");
-  eq("a status change propagates: taken_at", i1b?.taken_at, 8100);
-  eq("a status change propagates: notes", i1b?.notes, "with food");
-  eq("a status change propagates: updated_at", i1b?.updated_at, 8100);
-
-  eq(
-    "re-mirroring is idempotent (no duplicate rows)",
-    db
-      .prepare("SELECT COUNT(*) AS n FROM reminder_instances WHERE id = 'dose-1'")
-      .get()?.n,
-    1
-  );
-
-  // Snooze state has no dose-log source, so it must survive a dose-log edit
-  // rather than being reset to the migration's NULL/0.
-  db.prepare(
-    "UPDATE reminder_instances SET snoozed_until = 9500, snooze_count = 2 WHERE id = 'dose-1'"
-  ).run();
-  db.prepare("UPDATE dose_logs SET notes = 'edited' WHERE id = 'dose-1'").run();
-  runMirror.run("dose-1");
-  eq("a dose-log edit preserves snoozed_until", instance("dose-1")?.snoozed_until, 9500);
-  eq("a dose-log edit preserves snooze_count", instance("dose-1")?.snooze_count, 2);
-
-  // `convex_id` is not in the conflict clause at all: an `Id<"doseLogs">` is
-  // not a legal `Id<"reminderInstances">` no matter what either column holds.
-  db.prepare(
-    "UPDATE reminder_instances SET convex_id = 'ix-1' WHERE id = 'dose-1'"
-  ).run();
-  db.prepare("UPDATE dose_logs SET convex_id = 'dx-1' WHERE id = 'dose-1'").run();
-  runMirror.run("dose-1");
-  eq(
-    "mirroring does not erase a resolved instance convex_id",
-    instance("dose-1")?.convex_id,
-    "ix-1"
-  );
-  eq(
-    "a dose log convex_id never reaches the instance",
-    instance("dose-1")?.convex_id,
-    "ix-1"
-  );
-
-  // The re-pend clause, behaviorally. It fires only ON CONFLICT, so the row has
-  // to be marked synced first.
-  db.prepare(
-    "UPDATE reminder_instances SET sync_status = 'synced' WHERE id = 'dose-1'"
-  ).run();
-  db.prepare("UPDATE dose_logs SET status = 'skipped' WHERE id = 'dose-1'").run();
-  runMirror.run("dose-1");
-  eq(
-    "the local-write path re-pends an already-synced projection",
-    instance("dose-1")?.sync_status,
-    "pending"
-  );
-
-  db.prepare(
-    "UPDATE reminder_instances SET sync_status = 'synced' WHERE id = 'dose-1'"
-  ).run();
-  db.prepare("UPDATE dose_logs SET notes = 'pulled' WHERE id = 'dose-1'").run();
-  runMirrorRow.run("dose-1");
-  eq(
-    "the pull path leaves sync_status alone on conflict",
-    instance("dose-1")?.sync_status,
-    "synced"
-  );
-  eq("  but still refreshes the content", instance("dose-1")?.notes, "pulled");
-
-  // The EXISTS guard. A dose log whose medication was never projected must be
-  // skipped, not aborted -- an FK violation here would take the caller's dose
-  // write down with it, losing the dose the user just recorded.
-  insertMed.run("med-orphan", "user-1");
-  insertDose.run(
-    "dose-orphan", "user-1", null, "med-orphan", 7000,
-    null, "pending", null, 7000, 7000, "pending"
-  );
-  let aborted = null;
-  try {
-    runMirror.run("dose-orphan");
-  } catch (err) {
-    aborted = err.message;
-  }
-  ok(
-    "a dose log with no projected medication does not abort the write",
-    aborted === null,
-    `\n    ${aborted}`
-  );
-  eq(
-    "  and inserts no phantom instance",
-    instance("dose-orphan"),
-    undefined
-  );
-
-  // Mirroring an unknown id is a no-op, not a crash or a phantom row.
-  runMirror.run("does-not-exist");
-  eq(
-    "mirroring an unknown dose log inserts nothing",
-    instance("does-not-exist"),
-    undefined
-  );
-
-  // The backfilled and mirrored paths must be indistinguishable. Insert the
-  // same dose log twice under different ids, backfill one with 005's own SQL
-  // and project the other with the mirror, then diff every column.
-  insertDose.run(
-    "parity-a", "user-9", "dx-9", "med-1", 4242,
-    4300, "taken", "note", 4200, 4400, "synced"
-  );
-  insertDose.run(
-    "parity-b", "user-9", "dx-9", "med-1", 4242,
-    4300, "taken", "note", 4200, 4400, "synced"
-  );
-  db.prepare(
-    `INSERT OR IGNORE INTO reminder_instances (
-       id, reminder_id, user_id, reminder_kind, scheduled_time,
-       status, taken_at, snoozed_until, snooze_count, notes,
-       created_at, updated_at, sync_status, convex_id
-     )
-     ${migrationSelect} AND d.id = 'parity-a'`
-  ).run();
-  runMirror.run("parity-b");
-  const a = instance("parity-a");
-  const b = instance("parity-b");
-  const differing = Object.keys(a ?? {}).filter(
-    (k) => k !== "id" && a?.[k] !== b?.[k]
-  );
-  ok(
-    "a mirrored instance equals a backfilled one column for column",
-    a !== undefined && b !== undefined && differing.length === 0,
-    `\n    differing: ${differing.join(", ")}`
-  );
-
-  db.close();
-}
-
 /**
  * Part J — a device edit must not overwrite what only the server can author.
  *
- * `priority`, `tags` and `caregiverIds` have no local writer. `medication-mirror`
- * omits all three from its conflict clause and its SELECT supplies migration
- * 004's defaults; 005's backfill does the same; `remindersRepo.create` and
- * `.update` have no callers; and there is no pull path that would refresh a
- * `reminders` row from Convex. The columns are therefore always
- * `normal`/`[]`/`[]`, and `api.reminders.update` patches every field it is
- * handed — so pushing the column reset the server's copy. Not only on edit:
- * `mirrorMedication` re-pends the row, so `reconcilePending` re-sent the same
- * reset on later drains, and `reminders.create`'s collision branch defaulted
- * them a second time on any replayed create.
+ * `priority`, `tags` and `caregiverIds` still have no local author. Nothing on
+ * the device sets them: `remindersRepo.create` has callers now, but neither
+ * `meds/new.tsx` nor the stress-seed screen supplies any of the three, and a
+ * row backfilled by migration 005 carries 004's column defaults. The columns
+ * are therefore `normal`/`[]`/`[]`, and `api.reminders.update` patches every
+ * field it is handed — so pushing the column reset the server's copy. Not only
+ * on edit: a row left `pending` is re-enqueued by `reconcilePending`, which
+ * re-sent the same reset on later drains, and `reminders.create`'s collision
+ * branch defaulted them a second time on any replayed create.
+ *
+ * The original writer this guarded was the medication mirror, which omitted all
+ * three from its conflict clause. That module is deleted; the hazard is not,
+ * because the columns are still unauthored on this device.
  *
  * These checks are static, and that is not a compromise. The failure needs a
  * *second* writer — a web client, another device — to be observable at all, so
@@ -2435,7 +1678,9 @@ function partI() {
  * the thing to pin, and it is pinned on both sides of the wire.
  */
 function partJ() {
-  section("Part J: the mirror path does not push server-owned reminder fields");
+  section(
+    "Part J: the push path does not overwrite server-owned reminder fields"
+  );
 
   const strip = (src) =>
     src.replace(/\/\*[\s\S]*?\*\//g, "").replace(/\/\/.*$/gm, "");
@@ -2538,18 +1783,165 @@ function partJ() {
   }
 }
 
+// ── Part K: 009 drops the legacy generation ───────────────────────────────
+//
+// The end of the cutover, and the one migration that DESTROYS rather than adds.
+// Three things have to hold at once, and only the first is obvious:
+//
+//   * the legacy tables are gone;
+//   * everything unified survives untouched — the drop must not take the data
+//     the whole cutover existed to move;
+//   * `sync_queue` keeps its unified entries but loses the legacy ones, and its
+//     CHECK narrows so no new legacy entry can be written.
+//
+// The queue deletion is the subtle one. A leftover 'medication' entry addresses
+// a Convex function that no longer exists, so draining it could only burn five
+// attempts and dead-letter — noise that looks like a sync fault. It is deleted
+// rather than left, and this pins that.
+function partK() {
+  section("Part K — 009 drops the legacy generation");
+
+  const db = open();
+  applyMigrations(db, THROUGH_008);
+
+  // A device mid-cutover: legacy rows, unified rows, and queue entries of all
+  // four kinds.
+  db.prepare(
+    `INSERT INTO medications (id, user_id, name, schedule_type, schedule_times,
+       active, created_at, updated_at)
+     VALUES ('med-1', 'u1', 'Metformin', 'daily', '{"times":["09:00"]}', 1, 1, 1)`
+  ).run();
+  db.prepare(
+    `INSERT INTO dose_logs (id, user_id, medication_id, scheduled_time, status,
+       created_at, updated_at)
+     VALUES ('dose-1', 'u1', 'med-1', 100, 'taken', 1, 1)`
+  ).run();
+  db.prepare(
+    `INSERT INTO reminders (id, user_id, kind, name, schedule, created_at,
+       updated_at, sync_status)
+     VALUES ('rem-1', 'u1', 'medication', 'Metformin',
+       '{"type":"daily","times":["09:00"]}', 1, 1, 'synced')`
+  ).run();
+  db.prepare(
+    `INSERT INTO reminder_instances (id, reminder_id, user_id, reminder_kind,
+       scheduled_time, status, taken_at, created_at, updated_at, sync_status)
+     VALUES ('inst-1', 'rem-1', 'u1', 'medication', 100, 'taken', 150, 1, 1, 'synced')`
+  ).run();
+
+  const enqueue = db.prepare(
+    `INSERT INTO sync_queue (entity_type, entity_id, operation, payload, created_at)
+     VALUES (?,?,?,?,?)`
+  );
+  enqueue.run("medication", "med-1", "create", "{}", 1);
+  enqueue.run("dose_log", "dose-1", "create", "{}", 2);
+  enqueue.run("reminder", "rem-1", "create", "{}", 3);
+  enqueue.run("reminder_instance", "inst-1", "create", "{}", 4);
+
+  const seqBefore = db
+    .prepare("SELECT seq FROM sqlite_sequence WHERE name = 'sync_queue'")
+    .get();
+
+  eq("009 is the only migration left to apply", applyMigrations(db, ALL), [
+    "009_drop_legacy_generation",
+  ]);
+
+  const tables = db
+    .prepare(
+      "SELECT name FROM sqlite_master WHERE type = 'table' ORDER BY name"
+    )
+    .all()
+    .map((row) => row.name)
+    .filter((name) => !name.startsWith("sqlite_"));
+  eq("only the unified generation remains", tables, [
+    "_migrations",
+    "reminder_instances",
+    "reminders",
+    "sync_queue",
+  ]);
+
+  // The point of the whole cutover: the unified rows are still here, with their
+  // values, not merely their table.
+  eq(
+    "the reminder survives with its schedule intact",
+    db.prepare("SELECT id, name, schedule FROM reminders").all(),
+    [
+      {
+        id: "rem-1",
+        name: "Metformin",
+        schedule: '{"type":"daily","times":["09:00"]}',
+      },
+    ]
+  );
+  eq(
+    "the taken instance survives, status and timestamp intact",
+    db
+      .prepare(
+        "SELECT id, reminder_id, status, taken_at FROM reminder_instances"
+      )
+      .all(),
+    [{ id: "inst-1", reminder_id: "rem-1", status: "taken", taken_at: 150 }]
+  );
+
+  eq(
+    "unified queue entries survive, legacy ones are deleted",
+    db
+      .prepare(
+        "SELECT entity_type, entity_id FROM sync_queue ORDER BY created_at"
+      )
+      .all(),
+    [
+      { entity_type: "reminder", entity_id: "rem-1" },
+      { entity_type: "reminder_instance", entity_id: "inst-1" },
+    ]
+  );
+
+  const tryInsert = (entityType) => {
+    try {
+      db.prepare(
+        `INSERT INTO sync_queue (entity_type, entity_id, operation, payload, created_at)
+         VALUES (?,?,?,?,?)`
+      ).run(entityType, "x", "create", "{}", 9);
+      return null;
+    } catch (e) {
+      return e;
+    }
+  };
+  ok(
+    "the narrowed CHECK rejects 'medication'",
+    tryInsert("medication") !== null
+  );
+  ok("the narrowed CHECK rejects 'dose_log'", tryInsert("dose_log") !== null);
+  ok("'reminder' is still accepted", tryInsert("reminder") === null);
+
+  // The rebuild carries the AUTOINCREMENT watermark, as 006's did. Without it
+  // the queue reuses ids a drained entry once held.
+  const seqAfter = db
+    .prepare("SELECT seq FROM sqlite_sequence WHERE name = 'sync_queue'")
+    .get();
+  ok(
+    "the AUTOINCREMENT watermark is not rewound by the rebuild",
+    seqBefore !== undefined &&
+      seqAfter !== undefined &&
+      seqAfter.seq >= seqBefore.seq,
+    `before ${JSON.stringify(seqBefore)}, after ${JSON.stringify(seqAfter)}`
+  );
+
+  eq("re-running 009 is a no-op", applyMigrations(db, ALL), []);
+
+  db.close();
+}
+
 // ── run ───────────────────────────────────────────────────────────────────
 
 console.log(`node ${process.version}, node:sqlite`);
 part0();
 partA();
 partD(partC(partB()));
-partE();
 partF();
 partG();
 partH();
-partI();
 partJ();
+partK();
 
 console.log(
   `\n${checks - failures}/${checks} checks passed${failures === 0 ? "" : `, ${failures} FAILED`}`

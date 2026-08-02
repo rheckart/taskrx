@@ -4,24 +4,24 @@ import { getDb } from "../index";
  * Local SQLite repository for the sync queue.
  *
  * The sync queue is an append-only log of pending writes that need to be
- * pushed to Convex. Every local mutation (medication create/update/delete,
- * dose log create/update, and the unified reminder / reminder instance
- * equivalents) enqueues an entry here. The sync worker drains the queue,
- * calls the matching Convex mutation, and deletes the entry on success.
+ * pushed to Convex. Every local mutation — reminder create/update/delete and
+ * reminder-instance create/update — enqueues an entry here. The sync worker
+ * drains the queue, calls the matching Convex mutation, and deletes the entry
+ * on success.
  */
 
 /**
- * The entity kinds the queue accepts. This union is enforced in the database
- * by the `entity_type` CHECK constraint on `sync_queue`: 001 declared it with
- * only 'medication' and 'dose_log', and `006_widen_sync_queue.sql` rebuilt the
- * table to admit the two unified kinds. Adding a member here without widening
- * that CHECK produces a constraint failure at insert time, not a type error.
+ * The entity kinds the queue accepts. This union is enforced in the database by
+ * the `entity_type` CHECK constraint on `sync_queue`, most recently rewritten
+ * by `009_drop_legacy_generation`. Adding a member here without widening that
+ * CHECK produces a constraint failure at insert time, not a type error.
+ *
+ * The legacy 'medication' and 'dose_log' members were removed with the tables
+ * they named. Migration 009 deletes any queue rows still carrying them: those
+ * entries address Convex functions that no longer exist, so draining one could
+ * only ever dead-letter it after burning five attempts.
  */
-export type SyncEntityType =
-  | "medication"
-  | "dose_log"
-  | "reminder"
-  | "reminder_instance";
+export type SyncEntityType = "reminder" | "reminder_instance";
 export type SyncOperation = "create" | "update" | "delete";
 
 export interface SyncQueueEntry {
@@ -105,8 +105,8 @@ export async function pending(): Promise<readonly SyncQueueEntry[]> {
 /**
  * Return dead-lettered entries for inspection. Never called by the worker;
  * exposed for debug UI and manual requeue flows. Rows remain in the queue
- * indefinitely — the choice to keep them is deliberate: a dropped
- * medication dose log is unacceptable data loss.
+ * indefinitely — the choice to keep them is deliberate: a dropped record of a
+ * medication taken is unacceptable data loss.
  */
 export async function deadLettered(): Promise<readonly SyncQueueEntry[]> {
   const db = await getDb();

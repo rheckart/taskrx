@@ -4,17 +4,15 @@ import { v } from "convex/values";
 /**
  * Convex schema for TaskRx.
  *
- * Two generations of tables live here at once.
+ * One generation of tables. A POC pair, `medications` / `doseLogs`, used to sit
+ * alongside these; it was deleted once nothing read or wrote it, together with
+ * its device-side tables (migration 009) and its query/mutation modules.
  *
- * `medications` / `doseLogs` are the POC shape (`.omo/plans/poc-plan.md` §6.2),
- * mirrored by local SQLite in `apps/mobile/src/db/migrations/001_init.sql`.
- * They are kept readable until the device-side data migration has run.
- *
- * `reminders` / `reminderInstances` are the unified shape, matching the domain
- * types in `packages/shared/src/domain/reminder.ts`. The difference that
- * motivates the widening is `kind`: one reminder is either a medication or a
- * task, where `medications` can only express the former. Weekly schedules,
- * priority, tags, refill tracking, caregiver fan-out, and snoozing arrive with
+ * `reminders` / `reminderInstances` match the domain types in
+ * `packages/shared/src/domain/reminder.ts`. The difference that motivated
+ * replacing the POC pair is `kind`: one reminder is either a medication or a
+ * task, where `medications` could only express the former. Weekly schedules,
+ * priority, tags, refill tracking, caregiver fan-out, and snoozing arrived with
  * it. The Postgres target this shape came from is on the archive branch, at
  * `src/TaskRx.Data/Migrations/M0001_InitialSchema.cs`.
  *
@@ -23,7 +21,7 @@ import { v } from "convex/values";
  * same source and cannot drift from the stored shape.
  */
 
-/** `ReminderKind` — the axis `medications` does not have. */
+/** `ReminderKind` — the axis the POC medication shape did not have. */
 export const reminderKindValidator = v.union(
   v.literal("medication"),
   v.literal("task")
@@ -101,8 +99,9 @@ export const scheduleTimesValidator = v.union(
  * device UUID *is* the identity, while here Convex assigns `_id` and `localId`
  * is the join key back to the SQLite row.
  *
- * `rxcui` and `deletedAt` are likewise outside the domain type: `rxcui` carries
- * the RxNorm code forward from `medications` so the migration does not drop it,
+ * `rxcui` and `deletedAt` are likewise outside the domain type: `rxcui` carried
+ * the RxNorm code forward from the POC medication shape so the migration would
+ * not drop it,
  * and `deletedAt` is the soft-delete tombstone the sync layer needs to
  * propagate a deletion to other devices.
  */
@@ -151,52 +150,6 @@ export const reminderInstanceFields = {
 };
 
 export default defineSchema({
-  medications: defineTable({
-    // Clerk user ID, extracted from the JWT subject by the auth helper.
-    userId: v.string(),
-    // Stable local UUID from the device SQLite row. Used by the sync worker to
-    // map local ids to Convex-generated ids and to make create operations
-    // idempotent across app restarts.
-    localId: v.string(),
-    name: v.string(),
-    rxcui: v.optional(v.string()),
-    dosage: v.optional(v.string()),
-    scheduleType: v.union(v.literal("daily"), v.literal("interval")),
-    // JSON payload whose shape matches the SQLite `schedule_times` column:
-    // daily: { times: string[] }
-    // interval: { hours: number; startAt: number }
-    scheduleTimes: v.any(),
-    active: v.boolean(),
-    createdAt: v.number(),
-    updatedAt: v.number(),
-    deletedAt: v.optional(v.number()),
-  })
-    .index("by_user", ["userId"])
-    .index("by_user_active", ["userId", "active"])
-    .index("by_local_id", ["localId"]),
-
-  doseLogs: defineTable({
-    userId: v.string(),
-    // Stable local UUID from the device SQLite row. See medications.localId.
-    localId: v.string(),
-    medicationId: v.id("medications"),
-    scheduledTime: v.number(),
-    takenAt: v.optional(v.number()),
-    status: v.union(
-      v.literal("pending"),
-      v.literal("taken"),
-      v.literal("skipped"),
-      v.literal("missed")
-    ),
-    notes: v.optional(v.string()),
-    createdAt: v.number(),
-    updatedAt: v.number(),
-  })
-    .index("by_user", ["userId"])
-    .index("by_medication", ["medicationId"])
-    .index("by_user_time", ["userId", "scheduledTime"])
-    .index("by_local_id", ["localId"]),
-
   // `by_user_kind` is the unified model's own index: "show me my tasks" and
   // "show me my medications" are separate screens, and without it that split
   // is a full scan of the user's reminders.

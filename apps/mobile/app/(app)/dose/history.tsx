@@ -29,16 +29,16 @@ interface DayGroup {
 }
 
 /**
- * `snoozed` has no `dose_logs` counterpart — it exists only in the unified
- * `InstanceStatus`, so switching over that union obliges this arm to exist.
+ * `snoozed` exists in `InstanceStatus`, so switching over that union obliges
+ * this arm to exist.
  *
- * It does not yet render on device. `dose/log.tsx` now writes instance status
- * directly, but only ever `taken` or `skipped`; `dose-log-mirror.ts` copies
- * `dose_logs.status`, which has no `snoozed` member; and
+ * It does not yet render for anything this app writes. `dose/log.tsx` writes
+ * instance status directly but only ever `taken` or `skipped`, and
  * `reminderInstances.markSnoozed` still has no callers — `snooze.ts`
- * reschedules the notification without recording an instance. This arm is
- * therefore forward-looking, and stays unreachable until the snooze path
- * writes status.
+ * reschedules the notification without recording an instance. The pull path
+ * could deliver a snoozed instance authored elsewhere; nothing here creates
+ * one. This arm stops being forward-looking when the snooze path writes
+ * status.
  *
  * When it does become reachable it must not be folded into `skipped` or
  * `missed`: the adherence calculator counts those against the user and a

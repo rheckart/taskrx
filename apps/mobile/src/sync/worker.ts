@@ -1,7 +1,6 @@
 import NetInfo, { type NetInfoState } from "@react-native-community/netinfo";
 import { api, type Id } from "@taskrx/convex";
 import type {
-  DoseStatus,
   InstanceStatus,
   Priority,
   ReminderKind,
@@ -10,10 +9,6 @@ import type {
 import type { ConvexReactClient } from "convex/react";
 
 import { convex } from "../api/convex";
-import * as doseLogMirror from "../db/repos/dose-log-mirror";
-import * as doseLogsRepo from "../db/repos/doseLogs";
-import * as medicationMirror from "../db/repos/medication-mirror";
-import * as medicationsRepo from "../db/repos/medications";
 import * as reminderInstancesRepo from "../db/repos/reminderInstances";
 import * as remindersRepo from "../db/repos/reminders";
 import * as syncQueueRepo from "../db/repos/syncQueue";
@@ -39,32 +34,6 @@ const BACKOFF_MAX_MS = 30000;
 
 type StatusListener = (status: SyncStatus) => void;
 
-interface MedicationPayload {
-  readonly localId: string;
-  readonly userId: string;
-  readonly name: string;
-  readonly rxcui: string | null;
-  readonly dosage: string | null;
-  readonly scheduleType: "daily" | "interval";
-  readonly scheduleTimes: unknown;
-  readonly active: boolean;
-  readonly createdAt: number;
-  readonly updatedAt: number;
-  readonly deletedAt?: number;
-}
-
-interface DoseLogPayload {
-  readonly localId: string;
-  readonly userId: string;
-  readonly medicationId: string;
-  readonly scheduledTime: number;
-  readonly status: DoseStatus;
-  readonly takenAt: number | null;
-  readonly notes: string | null;
-  readonly createdAt: number;
-  readonly updatedAt: number;
-}
-
 /**
  * The `schedule` field as it round-trips through the queue payload.
  *
@@ -89,9 +58,8 @@ type ReminderSchedulePayload =
     };
 
 /**
- * Payload written by `db/repos/reminders.ts`. As with `MedicationPayload`, a
- * `delete` entry carries only `localId`, `userId`, and `deletedAt`; the delete
- * branch reads nothing else.
+ * Payload written by `db/repos/reminders.ts`. A `delete` entry carries only
+ * `localId`, `userId` and `deletedAt`; the delete branch reads nothing else.
  */
 interface ReminderPayload {
   readonly localId: string;
@@ -234,33 +202,6 @@ export class SyncWorker {
 
       this.setStatus("syncing");
 
-      // Ahead of everything else, rebuild projections that were never
-      // written. A mirror can throw — the pull path catches it per row so one
-      // bad row does not take the batch down — and nothing downstream repairs
-      // the result: the conflict rules reject the re-pulled row and
-      // `reconcilePending` only re-enqueues rows that already exist. Since the
-      // read cutover a missing projection is a medication gone from the med
-      // list or a dose gone from history, so this runs before the reconcile
-      // passes that would otherwise have nothing to find.
-      //
-      // Medications first: an instance's insert is dropped by the EXISTS guard
-      // while its parent has no `reminders` row, so repairing parents first is
-      // what lets both land in one drain rather than two.
-      //
-      // Both are best-effort for the same reason the reconciles are — a queue
-      // that already has entries is still worth draining.
-      try {
-        await medicationMirror.repairMissingProjections();
-      } catch (error) {
-        console.error("[sync] medication projection repair failed", error);
-      }
-
-      try {
-        await doseLogMirror.repairMissingProjections();
-      } catch (error) {
-        console.error("[sync] dose log projection repair failed", error);
-      }
-
       // Before reading the queue, give reminders that are pending but absent
       // from it a queue entry. Migration 005 backfilled them in SQL, which
       // cannot enqueue, and a best-effort enqueue can fail after its row
@@ -333,12 +274,6 @@ export class SyncWorker {
   private async processEntry(entry: SyncQueueEntry): Promise<SyncResult> {
     try {
       switch (entry.entityType) {
-        case "medication": {
-          return await this.processMedicationEntry(entry);
-        }
-        case "dose_log": {
-          return await this.processDoseLogEntry(entry);
-        }
         case "reminder": {
           return await this.processReminderEntry(entry);
         }
@@ -357,154 +292,25 @@ export class SyncWorker {
     }
   }
 
-  private async processMedicationEntry(
-    entry: SyncQueueEntry
-  ): Promise<SyncResult> {
-    const payload = JSON.parse(entry.payload) as MedicationPayload;
-
-    switch (entry.operation) {
-      case "create": {
-        const convexId = await this.client.mutation(api.medications.create, {
-          localId: payload.localId,
-          userId: payload.userId,
-          name: payload.name,
-          scheduleType: payload.scheduleType,
-          scheduleTimes: payload.scheduleTimes,
-          active: payload.active,
-          createdAt: payload.createdAt,
-          updatedAt: payload.updatedAt,
-          ...(payload.rxcui !== null ? { rxcui: payload.rxcui } : {}),
-          ...(payload.dosage !== null ? { dosage: payload.dosage } : {}),
-        });
-        await medicationsRepo.setConvexId(payload.localId, convexId);
-        return { ok: true };
-      }
-      case "update": {
-        const convexId = (await this.resolveMedicationId(
-          payload.localId
-        )) as Id<"medications">;
-        await this.client.mutation(api.medications.update, {
-          id: convexId,
-          name: payload.name,
-          scheduleType: payload.scheduleType,
-          scheduleTimes: payload.scheduleTimes,
-          active: payload.active,
-          updatedAt: payload.updatedAt,
-          ...(payload.rxcui !== null ? { rxcui: payload.rxcui } : {}),
-          ...(payload.dosage !== null ? { dosage: payload.dosage } : {}),
-        });
-        return { ok: true };
-      }
-      case "delete": {
-        const convexId = (await this.resolveMedicationId(
-          payload.localId
-        )) as Id<"medications">;
-        await this.client.mutation(api.medications.softDelete, {
-          id: convexId,
-        });
-        return { ok: true };
-      }
-      default: {
-        return {
-          ok: false,
-          error: `Unknown operation ${String(entry.operation)}`,
-        };
-      }
-    }
-  }
-
-  private async processDoseLogEntry(
-    entry: SyncQueueEntry
-  ): Promise<SyncResult> {
-    const payload = JSON.parse(entry.payload) as DoseLogPayload;
-
-    switch (entry.operation) {
-      case "create": {
-        const medicationConvexId = (await this.resolveMedicationId(
-          payload.medicationId
-        )) as Id<"medications">;
-        const convexId = await this.client.mutation(api.doseLogs.create, {
-          localId: payload.localId,
-          userId: payload.userId,
-          medicationId: medicationConvexId,
-          scheduledTime: payload.scheduledTime,
-          status: payload.status,
-          createdAt: payload.createdAt,
-          updatedAt: payload.updatedAt,
-          ...(payload.takenAt !== null ? { takenAt: payload.takenAt } : {}),
-          ...(payload.notes !== null ? { notes: payload.notes } : {}),
-        });
-        await doseLogsRepo.setConvexId(payload.localId, convexId);
-        return { ok: true };
-      }
-      case "update": {
-        const convexId = (await this.resolveDoseLogId(
-          payload.localId
-        )) as Id<"doseLogs">;
-        switch (payload.status) {
-          case "taken": {
-            await this.client.mutation(api.doseLogs.markTaken, {
-              id: convexId,
-              ...(payload.takenAt !== null ? { takenAt: payload.takenAt } : {}),
-            });
-            break;
-          }
-          case "skipped": {
-            await this.client.mutation(api.doseLogs.markSkipped, {
-              id: convexId,
-              ...(payload.notes !== null ? { notes: payload.notes } : {}),
-            });
-            break;
-          }
-          case "missed": {
-            await this.client.mutation(api.doseLogs.markMissed, {
-              id: convexId,
-            });
-            break;
-          }
-          case "pending": {
-            return { ok: false, error: "Cannot sync pending dose log update" };
-          }
-          default: {
-            return {
-              ok: false,
-              error: `Unknown dose status ${String(payload.status)}`,
-            };
-          }
-        }
-        return { ok: true };
-      }
-      default: {
-        return { ok: false, error: `Unknown operation ${entry.operation}` };
-      }
-    }
-  }
-
   /**
-   * Unified reminders. The `medication` branch above stays in place: both
-   * tables are still written during the cutover, and a queue entry names the
-   * table it came from.
+   * Reminders. Since the legacy generation was deleted this and its instance
+   * sibling are the only entity types the queue carries.
    *
    * Field clearing does not round-trip. `api.reminders.update` spells every
    * optional as `v.optional(...)` with no null member, so "leave alone" and
    * "clear" share one encoding; a null here has to be omitted, which reads as
    * "leave alone". A locally cleared `dosage` therefore stays set on Convex.
-   * That is the same limitation `processMedicationEntry` has for `rxcui` and
-   * `dosage`, and fixing it means adding a nullable member to the Convex
-   * validator, not changing this file.
+   * Fixing that means adding a nullable member to the Convex validator, not
+   * changing this file.
    *
    * `priority`, `tags` and `caregiverIds` use that same omission encoding, but
    * deliberately rather than by accident. They used to be sent unconditionally,
-   * and because nothing on this device authored them — `medication-mirror` and
-   * migration 005 write the column defaults, and there is no pull path that
-   * would refresh a `reminders` row from the server — every push reset the
-   * server's copy to `normal`/`[]`/`[]`. Not only on edit: `mirrorMedication`
-   * re-pends the row, so `reconcilePending` re-sent the same reset on later
-   * drains. A null here means "this device has no value to offer", and
-   * `db/repos/reminders.ts` is where that null is decided. That still holds
-   * after the write cutover: `remindersRepo.create` has gained callers, but
-   * neither `meds/new.tsx` nor the stress-seed screen sets any of the three, so
-   * every push this file makes still has nothing to offer for them.
+   * and because nothing on this device authored them, every push reset the
+   * server's copy to `normal`/`[]`/`[]`. A null here means "this device has no
+   * value to offer", and `db/repos/reminders.ts` is where that null is decided.
+   * It still holds: `remindersRepo.create` has callers now, but neither
+   * `meds/new.tsx` nor the stress-seed screen sets any of the three, so every
+   * push this file makes still has nothing to offer for them.
    */
   private async processReminderEntry(
     entry: SyncQueueEntry
@@ -688,56 +494,21 @@ export class SyncWorker {
     }
   }
 
-  private async resolveMedicationId(localId: string): Promise<string> {
-    const cached = await medicationsRepo.getConvexId(localId);
-    if (cached !== null) {
-      return cached;
-    }
-
-    const remote = await this.client.query(api.medications.getByLocalId, {
-      localId,
-    });
-    if (remote === null) {
-      throw new Error(`Medication ${localId} not found on Convex`);
-    }
-
-    await medicationsRepo.setConvexId(localId, remote._id);
-    return remote._id;
-  }
-
-  private async resolveDoseLogId(localId: string): Promise<string> {
-    const cached = await doseLogsRepo.getConvexId(localId);
-    if (cached !== null) {
-      return cached;
-    }
-
-    const remote = await this.client.query(api.doseLogs.getByLocalId, {
-      localId,
-    });
-    if (remote === null) {
-      throw new Error(`Dose log ${localId} not found on Convex`);
-    }
-
-    await doseLogsRepo.setConvexId(localId, remote._id);
-    return remote._id;
-  }
-
   /**
    * Resolve a local reminder id to its Convex document id.
    *
    * The return type is branded rather than a bare `string` so callers cannot
-   * re-brand it themselves. That matters here more than it looks: until
-   * migration 007, `reminders.convex_id` could hold an `Id<"medications">`,
-   * because the medication mirror and migration 005 copied the column across
-   * from `medications`. Every call site then wrote `as Id<"reminders">`, which
-   * is exactly the assertion that made the wrong-table id typecheck. With the
+   * re-brand it themselves. That mattered more than it looks: `reminders.
+   * convex_id` could once hold an `Id<"medications">`, because the deleted
+   * medication mirror and migration 005 copied the column across from
+   * `medications`. Every call site then wrote `as Id<"reminders">`, which is
+   * exactly the assertion that made the wrong-table id typecheck. With the
    * brand applied once, here, the only unchecked step left is this cache read.
    *
    * The invariant it rests on: `reminders.convex_id` is written by
    * `remindersRepo.setConvexId` and by nothing else, and every caller of that
-   * passes an id returned by an `api.reminders.*` mutation or query. The
-   * mirror no longer touches the column at all, and 007 cleared the values it
-   * had already written.
+   * passes an id returned by an `api.reminders.*` mutation or query. Nothing
+   * else can reach the column now that the mirror is gone.
    */
   private async resolveReminderId(localId: string): Promise<Id<"reminders">> {
     const cached = await remindersRepo.getConvexId(localId);
@@ -759,7 +530,7 @@ export class SyncWorker {
   /**
    * As `resolveReminderId`, for instances. `reminder_instances.convex_id` had
    * the same contamination — migration 005 copied `dose_logs.convex_id` into
-   * it, so it could hold an `Id<"doseLogs">` — and 007 clears that too.
+   * it, so it could hold an `Id<"doseLogs">`.
    */
   private async resolveReminderInstanceId(
     localId: string
@@ -780,19 +551,14 @@ export class SyncWorker {
     return remote._id;
   }
 
-  // The two mark-source helpers switch rather than branch on `medication`:
-  // with four entity types an `else` would have routed every reminder entry
-  // into `doseLogsRepo`, whose UPDATE would match no row and silently leave
-  // the reminder's `sync_status` stuck at 'pending'.
+  // The two mark-source helpers switch rather than branch. With four entity
+  // types an `else` routed every reminder entry into the wrong repo, whose
+  // UPDATE matched no row and silently left `sync_status` stuck at 'pending'.
+  // Two types remain, but the switch stays: the next one added would
+  // reintroduce exactly that bug.
   private async markSourceSynced(entry: SyncQueueEntry): Promise<void> {
     try {
       switch (entry.entityType) {
-        case "medication":
-          await medicationsRepo.markSynced(entry.entityId);
-          break;
-        case "dose_log":
-          await doseLogsRepo.markSynced(entry.entityId);
-          break;
         case "reminder":
           await remindersRepo.markSynced(entry.entityId);
           break;
@@ -811,12 +577,6 @@ export class SyncWorker {
   ): Promise<void> {
     try {
       switch (entry.entityType) {
-        case "medication":
-          await medicationsRepo.markError(entry.entityId, error);
-          break;
-        case "dose_log":
-          await doseLogsRepo.markError(entry.entityId, error);
-          break;
         case "reminder":
           await remindersRepo.markError(entry.entityId, error);
           break;

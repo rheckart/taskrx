@@ -8,7 +8,6 @@ import {
   weeklyTimes,
 } from "../domain/index";
 
-import { nextNInterval } from "./engine";
 import { nextOccurrences } from "./occurrences";
 import type { ScheduledOccurrence } from "./types";
 
@@ -219,30 +218,25 @@ describe("nextOccurrences — interval", () => {
 });
 
 /**
- * The boundary at `from` is the one place the ported engine and the POC engine
- * disagree, so it is pinned from both sides. `ScheduleEngine.cs` fast-forwards
- * with `while (next <= fromUtc)`, which drops a dose landing exactly on `from`;
- * the POC's `nextNInterval` keeps it (`engine.test.ts` asserts that directly).
+ * An occurrence landing exactly on `from` is EXCLUDED, matching
+ * `ScheduleEngine.cs`'s `while (next <= fromUtc)`.
  *
- * Whichever is right, they must not drift apart silently: firing an already-due
- * dose again, or dropping it, is a medication-safety defect either way.
+ * This used to be pinned from both sides, because the deleted POC engine
+ * included that occurrence and the two disagreeing silently would have been a
+ * medication-safety defect either way — firing an already-due dose again, or
+ * dropping it. With the POC engine gone there is only one behaviour left to
+ * pin, but it is still worth pinning: the boundary is exactly where an
+ * off-by-one produces a duplicate alarm at the moment a dose comes due.
  */
-describe("the `from` boundary, pinned against the POC engine", () => {
+describe("the `from` boundary", () => {
   const start = Date.UTC(2026, 6, 3, 0, 0, 0);
 
-  it("excludes the interval dose exactly at `from`, as the C# engine does", () => {
+  it("excludes the interval occurrence exactly at `from`, as the C# engine does", () => {
     const occ = nextOccurrences(reminder(intervalTimes(8, start)), start, 2);
 
     expect(occ.map((o) => o.fireAt)).toEqual([
       start + 8 * MS_PER_HOUR,
       start + 16 * MS_PER_HOUR,
-    ]);
-  });
-
-  it("differs from the POC `nextNInterval`, which includes it", () => {
-    expect(nextNInterval(8, start, start, 2)).toEqual([
-      start,
-      start + 8 * MS_PER_HOUR,
     ]);
   });
 });

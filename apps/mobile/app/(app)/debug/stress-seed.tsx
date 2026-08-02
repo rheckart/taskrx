@@ -28,18 +28,9 @@ import { getPendingCount, rescheduleAll } from "../../../src/notifications";
  * `kind: "medication"` throughout, so the seeded rows count as medications on
  * the list screen and against the medication Tier, exactly as before.
  *
- * One gap this leaves, and it only bites a device seeded by a pre-cutover
- * build: "Clear All Test Meds" soft-deletes reminders only, so a legacy
- * `medications` row survives it. That is enough to stop the alarms, because the
- * scheduler selects from `reminders`.
- *
- * An earlier version of this note claimed the clear was not durable while
- * signed in — that `useMedicationsSync` would hand the server's still-active
- * medication back through `mirrorMedicationRow` and re-activate the projection.
- * The sync cutover removed that path: nothing calls `useMedicationsSync`, and
- * `mirrorMedicationRow` is unreachable. The surviving legacy row is now inert.
- * Wiping app storage is still the honest full reset, and the leftover goes when
- * `medications` is retired.
+ * A note that used to live here described a leftover legacy `medications` row
+ * surviving "Clear All Test Meds". Migration 009 drops that table outright, so
+ * there is nothing left to survive and nothing to reactivate it.
  */
 
 function padTwo(value: number): string {

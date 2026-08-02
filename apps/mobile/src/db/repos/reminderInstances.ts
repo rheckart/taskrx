@@ -16,7 +16,7 @@ import { enqueue } from "./syncQueue";
 /**
  * Local SQLite repository for reminder instances — one materialized
  * occurrence of a reminder, and the row that records what the user did about
- * it. The unified counterpart to `doseLogs.ts`.
+ * it.
  *
  * Instances are append-only history. Nothing in this module deletes a row:
  * a dropped instance is a dropped medication record, so "delete" is expressed
@@ -25,9 +25,10 @@ import { enqueue } from "./syncQueue";
  * As in `reminders.ts`, every write enqueues a `sync_queue` row — here with
  * entity_type='reminder_instance'. That value only became insertable with
  * `006_widen_sync_queue.sql`, which rebuilt `sync_queue` to widen the
- * `entity_type` CHECK that 001 had pinned to 'medication' and 'dose_log'.
- * Before it, an enqueue here raised a constraint failure, so instance writes
- * were local-only and never reached Convex.
+ * `entity_type` CHECK 001 had pinned to the two legacy kinds; before it, an
+ * enqueue here raised a constraint failure and instance writes never reached
+ * Convex. Migration 009 rebuilt the CHECK once more, narrowing it to the two
+ * unified kinds.
  *
  * There is no `delete` enqueue because there is no delete: a "deletion" is a
  * status change, and the resulting `update` entry carries it.
@@ -365,8 +366,8 @@ export async function lastTakenFor(
  * Enqueue a sync entry for a `reminder_instances` row that was written
  * *outside* this repo.
  *
- * Migration 005 backfilled instances from `dose_logs`, and a `.sql` file
- * cannot call TypeScript, so not one of those rows ever produced a
+ * Migration 005 backfilled instances from the legacy dose-log table, and a
+ * `.sql` file cannot call TypeScript, so not one of those rows ever produced a
  * `sync_queue` entry. Migration 007 then cleared the `convex_id` values 005
  * had copied across from `dose_logs` and returned the rows to `pending`. The
  * result was that an existing install's entire pre-cutover dose history stayed

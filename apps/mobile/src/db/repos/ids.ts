@@ -5,10 +5,10 @@
  * and referenced while offline; the sync worker later maps the local id to the
  * Convex document id via the `convex_id` columns from migration 002.
  *
- * `medications.ts` and `doseLogs.ts` each carry their own copy of this
- * function from the POC. The unified repositories share this one instead of
- * adding a third and fourth copy; the POC copies are left alone because those
- * files are on the rollback path.
+ * The POC repositories each carried their own copy of this function. This
+ * module was extracted so the unified repositories could share one instead of
+ * adding a third and fourth; those copies went with the legacy generation, so
+ * this is now the only one.
  */
 
 /**

@@ -22,14 +22,13 @@ import { useToast } from "../../../src/components/useToast";
 import * as remindersRepo from "../../../src/db/repos/reminders";
 
 /**
- * Writes a `medication`-kind Reminder, not a `medications` row.
+ * Writes a `medication`-kind Reminder.
  *
- * This is the medication half of the write-path cutover. Before it, the form
- * wrote `medications` and `medication-mirror.ts` projected a `reminders` row
+ * This was the medication half of the write-path cutover. The form used to
+ * write a legacy `medications` row and let a mirror project a `reminders` row
  * behind it, which is the direction that cannot carry a Task — a Task has no
- * legacy row to project from. The mirror stays in place for the rows that
- * still arrive through the legacy pull path; nothing on this screen produces
- * one any more.
+ * legacy row to project from. Both the legacy table and its mirror are now
+ * deleted.
  *
  * The form's own state is unchanged: `SchedulePicker` still speaks the POC
  * `(ScheduleType, ScheduleValue)` pair, and `toScheduleTimes` converts once at
@@ -66,22 +65,16 @@ function isValidSchedule(type: ScheduleType, value: ScheduleValue): boolean {
 /**
  * The form's `(scheduleType, value)` pair as the unified tagged union.
  *
- * Deliberately the same mapping migration 005 and `medication-mirror.ts` apply
- * in SQL: same discriminator, same member names, and the same degradation to
- * `[]` / `0` when the value does not match its declared type. A medication
- * saved here must land in `reminders.schedule` identical to one the mirror
- * would have projected, because that column is what
- * `notifications/scheduler.ts` arms alarms from — a different blob is a
- * different set of alarms from the ones the device baseline was taken against.
+ * Emits the domain union directly: same discriminator and member names the
+ * `reminders.schedule` column already holds, degrading to `[]` / `0` when the
+ * value does not match its declared type. That column is what
+ * `notifications/scheduler.ts` arms alarms from, so the shape is load-bearing.
  *
- * Say the cost plainly: this is a third copy of one mapping, in a third
- * language, and the parity above is asserted by reading the two SQL copies, not
- * by a test — `scripts/verify-reminder-migrations.mjs` pins the migration
- * against the mirror but cannot reach TypeScript. Adding a `weekly` option to
- * `SchedulePicker` therefore means editing here, in `005_backfill_reminders.
- * sql`, and in `medication-mirror.ts`. The two SQL copies die with
- * `medications`; this one becomes the only mapping and the duplication goes
- * with them, which is why it is not worth extracting first.
+ * This used to be one of three copies of the same mapping — the other two in
+ * migration 005's backfill and the medication mirror, both SQL, with parity
+ * asserted by reading them rather than by a test. Both are gone with the legacy
+ * generation, so this is now the only place the conversion happens, which is
+ * what makes the earlier decision not to extract it look right in hindsight.
  *
  * The degraded arms are unreachable from this screen (`onChangeType` replaces
  * the value whenever the type changes, and `canSave` rejects a mismatch before

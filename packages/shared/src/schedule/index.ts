@@ -1,6 +1,4 @@
-export { nextNDaily, nextNInterval, upcomingDosesFor } from "./engine";
-export { selectUpcomingDoses, selectUpcomingOccurrences } from "./horizon";
-export type { GlobalDose } from "./horizon";
+export { selectUpcomingOccurrences } from "./horizon";
 export { nextOccurrences } from "./occurrences";
 export type { OccurrenceSource } from "./occurrences";
-export type { ScheduledDose, ScheduledOccurrence } from "./types";
+export type { ScheduledOccurrence } from "./types";

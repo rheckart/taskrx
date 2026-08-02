@@ -21,33 +21,32 @@ import { enqueue } from "./syncQueue";
  * Local SQLite repository for unified reminders.
  *
  * The row shape is snake_case (matching `004_unified_reminders.sql`); this
- * module returns the camelCase `Reminder` from `@taskrx/shared`. Since the
- * write-path cutover this is where a reminder a person creates on this device
- * is written: `meds/new.tsx` calls `create` here, and `medications.ts` is
- * reached only by the legacy pull path.
+ * module returns the camelCase `Reminder` from `@taskrx/shared`. Every reminder
+ * on this device is written here — `meds/new.tsx` calls `create`, and since
+ * migration 009 there is no other table it could go to.
  *
  * Every write enqueues a `sync_queue` row with entity_type='reminder' so the
- * sync worker can push it to Convex, exactly as `medications.ts` does. This
- * was not possible until `006_widen_sync_queue.sql`: 001's `entity_type` CHECK
- * admitted only 'medication' and 'dose_log', SQLite cannot widen a CHECK
- * without rebuilding the table, and an enqueue would have thrown a constraint
- * failure at runtime. Until 006 landed, reminder writes were local-only and
- * never reached Convex.
+ * sync worker can push it to Convex. That was not possible until
+ * `006_widen_sync_queue.sql`: 001's `entity_type` CHECK admitted only the two
+ * legacy kinds, SQLite cannot widen a CHECK without rebuilding the table, and
+ * an enqueue would have thrown a constraint failure at runtime. 009 rebuilt it
+ * once more, this time narrowing it to the two unified kinds.
  *
- * The enqueue is best-effort in the same sense as `medications.ts`: it is not
- * in the same transaction as the row write, so a failure to enqueue leaves the
- * row's `sync_status` at 'pending' for a later reconciliation pass rather than
- * rolling back a change the user already made.
+ * The enqueue is best-effort: it is not in the same transaction as the row
+ * write, so a failure to enqueue leaves the row's `sync_status` at 'pending'
+ * for a later reconciliation pass rather than rolling back a change the user
+ * already made.
  *
  * The `schedule`, `tags`, and `caregiver_ids` columns hold JSON. Reads parse
  * defensively — a column can only be as well-formed as whatever wrote it, and
  * a malformed blob must not take down the medication list.
  *
- * `rxcui` is storage-only. It is not on the domain `Reminder` (the unified
- * type does not model RxNorm) but the column exists locally and server-side so
- * the code survives the retirement of `medications`. It is therefore writable
- * through `create`/`update` and readable through `getRxcui`, the same shape of
- * accessor `convex_id` gets, rather than appearing on the returned object.
+ * `rxcui` is storage-only. It is not on the domain `Reminder` (the domain does
+ * not model RxNorm) but the column exists locally and server-side, which is
+ * what let the RxNorm code survive the retirement of the legacy table. It is
+ * writable through `create`/`update` and readable through `getRxcui`, the same
+ * shape of accessor `convex_id` gets, rather than appearing on the returned
+ * object.
  */
 
 interface ReminderRow {
@@ -391,9 +390,9 @@ export async function update(
 
   // `patch`, not `updated`, for the three server-owned fields: the patch is the
   // only evidence that this caller meant to set one. `updated.priority` is the
-  // column, and on a mirrored row the column is migration 005's default, so
-  // reading it here would push `normal`/`[]`/`[]` over whatever the server
-  // holds on every unrelated edit.
+  // column, and on a row backfilled by migration 005 the column is that
+  // migration's default, so reading it here would push `normal`/`[]`/`[]` over
+  // whatever the server holds on every unrelated edit.
   await enqueue("reminder", id, "update", {
     localId: id,
     userId: updated.userId,
@@ -426,9 +425,8 @@ export async function update(
  */
 export async function softDelete(id: string): Promise<void> {
   const db = await getDb();
-  // Read first, as `medications.softDelete` does: a delete for a row that is
-  // not here is not a change to propagate, and the enqueued payload needs the
-  // owning user.
+  // Read first: a delete for a row that is not here is not a change to
+  // propagate, and the enqueued payload needs the owning user.
   const existing = await get(id);
   if (existing === null) {
     return;
@@ -454,17 +452,15 @@ export async function softDelete(id: string): Promise<void> {
  * Enqueue a sync entry for a `reminders` row that was written *outside* this
  * repo.
  *
- * Two writers bypass `create`/`update`: the medication mirror's raw-SQL upsert
- * (`medication-mirror.ts`) and migration 005's backfill. Neither can call the
- * repo — the mirror deliberately writes SQL so it can stay column-for-column
- * identical to the migration, and a `.sql` file cannot call TypeScript at all.
- * Before this existed, that meant no mirrored or backfilled reminder ever
- * produced a `sync_queue` row, so the Convex `reminders` table stayed empty
- * indefinitely no matter how many medications the user created.
+ * Two writers used to bypass `create`/`update`: the medication mirror's raw-SQL
+ * upsert and migration 005's backfill. The mirror is deleted; 005 remains,
+ * because an install upgrading from a pre-cutover build still replays it, and a
+ * `.sql` file cannot call TypeScript to enqueue. Without this, a backfilled
+ * reminder would never produce a `sync_queue` row and would sit on the device
+ * unsynced forever.
  *
  * The payload is built here rather than at the call sites so there is exactly
- * one definition of a reminder's sync shape. A second copy in SQL (or in the
- * mirror) is precisely the drift the mirror's own header warns about.
+ * one definition of a reminder's sync shape.
  *
  * The operation is chosen from `convex_id` rather than passed in: a row the
  * server has never seen needs `create`, and one it has needs `update`. Getting
@@ -473,31 +469,25 @@ export async function softDelete(id: string): Promise<void> {
  * exist yet.
  *
  * A soft delete routes through here as an ordinary `update` carrying
- * `active: false`, never as a `delete`. The mirror only ever flips `active` to
- * 0 (the row is retained so dose history still resolves), and a `delete` entry
- * for a row that never synced would fail id resolution for no reason.
+ * `active: false`, never as a `delete`: a `delete` entry for a row that never
+ * synced would fail id resolution for no reason.
  *
  * `priority`, `tags` and `caregiverIds` are sent as `null` — never read off the
  * row — because this is by definition the path for a row *no local writer
- * authored*. The two writers it exists for both write migration 004's column
- * defaults: `medication-mirror`'s upsert omits the three from its conflict
- * clause and its SELECT supplies `'normal'`/`'[]'`/`'[]'`, and 005's backfill
- * does the same. So reading the column here could only ever transmit a default
- * for those rows, and `api.reminders.update` patches every field it receives:
- * the effect was to reset the server's copy on every push, including the ones
- * `reconcilePending` issues on later drains for rows `mirrorMedication`
- * re-pended. A `null` says "no value to offer" and leaves the server's alone.
+ * authored*. A backfilled row carries migration 004's column defaults, so
+ * reading the column here could only ever transmit a default, and
+ * `api.reminders.update` patches every field it receives: the effect was to
+ * reset the server's copy on every push. A `null` says "no value to offer" and
+ * leaves the server's alone.
  *
- * The cost is real and, since the write-path cutover, no longer merely
- * theoretical: `create` above now has callers (`meds/new.tsx`, the stress-seed
- * screen). If one of their enqueues failed after the row write and
- * `reconcilePending` recovered the row through here, a user-chosen `priority`
- * would be dropped from that recovery, because the column cannot distinguish a
- * chosen `normal` from a defaulted one. It stays unreachable in practice only
- * because neither caller sets any of the three — the medication form has no
- * field for them. The moment one does, this needs provenance the schema does
- * not carry, and a `sync_status`-style "authored locally" marker is the cheapest
- * shape for it.
+ * The cost is real rather than theoretical, because `create` above has callers
+ * now (`meds/new.tsx`, the stress-seed screen). If one of their enqueues failed
+ * after the row write and `reconcilePending` recovered the row through here, a
+ * user-chosen `priority` would be dropped from that recovery — the column
+ * cannot distinguish a chosen `normal` from a defaulted one. It stays
+ * unreachable in practice only because neither caller sets any of the three.
+ * The moment one does, this needs provenance the schema does not carry, and a
+ * `sync_status`-style "authored locally" marker is the cheapest shape for it.
  *
  * A no-op for an absent row, matching `softDelete`: there is nothing to
  * describe and no user to attribute it to.
@@ -547,10 +537,10 @@ export async function enqueueExternalWrite(id: string): Promise<void> {
  * This is the "later reconciliation pass" the enqueue-is-best-effort note at
  * the top of this file refers to. It closes two gaps:
  *
- *   * Migration 005 backfilled `reminders` from `medications` in SQL, which
+ *   * Migration 005 backfilled `reminders` from the legacy table in SQL, which
  *     cannot enqueue. Migration 007 then returns those rows to `pending`.
- *     Without this pass, an existing install's backfilled reminders would sit
- *     unsynced until the user happened to edit each medication, so the Convex
+ *     Without this pass, an upgraded install's backfilled reminders would sit
+ *     unsynced until the user happened to edit each one, so the Convex
  *     `reminders` table would stay empty or partial indefinitely.
  *   * An enqueue that failed after its row write — the failure mode the repo
  *     header already anticipates — leaves a `pending` row with no queue entry.
@@ -667,8 +657,8 @@ export async function getConvexId(localId: string): Promise<string | null> {
  * instance carries its parent as an `Id<"reminders">`, and every local producer
  * of `reminder_instances.reminder_id` writes a local UUID. Storing the Convex
  * id there would break the foreign key and orphan the row from the reminder it
- * belongs to — the defect `medications.localIdForConvexId` was written to undo
- * one table over.
+ * belongs to — the same defect the deleted legacy repo had a `localIdForConvexId`
+ * of its own to undo, one table over.
  *
  * Returns `null` when this device has not pulled the parent reminder yet, which
  * is ordinary rather than exceptional: the two subscriptions land independently
@@ -702,20 +692,19 @@ export interface PulledReminder {
  * written.
  *
  * Rows the local copy already beats are skipped by `shouldApplyRemoteReminder`
- * — last-write-wins, local winning ties, the same rule `medications.upsertMany`
- * applies one table over.
+ * — last-write-wins, local winning ties.
  *
- * Two things this does that its legacy twin does not, both deliberate:
+ * Two things this does that its legacy twin did not, both deliberate:
  *
- *   * It writes `convex_id` from the pulled document. `medications.upsertMany`
- *     leaves that column alone, so on a device that has only ever *received* a
- *     medication the column stays NULL — and `localIdForConvexId` then fails to
- *     resolve, which is why `useDoseLogsSync` can skip a pulled dose log
- *     indefinitely rather than transiently. Writing it here is what makes the
- *     instance pull resolve its parent on a second device at all.
- *   * It writes `kind`. The mirror excludes that column because a projected row
- *     is always a medication and rewriting it could clobber a converted row;
- *     a genuine pull has the server's own value and is authoritative.
+ *   * It writes `convex_id` from the pulled document. The deleted legacy
+ *     upsert left that column alone, so on a device that had only ever
+ *     *received* a row the column stayed NULL and the id lookup could never
+ *     resolve — which is why its dose-log pull skipped rows indefinitely
+ *     rather than transiently. Writing it here is what makes the instance pull
+ *     resolve its parent on a second device at all.
+ *   * It writes `kind`. The mirror excluded that column, because a projected
+ *     row was always a medication and rewriting it could clobber a converted
+ *     one; a genuine pull has the server's own value and is authoritative.
  *
  * No enqueue, and `sync_status = 'synced'`: this content arrived *from* the
  * server, so marking it pending would push it straight back, one entry per

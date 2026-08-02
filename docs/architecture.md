@@ -21,7 +21,7 @@ This document describes the architecture of the TaskRx proof-of-concept. The Pha
 │  │ @taskrx/shared               │  │         │  - enforces userId on all    │
 │  │  - scheduleEngine (daily,    │  │         │    reads/writes              │
 │  │    interval)                 │  │         └──────────────┬───────────────┘
-│  │  - selectUpcomingDoses       │  │                        │
+│  │  - selectUpcomingOccurrences │  │                        │
 │  │    (global 64 horizon)       │  │                        │
 │  │  - conflict resolution       │  │                        │
 │  │  - permission-state derive   │  │                        │
@@ -56,7 +56,7 @@ This document describes the architecture of the TaskRx proof-of-concept. The Pha
 2. **Convex is the source of truth in the cloud.** Sync pushes local changes up and pulls remote changes in.
 3. **The notification scheduler reads from SQLite, never from Convex.** This is why reminders fire offline.
 4. **Schedule computation is pure + deterministic.** Given a med config + current time, `@taskrx/shared` returns the next N dose times. No DB calls inside the engine.
-5. **Notification horizon is global, not per-medication.** `selectUpcomingDoses` picks the 64 soonest doses across ALL active meds — iOS-cap-safe and, when both A@21:00 and B@10min-from-now exist, B always wins over A regardless of what A already had scheduled.
+5. **Notification horizon is global, not per-reminder.** `selectUpcomingOccurrences` picks the 64 soonest occurrences across ALL active reminders — iOS-cap-safe and, when both A@21:00 and B@10min-from-now exist, B always wins over A regardless of what A already had scheduled.
 6. **Sync queue drains until MAX_ATTEMPTS (5) failures; then dead-letters.** Dead-lettered entries are retained (never deleted) for inspection and manual requeue.
 7. **Conflict resolution rules live in one tested place.** `@taskrx/shared/sync/conflict` — local wins ties, and a locally-taken dose is never overwritten by a remote pull.
 
@@ -139,26 +139,25 @@ Dead-letter recovery: `syncQueueRepo.deadLettered()` returns terminal rows for a
 
 Realtime hooks subscribe to Convex queries and mirror changes into SQLite:
 
-- `useMedicationsSync(userId)` — subscribes to `convex.medications.list`, upserts by local `id`.
-- `useDoseLogsSync(userId)` — subscribes to `convex.doseLogs.list`, same merge strategy.
+- `useUnifiedSync(userId)` — one hook covering both unified tables. It subscribes to `api.reminders.list` and `api.reminderInstances.list`, applies the reminders first and awaits them, then resolves each instance's parent through `remindersRepo.localIdForConvexId` before writing. Deliberately one hook and not two: an instance names its parent by Convex document id, and splitting the halves across two effects both raced the parent write and stranded the rows it skipped.
 - `useConvexSyncStatus()` — returns `'synced' | 'pending' | 'offline'` for the UI badge.
 
 ### Conflict resolution (`packages/shared/src/sync/conflict.ts`)
 
 Two pure functions consumed by both repo `upsertMany` paths:
 
-- `shouldApplyRemoteMedication(local, remote)` — false when `local != null && local.updatedAt >= remote.updatedAt` (local wins ties). True otherwise.
-- `shouldApplyRemoteDoseLog(local, remote)` — false when local is `taken` (never overwritten), or when the medication rule above would return false. True otherwise.
+- `shouldApplyRemoteReminder(local, remote)` — false when `local != null && local.updatedAt >= remote.updatedAt` (local wins ties). True otherwise.
+- `shouldApplyRemoteReminderInstance(local, remote)` — false when local is `taken` (never overwritten), or when the reminder rule above would return false. True otherwise.
 
-10 vitest cases cover the truth table incl. the safety-critical taken-dose preservation.
+11 vitest cases cover the truth table incl. the safety-critical taken-instance preservation, and `conflict.ts` sits under the shared package's 100% coverage gate.
 
 ## Notification flow
 
 ### Scheduling
 
 1. User saves a medication → repo writes to SQLite and enqueues a sync entry.
-2. `rescheduleAll(userId)` reads all active meds from SQLite.
-3. `selectUpcomingDoses(meds, Date.now(), 64)` from `@taskrx/shared` returns the 64 soonest doses **across all meds** (not per-med). This is iOS-cap-safe and ensures a med with a closer next dose always displaces one with a farther next dose regardless of how many alarms the farther med already has.
+2. `rescheduleAll(userId)` reads all active reminders from SQLite.
+3. `selectUpcomingOccurrences(reminders, Date.now(), 64)` from `@taskrx/shared` returns the 64 soonest occurrences **across all reminders** (not per-reminder). This is iOS-cap-safe and ensures a reminder with a closer next occurrence always displaces one with a farther next occurrence, regardless of how many alarms the farther reminder already has.
 4. **Diff, don't rebuild:** read current pending trigger IDs from notify-kit, compare against the desired 64:
    - Cancel only the notifications that are no longer in the desired set.
    - Create only the notifications that are missing.

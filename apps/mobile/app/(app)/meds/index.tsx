@@ -29,14 +29,13 @@ const DAY_NAMES = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"] as const;
  *
  * The `weekly` arm does not render today, and an earlier version of this
  * comment was wrong to say it was "newly reachable" — that implied weekly
- * reminders existed and were being hidden. None can exist yet: the two writers
- * of reminder content both emit `daily` or `interval` and nothing else —
- * `meds/new.tsx` because `SchedulePicker` offers only those two, and
- * `medication-mirror` because `medications` constrains `schedule_type` to
- * `('daily','interval')` by CHECK — and there is no pull path for `reminders`.
- * The arm exists because the switch must be total over the union, and it stays
- * unreachable until the schedule picker grows a weekly option — the same
- * standing as the `snoozed` arm in `dose/history.tsx`.
+ * reminders existed and were being hidden. None can be created here: the only
+ * writer is `meds/new.tsx`, and `SchedulePicker` offers `daily` and `interval`
+ * alone. The pull path can now deliver one, so this is no longer strictly
+ * unreachable — a reminder authored elsewhere against the same account would
+ * render through it — but nothing in this app authors one yet. The arm exists
+ * because the switch must be total over the union, and it stops being
+ * decorative when the picker grows a weekly option.
  */
 function describeSchedule(reminder: Reminder): string {
   const schedule = reminder.schedule;

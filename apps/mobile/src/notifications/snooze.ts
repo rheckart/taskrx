@@ -24,10 +24,11 @@ import {
  * dose time.
  *
  * The title is read from `reminders`, which is the table `scheduler.ts` armed
- * the alarm from. Reading `medications` here meant the snooze could disagree
+ * the alarm from. Reading the legacy `medications` table here meant the snooze
+ * could disagree
  * with the notification it was snoozing — a `weekly` reminder has no
- * `medications` row to name at all. The id is the same either way: a mirrored
- * reminder keeps the medication's id (see `db/repos/medication-mirror.ts`).
+ * legacy row to name at all. Both tables are gone now; `reminders` is simply
+ * where a reminder lives.
  */
 export async function snoozeDose(
   medicationId: string,

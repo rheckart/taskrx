@@ -9,8 +9,6 @@
  */
 
 import type * as auth from "../auth.js";
-import type * as doseLogs from "../doseLogs.js";
-import type * as medications from "../medications.js";
 import type * as reminderInstances from "../reminderInstances.js";
 import type * as reminders from "../reminders.js";
 import type * as rxnorm from "../rxnorm.js";
@@ -23,8 +21,6 @@ import type {
 
 declare const fullApi: ApiFromModules<{
   auth: typeof auth;
-  doseLogs: typeof doseLogs;
-  medications: typeof medications;
   reminderInstances: typeof reminderInstances;
   reminders: typeof reminders;
   rxnorm: typeof rxnorm;

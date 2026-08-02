@@ -16,7 +16,6 @@ export default defineConfig({
         "src/parser/reminder-parser.ts",
         "src/parser/schedule-grammar.ts",
         "src/refill/planner.ts",
-        "src/schedule/engine.ts",
         "src/schedule/horizon.ts",
         "src/schedule/occurrences.ts",
         "src/domain/enums.ts",

@@ -16,9 +16,10 @@
 -- which held a `doseLogs` id where an `Id<"reminderInstances">` was expected.
 --
 -- It was latent: nothing enqueued `reminder`-typed queue entries, so
--- `resolveReminderId` never ran. `medication-mirror.ts` now enqueues them, which
--- is exactly what arms the fault — so the contamination has to be cleared from
--- devices that already applied 005 before that enqueue can be allowed to run.
+-- `resolveReminderId` never ran. The medication mirror then began enqueuing
+-- them, which is exactly what armed the fault — so the contamination has to be
+-- cleared from devices that already applied 005. (That mirror was itself
+-- deleted in 009; this migration still runs on any install upgrading past it.)
 --
 -- Fresh installs apply the corrected 005 and reach this migration with nothing
 -- to do.

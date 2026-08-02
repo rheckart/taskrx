@@ -23,21 +23,21 @@ type ActionStatus = "idle" | "taking" | "skipping" | "snoozing" | "done";
  * Reads and writes both go to the unified tables.
  *
  * Before the write-path cutover this screen read `reminder_instances` and
- * wrote `dose_logs`, leaning on `dose-log-mirror.ts` to reconcile the two. That
- * split is what the dedupe dance here existed for: the screen had to look for
- * an existing dose log rather than an existing instance, because a dose log
+ * wrote a legacy `dose_logs` row, leaning on a mirror module to reconcile the
+ * two. That split is what the dedupe dance here existed for: the screen had to
+ * look for an existing dose log rather than an existing instance, because one
  * whose projection had failed would otherwise be duplicated on every retry.
+ * Both the legacy table and the mirror are now deleted.
  *
  * With the instance written directly there is one row and one place to look
  * for it, so `findPendingForOccurrence` is both the dedupe and the load.
  *
- * What still has to hold for a pre-cutover dose to resolve is the *pairing*,
- * not the instance id the deleted `instancesRepo.get(doseLog.id)` needed:
- * migration 005 and `medication-mirror.ts` preserve the medication's primary
- * key as the reminder's, and project `dose_logs.medication_id` into
- * `reminder_instances.reminder_id` unchanged. So the `medicationId` an alarm
- * armed by an older build carries still names the reminder, and the projected
- * instance still sits at the same `(reminder, scheduled time)`.
+ * What still has to hold for a pre-cutover dose to resolve is the *pairing*.
+ * Migration 005 preserved the medication's primary key as the reminder's and
+ * copied `dose_logs.medication_id` into `reminder_instances.reminder_id`
+ * unchanged, so the `medicationId` an alarm armed by an older build carries
+ * still names the reminder, and the instance backfilled from that dose still
+ * sits at the same `(reminder, scheduled time)`.
  *
  * The route param is still `medicationId` — it is the key the alarms already
  * armed on the device carry (`notifications/scheduler.ts`), and renaming it

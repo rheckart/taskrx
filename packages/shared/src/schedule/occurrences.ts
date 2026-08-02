@@ -2,18 +2,19 @@
  * The reminder schedule engine, ported from `ScheduleEngine.NextOccurrences`
  * in `TaskRx.Core/ScheduleEngine.cs` on the `archive/dotnet-maui` branch.
  *
- * This supersedes `engine.ts` for new code: it works on the unified `Reminder`
- * (so `task` reminders schedule too) and it handles `weekly`, which the POC
- * engine has no shape for. `engine.ts` stays for the medication-only POC paths
- * until the cutover.
+ * It works on the unified `Reminder`, so `task` reminders schedule too, and it
+ * handles `weekly`. A medication-only predecessor, `engine.ts`, had no shape
+ * for either; it was deleted with the legacy generation, and this is now the
+ * only schedule engine.
  *
- * Two behaviours differ from the POC engine and are deliberate:
+ * Two behaviours differed from that predecessor, deliberately, and are worth
+ * recording because they are the ones a reimplementation would get wrong:
  *
  * - **The `from` boundary.** An occurrence landing exactly on `from` is
  *   excluded for every variant, matching `while (next <= fromUtc)` and
- *   `if (utc <= fromUtc) continue;` in the C#. `nextNInterval` in `engine.ts`
- *   includes it. `occurrences.test.ts` pins both sides so the two cannot drift
- *   apart unnoticed.
+ *   `if (utc <= fromUtc) continue;` in the C#. The POC engine included it.
+ *   `occurrences.test.ts` still pins this side: the boundary is exactly where
+ *   an off-by-one produces a duplicate alarm as a dose comes due.
  * - **Calendar arithmetic.** Day-based schedules step local calendar days, not
  *   fixed 86_400_000 ms hops, which is what `DateOnly.FromDateTime(...)
  *   .AddDays(n)` plus `zone.GetUtcOffset(local)` does on the C# side. Across a

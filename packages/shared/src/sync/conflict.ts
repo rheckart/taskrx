@@ -1,56 +1,20 @@
-import type { DoseLog, Medication, Reminder, ReminderInstance } from "../index";
+import type { Reminder, ReminderInstance } from "../index";
 
 /**
- * Pure sync-conflict decisions used by the mobile repos when applying a
- * remote pull to the local SQLite store.
+ * Pure sync-conflict decisions, used when applying a remote pull to the local
+ * SQLite store.
  *
- * These helpers exist because the same rules were previously implemented
- * twice: once in a `mergeMeds`/`mergeDoseLogs` helper module that had zero
- * call sites, and once inline in each repo's `upsertMany`. The inline
- * repo behaviour is authoritative and is what these helpers preserve —
- * critically, the "local wins on tie" rule and the "never overwrite a
- * locally taken dose" rule.
+ * Two rules, and only the second is interesting: last-write-wins with the LOCAL
+ * row winning ties, and — for an Instance — a locally `taken` row is never
+ * overwritten at all.
+ *
+ * A medication/dose-log pair used to sit alongside these, written first and
+ * copied here deliberately rather than generalized, on the reasoning that the
+ * legacy pair was scheduled for deletion and ADR 0001 would rename `taken` to
+ * `completed` on the unified side alone. The deletion has now happened, leaving
+ * these as the only copy — which is what that reasoning predicted, and why
+ * there was never an abstraction to unpick.
  */
-
-export type MedicationWithTimestamps = Pick<Medication, "updatedAt">;
-
-export type DoseLogWithConflictFields = Pick<DoseLog, "updatedAt" | "status">;
-
-/**
- * Decide whether an incoming remote medication should overwrite the local
- * row. Returns `false` when the local row is at least as fresh as the
- * remote (local wins ties). Returns `true` when there is no local row or
- * when the remote is strictly newer.
- */
-export function shouldApplyRemoteMedication(
-  local: MedicationWithTimestamps | null,
-  remote: MedicationWithTimestamps
-): boolean {
-  if (local === null) {
-    return true;
-  }
-  return remote.updatedAt > local.updatedAt;
-}
-
-/**
- * Decide whether an incoming remote dose log should overwrite the local
- * row. A locally `taken` dose is NEVER overwritten by a remote pull — a
- * patient's recorded dose must not be erased by a stale sync. Otherwise
- * the same last-write-wins rule as medications applies, with local
- * winning ties.
- */
-export function shouldApplyRemoteDoseLog(
-  local: DoseLogWithConflictFields | null,
-  remote: DoseLogWithConflictFields
-): boolean {
-  if (local === null) {
-    return true;
-  }
-  if (local.status === "taken") {
-    return false;
-  }
-  return remote.updatedAt > local.updatedAt;
-}
 
 export type ReminderWithTimestamps = Pick<Reminder, "updatedAt">;
 
@@ -60,22 +24,8 @@ export type ReminderInstanceWithConflictFields = Pick<
 >;
 
 /**
- * The unified counterparts of the two rules above, for the pull path onto
- * `reminders` and `reminder_instances`.
- *
- * They are deliberate copies rather than a generalization of their legacy
- * twins. The two pairs are the same decision today only by coincidence of
- * timing: the legacy pair is deleted with `medications` and `dose_logs`, and
- * ADR 0001 renames `taken` to `completed` on the unified side alone. A shared
- * implementation would have to be un-shared at both of those moments, and the
- * second one is a rename of the very field that carries the safety-critical
- * rule. Duplication that is scheduled to become the only copy is cheaper than
- * an abstraction that is scheduled to break.
- */
-
-/**
  * Decide whether an incoming remote reminder should overwrite the local row.
- * Last-write-wins with the local row winning ties, exactly as for medications.
+ * Last-write-wins, with the local row winning ties.
  */
 export function shouldApplyRemoteReminder(
   local: ReminderWithTimestamps | null,

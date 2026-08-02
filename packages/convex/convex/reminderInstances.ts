@@ -15,8 +15,7 @@ import {
  *
  * All functions enforce per-user access via `getCurrentUserId`. Writes verify
  * ownership before mutating a document, and `create` additionally verifies
- * ownership of the parent reminder before writing a child that points at it —
- * the same check `doseLogs.create` does against `medications`.
+ * ownership of the parent reminder before writing a child that points at it.
  *
  * `localId` carries the device-generated UUID and makes `create` idempotent
  * across app restarts; see `reminders.ts` for the full note.
