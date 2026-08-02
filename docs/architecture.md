@@ -58,44 +58,64 @@ This document describes the architecture of the TaskRx proof-of-concept. The Pha
 4. **Schedule computation is pure + deterministic.** Given a med config + current time, `@taskrx/shared` returns the next N dose times. No DB calls inside the engine.
 5. **Notification horizon is global, not per-reminder.** `selectUpcomingOccurrences` picks the 64 soonest occurrences across ALL active reminders — iOS-cap-safe and, when both A@21:00 and B@10min-from-now exist, B always wins over A regardless of what A already had scheduled.
 6. **Sync queue drains until MAX_ATTEMPTS (5) failures; then dead-letters.** Dead-lettered entries are retained (never deleted) for inspection and manual requeue.
-7. **Conflict resolution rules live in one tested place.** `@taskrx/shared/sync/conflict` — local wins ties, and a locally-taken dose is never overwritten by a remote pull.
+7. **Conflict resolution rules live in one tested place.** `@taskrx/shared/sync/conflict` — local wins ties, and a locally `completed` instance is never overwritten by a remote pull.
 
 ## Local SQLite schema
 
-See `apps/mobile/src/db/migrations/001_init.sql`, `002_add_convex_id.sql`, and `003_sync_queue_dead_letter.sql`.
+Defined by `apps/mobile/src/db/migrations/004_unified_reminders.sql` and amended by `008_sync_reconcile_indexes.sql`, `009_drop_legacy_generation.sql` and `010_kind_neutral_instance_status.sql`. Migrations 001-003 created the legacy `medications` / `dose_logs` pair that 009 dropped; they are kept so an upgrading install still replays its history.
 
-### `medications`
+### `reminders`
 
 | Column | Type | Notes |
 |---|---|---|
 | `id` | TEXT PK | UUID v4 generated on device |
 | `user_id` | TEXT | Clerk user ID |
+| `kind` | TEXT | `medication` or `task` — the axis the POC shape lacked |
 | `name` | TEXT | Display name |
-| `rxcui` | TEXT | Optional RxNorm CUI |
+| `rxcui` | TEXT | Optional RxNorm CUI. Storage-only; not on the domain type |
 | `dosage` | TEXT | Optional free text |
-| `schedule_type` | TEXT | `daily` or `interval` |
-| `schedule_times` | TEXT | JSON schedule payload |
+| `instructions` | TEXT | Optional free text |
+| `schedule` | TEXT | JSON `ScheduleTimes` — `daily`, `interval` or `weekly` |
+| `priority` | TEXT | `critical`, `high`, `normal`, `low`. Read by no scheduling decision |
+| `tags` | TEXT | JSON string array |
+| `pills_remaining` | INTEGER | Refill tracking, nullable |
+| `pills_per_dose` | REAL | Refill tracking, nullable |
+| `refill_reminder_days` | INTEGER | Refill tracking, nullable |
+| `caregiver_ids` | TEXT | JSON string array |
 | `active` | INTEGER | 1 = active |
 | `created_at` | INTEGER | Unix ms |
 | `updated_at` | INTEGER | Unix ms |
 | `sync_status` | TEXT | `pending`, `synced`, or `error` |
-| `convex_id` | TEXT | Local↔Convex ID bridge (migration 002) |
+| `convex_id` | TEXT | Local↔Convex ID bridge |
 
-### `dose_logs`
+### `reminder_instances`
+
+One row per occurrence the user acted on, or that the sweep judged missed.
 
 | Column | Type | Notes |
 |---|---|---|
 | `id` | TEXT PK | UUID v4 generated on device |
+| `reminder_id` | TEXT | FK to `reminders(id)` ON DELETE CASCADE |
 | `user_id` | TEXT | Clerk user ID |
-| `medication_id` | TEXT | FK to `medications(id)` |
-| `scheduled_time` | INTEGER | Unix ms |
-| `taken_at` | INTEGER | Unix ms, nullable |
-| `status` | TEXT | `pending`, `taken`, `skipped`, `missed` |
+| `reminder_kind` | TEXT | Denormalized from the parent so adherence filters without a join |
+| `scheduled_time` | INTEGER | Unix ms — the instant this instance occupied |
+| `status` | TEXT | `pending`, `completed`, `snoozed`, `skipped`, `missed` |
+| `completed_at` | INTEGER | Unix ms, nullable |
+| `snoozed_until` | INTEGER | Unix ms, nullable |
+| `snooze_count` | INTEGER | Defaults to 0 |
 | `notes` | TEXT | Optional |
 | `created_at` | INTEGER | Unix ms |
 | `updated_at` | INTEGER | Unix ms |
 | `sync_status` | TEXT | `pending`, `synced`, or `error` |
-| `convex_id` | TEXT | Local↔Convex ID bridge (migration 002) |
+| `convex_id` | TEXT | Local↔Convex ID bridge |
+
+`completed` is what a medication-only model would call "taken", and
+`completed_at` is the ingestion timestamp on a medication. Both Kinds share this
+table, and a task is never taken — see ADR 0001. The UI still *displays*
+"Taken" for a medication.
+
+A `medications` / `dose_logs` pair preceded these two and was deleted with the
+rest of the legacy generation (migration 009).
 
 ### `sync_queue`
 
@@ -147,9 +167,9 @@ Realtime hooks subscribe to Convex queries and mirror changes into SQLite:
 Two pure functions consumed by both repo `upsertMany` paths:
 
 - `shouldApplyRemoteReminder(local, remote)` — false when `local != null && local.updatedAt >= remote.updatedAt` (local wins ties). True otherwise.
-- `shouldApplyRemoteReminderInstance(local, remote)` — false when local is `taken` (never overwritten), or when the reminder rule above would return false. True otherwise.
+- `shouldApplyRemoteReminderInstance(local, remote)` — false when local is `completed` (never overwritten), or when the reminder rule above would return false. True otherwise.
 
-11 vitest cases cover the truth table incl. the safety-critical taken-instance preservation, and `conflict.ts` sits under the shared package's 100% coverage gate.
+11 vitest cases cover the truth table incl. the safety-critical completed-instance preservation, and `conflict.ts` sits under the shared package's 100% coverage gate.
 
 ## Notification flow
 
