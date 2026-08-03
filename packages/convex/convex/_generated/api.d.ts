@@ -9,6 +9,7 @@
  */
 
 import type * as auth from "../auth.js";
+import type * as harnessData from "../harnessData.js";
 import type * as reminderInstances from "../reminderInstances.js";
 import type * as reminders from "../reminders.js";
 import type * as rxnorm from "../rxnorm.js";
@@ -21,6 +22,7 @@ import type {
 
 declare const fullApi: ApiFromModules<{
   auth: typeof auth;
+  harnessData: typeof harnessData;
   reminderInstances: typeof reminderInstances;
   reminders: typeof reminders;
   rxnorm: typeof rxnorm;

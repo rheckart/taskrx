@@ -43,6 +43,23 @@ const mocks = vi.hoisted(() => ({
   queuePending: vi.fn(),
   queueDeadLettered: vi.fn(),
   syncStatus: vi.fn<() => string>(),
+  dbRunAsync:
+    vi.fn<
+      (
+        sql: string,
+        ...args: unknown[]
+      ) => Promise<{ changes: number; lastInsertRowId: number }>
+    >(),
+  dbGetAllAsync:
+    vi.fn<(sql: string, ...args: unknown[]) => Promise<unknown[]>>(),
+}));
+
+vi.mock("../db", () => ({
+  getDb: () =>
+    Promise.resolve({
+      runAsync: mocks.dbRunAsync,
+      getAllAsync: mocks.dbGetAllAsync,
+    }),
 }));
 
 vi.mock("react-native-notify-kit", () => ({
@@ -114,6 +131,8 @@ beforeEach(() => {
   mocks.queuePending.mockResolvedValue([]);
   mocks.queueDeadLettered.mockResolvedValue([]);
   mocks.syncStatus.mockReturnValue("idle");
+  mocks.dbGetAllAsync.mockResolvedValue([]);
+  mocks.dbRunAsync.mockResolvedValue({ changes: 0, lastInsertRowId: 0 });
 });
 
 afterEach(() => {
@@ -379,6 +398,101 @@ describe("sync-status", () => {
     await expect(
       runHarnessAction(parseHarnessSpec(spec("sync-status")), SIGNED_IN)
     ).resolves.toBe("sync_status=offline");
+  });
+});
+
+describe("purge-seeded", () => {
+  it("hard-deletes only the seeded reminders, their instances and their queue entries", async () => {
+    mocks.dbGetAllAsync
+      .mockResolvedValueOnce([
+        { id: "real-1", name: "metformin Pill" },
+        { id: "seed-1", name: `${HARNESS_REMINDER_MARKER} tap-test` },
+      ])
+      .mockResolvedValueOnce([{ id: "inst-1" }, { id: "inst-2" }]);
+    // The counts must come from SQLite, not from the id lists handed to each
+    // statement. Deliberately mismatched: the queue delete is given THREE ids
+    // (one reminder + two instances) and removes ONE row, which is the normal
+    // case — most seeded rows have already synced and left the queue. Reporting
+    // the id count said `purged_queue=29` on a queue holding a single row.
+    mocks.dbRunAsync
+      .mockResolvedValueOnce({ changes: 1, lastInsertRowId: 0 })
+      .mockResolvedValueOnce({ changes: 2, lastInsertRowId: 0 })
+      .mockResolvedValueOnce({ changes: 1, lastInsertRowId: 0 });
+
+    const result = await runHarnessAction(
+      parseHarnessSpec(spec("purge-seeded")),
+      SIGNED_IN
+    );
+
+    const statements = mocks.dbRunAsync.mock.calls.map((call) =>
+      call[0].replace(/\s+/g, " ").trim()
+    );
+    // Children before parents: an instance whose reminder is already gone is
+    // the orphan the purge exists to remove, and the foreign key would reject
+    // the parent delete anyway.
+    expect(statements[0]).toContain("DELETE FROM sync_queue");
+    expect(statements[1]).toContain("DELETE FROM reminder_instances");
+    expect(statements[2]).toContain("DELETE FROM reminders");
+    // Every statement is scoped to the ids gathered above — never a bare
+    // DELETE, and never a LIKE against the name, which would put the marker's
+    // brackets into SQL and the matching rule in two places.
+    for (const statement of statements) {
+      expect(statement).toContain("IN (");
+    }
+    expect(result).toBe("purged_reminders=1 purged_instances=2 purged_queue=1");
+  });
+
+  it("matches the marker as a prefix, not anywhere in the name", async () => {
+    // The only thing standing between this and someone's medication history is
+    // that the match is anchored. "My [harness] notes" is a name a person could
+    // plausibly type, and a substring match would delete it and every dose
+    // recorded against it.
+    mocks.dbGetAllAsync.mockResolvedValueOnce([
+      { id: "real-1", name: `My ${HARNESS_REMINDER_MARKER} notes` },
+    ]);
+
+    const result = await runHarnessAction(
+      parseHarnessSpec(spec("purge-seeded")),
+      SIGNED_IN
+    );
+
+    expect(mocks.dbRunAsync).not.toHaveBeenCalled();
+    expect(result).toBe("purged_reminders=0 purged_instances=0 purged_queue=0");
+  });
+
+  it("touches nothing when no reminder carries the marker", async () => {
+    mocks.dbGetAllAsync.mockResolvedValueOnce([
+      { id: "real-1", name: "metformin Pill" },
+    ]);
+
+    const result = await runHarnessAction(
+      parseHarnessSpec(spec("purge-seeded")),
+      SIGNED_IN
+    );
+
+    expect(mocks.dbRunAsync).not.toHaveBeenCalled();
+    expect(result).toBe("purged_reminders=0 purged_instances=0 purged_queue=0");
+  });
+
+  it("reads only the signed-in user's reminders", async () => {
+    mocks.dbGetAllAsync.mockResolvedValueOnce([]);
+
+    await runHarnessAction(parseHarnessSpec(spec("purge-seeded")), SIGNED_IN);
+
+    expect(mocks.dbGetAllAsync).toHaveBeenCalledWith(
+      expect.stringContaining("user_id = ?"),
+      USER
+    );
+  });
+
+  it("deletes nothing when signed out", async () => {
+    const result = await runHarnessAction(
+      parseHarnessSpec(spec("purge-seeded")),
+      SIGNED_OUT
+    );
+
+    expect(result).toBe("signed_in=false user_id=none");
+    expect(mocks.dbRunAsync).not.toHaveBeenCalled();
   });
 });
 

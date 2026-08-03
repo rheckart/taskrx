@@ -1634,6 +1634,7 @@ usage() {
 notification-harness.sh — adb-driven notification test harness
 
   --list          List cases
+  --purge         Hard-delete every row cases 8 and 9 seeded (Convex, then device)
   --case N        Run case N (1..9)
   --all           Run cases 1-7: the local-only delivery baseline
   --auth          Run cases 8-9: need a signed-in app and a reachable Convex.
@@ -1663,6 +1664,69 @@ Before running:
   (cd apps/mobile && npx expo start --dev-client)
   Ensure the device is UNLOCKED.
 EOF
+}
+
+# Remove every row cases 8 and 9 created, from both sides.
+#
+# They seed a real reminder and answer a real dose, and both push to Convex, so
+# a device used for these cases accumulates fabricated medications and — the
+# part that matters — fabricated `reminder_instances`. Adherence is computed
+# from exactly those rows. `cleanup-seeded` runs inside each case and only soft
+# deletes, which is right there and not enough over time.
+#
+# CONVEX FIRST, then the device. In the other order the device's next pull can
+# land between the two steps and write the reminders straight back down.
+purge_seeded() {
+  local convex_out device_out
+  echo "purging seeded rows from Convex..."
+  # Pull the two counts out by name rather than trying to isolate "the JSON".
+  # The CLI interleaves npm notices, an ExperimentalWarning and a convex.json
+  # warning with the result, echoes the `{}` argument, and pretty-prints the
+  # return across several lines — so both "the first {...}" and "the last line"
+  # are wrong, and each was wrong in the direction of reporting success. Reading
+  # the named fields is also order-independent, which the JSON's key order is
+  # not.
+  local purged_r purged_i
+  convex_out="$( (cd "$repo_root/packages/convex" && npx convex run harnessData:purgeSeeded '{}' 2>&1) | tr -d '\n ' )"
+  purged_r="$(printf '%s' "$convex_out" | grep -oE '"reminders":[0-9]+' | tail -1 | cut -d: -f2)"
+  purged_i="$(printf '%s' "$convex_out" | grep -oE '"instances":[0-9]+' | tail -1 | cut -d: -f2)"
+  if [[ -n "$purged_r" && -n "$purged_i" ]]; then
+    printf '  convex: reminders=%s instances=%s\n' "$purged_r" "$purged_i"
+  else
+    printf '  convex: FAILED — %s\n' "$(printf '%s' "$convex_out" | tail -c 300)" >&2
+    echo "  not touching the device: purging it while the rows still exist on" >&2
+    echo "  Convex would let the next pull write them straight back down." >&2
+    return 2
+  fi
+
+  echo "purging seeded rows from the device..."
+  if ! device_attached; then
+    echo "  device: no device attached — Convex is purged, the device is not." >&2
+    return 2
+  fi
+  device_out="$(harness purge-seeded x 0 "$HARNESS_SLOW_BUDGET_S")"
+  if [[ -z "$device_out" ]]; then
+    echo "  device: the app did not answer. Is it signed in and reachable?" >&2
+    return 2
+  fi
+  # `parseHarnessSpec` falls back to `pending-count` for an action it does not
+  # know, so a dev client still serving a bundle from before this action existed
+  # answers cheerfully with a notification count — which looks like a successful
+  # purge of nothing. Measured, on the first real run of this flag. Recognise
+  # the wrong answer and say what it means.
+  if printf '%s' "$device_out" | grep -q "pending_count="; then
+    echo "  device: the app answered a DIFFERENT action ($device_out), which means" >&2
+    echo "  its bundle predates \`purge-seeded\` and the fallback in" >&2
+    echo "  parseHarnessSpec took over. NOTHING was purged from the device." >&2
+    echo "  Restart the app so it reloads from Metro, then re-run --purge." >&2
+    return 2
+  fi
+  printf '  device: %s\n' "$device_out"
+  case "$device_out" in
+    *"signed_in=false"*)
+      echo "  the app is signed out, so nothing was purged from it." >&2
+      return 2 ;;
+  esac
 }
 
 list_cases() {
@@ -1702,6 +1766,7 @@ while [[ $# -gt 0 ]]; do
   case "$1" in
     --help|-h) usage; exit 0 ;;
     --list) list_cases; exit 0 ;;
+    --purge) purge_seeded; exit $? ;;
     --case) cases_to_run+=("$2"); shift 2 ;;
     --all) cases_to_run=(1 2 3 4 5 6 7); shift ;;
     --auth) cases_to_run+=(8 9); shift ;;

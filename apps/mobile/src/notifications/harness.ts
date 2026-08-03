@@ -6,6 +6,7 @@ import notifee, {
   type TimestampTrigger,
 } from "react-native-notify-kit";
 
+import { getDb } from "../db";
 import * as instancesRepo from "../db/repos/reminderInstances";
 import * as remindersRepo from "../db/repos/reminders";
 import * as syncQueueRepo from "../db/repos/syncQueue";
@@ -54,7 +55,8 @@ export type HarnessAction =
   | "instance-at"
   | "queue-count"
   | "sync-status"
-  | "cleanup-seeded";
+  | "cleanup-seeded"
+  | "purge-seeded";
 
 export interface HarnessSpec {
   readonly action: HarnessAction;
@@ -108,6 +110,7 @@ const VALID_ACTIONS: readonly HarnessAction[] = [
   "queue-count",
   "sync-status",
   "cleanup-seeded",
+  "purge-seeded",
 ];
 
 function isHarnessAction(value: string): value is HarnessAction {
@@ -354,6 +357,95 @@ async function runCleanupSeeded(userId: string): Promise<string> {
   return `cleaned=${String(seeded.length)}`;
 }
 
+/**
+ * Hard-deletes everything the harness seeded: the reminders, the instances
+ * behind them, and their `sync_queue` entries.
+ *
+ * `cleanup-seeded` above only soft-deletes, which is right for a case tidying
+ * up after itself — the reminder disappears from the medication list and the
+ * app keeps its history. Across many runs that history is not history: each
+ * run leaves a fabricated reminder and an answered dose, and adherence is
+ * computed from exactly those `reminder_instances` rows. This is the pass that
+ * removes them.
+ *
+ * The SQL lives here rather than in `db/repos/` on purpose. The app has no hard
+ * delete anywhere and should not grow one: a medication a user removed is a
+ * record they may need, which is why `remindersRepo.softDelete` is a status
+ * change. This is rig cleanup, so it stays in the rig.
+ *
+ * Delete the CONVEX rows first (`npx convex run harnessData:purgeSeeded '{}'`),
+ * then run this. In the other order a pull can land between the two and write
+ * the reminders straight back down.
+ */
+async function runPurgeSeeded(userId: string): Promise<string> {
+  const db = await getDb();
+
+  // Read every row for the user, including the inactive ones — `cleanup-seeded`
+  // has usually soft-deleted these already, so `remindersRepo.list` (which
+  // filters `active = 1`) cannot see the very rows this is here to remove.
+  //
+  // Filtered in JS with the same `startsWith` the seeding uses, rather than a
+  // SQL `LIKE '[harness]%'`: it keeps the matching rule in one place and keeps
+  // the marker's brackets out of a pattern language.
+  const rows = await db.getAllAsync<{ id: string; name: string }>(
+    "SELECT id, name FROM reminders WHERE user_id = ?",
+    userId
+  );
+  const seededIds = rows
+    .filter((row) => row.name.startsWith(HARNESS_REMINDER_MARKER))
+    .map((row) => row.id);
+
+  if (seededIds.length === 0) {
+    return "purged_reminders=0 purged_instances=0 purged_queue=0";
+  }
+
+  const reminderList = seededIds.map(() => "?").join(",");
+  const instances = await db.getAllAsync<{ id: string }>(
+    `SELECT id FROM reminder_instances WHERE reminder_id IN (${reminderList})`,
+    ...seededIds
+  );
+  const instanceIds = instances.map((instance) => instance.id);
+  const queueIds = [...seededIds, ...instanceIds];
+  const queueList = queueIds.map(() => "?").join(",");
+
+  // Every count below is SQLite's own `changes`, never the length of the id
+  // list handed to the statement. The two are not the same and the difference
+  // is not academic: the queue delete is given one id per reminder AND per
+  // instance, so the first run of this reported `purged_queue=29` when the
+  // queue held a single row. A cleanup tool that overstates what it removed is
+  // worse than one that removes nothing.
+
+  // Queue first: an entry left behind names a row that no longer exists, and
+  // the worker would spend all five attempts failing to resolve it before
+  // dead-lettering — noise that looks like a sync defect.
+  const queueResult = await db.runAsync(
+    `DELETE FROM sync_queue WHERE entity_id IN (${queueList})`,
+    ...queueIds
+  );
+  let instanceChanges = 0;
+  if (instanceIds.length > 0) {
+    const instanceResult = await db.runAsync(
+      `DELETE FROM reminder_instances WHERE id IN (${instanceIds
+        .map(() => "?")
+        .join(",")})`,
+      ...instanceIds
+    );
+    instanceChanges = instanceResult.changes;
+  }
+  // Parents last. `reminder_instances.reminder_id` is a foreign key, so the
+  // other order is rejected outright rather than merely leaving orphans.
+  const reminderResult = await db.runAsync(
+    `DELETE FROM reminders WHERE id IN (${reminderList})`,
+    ...seededIds
+  );
+
+  return (
+    `purged_reminders=${String(reminderResult.changes)} ` +
+    `purged_instances=${String(instanceChanges)} ` +
+    `purged_queue=${String(queueResult.changes)}`
+  );
+}
+
 export async function runHarnessAction(
   spec: HarnessSpec,
   context: HarnessContext
@@ -406,6 +498,8 @@ export async function runHarnessAction(
       return `sync_status=${syncWorker.currentStatus}`;
     case "cleanup-seeded":
       return userId === null ? SIGNED_OUT_REPLY : runCleanupSeeded(userId);
+    case "purge-seeded":
+      return userId === null ? SIGNED_OUT_REPLY : runPurgeSeeded(userId);
     default:
       return `unknown_action=${String(spec.action)}`;
   }

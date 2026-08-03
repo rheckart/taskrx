@@ -25,6 +25,13 @@ the issue #7 round trip answered by hand, re-runnable.
   nowhere used to be completely silent.
 - `fix(harness): verify the app process actually restarted` — `am kill`
   declines to kill a process Android still considers foreground, silently.
+- `feat(harness): purge the rows cases 8 and 9 seed` — `--purge` hard-deletes
+  them from Convex and then the device, in that order. Each run leaves a
+  fabricated reminder and an answered dose, and adherence is computed from
+  exactly those instance rows; the in-case `cleanup-seeded` only soft-deletes.
+  `harnessData.purgeSeeded` is the only hard delete in the deployment, which is
+  why it is an `internalMutation` and why its blast radius is pinned by tests
+  on both sides.
 
 Three findings are recorded in `docs/poc-results.md` and **not** fixed here,
 the first of which stops reminders reaching a real user:

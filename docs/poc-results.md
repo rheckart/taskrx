@@ -165,6 +165,19 @@ This document tracks the 13 success criteria from the POC plan §3. Each row sho
 > case killed the process mid-write and produced the lock above, which surfaced
 > as "no reminder was seeded" with no cause. The grant now happens once at
 > startup, before anything holds the database.
+>
+> **Clean up after these cases: `notification-harness.sh --purge`.** Every run
+> of case 8 or 9 creates a real reminder and answers a real dose, and both push
+> to Convex like any other write. `cleanup-seeded` runs inside each case and only
+> *soft* deletes, which is right there — the reminder leaves the medication list
+> and the app keeps its history — and not enough across many runs. The
+> `reminder_instances` rows are the ones that matter: **adherence is computed
+> from exactly those**, so invented doses move a real number. The purge deletes
+> from **Convex first, then the device**; in the other order the next pull can
+> land in between and write the reminders straight back down. Verifying this
+> session's cleanup: 14 seeded reminders and 15 fabricated instances removed
+> from both sides, leaving the one real medication and the two instances the
+> issue #7 round trip created.
 
 ## Success criteria
 
