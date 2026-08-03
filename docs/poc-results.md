@@ -3,6 +3,7 @@
 This document tracks the 13 success criteria from the POC plan §3. Each row shows the criterion, the expected result, the actual result, and a pass/fail verdict.
 
 **Status:** 2026-07-30, Phase 1 gate **PASS**. The notification harness reports **7/7 on a physical Pixel 8 Pro (Android 17, API 37)** in a single end-to-end `--all` invocation (`exit 0`), taken against commit `a931bbf` with a clean working tree, closing criteria #5, #5a, #11 and #12. **Updated 2026-08-02:** the auth / RxNorm / sync / cross-device criteria that were waiting on a signed-in Clerk + Convex session were exercised during the issue #7 round trip — 7 pass, 4 are partial on a latency or variant qualifier, and only #6 (notification tap) and #9 (airplane mode) remain untouched.
+**Updated 2026-08-03:** #6 and #9 are now **verified on the device and executable** as notification-harness cases 8 and 9 — **9 pass, 4 partial, 0 pending**. See "Criteria 6 and 9 on the device" below for what the run also found, including a product gap that would stop notifications reaching a real user on a fresh install.
 
 > **Baseline (2026-07-30).** All seven cases have been run against current
 > `main` on the physical Pixel 8 Pro, in one sweep, and all seven passed.
@@ -107,6 +108,64 @@ This document tracks the 13 success criteria from the POC plan §3. Each row sho
 > notifications but does not drain — so both pushes here needed an app restart
 > before they left the queue.
 
+> **Criteria 6 and 9 run on the device (2026-08-03, issue #9).** Both pass, and
+> both are now harness cases rather than prose, so the next person can re-run
+> them: `--case 8` and `--case 9`. Evidence:
+> `.omo/evidence/issue-9-case-8-notification-tap.json` and
+> `.omo/evidence/issue-9-case-9-offline-drain.json`, taken against `8d9ca44`
+> and a clean tree on the same Pixel 8 Pro.
+>
+> **Run them in separate invocations.** `--auth` runs both and case 9 then fails
+> every time; see "The database locks after a notification fires" below. This is
+> a real limit of the current instrument, recorded rather than papered over.
+>
+> Four things the run found that are not the criteria themselves. The first is
+> a product defect and the most consequential thing in this document.
+>
+> **A fresh install never asks for POST_NOTIFICATIONS, so no notification is
+> ever shown.** The alarm fires exactly on time, notify-kit runs, and the
+> framework throws `SecurityException: POST_NOTIFICATIONS permission is not
+> granted. Notification was not displayed.` Nothing in `dumpsys alarm` hints at
+> it — the alarm looks perfect right up to the millisecond it fires. The only
+> caller of `requestPermissions()` is `app/(app)/debug/notifications.tsx`, a
+> debug screen; no normal flow requests it. This was observed on the real device
+> here, where `pm clear` during the issue #7 round trip had revoked the grant:
+> from that moment the app was arming alarms that Android silently discarded.
+> **A user installing this app today gets no reminders and no error.** Not
+> fixed — it is a product change beyond running these two criteria, and it
+> wants its own issue. The harness now grants the permission at startup and
+> records the state in every case detail, so no delivery case can quietly fail
+> for this reason again (constraint 12).
+>
+> **Answering a dose leaves a duplicate pending instance.** `/dose/log` re-runs
+> its load after the write, `findPendingForOccurrence` filters to `pending` and
+> so does not see the row it just completed, and it mints a fresh one — every
+> answered occurrence ends up with a `completed` row and a spurious `pending`
+> row beside it, both pushed to Convex. Observed repeatedly here (`count=2` at a
+> single pairing; three at one point). The screen's own comments anticipate this
+> for *reopening* an answered occurrence, but it happens on the first answer,
+> without reopening anything. Adherence counts from these rows, so this is not
+> cosmetic. Not fixed. Harness case 9 works around it by asking for the
+> `completed` row by name rather than the first row.
+>
+> **The database locks after a notification fires.** Once an alarm has posted, the
+> app's SQLite writes fail with `Call to function 'NativeStatement.finalizeAsync'
+> has been rejected. → Caused by: Error code : database is locked`, and it
+> survives `am kill` and a verified-fresh process — so the lock outlives the
+> process that fired the alarm. The app's own code opens exactly one connection
+> (`getDb` memoises it) and uses a transaction only for migrations, so the second
+> writer comes from outside that code; the suspect is the entry bundle being
+> evaluated in a second JS context (notifee's headless task, and Fast Refresh,
+> which produced the same symptom). This is stated as a suspicion, not a
+> diagnosis — it was not run to ground. It is why cases 8 and 9 must be invoked
+> separately, and it deserves its own investigation: if it can happen in
+> production, a fired reminder would break dose logging until the app restarts.
+>
+> **`pm grant` restarts the app.** Granting POST_NOTIFICATIONS from inside a
+> case killed the process mid-write and produced the lock above, which surfaced
+> as "no reminder was seeded" with no cause. The grant now happens once at
+> startup, before anything holds the database.
+
 ## Success criteria
 
 | # | Criterion | Expected | Actual | Pass/Fail |
@@ -117,10 +176,10 @@ This document tracks the 13 success criteria from the POC plan §3. Each row sho
 | 4 | Medication persists in local SQLite across app restart | Medication list survives force-stop | **VERIFIED on Pixel 8 Pro (2026-08-02, incidental to issue #7).** The saved medication survived repeated `am force-stop` + relaunch cycles and a full device reboot, still rendering in My Medications. Confirmed below the UI as well, by pulling `files/SQLite/taskrx.db` off the device and reading the row directly rather than trusting the screen. Migrations 001→010 (not just 001–003) apply on a fresh boot; see the round-trip note above for the `pm clear` run. | ✅ **PASS** |
 | 5 | Local notification fires at scheduled time on a physical Android device, app closed, not in foreground, surviving Doze + battery optimization | Notification fires within 1 minute of scheduled time | **VERIFIED on Pixel 8 Pro / Android 17 / API 37.** Uses `AlarmType.SET_ALARM_CLOCK`. Delivered with the app process dead (`am kill`, 0 processes, `stopped=false`) across **three independent runs: 34 ms, 94 ms, and 31 ms late** — all far inside the 1-minute budget. Full chain in logcat: `Start proc ... for broadcast {NotificationAlarmReceiver}` → `NotifeeHeadlessJS: launched taskId: 1` → notification posted with correct title + `medicationId`. Primitive confirmed at OS level, not inferred: `window=0`, `exactAllowReason=permission`, `whenElapsed == maxWhenElapsed`, and the alarm registered as the device's *next alarm clock* with a timestamp exactly matching the scheduled one. The Doze clause is verified in criterion 5a below. **Re-verified 2026-07-30 against `a931bbf`** in a 7/7 single `--all` run — evidence `.omo/evidence/issue-5-baseline-all-cases.json`. Earlier evidence: `.omo/evidence/task-13-all-cases-final.json`, `.omo/evidence/task-13-SUMMARY.md`, `task-13-cases-1-4.json`, `task-13-cases-6-2.json` (all taken before the alarm-scoping fix; their `exact_windows` counts are inflated by `dumpsys` history — see "Case 5 was measuring the wrong thing"). | ✅ **PASS** |
 | 5a | *(sub-criterion)* Notification survives **deep Doze** specifically | Fires while device is in deep IDLE | **VERIFIED on Pixel 8 Pro / Android 17.** With the app process killed and the device on simulated battery, it entered deep `IDLE` with the alarm pending and dozed continuously — observed cycle `IDLE → IDLE_MAINTENANCE → IDLE → IDLE_MAINTENANCE → QUICK_DOZE_DELAY`, never returning to `ACTIVE` before the alarm fired — and the notification still posted. `dumpsys alarm` shows Doze imposes **zero deferral**: `policyWhenElapsed: requester=+2m22s657ms … device_idle=-1m21s983ms` (device_idle resolves earlier than the request) with `whenElapsed == maxWhenElapsed`. **Finding:** Android refuses to enter deep Doze at all while a wake-from-idle alarm is due within `min_time_to_alarm` (default **1 hour**) — `force-idle` reports `Unable to go deep idle; stopped at QUICK_DOZE_DELAY`. That refusal is itself evidence the alarm is classified wake-from-idle. **Accommodation:** `min_time_to_alarm` was lowered to 30s for this case only and stock constants restored afterwards (verified `device_idle_constants = null`); no battery-optimization exemption was granted. Evidence: `.omo/evidence/task-13-case-3-deep-idle.json`, `.omo/evidence/task-13-all-cases-final.json`. | ✅ **PASS** |
-| 6 | Tapping notification opens the dose logging screen pre-filled with the right med + scheduled time | Correct medication and time shown | Tap handler + deep-link routing implemented (`src/notifications/tap-handler.ts`); notification data includes `medicationId` and `scheduledTime` for the dose-log deep link; no device verification yet | ⏸️ Pending (device test) |
+| 6 | Tapping notification opens the dose logging screen pre-filled with the right med + scheduled time | Correct medication and time shown | **VERIFIED on Pixel 8 Pro (2026-08-03), now executable as harness case 8.** A real reminder was seeded, `rescheduleAll` armed it from SQLite, the notification posted, and the case found the row in the shade and tapped its coordinates — there is no adb command that invokes a notification's content intent, so this is a real tap. The dose screen opened showing the medication name, its dosage, and `Scheduled: … 3:39 PM` (device tz America/New_York) matching the armed millisecond, and it minted its instance at **exactly** that millisecond (`instance_at=627d30ae… count=1` at `1785785940000`; a row one second off does not match). The dosage assertion is the one that rules out a screen echoing the deep link's parameters — the link carries no dosage, so it can only have come from the row. Evidence: `.omo/evidence/issue-9-case-8-notification-tap.json`. | ✅ **PASS** |
 | 7 | Marking dose "taken" writes a `dose_logs` row in local SQLite | Row exists with status `taken` | **VERIFIED on Pixel 8 Pro (2026-08-02, issue #7).** The criterion's vocabulary is legacy on both nouns: `dose_logs` was dropped in migration 009 and `taken` was renamed `completed` in ADR 0001, so what was checked is a `reminder_instances` row with `status = 'completed'`, read out of the device's own SQLite. It also carried `completed_at` and `reminder_kind = 'medication'`. Conflict resolution is still test-only — see the round-trip note above on what contention was *not* exercised. Evidence: `.omo/evidence/issue-7-round-trip-verification.json`. | ✅ **PASS** |
 | 8 | When online, `dose_logs` rows sync to Convex (visible in Convex dashboard) | Row appears in Convex within 60s | **VERIFIED against the local deployment (2026-08-02, issue #7).** Two `reminderInstances` documents reached Convex through the unified `api.reminderInstances.create`, each with its parent resolved from the local UUID to the parent's Convex id. **But not within 60s, so the criterion is not met as written:** the worker drains on `syncWorker.start()` and on NetInfo changes only, and the `AppState` "active" handler does not drain, so the push left the queue only after an app restart. Routing is verified; unprompted timeliness is not. Evidence: `.omo/evidence/issue-7-round-trip-verification.json`. | ⚠️ **PARTIAL** — routes correctly, no 60s guarantee |
-| 9 | When offline (airplane mode), dose logs accumulate in `sync_queue`; when back online, they sync within 60s | Queue drains and rows appear in Convex | Sync queue + retry logic implemented; MAX_ATTEMPTS=5, exponential backoff to 30s cap. **Phase 1 fix**: dead-letter state (migration 003) ensures failed rows no longer retry forever; retained rows can be requeued via debug UI. Requires device test. | ⏸️ Pending (device test) |
+| 9 | When offline (airplane mode), dose logs accumulate in `sync_queue`; when back online, they sync within 60s | Queue drains and rows appear in Convex | **VERIFIED on Pixel 8 Pro (2026-08-03), now executable as harness case 9.** With airplane mode on and `Active default network: none` confirmed from `dumpsys connectivity`, a dose was answered through the real screen: the instance was written `completed` in SQLite, three entries accumulated in `sync_queue`, and the row was verified **absent from Convex** — the premise, without which the reconnect proves nothing. Airplane mode off: the row reached Convex **4s after the toggle** (0s after the device regained a default network, within one 3s poll), and the queue drained to 0 with nothing dead-lettered. Arrival is read from the deployment with `npx convex data`, keyed on `localId bb0e588a…`, **not** from the app's own `sync_status` — that column is written by the code path under test. Budget 60s. Evidence: `.omo/evidence/issue-9-case-9-offline-drain.json`. **Note on the claim in the old text:** dead-lettered rows still cannot be "requeued via debug UI" — `syncQueue.requeue()` has no call sites, as recorded under Outstanding verification. | ✅ **PASS** |
 | 10 | Same user logged in on Device B sees the medication + dose log within 10s of Device A's action | Realtime pull updates Device B | **VERIFIED as two installs, not two devices (2026-08-02, issue #7).** Only one Pixel was available, so "Device B" was the same handset after `pm clear` and re-authentication — the substitution issue #7 explicitly allows. The medication and both instances came down. **But not within 10s, so the criterion is not met as written:** the meds list reads SQLite once on mount, so the pulled rows stayed invisible until the screen was remounted — the data arrives, the screen does not notice. Arrival is verified; latency to the eye is not. Evidence: `.omo/evidence/issue-7-round-trip-verification.json`. | ⚠️ **PARTIAL** — arrives, but the screen needs a remount |
 | 11 | Adding 30 meds with daily schedules: rolling scheduler keeps notifications firing without dropping any | All 30 notifications fire in observation window | **Phase 1 fix**: scheduler now uses a **global 64-dose priority queue** across all active meds (`selectUpcomingDoses` in `@taskrx/shared`, 10 vitest cases), not 10 per med. Diff-based reschedule is idempotent. **VERIFIED on device** via harness case 6: 30 scheduled → `pending_count=30`, within the [1,64] cap, no drops. Evidence: `.omo/evidence/task-13-cases-6-2.json`. Note: this exercises harness-direct scheduling; the full `rescheduleAll(userId)` path from SQLite still needs a signed-in run. | ✅ **PASS** (cap + no-drop verified) |
 | 12 | EAS Build produces a sideloadable Android APK that installs and runs on a physical device | APK installs and app launches | ✅ **VERIFIED on physical device.** `./gradlew assembleDebug` produces a 260MB debug APK (Node 26 + Expo SDK 56 + notify-kit New Arch, BUILD SUCCESSFUL in 4m 25s); installed and launched on the Pixel 8 Pro (Android 17) with Metro tunnelled over USB via `adb reverse tcp:8081 tcp:8081`. Entry bundle confirmed as `apps/mobile/index.ts` (1991 modules). EAS cloud build still unused. | ✅ **PASS** |
@@ -176,8 +235,8 @@ See `docs/poc-stress-tests.md`. Also superseded by the harness.
 | 30-medication rolling horizon | ✅ Pass | Case 6 — `pending_count=30`, within the [1,64] cap, no drops |
 | Doze force-idle | ✅ Pass | Case 3 — on 2026-07-30 deep IDLE was reached by **stepping**, with no `force-idle` fallback needed (both runs that day); the 2026-07-27 run had required `dumpsys deviceidle force-idle deep` after `step deep` stalled at `QUICK_DOZE_DELAY`. The fallback remains in the harness for when stepping stalls |
 | Force-stop then next dose | ✅ Pass | Case 1 — via `am kill` (see the force-stop note in the Day 6 table) |
-| Offline-first 3 meds + 5 doses | ⏸️ Pending | Not yet in harness — manual test |
-| Restore network sync within 60s | ⏸️ Pending | Not yet in harness — manual test |
+| Offline-first 3 meds + 5 doses | ⏸️ Pending | Harness case 9 covers the shape with **one** med and one dose, verified offline in SQLite and in `sync_queue`. The multiplicity is what is still unexercised |
+| Restore network sync within 60s | ✅ Pass | Case 9 — reached Convex 4s after the airplane-mode toggle, verified server-side by `localId`, queue drained to 0 |
 
 ### Day 9 — Production-style build
 
@@ -202,7 +261,10 @@ and the issue #7 round trip established exactly that, so seven of them were
 answered as a side effect of verifying the sync cutover rather than by a
 campaign aimed at them.
 
-- **Passed: 7/13** — #2 (RxNorm returns live matches, selection carries the
+- **Passed: 9/13** — #6 (a tapped notification opens a pre-filled dose screen)
+  and #9 (offline accumulation, then drain within 60s) joined the list on
+  2026-08-03; both are machine-checked and re-runnable. The seven before them:
+  #2 (RxNorm returns live matches, selection carries the
   RxCUI to the backend), #4 (medication survives force-stop and reboot,
   confirmed in the device's own SQLite), #5 (killed-app exact delivery, 31-94 ms across 3 runs,
   plus sub-criterion #5a deep-Doze survival), #7 (an answered Occurrence writes
@@ -220,11 +282,10 @@ campaign aimed at them.
   "within 60s" — the worker drains only on sign-in and on NetInfo changes),
   #10 (rows reach a second install, but not "within 10s" — the list reads
   SQLite once on mount and does not notice a pull landing afterwards).
-- **Pending: 2/13** — #6 (tapping a notification opens a pre-filled dose log)
-  and #9 (airplane-mode accumulation then drain). Neither was exercised: the
-  round trip drove the UI directly rather than through a notification tap, and
-  connectivity was never cut. Both are now cheap to run — the blocker was the
-  signed-in session, and that is set up.
+- **Pending: 0/13** — #6 and #9 were the last two, and both were run on the
+  device on 2026-08-03 as harness cases 8 and 9. Unlike the seven criteria the
+  issue #7 round trip answered by hand, these two are now **re-runnable**:
+  `notification-harness.sh --case 8` and `--case 9`.
 - **Inconclusive: 0** — deep-Doze survival (criterion 5a) is now **verified**;
   see that row for the observed doze cycle, the `dumpsys alarm` zero-deferral
   policy line, and the `min_time_to_alarm` accommodation it required.
@@ -251,6 +312,17 @@ Evidence for every row: `.omo/evidence/issue-5-baseline-all-cases.json`.
 | 5 | boot_reschedule | ✅ PASS | 2026-07-30 | `before=3 after=3`, cross-checked against the OS per-uid tally (=3); all armed 15m+ out so none could have come due during the reboot; receiver landed ~61s after the first unlock |
 | 6 | stress_horizon_cap | ✅ PASS | 2026-07-30 | 30 scheduled → `pending_count=30`, within [1,64] |
 | 7 | weekly_schedule | ✅ PASS | 2026-07-30 | 3 alarms, all Mon/Wed/Fri 09:00 in America/New_York |
+
+Cases 8 and 9 are **not** part of that `--all` baseline and are not counted in
+it. They need a signed-in app and a reachable Convex deployment, and they report
+themselves unevaluated without one — folding them into `--all` would make every
+baseline run on a signed-out device incomplete. Measured separately on
+2026-08-03 against `8d9ca44`, clean tree, same device:
+
+| # | Case | Verdict | Measured | Detail |
+|---|------|---------|----------|--------|
+| 8 | notification_tap | ✅ PASS | 2026-08-03 | tapped the posted notification; dose screen showed name, dosage and `3:39 PM`, and minted its instance at exactly `1785785940000` |
+| 9 | offline_queue_drain | ✅ PASS | 2026-08-03 | answered offline with no default network, 3 queued, absent from Convex; arrived 4s after the toggle, queue drained to 0 |
 
 This is the first single-invocation 7/7. Case 7 had previously only ever passed
 inside a partial `--case 4 --case 6 --case 7` invocation.
@@ -350,21 +422,30 @@ unobtainable and looked like a genuine product ambiguity for three runs.
 3. Start Metro: `cd apps/mobile && npx expo start --dev-client`, then `adb -s <serial> reverse tcp:8081 tcp:8081`.
 4. **Disable the device's screen lock for the duration.** Case 3 needs screen-off to reach deep Doze, and screen-off engages the keyguard, which prevents foregrounding the app for the next case. This is a test-rig setting, not a product requirement — restore your PIN afterwards.
 5. Run the harness: `ANDROID_SERIAL=<serial> apps/mobile/scripts/notification-harness.sh --all --output .omo/evidence/<name>.json`. Takes ~16 minutes and reboots the device (case 5).
+5a. For criteria 6 and 9, additionally: sign in on the device, start the Convex
+   deployment it points at (`npx convex dev` from `packages/convex` for a local
+   one), and `adb reverse tcp:3210 tcp:3210`. Then run the two cases in
+   **separate** invocations — `--case 8`, then `--case 9` — for the reason under
+   "The database locks after a notification fires". `--auth` runs both in one go
+   and case 9 will report SETUP FAILED.
 6. The harness restores all mutated device state on exit (`deviceidle`, simulated battery, and `device_idle_constants`) via an EXIT/INT/TERM trap. Verify with `adb shell settings get global device_idle_constants` → `null`.
 
 ## Outstanding verification
 
-Recorded here so the ⏸️ markers above are not mistaken for oversight. This
-document still carries `⏸️ Pending` rows, against a plan criterion
-(`.omo/plans/convex-expo-revisit.md` todo 14, Success criterion 6) that requires
-zero. They are deliberately *not* being converted to ❌: none of them failed.
-They were never run, and recording an unrun check as a failure would be its own
-false claim. Blocker 2 is now cleared; the criterion remains unmeetable until
-Blocker 1 clears, and should be restated rather than satisfied on paper.
+Recorded here so the ⏸️ markers above are not mistaken for oversight.
 
-**Blocker 1 — no signed-in session.** Criteria 1, 2, 3, 4, 6, 7, 8, 9 and 10
-need Clerk + Convex credentials on a device. Nine of the thirteen numbered
-criteria are undischarged for this one reason.
+**The thirteen numbered criteria now carry zero `⏸️ Pending` rows**, which is
+what the plan criterion (`.omo/plans/convex-expo-revisit.md` todo 14, Success
+criterion 6) asks for. Four remain ⚠️ **PARTIAL**, and those are not pending —
+each was run and missed a qualifier in its own wording, which is a measurement,
+not an omission. The ⏸️ markers that remain in this document are all in the
+auxiliary tables below (DND, battery-saver, EAS cloud build), not in the
+criteria.
+
+**Blocker 1 — no signed-in session.** ✅ **Cleared 2026-08-02/03.** Criteria 1,
+2, 3, 4, 7, 8 and 10 were exercised during the issue #7 round trip; 6 and 9
+followed on 2026-08-03 as harness cases 8 and 9. Nothing is now waiting on
+credentials.
 
 **Blocker 2 — no device attached.** ✅ **Cleared 2026-07-30.** The Pixel 8 Pro
 was attached and all seven cases were run against current `main` in a single

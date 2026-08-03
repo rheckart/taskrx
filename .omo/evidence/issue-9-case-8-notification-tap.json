@@ -1,0 +1,11 @@
+{
+  "timestamp": "2026-08-03T19:40:35+00:00",
+  "package": "com.taskrx.mobile",
+  "provenance": { "commit": "1d0286e8070a5f68e54782fd63216a21ebabae83", "branch": "main", "dirty": false, "dirty_files": "" },
+  "device": { "serial": "38220DLJG000JK", "release": "17", "sdk": "37", "fingerprint": "google/husky/husky:17/CP2A.260705.006/15641320:user/release-keys" },
+  "summary": { "passed": 1, "failed": 0, "unevaluated": 1 },
+  "cases": [
+    {"case":8,"name":"notification_tap","pass":true,"outcome":"pass","detail":"tapped the posted notification and landed on the dose screen, pre-filled: name and dosage rendered from the seeded row, scheduled time shown as '3:39 PM' (device tz America/New_York), and the screen minted its instance at exactly 1785785940000 ([harness] result: instance_at=627d30ae-b5e2-408d-a8ff-ce6b275590b7 status=pending count=1 completed=none statuses=pending). Armed by rescheduleAll from SQLite, not by a synthetic trigger. POST_NOTIFICATIONS granted=true"},
+    {"case":9,"name":"offline_queue_drain","pass":null,"outcome":"setup_failed","detail":"SETUP FAILED (not a product failure): no reminder was seeded, so there was no dose to answer. The app answered: [harness] error: Call to function 'NativeStatement.finalizeAsync' has been rejected."}
+  ]
+}

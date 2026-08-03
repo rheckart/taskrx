@@ -1,0 +1,10 @@
+{
+  "timestamp": "2026-08-03T19:43:52+00:00",
+  "package": "com.taskrx.mobile",
+  "provenance": { "commit": "1d0286e8070a5f68e54782fd63216a21ebabae83", "branch": "main", "dirty": false, "dirty_files": "" },
+  "device": { "serial": "38220DLJG000JK", "release": "17", "sdk": "37", "fingerprint": "google/husky/husky:17/CP2A.260705.006/15641320:user/release-keys" },
+  "summary": { "passed": 1, "failed": 0, "unevaluated": 0 },
+  "cases": [
+    {"case":9,"name":"offline_queue_drain","pass":true,"outcome":"pass","detail":"accumulated offline then drained on reconnect: the dose was answered with no default network, queued (queue_pending=3) and verifiably absent from Convex; after the network returned it arrived in 0s (4s from the airplane-mode toggle, budget 60s) and the queue drained to 0. Verified server-side by localId bb0e588a-d11b-4b8c-9c99-de7000663f58, not from the app's own sync_status. queue_dead=0"}
+  ]
+}

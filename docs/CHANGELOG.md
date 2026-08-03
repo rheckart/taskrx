@@ -8,6 +8,34 @@ for commit discipline (POC tags use `0.x.x`).
 
 ## [Unreleased]
 
+### 2026-08-03 — Criteria 6 and 9 verified on the device
+
+The last two `⏸️ Pending` POC criteria are now verified and, unlike the seven
+the issue #7 round trip answered by hand, re-runnable.
+
+- `feat(mobile): expose the signed-in harness actions` — six harness actions
+  that read and write the real SQLite tables as the authenticated user, so the
+  adb harness can drive the signed-in tree and not just the local-only one.
+  Every one refuses without a Clerk subject rather than guessing at it.
+- `feat(harness): add device cases 8 and 9 for criteria 6 and 9` — a real tap
+  on a real notification, and an airplane-mode round trip measured from the
+  Convex deployment rather than from the app's own `sync_status`. Not part of
+  `--all`, which stays the local-only delivery baseline.
+- `feat(notifications): log every notification-tap outcome` — a tap that went
+  nowhere used to be completely silent.
+- `fix(harness): verify the app process actually restarted` — `am kill`
+  declines to kill a process Android still considers foreground, silently.
+
+Three findings are recorded in `docs/poc-results.md` and **not** fixed here,
+the first of which stops reminders reaching a real user:
+
+- A fresh install never requests `POST_NOTIFICATIONS`; the only caller is a
+  debug screen. Alarms fire and Android discards every notification.
+- Answering a dose mints a duplicate `pending` instance beside the `completed`
+  one, and both reach Convex. Adherence counts from these rows.
+- After a notification fires, the app's SQLite writes fail with "database is
+  locked", surviving a process restart.
+
 ### 2026-07-26 — Stack revisit (return to Convex + Expo) + Phase 1
 
 The stack briefly moved to .NET MAUI + ASP.NET Core + PostgreSQL + Aspire and

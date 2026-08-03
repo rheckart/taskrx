@@ -111,7 +111,18 @@
 #   apps/mobile/scripts/notification-harness.sh --list
 #   apps/mobile/scripts/notification-harness.sh --case 2
 #   apps/mobile/scripts/notification-harness.sh --all --output report.json
-#   apps/mobile/scripts/notification-harness.sh --auth --output report.json
+#   apps/mobile/scripts/notification-harness.sh --case 8 --output tap.json
+#   apps/mobile/scripts/notification-harness.sh --case 9 --output drain.json
+#
+# RUN 8 AND 9 IN SEPARATE INVOCATIONS. `--auth` runs both, and case 9 then
+# reports SETUP FAILED every time: case 8 lets a notification fire, and from
+# that point the app's SQLite writes fail with "Error code : database is
+# locked" — through an `am kill` and a verified-fresh process, so the lock
+# outlives the process that fired the alarm. Run separately, both pass.
+# This is the same shape as the two-pass split constraint 5 documents for
+# cases 3 and 5: a real limit, recorded rather than hidden, and NOT worked
+# around by having a case restart something until it passes. See constraint 6a
+# and docs/poc-results.md.
 #
 # On a device with NO screen lock, `--all` is a single pass. With a screen lock
 # set, use two passes and unlock the device before each (see constraint 5):
