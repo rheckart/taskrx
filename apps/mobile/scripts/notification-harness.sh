@@ -1636,7 +1636,11 @@ notification-harness.sh — adb-driven notification test harness
   --list          List cases
   --case N        Run case N (1..9)
   --all           Run cases 1-7: the local-only delivery baseline
-  --auth          Run cases 8-9: need a signed-in app and a reachable Convex
+  --auth          Run cases 8-9: need a signed-in app and a reachable Convex.
+                  Prefer `--case 8` then `--case 9` as separate invocations —
+                  case 8 fires a notification, after which the app's SQLite
+                  writes fail with "database is locked" and case 9 cannot set
+                  itself up. See constraint 6a.
   --output PATH   JSON report destination
 
 `--all` deliberately stops at 7. Cases 1-7 assert delivery against a fresh,
