@@ -1295,8 +1295,27 @@ case7_weekly_schedule() {
 # It is recorded in docs/poc-results.md rather than papered over, and the
 # restart is deliberately NOT applied to cases 1-7: those assert delivery, an
 # `am kill` mid-suite would change what they measure, and none of them writes.
+# Returns non-zero if the process could not be killed, so a case can say so
+# rather than proceeding against a database that may already be locked.
+#
+# The kill is CHECKED, not assumed, and retried. `am kill` only terminates a
+# process Android considers cached, and both cases reach here moments after the
+# app was last in the foreground — case 8 ends on the dose screen it just
+# tapped its way to. Two seconds after HOME is not always enough for the
+# demotion, and an `am kill` that silently declines leaves exactly the
+# long-lived process this function exists to replace: case 9 then failed with
+# "database is locked" immediately after case 8's alarm had fired.
 fresh_app_process() {
-  kill_app_realistically
+  local tries=0
+  while (( tries < 3 )); do
+    kill_app_realistically
+    [[ -z "$(adb_shell pidof "$PKG" 2>/dev/null | tr -d '\r')" ]] && break
+    sleep 5
+    tries=$((tries + 1))
+  done
+  if [[ -n "$(adb_shell pidof "$PKG" 2>/dev/null | tr -d '\r')" ]]; then
+    return 1
+  fi
   wait_for_app_ready >/dev/null 2>&1 || true
 }
 
@@ -1328,7 +1347,11 @@ fresh_app_process() {
 #     that exact millisecond is proof of which occurrence it opened. It is
 #     checked at the exact `fire_at`, and a row one second off does not match.
 case8_notification_tap() {
-  fresh_app_process
+  if ! fresh_app_process; then
+    add_unevaluated 8 notification_tap setup_failed \
+      "SETUP FAILED (not a product failure): the app process could not be restarted, so this case would have run against a process that may already be holding the database locked. Nothing was measured."
+    return
+  fi
   require_reachable 8 notification_tap || return
   require_signed_in 8 notification_tap || return
   grant_exact
@@ -1451,7 +1474,11 @@ case8_notification_tap() {
 # the server before the reconnect, nothing was ever queued and the case has
 # measured nothing, so it says so instead of passing.
 case9_offline_queue_drain() {
-  fresh_app_process
+  if ! fresh_app_process; then
+    add_unevaluated 9 offline_queue_drain setup_failed \
+      "SETUP FAILED (not a product failure): the app process could not be restarted, so this case would have run against a process that may already be holding the database locked. Nothing was measured."
+    return
+  fi
   require_reachable 9 offline_queue_drain || return
   require_signed_in 9 offline_queue_drain || return
   ensure_convex_reverse
