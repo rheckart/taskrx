@@ -1,5 +1,4 @@
 import { ClerkProvider, useAuth, useUser } from "@clerk/clerk-expo";
-import { tokenCache } from "@clerk/clerk-expo/token-cache";
 import { ConvexProviderWithClerk } from "convex/react-clerk";
 import { Redirect, Slot, useRouter, useSegments } from "expo-router";
 import { Component, useEffect, useRef } from "react";
@@ -14,6 +13,7 @@ import {
 } from "react-native";
 
 import { convex, isConvexConfigured } from "../src/api/convex";
+import { authConfig, isClerkKeyConfigured } from "../src/config/clerk";
 import { getDb } from "../src/db";
 import {
   createNotificationChannel,
@@ -21,17 +21,6 @@ import {
   rescheduleAll,
 } from "../src/notifications";
 import { syncWorker } from "../src/sync/worker";
-
-const rawPublishableKey = process.env.EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY;
-
-// Kept as `string | undefined` rather than a boolean flag so TypeScript can
-// narrow it to string in RootLayout's configured branch without an assertion.
-const clerkPublishableKey: string | undefined =
-  rawPublishableKey !== undefined &&
-  rawPublishableKey.length > 0 &&
-  !rawPublishableKey.includes("replace_me")
-    ? rawPublishableKey
-    : undefined;
 
 function AuthRedirectGate(): ReactElement {
   const { isLoaded, isSignedIn } = useAuth();
@@ -255,13 +244,12 @@ function LocalOnlyTree(): ReactElement {
 }
 
 export default function RootLayout(): ReactElement {
-  if (
-    clerkPublishableKey === undefined ||
-    tokenCache === undefined ||
-    !isConvexConfigured
-  ) {
+  // The condition itself lives in `src/config/clerk.ts`, because `/harness`
+  // now has to reach the same verdict before deciding whether calling a Clerk
+  // hook is safe — and a copy of the condition here is a copy that can drift.
+  if (authConfig === null) {
     console.warn(
-      `[config] running local-only: clerk=${String(clerkPublishableKey !== undefined)} convex=${String(isConvexConfigured)}. ` +
+      `[config] running local-only: clerk=${String(isClerkKeyConfigured)} convex=${String(isConvexConfigured)}. ` +
         "Copy apps/mobile/.env.example to apps/mobile/.env to enable auth and cloud sync. " +
         "Redirecting to /harness; SQLite and local notifications still work."
     );
@@ -269,7 +257,10 @@ export default function RootLayout(): ReactElement {
   }
 
   return (
-    <ClerkProvider publishableKey={clerkPublishableKey} tokenCache={tokenCache}>
+    <ClerkProvider
+      publishableKey={authConfig.publishableKey}
+      tokenCache={authConfig.tokenCache}
+    >
       <ConvexProviderWithClerk client={convex} useAuth={useAuth}>
         <DatabaseBootstrap />
         <NotificationBootstrap />
