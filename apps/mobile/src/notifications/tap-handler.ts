@@ -35,12 +35,22 @@ function extractDoseData(
 }
 
 function handleEvent(event: Event, navigate?: NavigateFunction): void {
+  // Logged at every exit, because until this existed a tap that went nowhere
+  // was completely silent: the app came to the foreground on whatever route it
+  // was last showing, and there was no way to tell whether the event never
+  // arrived, arrived as something other than a press, carried unusable data,
+  // or navigated and lost. Three of those four are real possibilities and they
+  // have different fixes. One line per tap is a price worth paying for a
+  // handler whose failure mode is "the medication reminder does nothing".
+  const surface = navigate === undefined ? "background" : "foreground";
   if (event.type !== EventType.PRESS) {
+    console.log(`[tap] ${surface} ignored: type=${String(event.type)}`);
     return;
   }
 
   const dose = extractDoseData(event);
   if (dose === null) {
+    console.log(`[tap] ${surface} press with no usable dose data`);
     return;
   }
 
@@ -49,9 +59,21 @@ function handleEvent(event: Event, navigate?: NavigateFunction): void {
   )}&scheduledTime=${encodeURIComponent(String(dose.scheduledTime))}`;
 
   if (navigate !== undefined) {
+    console.log(`[tap] foreground navigating to ${path}`);
     navigate({ pathname: "/dose/log", params: dose });
   } else {
-    void Linking.openURL(`taskrx://${path}`);
+    console.log(`[tap] background opening taskrx://${path}`);
+    void Linking.openURL(`taskrx://${path}`).catch((error: unknown) => {
+      // Previously fire-and-forget. A rejection here is the one failure that
+      // leaves no trace at all — the app is already coming to the foreground
+      // because of the notification's own launch intent, so a dropped deep
+      // link looks exactly like a tap that opened the app on the wrong screen.
+      console.log(
+        `[tap] background openURL failed: ${
+          error instanceof Error ? error.message : String(error)
+        }`
+      );
+    });
   }
 }
 
