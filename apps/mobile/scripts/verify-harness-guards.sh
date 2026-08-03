@@ -145,6 +145,43 @@ else
   ok "harness_once returns immediately and empty with no device"
 fi
 
+# 5b — the signed-in precondition, which cases 8 and 9 gate on. It asks the app
+# a question, and with no device the answer is silence — which must not be read
+# as "the app is signed out". That would be the same shape of false verdict as
+# the keyguard claim above: a statement about a session on a phone that is not
+# attached, and one that sends the reader off to sign in on it.
+results=()
+require_signed_in 8 notification_tap >/dev/null 2>&1
+recorded="${results[0]:-}"
+if [[ -z "$recorded" ]]; then
+  bad "require_signed_in recorded no result at all"
+else
+  case "$recorded" in
+    *'"outcome":"no_device"'*) ok "require_signed_in names the missing device" ;;
+    *'"outcome":"signed_out"'*) bad "require_signed_in blames the session with no device: $recorded" ;;
+    *) bad "require_signed_in produced an unexpected record: $recorded" ;;
+  esac
+  case "$recorded" in
+    *'"pass":null'*) ok "a signed-out/absent device records pass:null, not a verdict" ;;
+    *) bad "require_signed_in recorded a verdict: $recorded" ;;
+  esac
+fi
+
+# 5c — case 9 takes the radios down, and `restore_device` is what brings them
+# back on an interrupted run. It is trapped on EXIT/INT/TERM, so the one thing
+# it must never do is exit non-zero part-way and skip the rest: a phone left in
+# airplane mode by a cancelled test is silent (adb is over USB) and is the most
+# user-hostile thing this script can leave behind.
+if ! declare -F airplane_off >/dev/null; then
+  bad "airplane_off is not defined"
+elif ! grep -q 'airplane_off' <<<"$(declare -f restore_device)"; then
+  bad "restore_device does not restore airplane mode"
+elif restore_device >/dev/null 2>&1; then
+  ok "restore_device restores airplane mode and survives a missing device"
+else
+  bad "restore_device exited non-zero with no device — the EXIT trap would stop early"
+fi
+
 # 6 — the report has to PARSE. `detail` is built from dumpsys output, which is
 # arbitrary text this script does not control, so a backslash in it must be
 # escaped before the quote or the evidence file is unreadable. Both writers

@@ -9,11 +9,14 @@
 # rather than by eyeballing the device.
 #
 # ── EMPIRICALLY-VALIDATED CONSTRAINTS ──────────────────────────────────────
-# Learned by running against a Pixel 8 Pro on Android 17 (API 37). Ten
+# Learned by running against a Pixel 8 Pro on Android 17 (API 37). Thirteen
 # constraints: 1-7 below, then 8 (deep Doze is blocked by a pending
-# wake-from-idle alarm), 9 (`dumpsys alarm` is mostly NOT pending alarms), and
-# 10 (silence from adb is not a fact about the device), which are documented
-# inline at their point of use.
+# wake-from-idle alarm), 9 (`dumpsys alarm` is mostly NOT pending alarms), 10
+# (silence from adb is not a fact about the device), 11 (in the signed-in tree
+# `rescheduleAll` sweeps away any alarm it did not derive), 12 (an ungranted
+# POST_NOTIFICATIONS silently discards every delivery), and 13 (`adb shell`
+# re-parses the URL you pass it), which are documented inline at their point
+# of use.
 # Do not "simplify" these away; each one caused a real false result.
 #
 #  1. DEEP LINKS MUST CONTAIN A REAL PATH, NOT JUST A HOST.
@@ -64,6 +67,20 @@
 #     harness suddenly stops responding, check logcat for a render error
 #     before suspecting the deep-link format.
 #
+#  6a. A LONG DEV-CLIENT SESSION CAN LOCK THE DATABASE. After editing app
+#     source with the harness running, every SQLite write began failing with
+#     "Error code : database is locked", so `seed-due-reminder` threw and
+#     cases 8 and 9 reported SETUP FAILED. `am kill` plus a relaunch cleared it
+#     immediately and the same call then succeeded in ~1s.
+#     Suspected cause, stated as the suspicion it is: each Metro bundle reload
+#     re-runs module initialisation and opens the database again, while the
+#     previous native connection stays open — the app's own code opens exactly
+#     one connection and uses transactions only for migrations, so a second
+#     writer has to come from somewhere outside it. Treated as a DEV-CLIENT
+#     artifact, not a product defect, and deliberately NOT worked around here:
+#     the harness surfaces the app's error instead (see `harness_once`), and
+#     the remedy is to restart the app after touching app source.
+#
 #  7. ACTION_BOOT_COMPLETED IS WITHHELD UNTIL THE FIRST MANUAL UNLOCK. On a
 #     device with any screen lock, user 0 boots to RUNNING_LOCKED: credential-
 #     encrypted storage stays sealed and only LOCKED_BOOT_COMPLETED is sent.
@@ -77,10 +94,24 @@
 # reachable. Use `adb reverse tcp:8081 tcp:8081` for USB — this also sidesteps
 # LAN firewall and multi-subnet problems that break mDNS-discovered LAN IPs.
 #
+# CASES 8 AND 9 ADDITIONALLY REQUIRE A SIGNED-IN APP, and are deliberately NOT
+# part of `--all`. Cases 1-7 run local-only against a fresh install, which is
+# what makes that suite the delivery baseline on any device; folding in two
+# cases that report `signed_out` on such a device would turn every baseline run
+# into an incomplete one. Run them with `--auth`, or by number.
+#
+# Case 9 also needs the Convex deployment the DEVICE talks to to be readable
+# from THIS machine, because it verifies arrival server-side rather than
+# trusting the app's own "synced" flag. With the usual local backend that means
+# `adb reverse tcp:3210 tcp:3210` (asserted automatically) plus a `npx convex`
+# that resolves the same deployment. When it does not, the case reports itself
+# unevaluated rather than failing the product.
+#
 # Usage:
 #   apps/mobile/scripts/notification-harness.sh --list
 #   apps/mobile/scripts/notification-harness.sh --case 2
 #   apps/mobile/scripts/notification-harness.sh --all --output report.json
+#   apps/mobile/scripts/notification-harness.sh --auth --output report.json
 #
 # On a device with NO screen lock, `--all` is a single pass. With a screen lock
 # set, use two passes and unlock the device before each (see constraint 5):
@@ -92,7 +123,8 @@
 #
 # Env: TASKRX_PKG ANDROID_SERIAL METRO_URL VERBOSE=1 SKIP_DOZE=1 SKIP_REBOOT=1
 #      BOOT_UNLOCK_TIMEOUT_S (default 300) BOOT_REGISTER_TIMEOUT_S (default 300)
-#      BOOT_ALARM_COUNT (default 3)
+#      BOOT_ALARM_COUNT (default 3) CONVEX_DEVICE_PORT (default 3210)
+#      SYNC_BUDGET_S (default 60 — criterion 9's own wording)
 #
 # Case 5 is INTERACTIVE on a device with a screen lock: it reboots, then waits
 # for you to unlock before it can observe anything (constraint 7).
@@ -123,6 +155,26 @@ BOOT_REGISTER_TIMEOUT_S="${BOOT_REGISTER_TIMEOUT_S:-300}"
 # Case 5 only. How many alarms to arm before the reboot. Must be >1 or a
 # partial restore cannot be detected — see the comment in case5_boot_reschedule.
 BOOT_ALARM_COUNT="${BOOT_ALARM_COUNT:-3}"
+# Cases 8 and 9 only. The port the DEVICE reaches its Convex deployment on. For
+# the usual local backend this is the loopback port an `adb reverse` tunnel
+# forwards; for a cloud deployment the tunnel is simply unused.
+CONVEX_DEVICE_PORT="${CONVEX_DEVICE_PORT:-3210}"
+# Cases 8 and 9 only. Extra time to wait for the actions that end in
+# `rescheduleAll`, which rewrites a horizon of up to 64 triggers one notifee
+# call at a time and does not answer inside HARNESS_SETTLE_S.
+HARNESS_SLOW_BUDGET_S="${HARNESS_SLOW_BUDGET_S:-90}"
+# Case 9 only. Criterion 9 says "sync within 60s", so the budget is the
+# criterion's own number rather than a tuned value. Overridable only so a
+# slower link can be measured without editing the case.
+SYNC_BUDGET_S="${SYNC_BUDGET_S:-60}"
+# Case 8 only. Lead time for the seeded occurrence. The schedule engine has
+# minute resolution, so this is rounded UP to the next whole minute by
+# `seed-due-reminder`; 120s therefore buys 60-120s of setup room.
+TAP_LEAD_MS="${TAP_LEAD_MS:-120000}"
+# Case 8 only. How long past the armed time to keep looking for the post. An
+# exact alarm lands within ~100ms, but the process may have to be started to
+# run the headless JS that posts it.
+TAP_POST_GRACE_S="${TAP_POST_GRACE_S:-60}"
 
 script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 repo_root="$(cd "$script_dir/../../.." && pwd)"
@@ -239,8 +291,8 @@ next_nonce() { nonce_counter=$((nonce_counter + 1)); printf 'n%s' "$nonce_counte
 # ── Harness invocation (constraints 1 and 3) ───────────────────────────────
 
 harness_once() {
-  local action="$1" id="${2:-x}" delay="${3:-0}"
-  local nonce
+  local action="$1" id="${2:-x}" delay="${3:-0}" extra_budget_s="${4:-0}"
+  local nonce out deadline
   # Bail before touching adb at all. `adb logcat` BLOCKS waiting for a device
   # rather than failing, so with no device this function does not return an
   # empty string — it hangs the whole run, indefinitely, in whichever case was
@@ -254,12 +306,47 @@ harness_once() {
   if ! device_attached; then
     return 0
   fi
+  # `result:` OR `error:`. `HarnessScreen` catches a thrown action and logs it
+  # as `[harness] error: <message>`, and matching only `result:` threw that
+  # away — so an action that failed loudly, with a diagnosis, was reported to
+  # the caller as silence and rendered as "the app answered: <nothing>".
+  #
+  # Measured: `seed-due-reminder` failed with "Error code : database is locked"
+  # and two consecutive runs recorded SETUP FAILED with no cause, sending the
+  # investigation towards deep links and timing. The app had been saying
+  # exactly what was wrong the whole time. Callers already treat a reply they
+  # cannot parse as a failed setup; the difference is that the reply now
+  # carries the reason into the evidence file.
   nonce="$(next_nonce)"
   adb_run logcat -c >/dev/null 2>&1
   adb_shell am start -a android.intent.action.VIEW \
     -d "taskrx://harness/${action}/${id}/${delay}/${nonce}" >/dev/null 2>&1
   sleep "$HARNESS_SETTLE_S"
-  adb_run logcat -d 2>/dev/null | grep -oE "\[harness\] result:.{0,120}" | tail -1
+  out="$(adb_run logcat -d 2>/dev/null | grep -oE "\[harness\] (result|error):.{0,160}" | tail -1)"
+
+  # The blind settle above is kept exactly as it was — cases 1-7 read `dumpsys`
+  # immediately after this returns, and shortening their wait would race the
+  # alarm's registration. `extra_budget_s` only extends it, and only for callers
+  # that ask.
+  #
+  # They have to ask because some actions genuinely take longer than 8s.
+  # `seed-due-reminder` and `cleanup-seeded` both end in `rescheduleAll`, which
+  # diffs and rewrites a horizon of up to 64 triggers one notifee call at a
+  # time; measured against a 59-alarm horizon it did not answer inside the
+  # settle. The reply was then read as "the app did not answer" and case 8
+  # reported SETUP FAILED — for a seed that had in fact been written, which is
+  # the worse half: `harness()` then retried and seeded a SECOND reminder under
+  # the same name. Polling for the line the app does eventually log is what
+  # keeps a slow action from looking like a dead one.
+  if [[ -z "$out" && "$extra_budget_s" -gt 0 ]]; then
+    deadline=$(( $(date +%s) + extra_budget_s ))
+    while [[ -z "$out" ]] && (( $(date +%s) < deadline )); do
+      device_attached || break
+      sleep 2
+      out="$(adb_run logcat -d 2>/dev/null | grep -oE "\[harness\] (result|error):.{0,160}" | tail -1)"
+    done
+  fi
+  printf '%s\n' "$out"
 }
 
 # Self-heal one level. Cases 1, 3 and 5 deliberately destroy the app process
@@ -408,6 +495,162 @@ next_alarm_clock() { adb_shell dumpsys alarm 2>/dev/null | grep -A1 "Next alarm 
 notification_has() { adb_shell dumpsys notification --noredact 2>/dev/null | grep -c "$1" || true; }
 grant_exact()      { adb_shell cmd appops set "$PKG" SCHEDULE_EXACT_ALARM allow >/dev/null 2>&1 || true; }
 deny_exact()       { adb_shell cmd appops set "$PKG" SCHEDULE_EXACT_ALARM deny  >/dev/null 2>&1 || true; }
+
+# ── Constraint 12: AN UNGRANTED POST_NOTIFICATIONS DISCARDS EVERY DELIVERY. ──
+# On Android 13+ the alarm still fires and notify-kit still runs, and then the
+# framework throws SecurityException and drops the notification on the floor:
+#
+#   W NOTIFEE (NotificationManager): POST_NOTIFICATIONS permission is not
+#     granted. Notification was not displayed.
+#
+# Nothing in `dumpsys alarm` shows it — the alarm looks perfect right up to the
+# moment it fires — so every delivery case (1, 3, 4, and 8) reports "NOT
+# posted" and scores a product FAIL for a permission the rig never granted.
+# Measured while building case 8: the alarm fired at the armed millisecond and
+# no notification existed a minute later.
+#
+# `pm grant` rather than a prompt, and it is the same class of accommodation as
+# `grant_exact` above: the permission is the user's to give, and the cases
+# exist to test delivery, not the consent dialog. `notification_permission`
+# reads the state back so a result can say which it ran under.
+#
+# It is worth knowing WHY a real device can be missing it: `pm clear` revokes
+# runtime permissions, and in this app the only caller of `requestPermissions()`
+# is the debug screen — so a fresh install never asks. That is a product gap,
+# recorded in docs/poc-results.md, not something this grant fixes.
+grant_post()       { adb_shell pm grant "$PKG" android.permission.POST_NOTIFICATIONS >/dev/null 2>&1 || true; }
+notification_permission() {
+  adb_shell dumpsys package "$PKG" 2>/dev/null \
+    | grep -m1 "android.permission.POST_NOTIFICATIONS: granted=" \
+    | grep -oE 'granted=(true|false)' | tr -d '\r'
+}
+
+# ── Constraint 13: `adb shell` RE-PARSES WHATEVER YOU HAND IT. ──────────────
+# `adb shell am start -d "taskrx:///dose/log?a=1&b=2"` does NOT deliver that
+# URL. The arguments are joined and run through the DEVICE's shell, so the `&`
+# backgrounds the command and everything after it is lost — the app receives
+# `?a=1` and reports "Invalid dose link", which reads exactly like a routing
+# bug in the app. Measured while building case 9.
+#
+# The existing `harness://` links encode their parameters as path segments and
+# are unaffected, which is why this went unnoticed until a route with a real
+# query string was driven. Wrap in single quotes so the device shell strips
+# them and `am` sees one argument.
+deep_link() { adb_shell am start -a android.intent.action.VIEW -d "'$1'" >/dev/null 2>&1; }
+
+# ── UI reads (cases 8 and 9) ───────────────────────────────────────────────
+#
+# Cases 1-7 assert from `dumpsys`, which is the stronger instrument and stays
+# the default. These two cannot: "the dose screen opened, pre-filled with the
+# right medication and time" is a claim about what the USER sees, and only the
+# view hierarchy can answer it. Tapping a notification is the same — there is
+# no adb command that invokes a notification's content intent, so the case has
+# to find the row and tap its coordinates, exactly as a finger would.
+#
+# PRIVACY, and this is not incidental: `uiautomator dump` captures the whole
+# screen, and on a real phone the notification shade is full of the owner's
+# messages, calendar invites and addresses. Nothing below ever echoes a dump,
+# and every value that reaches the JSON report is one this script matched or
+# derived. These reports get committed — keep it that way.
+ui_dump()  { adb_run exec-out uiautomator dump /dev/tty 2>/dev/null | tr '>' '\n'; }
+
+# ── The screen does not use the space you think it does. ───────────────────
+# `toLocaleString` on a modern ICU separates the time from AM/PM with U+202F
+# NARROW NO-BREAK SPACE, not U+0020. The dose screen renders
+#
+#   Scheduled: Aug 3, 2:39<U+202F>PM        (hex ... 32 3a 33 39 e2 80 af 50 4d)
+#
+# which is indistinguishable from an ordinary space in any terminal, log or
+# screenshot. Case 8 built its expected string with `date`, which emits a plain
+# space, and reported "the dose screen did not show the right time" for a
+# screen showing exactly the right time — while its name and dosage assertions
+# passed, so the failure looked like a scheduling bug rather than a text one.
+# Diagnosed only by dumping the bytes.
+#
+# Normalise the three Unicode spaces ICU actually uses (U+202F, U+00A0, U+2009)
+# to U+0020 for every text read, so assertions may be written with the space a
+# human would type.
+ui_text() {
+  ui_dump | grep -oE 'text="[^"]*"' \
+    | sed -e 's/^text="//' -e 's/"$//' \
+          -e 's/\xe2\x80\xaf/ /g' -e 's/\xc2\xa0/ /g' -e 's/\xe2\x80\x89/ /g' \
+    | grep -v '^$'
+}
+
+# Does the current screen show this text? Substring, because the dose screen
+# renders "Scheduled: Aug 3, 2:22 PM" as one node.
+ui_shows() { ui_text | grep -qF "$1"; }
+
+# Tap the centre of the first node whose XML contains `needle`. Returns 1 when
+# there is no such node, which callers must treat as "could not be driven"
+# rather than as a failed assertion.
+tap_node() {
+  local needle="$1" line bounds x1 y1 x2 y2
+  line="$(ui_dump | grep -F "$needle" | head -1)"
+  [[ -z "$line" ]] && return 1
+  bounds="$(printf '%s' "$line" | grep -oE 'bounds="\[[0-9]+,[0-9]+\]\[[0-9]+,[0-9]+\]"' | head -1)"
+  [[ -z "$bounds" ]] && return 1
+  read -r x1 y1 x2 y2 <<<"$(printf '%s' "$bounds" | grep -oE '[0-9]+' | tr '\n' ' ')"
+  adb_shell input tap $(( (x1 + x2) / 2 )) $(( (y1 + y2) / 2 )) >/dev/null 2>&1
+}
+
+app_is_foreground() {
+  adb_shell dumpsys activity activities 2>/dev/null | grep -q "topResumedActivity.*$PKG"
+}
+
+# ── Connectivity (case 9) ──────────────────────────────────────────────────
+#
+# `cmd connectivity airplane-mode` rather than `settings put global
+# airplane_mode_on`: the setting alone does not take the radios down without
+# the broadcast, which a shell user may not send. Verified on Android 17 —
+# after `enable`, `dumpsys wifi` reads "Wi-Fi is disabled" and the default
+# network is gone.
+#
+# adb itself is unaffected: it runs over USB, so the device stays fully
+# observable throughout the offline window.
+airplane_on()  { adb_shell cmd connectivity airplane-mode enable  >/dev/null 2>&1 || true; }
+airplane_off() { adb_shell cmd connectivity airplane-mode disable >/dev/null 2>&1 || true; }
+
+# The OS's own view of whether anything is reachable, which is what NetInfo —
+# and therefore the sync worker — is ultimately reading. "none" while airplane
+# mode is on; an id once a network comes back.
+default_network() {
+  adb_shell dumpsys connectivity 2>/dev/null \
+    | grep -m1 "Active default network:" | cut -d: -f2 | tr -d ' \r'
+}
+
+wait_for_network() {
+  local want="$1" deadline=$(( $(date +%s) + ${2:-60} ))
+  while (( $(date +%s) < deadline )); do
+    local net
+    net="$(default_network)"
+    if [[ "$want" == "none" && "$net" == "none" ]]; then return 0; fi
+    if [[ "$want" == "any" && -n "$net" && "$net" != "none" ]]; then return 0; fi
+    sleep 2
+  done
+  return 1
+}
+
+# ── Convex (case 9) ────────────────────────────────────────────────────────
+#
+# Case 9 asserts arrival ON THE SERVER rather than trusting the app's own
+# `sync_status = 'synced'`, because that column is written by the same code
+# path the case is testing: a worker that marked rows synced without pushing
+# them would pass its own audit. `npx convex data` reads the deployment
+# directly.
+#
+# Run from `packages/convex` because the CLI resolves the deployment from the
+# `.env.local` in its own working directory — from the repo root it would
+# scaffold a stray project instead.
+convex_rows() {
+  (cd "$repo_root/packages/convex" && npx convex data "$1" --limit "${2:-50}" 2>/dev/null)
+}
+convex_reachable() { convex_rows reminders 1 | grep -q "_id"; }
+convex_has_local_id() { convex_rows reminderInstances 50 | grep -qF "$1"; }
+
+ensure_convex_reverse() {
+  adb_run reverse "tcp:$CONVEX_DEVICE_PORT" "tcp:$CONVEX_DEVICE_PORT" >/dev/null 2>&1 || true
+}
 idle_state()       { adb_shell dumpsys deviceidle get deep 2>/dev/null | tail -1 | tr -d '\r'; }
 screen_wakefulness() { adb_shell dumpsys power 2>/dev/null | grep -oE 'mWakefulness=[A-Za-z]+' | head -1 | cut -d= -f2 | tr -d '\r'; }
 pkg_stopped()      { adb_shell dumpsys package "$PKG" 2>/dev/null | grep -oE "stopped=(true|false)" | head -1 | tr -d '\r'; }
@@ -425,6 +668,15 @@ restore_device() {
   adb_shell dumpsys deviceidle disable >/dev/null 2>&1 || true
   adb_shell dumpsys battery reset      >/dev/null 2>&1 || true
   adb_shell input keyevent KEYCODE_WAKEUP >/dev/null 2>&1 || true
+  # Case 9 takes the radios down. This is the safety net that brings them back
+  # if the run is interrupted mid-window — leaving someone's phone in airplane
+  # mode because a test was cancelled would be the worst thing this script
+  # does, and it is silent: the device stays on adb over USB throughout, so
+  # nothing here looks broken.
+  airplane_off
+  # Case 9 also collapses/expands the shade (case 8 does the tapping). Leave it
+  # closed so the next case can foreground the app.
+  adb_shell cmd statusbar collapse >/dev/null 2>&1 || true
   # Case 3 shrinks min_time_to_alarm to make deep Doze reachable. Always put
   # the device back on stock Doze constants — leaving a phone with a 30s
   # min_time_to_alarm would quietly change its real battery behaviour.
@@ -548,6 +800,48 @@ require_reachable() {
   wakefulness="$(screen_wakefulness)"
   add_unevaluated "$n" "$name" unreachable \
     "UNREACHABLE (not a product failure): the device is attached but the app never answered a deep link, so this case could not be evaluated. ${keyguard:-isKeyguardShowing=unknown} mWakefulness=${wakefulness:-unknown}. If the keyguard is showing, unlock the device and re-run this case."
+  return 1
+}
+
+# Cases 8 and 9 only. The signed-out app is not a broken app: `/dose/log`
+# renders "Sign in to log a dose" and the sync worker is never started, both
+# correctly. Running these cases against it would assert nothing and report a
+# FAIL, which is the same false-verdict shape constraint 10 exists to prevent —
+# so a signed-out app makes the case UNEVALUATED, with the reason named.
+#
+# This is also why `--all` stops at 7: cases 1-7 are local-only by design and a
+# device with no session must still be able to produce a clean delivery
+# baseline.
+require_signed_in() {
+  local n="$1" name="$2" out
+  # Before the probe, for the reason `require_reachable` documents at length: a
+  # detached device answers every question with silence, and silence here would
+  # otherwise be dressed up as "the app is signed out" — a claim about a
+  # session on a phone that is not attached.
+  if ! device_attached; then
+    add_unevaluated "$n" "$name" no_device \
+      "NO DEVICE (instrument, not product): no device is attached (adb get-state is not \"device\"), so this case was never run. Nothing here is a statement about the app's session."
+    return 1
+  fi
+  out="$(harness auth-status)"
+  if [[ -z "$out" ]]; then
+    add_unevaluated "$n" "$name" unreachable \
+      "UNREACHABLE (not a product failure): the app stopped answering deep links between the reachability probe and the auth check, so this case was never run."
+    return 1
+  fi
+  if printf '%s' "$out" | grep -q "signed_in=true"; then
+    return 0
+  fi
+  # An action that THREW is not an app that is signed out. Both arrive here as
+  # "not signed_in=true", and blaming the session would send the reader off to
+  # sign in on a device that already is.
+  if printf '%s' "$out" | grep -q "\[harness\] error:"; then
+    add_unevaluated "$n" "$name" app_error \
+      "APP ERROR (not a verdict): the auth check itself threw inside the app, so whether this case would pass is unknown. The app reported: ${out}"
+    return 1
+  fi
+  add_unevaluated "$n" "$name" signed_out \
+    "SIGNED OUT (not a product failure): the app has no Clerk session, so this case was never run. It asserts against the signed-in tree — SQLite rows owned by a subject, and a sync worker that only starts once signed in — none of which exists here. Sign in on the device and re-run. Reported by the app as: ${out}"
   return 1
 }
 
@@ -971,6 +1265,317 @@ case7_weekly_schedule() {
   fi
 }
 
+# ── Signed-in cases (8, 9) ─────────────────────────────────────────────────
+#
+# Both need a Clerk session, so neither is in `--all`. See `require_signed_in`.
+
+# Start each signed-in case from a fresh app process.
+#
+# Not hygiene — a precondition, and one that was found the hard way. Both cases
+# begin by WRITING to SQLite, and an app process that has been running for a
+# while starts refusing every write with
+#
+#   [harness] error: Call to function 'NativeStatement.finalizeAsync' has been
+#   rejected. → Caused by: Error code : database is locked
+#
+# after which nothing either case does can succeed, and the whole run reports
+# SETUP FAILED. `am kill` plus a relaunch clears it every time, and the same
+# call then completes in about a second.
+#
+# What is actually going on is NOT established, so this comment does not claim
+# it. Two observations bound it: the app's own code opens exactly one
+# connection (`getDb` memoises it) and uses a transaction only for migrations,
+# so the second writer comes from outside that code; and the failures appeared
+# after a Metro bundle reload and again after a trigger notification fired, both
+# of which evaluate the entry bundle in a SECOND JS context (Fast Refresh, and
+# notifee's headless task — see `src/notifications/background-handler.ts`).
+# A second context re-running module init would open a second connection to the
+# same file, which is exactly what SQLITE_BUSY reports.
+#
+# It is recorded in docs/poc-results.md rather than papered over, and the
+# restart is deliberately NOT applied to cases 1-7: those assert delivery, an
+# `am kill` mid-suite would change what they measure, and none of them writes.
+fresh_app_process() {
+  kill_app_realistically
+  wait_for_app_ready >/dev/null 2>&1 || true
+}
+
+# Criterion 6: tapping the notification opens the dose logging screen
+# pre-filled with the right medication and scheduled time.
+#
+# ── Constraint 11: IN THE SIGNED-IN TREE, `rescheduleAll` SWEEPS AWAY EVERY
+# ALARM IT DID NOT DERIVE. `_layout.tsx` calls it on every transition to
+# `active`, and its cancel pass removes each pending trigger outside the
+# schedule-derived desired set. The `schedule` action cases 1-7 use arms a
+# notification under a bare id, which is never in that set — so in this tree it
+# is retracted at the next foreground and simply never fires. Measured: armed,
+# confirmed in `dumpsys alarm`, gone one foreground later, no notification.
+#
+# So this case seeds a REAL reminder due shortly and lets `rescheduleAll` arm
+# it (`seed-due-reminder`). That is not a workaround, it is the stronger test:
+# the alarm under the finger is then one the production scheduler derived from
+# a row in SQLite, and the screen the tap lands on reads that same row back.
+#
+# What the assertions are for, since three of the four look redundant:
+#   * the medication NAME proves the tap routed to a dose screen for the right
+#     reminder rather than to the home screen or the last-viewed dose;
+#   * the DOSAGE proves the screen loaded the row rather than echoing the deep
+#     link's parameters, which carry no dosage;
+#   * the TIME proves the occurrence identity survived the trip;
+#   * and the INSTANCE ROW is the one assertion that cannot be satisfied by a
+#     screen that merely looks right — `/dose/log` mints its pending instance at
+#     exactly the `(reminder, scheduled time)` pairing it loaded, so a row at
+#     that exact millisecond is proof of which occurrence it opened. It is
+#     checked at the exact `fire_at`, and a row one second off does not match.
+case8_notification_tap() {
+  fresh_app_process
+  require_reachable 8 notification_tap || return
+  require_signed_in 8 notification_tap || return
+  grant_exact
+  # NOT `grant_post` — it is granted once at startup, because `pm grant`
+  # restarts the app and a restart here would drop the database mid-write.
+  local perm
+  perm="$(notification_permission)"
+
+  harness cleanup-seeded x 0 "$HARNESS_SLOW_BUDGET_S" >/dev/null
+
+  local label seeded rid fire_at armed name
+  label="tap-$(date +%s)"
+  # `harness_once`, NOT `harness`: the self-heal retry is wrong for a write.
+  # An empty reply means "no answer yet", not "nothing happened", and asking
+  # again seeds a SECOND reminder under the same name — two reminders, two
+  # alarms, one label, and a case that then taps whichever posted. The budget
+  # above is what makes a retry unnecessary; `require_reachable` ran moments
+  # ago, so a genuinely dead app is not the likely cause here.
+  seeded="$(harness_once seed-due-reminder "$label" "$TAP_LEAD_MS" "$HARNESS_SLOW_BUDGET_S")"
+  rid="$(printf '%s' "$seeded" | grep -oE 'reminder_id=[0-9a-fA-F-]+' | head -1 | cut -d= -f2)"
+  fire_at="$(printf '%s' "$seeded" | grep -oE 'fire_at=[0-9]+' | head -1 | cut -d= -f2)"
+  armed="$(printf '%s' "$seeded" | grep -oE 'armed=[0-9]+' | head -1 | cut -d= -f2)"
+  # The name is the notification's title, but `[harness] ...` is a character
+  # class to grep, so every search below uses the regex-safe label instead.
+  name="[harness] $label"
+
+  if [[ -z "$rid" || -z "$fire_at" ]]; then
+    add_unevaluated 8 notification_tap setup_failed \
+      "SETUP FAILED (not a product failure): no reminder was seeded, or the scheduler armed nothing for it, so there was never a notification to tap. The app answered: ${seeded:-<nothing>}"
+    return
+  fi
+
+  # Background the app first: the case is about a notification the user
+  # receives and taps, not about a foreground event.
+  adb_shell input keyevent KEYCODE_HOME >/dev/null 2>&1
+  local posted=0 fire_s deadline
+  fire_s=$(( fire_at / 1000 ))
+  deadline=$(( fire_s + TAP_POST_GRACE_S ))
+  while (( $(date +%s) < deadline )); do
+    posted="$(notification_has "$label")"
+    [[ "$posted" -ge 1 ]] && break
+    sleep 5
+  done
+
+  if [[ "$posted" -lt 1 ]]; then
+    harness cleanup-seeded x 0 "$HARNESS_SLOW_BUDGET_S" >/dev/null
+    add_result 8 notification_tap false \
+      "the seeded reminder never posted, so the tap could not be tested (armed=$armed for $fire_at, waited ${TAP_POST_GRACE_S}s past it; POST_NOTIFICATIONS $perm). If the permission reads false, the alarm fires and the framework discards the notification — see constraint 12."
+    return
+  fi
+
+  adb_shell cmd statusbar expand-notifications >/dev/null 2>&1
+  sleep 3
+  if ! tap_node "$label"; then
+    adb_shell cmd statusbar collapse >/dev/null 2>&1
+    harness cleanup-seeded x 0 "$HARNESS_SLOW_BUDGET_S" >/dev/null
+    add_unevaluated 8 notification_tap unreachable \
+      "UNREACHABLE (not a product failure): the notification posted (dumpsys sees it) but no node carrying it was found in the expanded shade, so nothing could be tapped. This is an instrument limit — there is no adb command that invokes a notification's content intent — not a statement about the tap handler."
+    return
+  fi
+
+  local ready=0
+  for _ in $(seq 1 15); do
+    if app_is_foreground; then ready=1; break; fi
+    sleep 2
+  done
+
+  # One dump, reused: each is a round trip, and re-reading between assertions
+  # would let the screen change underneath them.
+  local screen tz t12 t24 shows_time=0
+  screen="$(ui_text)"
+  tz="$(adb_shell getprop persist.sys.timezone 2>/dev/null | tr -d '\r')"
+  # Both renderings, because the screen formats with `toLocaleString` and the
+  # hour is not zero-padded in every locale — observed "Aug 3, 2:22 PM" from a
+  # `hour: "2-digit"` format. Asserting one spelling would fail a correct
+  # screen on a device set to the other.
+  t12="$(TZ="${tz:-UTC}" date -d "@$fire_s" '+%-I:%M %p' 2>/dev/null)"
+  t24="$(TZ="${tz:-UTC}" date -d "@$fire_s" '+%H:%M' 2>/dev/null)"
+  { [[ -n "$t12" ]] && printf '%s' "$screen" | grep -qF "$t12"; } && shows_time=1
+  { [[ -n "$t24" ]] && printf '%s' "$screen" | grep -qF "$t24"; } && shows_time=1
+
+  local shows_name=0 shows_dosage=0 shows_actions=0
+  printf '%s' "$screen" | grep -qF "$name"        && shows_name=1
+  printf '%s' "$screen" | grep -qF "1 tablet"     && shows_dosage=1
+  printf '%s' "$screen" | grep -qF "Mark Taken"   && shows_actions=1
+
+  local inst inst_id
+  inst="$(harness instance-at "$rid" "$fire_at")"
+  inst_id="$(printf '%s' "$inst" | grep -oE 'instance_at=[^ ]+' | head -1 | cut -d= -f2)"
+
+  harness cleanup-seeded x 0 "$HARNESS_SLOW_BUDGET_S" >/dev/null
+  adb_shell cmd statusbar collapse >/dev/null 2>&1
+
+  if (( shows_name && shows_dosage && shows_actions && shows_time )) &&
+     [[ -n "$inst_id" && "$inst_id" != none ]]; then
+    add_result 8 notification_tap true \
+      "tapped the posted notification and landed on the dose screen, pre-filled: name and dosage rendered from the seeded row, scheduled time shown as '${t12}' (device tz ${tz:-unknown}), and the screen minted its instance at exactly ${fire_at} (${inst}). Armed by rescheduleAll from SQLite, not by a synthetic trigger. POST_NOTIFICATIONS $perm"
+  else
+    add_result 8 notification_tap false \
+      "tap did not land on a correctly pre-filled dose screen: name=$shows_name dosage=$shows_dosage actions=$shows_actions time=$shows_time (expected '$t12' or '$t24' in tz ${tz:-unknown}), instance-at ${fire_at}: ${inst}. app_foregrounded=$ready posted=$posted"
+  fi
+}
+
+# Criterion 9: offline, dose logs accumulate in `sync_queue`; back online, they
+# sync within 60s.
+#
+# The measurement is taken from the SERVER, not from the app's own
+# `sync_status = 'synced'` column: that column is written by the very code path
+# under test, so a worker that marked rows synced without pushing them would
+# pass its own audit. `convex_has_local_id` reads the deployment directly.
+#
+# Two clocks are recorded and they are not interchangeable. The criterion says
+# "when back online", so the budget is measured from the moment the DEVICE has
+# a default network again — the radios take several seconds to reassociate
+# after airplane mode, and charging that to the sync worker would be measuring
+# the phone's modem. The interval from the airplane-mode toggle is reported
+# beside it so the stricter number is never hidden.
+#
+# The offline premise is asserted rather than assumed: if the row is already on
+# the server before the reconnect, nothing was ever queued and the case has
+# measured nothing, so it says so instead of passing.
+case9_offline_queue_drain() {
+  fresh_app_process
+  require_reachable 9 offline_queue_drain || return
+  require_signed_in 9 offline_queue_drain || return
+  ensure_convex_reverse
+  if ! convex_reachable; then
+    add_unevaluated 9 offline_queue_drain no_backend \
+      "NO BACKEND (instrument, not product): the Convex deployment could not be read from this machine with \`npx convex data\`, so arrival could not be verified server-side and this case was never run. Start the deployment the device points at (\`npx convex dev\` from packages/convex for a local one) and re-run."
+    return
+  fi
+
+  harness cleanup-seeded x 0 "$HARNESS_SLOW_BUDGET_S" >/dev/null
+
+  # An hour out on purpose. This case answers the dose through the screen and
+  # never needs the alarm to fire; a nearer occurrence would post a
+  # notification into the middle of the measurement.
+  local label seeded rid fire_at
+  label="drain-$(date +%s)"
+  # `harness_once` for the same reason as case 8: a retried write double-seeds.
+  seeded="$(harness_once seed-due-reminder "$label" 3600000 "$HARNESS_SLOW_BUDGET_S")"
+  rid="$(printf '%s' "$seeded" | grep -oE 'reminder_id=[0-9a-fA-F-]+' | head -1 | cut -d= -f2)"
+  fire_at="$(printf '%s' "$seeded" | grep -oE 'fire_at=[0-9]+' | head -1 | cut -d= -f2)"
+  if [[ -z "$rid" || -z "$fire_at" ]]; then
+    add_unevaluated 9 offline_queue_drain setup_failed \
+      "SETUP FAILED (not a product failure): no reminder was seeded, so there was no dose to answer. The app answered: ${seeded:-<nothing>}"
+    return
+  fi
+
+  airplane_on
+  if ! wait_for_network none 60; then
+    airplane_off
+    add_unevaluated 9 offline_queue_drain unreachable \
+      "UNREACHABLE (not a product failure): the device still had a default network 60s after \`cmd connectivity airplane-mode enable\`, so it was never offline and the case would have measured nothing."
+    return
+  fi
+
+  # Answer the dose through the real screen, offline. Constraint 13: the URL is
+  # quoted through `deep_link` or the device shell eats it at the `&`.
+  deep_link "taskrx:///dose/log?medicationId=${rid}&scheduledTime=${fire_at}"
+  sleep 6
+  if ! tap_node "Mark Taken"; then
+    airplane_off
+    harness cleanup-seeded x 0 "$HARNESS_SLOW_BUDGET_S" >/dev/null
+    add_unevaluated 9 offline_queue_drain unreachable \
+      "UNREACHABLE (not a product failure): the dose screen never rendered a Mark Taken button while offline, so no dose was answered and there was nothing to queue."
+    return
+  fi
+  sleep 4
+
+  # `completed=`, never the first row: answering a dose leaves two instances at
+  # the pairing (the screen re-loads after the write and mints a fresh pending
+  # one), and reading whichever sorted first reported a recorded dose as
+  # unrecorded. The completed row is also the one worth tracking to the server —
+  # it is the dose the user actually answered.
+  local inst inst_id
+  inst="$(harness instance-at "$rid" "$fire_at")"
+  inst_id="$(printf '%s' "$inst" | grep -oE 'completed=[^ ]+' | head -1 | cut -d= -f2)"
+  if [[ -z "$inst_id" || "$inst_id" == none ]]; then
+    airplane_off
+    harness cleanup-seeded x 0 "$HARNESS_SLOW_BUDGET_S" >/dev/null
+    add_result 9 offline_queue_drain false \
+      "the dose was not recorded locally while offline, so nothing could accumulate: instance-at ${fire_at} reported ${inst}. Offline writes must land in SQLite first; this is the half of the criterion that does not involve the network at all."
+    return
+  fi
+
+  local queued dead
+  queued="$(harness queue-count)"
+  dead="$(printf '%s' "$queued" | grep -oE 'queue_dead=[0-9]+' | head -1 | cut -d= -f2)"
+  queued="$(printf '%s' "$queued" | grep -oE 'queue_pending=[0-9]+' | head -1 | cut -d= -f2)"
+  if [[ "${queued:-0}" -lt 1 ]]; then
+    airplane_off
+    harness cleanup-seeded x 0 "$HARNESS_SLOW_BUDGET_S" >/dev/null
+    add_result 9 offline_queue_drain false \
+      "the answered dose left nothing in sync_queue while offline (queue_pending=${queued:-unknown}), so there is no record to drain when the network returns — an offline answer would be lost."
+    return
+  fi
+
+  if convex_has_local_id "$inst_id"; then
+    airplane_off
+    harness cleanup-seeded x 0 "$HARNESS_SLOW_BUDGET_S" >/dev/null
+    add_unevaluated 9 offline_queue_drain setup_failed \
+      "SETUP FAILED (not a product failure): instance ${inst_id} was already on the Convex deployment while the device had no default network, so it never accumulated offline and the reconnect could not have been what delivered it. Nothing was measured. Check that the deployment \`npx convex data\` reads is the one the device pushes to."
+    return
+  fi
+
+  local t0 connected_at=0 arrived_at=0 deadline net
+  t0=$(date +%s)
+  airplane_off
+  # Budget plus slack: the poll must be able to OVERRUN the budget, or a sync
+  # that took 61s would be indistinguishable from one that never happened.
+  deadline=$(( t0 + SYNC_BUDGET_S + 60 ))
+  while (( $(date +%s) < deadline )); do
+    if (( connected_at == 0 )); then
+      net="$(default_network)"
+      [[ -n "$net" && "$net" != "none" ]] && connected_at=$(date +%s)
+    fi
+    if convex_has_local_id "$inst_id"; then
+      arrived_at=$(date +%s)
+      break
+    fi
+    sleep 3
+  done
+
+  local drained
+  drained="$(harness queue-count | grep -oE 'queue_pending=[0-9]+' | head -1 | cut -d= -f2)"
+  harness cleanup-seeded x 0 "$HARNESS_SLOW_BUDGET_S" >/dev/null
+
+  if (( arrived_at == 0 )); then
+    add_result 9 offline_queue_drain false \
+      "the dose answered offline never reached Convex: ${inst_id} was still absent $(( $(date +%s) - t0 ))s after the network came back (budget ${SYNC_BUDGET_S}s), with queue_pending=${drained:-unknown} queue_dead=${dead:-unknown}. The rows accumulated correctly; the drain is what did not happen."
+    return
+  fi
+
+  local since_connect since_toggle
+  since_toggle=$(( arrived_at - t0 ))
+  since_connect=$(( connected_at == 0 ? since_toggle : arrived_at - connected_at ))
+
+  if (( since_connect <= SYNC_BUDGET_S )) && [[ "${drained:-1}" == "0" ]]; then
+    add_result 9 offline_queue_drain true \
+      "accumulated offline then drained on reconnect: the dose was answered with no default network, queued (queue_pending=$queued) and verifiably absent from Convex; after the network returned it arrived in ${since_connect}s (${since_toggle}s from the airplane-mode toggle, budget ${SYNC_BUDGET_S}s) and the queue drained to 0. Verified server-side by localId ${inst_id}, not from the app's own sync_status. queue_dead=${dead:-0}"
+  else
+    add_result 9 offline_queue_drain false \
+      "arrived, but not within the criterion: ${since_connect}s after the network returned (${since_toggle}s from the toggle, budget ${SYNC_BUDGET_S}s), queue_pending after=${drained:-unknown} (expected 0), queue_dead=${dead:-unknown}, localId ${inst_id}"
+  fi
+}
+
 run_case() {
   case "$1" in
     1) case1_killed_app ;;
@@ -980,6 +1585,8 @@ run_case() {
     5) case5_boot_reschedule ;;
     6) case6_stress_horizon ;;
     7) case7_weekly_schedule ;;
+    8) case8_notification_tap ;;
+    9) case9_offline_queue_drain ;;
     *) echo "unknown case: $1" >&2; return 2 ;;
   esac
 }
@@ -989,9 +1596,15 @@ usage() {
 notification-harness.sh — adb-driven notification test harness
 
   --list          List cases
-  --case N        Run case N (1..7)
-  --all           Run every case
+  --case N        Run case N (1..9)
+  --all           Run cases 1-7: the local-only delivery baseline
+  --auth          Run cases 8-9: need a signed-in app and a reachable Convex
   --output PATH   JSON report destination
+
+`--all` deliberately stops at 7. Cases 1-7 assert delivery against a fresh,
+signed-out install, which is what lets any device produce a baseline; cases 8
+and 9 assert the signed-in tree and report themselves unevaluated without a
+session, so including them would make every baseline run incomplete.
 
 Env: TASKRX_PKG ANDROID_SERIAL METRO_URL VERBOSE=1 SKIP_DOZE=1 SKIP_REBOOT=1
 
@@ -1019,6 +1632,8 @@ list_cases() {
 5  boot_reschedule          Alarms re-registered after reboot
 6  stress_horizon_cap       30 scheduled -> pending count stays within the 64 cap
 7  weekly_schedule          Mon/Wed/Fri weekly reminder arms 3 alarms at 09:00 device-local
+8  notification_tap         [signed in] Tapping the posted notification opens /dose/log pre-filled
+9  offline_queue_drain      [signed in] Airplane mode: doses queue, then reach Convex on reconnect
 EOF
 }
 
@@ -1047,6 +1662,7 @@ while [[ $# -gt 0 ]]; do
     --list) list_cases; exit 0 ;;
     --case) cases_to_run+=("$2"); shift 2 ;;
     --all) cases_to_run=(1 2 3 4 5 6 7); shift ;;
+    --auth) cases_to_run+=(8 9); shift ;;
     --output) output="$2"; shift 2 ;;
     *) echo "unknown arg: $1" >&2; usage; exit 2 ;;
   esac
@@ -1073,6 +1689,19 @@ if ! pending_dump >/dev/null; then
   echo "The section whitelist in pending_dump likely needs updating for this build." >&2
   exit 2
 fi
+
+# Grant POST_NOTIFICATIONS ONCE, here, before the app is brought up — never
+# from inside a case.
+#
+# Two reasons, and the second is the one that cost a run. Every delivery case
+# (1, 3, 4, 8) silently reports "NOT posted" without it (constraint 12), so it
+# belongs to the rig rather than to any one case. And `pm grant` RESTARTS the
+# app when it changes a permission: issued mid-case it killed the process while
+# SQLite was in use, and the next write then failed with
+# "Error code : database is locked" — which surfaced as case 8 reporting SETUP
+# FAILED with no seed. Granting before `wait_for_app_ready` means the restart,
+# if any, happens before anything is holding the database.
+grant_post
 
 echo "waiting for app + Metro to be ready..."
 ready="$(wait_for_app_ready)" || {
