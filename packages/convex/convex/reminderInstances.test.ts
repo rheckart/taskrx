@@ -235,14 +235,19 @@ describe("reminderInstances.create replayed for the same localId", () => {
     ).toMatchObject({ snoozeCount: 3 });
   });
 
+  /**
+   * The fixture is `skipped` rather than `completed` on purpose. An earlier
+   * version of this case moved the row with `markCompleted`, which made it
+   * assert that a completed instance demotes to `pending` — the corruption the
+   * "a completed instance is terminal" block below now forbids. The subject
+   * here is the defaulting, not which status it starts from, so any non-terminal
+   * one serves.
+   */
   it("defaults an omitted status to pending, unlike its optional siblings", async () => {
     const { owner } = deployment();
     const { instance } = await seed(owner, OWNER);
     const id = await owner.mutation(api.reminderInstances.create, instance);
-    await owner.mutation(api.reminderInstances.markCompleted, {
-      id,
-      completedAt: NOW + 60_000,
-    });
+    await owner.mutation(api.reminderInstances.markSkipped, { id });
 
     const { status: _dropped, ...withoutStatus } = instance;
     await owner.mutation(api.reminderInstances.create, {
@@ -637,6 +642,144 @@ describe("reminderInstances.markMissed", () => {
       snoozeCount: 1,
       snoozedUntil: NOW + HOUR,
     });
+  });
+});
+
+/**
+ * The rule story 44 of `docs/specs/fused-timeline.md` states — "a taken dose
+ * stays taken" — asserted of the server rather than of the device.
+ *
+ * The device's own guard (`shouldApplyRemoteReminderInstance`) protects only the
+ * device that recorded the taking. These cases cover the other direction: a
+ * second device pushing an answer it decided before it learned of the
+ * completion. Each asserts the surviving document, not that a mutation was
+ * called, so the rule outlives any rewrite of how it is enforced.
+ *
+ * A refusal is a no-op, deliberately, and `does not report a refusal as an
+ * error` is the case that pins that: the sync worker retries a throw to its
+ * dead-letter threshold, so throwing here would turn a write the server was
+ * right to ignore into a visible data-loss warning.
+ */
+describe("a completed instance is terminal", () => {
+  async function completed(as: ReturnType<typeof deployment>["owner"]) {
+    const { instance } = await seed(as, OWNER);
+    const id = await as.mutation(api.reminderInstances.create, instance);
+    await as.mutation(api.reminderInstances.markCompleted, {
+      id,
+      completedAt: NOW + 60_000,
+    });
+    return { id, localId: instance.localId, instance };
+  }
+
+  it("survives a stale skip", async () => {
+    const { owner } = deployment();
+    const { id, localId } = await completed(owner);
+
+    await owner.mutation(api.reminderInstances.markSkipped, {
+      id,
+      notes: "second device thought this was skipped",
+    });
+
+    expect(
+      await owner.query(api.reminderInstances.getByLocalId, { localId })
+    ).toMatchObject({ status: "completed", completedAt: NOW + 60_000 });
+  });
+
+  it("keeps a stale skip's note off the row entirely", async () => {
+    const { owner } = deployment();
+    const { id, localId } = await completed(owner);
+
+    await owner.mutation(api.reminderInstances.markSkipped, {
+      id,
+      notes: "nauseous",
+    });
+
+    expect(
+      (await owner.query(api.reminderInstances.getByLocalId, { localId }))
+        ?.notes
+    ).toBeUndefined();
+  });
+
+  it("survives a stale sweep verdict of missed", async () => {
+    const { owner } = deployment();
+    const { id, localId } = await completed(owner);
+
+    await owner.mutation(api.reminderInstances.markMissed, { id });
+
+    expect(
+      await owner.query(api.reminderInstances.getByLocalId, { localId })
+    ).toMatchObject({ status: "completed", completedAt: NOW + 60_000 });
+  });
+
+  it("survives a stale snooze, and does not count it", async () => {
+    const { owner } = deployment();
+    const { id, localId } = await completed(owner);
+
+    const returned = await owner.mutation(api.reminderInstances.snooze, {
+      id,
+      snoozedUntil: NOW + HOUR,
+    });
+
+    expect(returned).toBe(0);
+    const row = await owner.query(api.reminderInstances.getByLocalId, {
+      localId,
+    });
+    expect(row).toMatchObject({ status: "completed", snoozeCount: 0 });
+    expect(row?.snoozedUntil).toBeUndefined();
+  });
+
+  it("survives a replayed create carrying an older status", async () => {
+    const { owner } = deployment();
+    const { localId, instance } = await completed(owner);
+
+    await owner.mutation(api.reminderInstances.create, {
+      ...instance,
+      status: "missed",
+      updatedAt: NOW + HOUR,
+    });
+
+    expect(
+      await owner.query(api.reminderInstances.getByLocalId, { localId })
+    ).toMatchObject({ status: "completed", completedAt: NOW + 60_000 });
+  });
+
+  it("does not let a replayed create move when the dose was taken", async () => {
+    const { owner } = deployment();
+    const { localId, instance } = await completed(owner);
+
+    await owner.mutation(api.reminderInstances.create, {
+      ...instance,
+      status: "completed",
+      completedAt: NOW + 6 * HOUR,
+      updatedAt: NOW + HOUR,
+    });
+
+    expect(
+      await owner.query(api.reminderInstances.getByLocalId, { localId })
+    ).toMatchObject({ completedAt: NOW + 60_000 });
+  });
+
+  it("does not report a refusal as an error", async () => {
+    const { owner } = deployment();
+    const { id } = await completed(owner);
+
+    await expect(
+      owner.mutation(api.reminderInstances.markMissed, { id })
+    ).resolves.toBe(id);
+  });
+
+  it("still applies an answer to an instance that is not yet completed", async () => {
+    const { owner } = deployment();
+    const { instance } = await seed(owner, OWNER);
+    const id = await owner.mutation(api.reminderInstances.create, instance);
+
+    await owner.mutation(api.reminderInstances.markSkipped, { id });
+
+    expect(
+      await owner.query(api.reminderInstances.getByLocalId, {
+        localId: instance.localId,
+      })
+    ).toMatchObject({ status: "skipped" });
   });
 });
 

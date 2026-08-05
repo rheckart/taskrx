@@ -33,6 +33,28 @@ const reminderInstanceDoc = v.object({
 });
 
 /**
+ * `completed` is terminal: no later write may move an instance out of it.
+ *
+ * This is the server half of the rule `shouldApplyRemoteReminderInstance`
+ * enforces on the device (`packages/shared/src/sync/conflict.ts`), and what
+ * story 44 of `docs/specs/fused-timeline.md` asks for — "a taken dose stays
+ * taken". The device guard protects only the device that recorded the taking.
+ * Without this one, a second device draining a queue it filled before it
+ * learned of the completion patches the server copy instead: a sweep verdict of
+ * `missed`, a `skipped`, or a `snooze` all land unconditionally. Any third
+ * install then pulls that status for a dose that was actually taken, and its
+ * own local guard cannot help — a fresh install has no local row to protect.
+ *
+ * Refusing is a silent no-op rather than a throw. The caller is the sync worker
+ * draining its queue, where a stale entry is routine rather than exceptional;
+ * throwing would retry it to the dead-letter threshold in `worker.ts` and raise
+ * a data-loss warning for a write the server was right to ignore.
+ */
+function isCompleted(instance: { status: string }): boolean {
+  return instance.status === "completed";
+}
+
+/**
  * Reads a user's instances over a time window.
  *
  * Every branch is served by an index rather than a table scan: a `status`
@@ -175,11 +197,25 @@ export const create = mutation({
        * payload, exactly as on insert. `localId`, `userId` and `createdAt` are
        * identity and stay put.
        */
+      /**
+       * `completed` is terminal on this path too — see `isCompleted`. Unlike
+       * the three `mark*` mutations this is defence in depth rather than a live
+       * hole: a replayed `create` carries the newest status its device holds and
+       * the queue drains in order, so a stale one landing after a completion
+       * needs a reordering the worker does not produce. Guarded anyway, so the
+       * rule is a property of the table rather than of three functions.
+       *
+       * `completedAt` is pinned with it. A replay of the completion itself
+       * carries the same instant, and a stale payload has no business moving
+       * when the dose was taken.
+       */
+      const settled = isCompleted(existing);
+
       await ctx.db.patch(existing._id, {
         reminderId: args.reminderId,
         reminderKind: reminder.kind,
         scheduledTime: args.scheduledTime,
-        status: args.status ?? "pending",
+        status: settled ? "completed" : (args.status ?? "pending"),
         updatedAt: args.updatedAt,
         /**
          * Spread like its optional siblings, not defaulted like `status`.
@@ -198,7 +234,7 @@ export const create = mutation({
         ...(args.snoozeCount !== undefined
           ? { snoozeCount: args.snoozeCount }
           : {}),
-        ...(args.completedAt !== undefined
+        ...(!settled && args.completedAt !== undefined
           ? { completedAt: args.completedAt }
           : {}),
         ...(args.snoozedUntil !== undefined
@@ -270,6 +306,9 @@ export const markSkipped = mutation({
     if (instance?.userId !== userId) {
       throw new Error("Reminder instance not found");
     }
+    if (isCompleted(instance)) {
+      return args.id;
+    }
 
     await ctx.db.patch(args.id, {
       status: "skipped",
@@ -291,6 +330,9 @@ export const markMissed = mutation({
     const instance = await ctx.db.get(args.id);
     if (instance?.userId !== userId) {
       throw new Error("Reminder instance not found");
+    }
+    if (isCompleted(instance)) {
+      return args.id;
     }
 
     await ctx.db.patch(args.id, {
@@ -320,6 +362,9 @@ export const snooze = mutation({
     const instance = await ctx.db.get(args.id);
     if (instance?.userId !== userId) {
       throw new Error("Reminder instance not found");
+    }
+    if (isCompleted(instance)) {
+      return instance.snoozeCount;
     }
 
     const snoozeCount = instance.snoozeCount + 1;
