@@ -273,31 +273,48 @@ export async function create(input: CreateReminderRowInput): Promise<Reminder> {
   return inserted;
 }
 
+export interface ListRemindersOptions {
+  /**
+   * Include reminders the user has stopped.
+   *
+   * Off by default, because every caller that asks "what should I arm / show as
+   * live" wants active ones only. The timeline wants them on: stopping a
+   * medication does not unmake the Reminder Instances already recorded against
+   * it, and `projectTimeline` needs the parent to render one at all. It already
+   * knows not to predict new Occurrences for an inactive reminder, so handing it
+   * the full set is what keeps that rule in one place.
+   */
+  readonly includeInactive?: boolean;
+}
+
 /**
- * List a user's active reminders, newest first. Pass `kind` to restrict to
- * medications or tasks; omit it for the combined list, which is the whole
- * point of the unified table.
+ * List a user's reminders, newest first. Pass `kind` to restrict to medications
+ * or tasks; omit it for the combined list, which is the whole point of the
+ * unified table.
  */
 export async function list(
   userId: string,
-  kind?: ReminderKind
+  kind?: ReminderKind,
+  options: ListRemindersOptions = {}
 ): Promise<readonly Reminder[]> {
   const db = await getDb();
-  const rows =
-    kind === undefined
-      ? await db.getAllAsync<ReminderRow>(
-          `SELECT * FROM reminders
-           WHERE user_id = ? AND active = 1
-           ORDER BY created_at DESC`,
-          userId
-        )
-      : await db.getAllAsync<ReminderRow>(
-          `SELECT * FROM reminders
-           WHERE user_id = ? AND active = 1 AND kind = ?
-           ORDER BY created_at DESC`,
-          userId,
-          kind
-        );
+  const conditions = ["user_id = ?"];
+  const args: (string | number)[] = [userId];
+
+  if (options.includeInactive !== true) {
+    conditions.push("active = 1");
+  }
+  if (kind !== undefined) {
+    conditions.push("kind = ?");
+    args.push(kind);
+  }
+
+  const rows = await db.getAllAsync<ReminderRow>(
+    `SELECT * FROM reminders
+     WHERE ${conditions.join(" AND ")}
+     ORDER BY created_at DESC`,
+    ...args
+  );
   return rows.map(rowToReminder);
 }
 

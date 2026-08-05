@@ -142,8 +142,8 @@ describe("projectTimeline union of occurrences and instances", () => {
 
   /**
    * The deduplication rule, and the reason the projection is a union rather
-   * than a concatenation: the 09:00 dose is both a moment the schedule predicts
-   * and a moment the person answered. It is one entry in their day.
+   * than a concatenation: the 09:00 moment is both one the Schedule predicts
+   * and one the person answered. It is one entry in their day.
    */
   it("shows an answered occurrence once, in the state it was answered", () => {
     const rows = projectTimeline({
@@ -194,10 +194,10 @@ describe("projectTimeline union of occurrences and instances", () => {
   });
 
   it.each([
-    { status: "completed", meaning: "a dose the person took" },
-    { status: "skipped", meaning: "a dose deliberately declined" },
-    { status: "missed", meaning: "a dose that ran out of time" },
-    { status: "snoozed", meaning: "a dose pushed back to later" },
+    { status: "completed", meaning: "an Occurrence the person answered" },
+    { status: "skipped", meaning: "one deliberately declined" },
+    { status: "missed", meaning: "one that ran out of time" },
+    { status: "snoozed", meaning: "one pushed back to later" },
   ] as const)("keeps $status on the timeline — $meaning", ({ status }) => {
     const rows = projectTimeline({
       reminders: [medication()],
@@ -272,7 +272,7 @@ describe("projectTimeline window", () => {
    * code. All four combinations are pinned across the next two cases; covering
    * only the diagonal let an exclusive bound survive on each side.
    *
-   * Midnight is why the lower bound matters: a dose at 00:00 belongs to the day
+   * Midnight is why the lower bound matters: a moment at 00:00 belongs to the day
    * that begins then, and an exclusive bound would drop it from every day it
    * could appear on.
    */
@@ -283,7 +283,7 @@ describe("projectTimeline window", () => {
         medication({ id: "rem-evening", schedule: dailyTimes(["21:00"]) }),
       ],
       instances: [],
-      // Ends exactly on the evening dose, which `DAY_END` cannot express: no
+      // Ends exactly on the evening Occurrence, which `DAY_END` cannot express: no
       // clock time lands on 23:59:59.999.
       window: { start: DAY_START, end: at(21) },
       now: DAY_START,
@@ -363,7 +363,7 @@ describe("projectTimeline what is next", () => {
       .toEqual([at(13)]);
   });
 
-  it("looks past an answered dose to the next unanswered one", () => {
+  it("looks past an answered moment to the next unanswered one", () => {
     const rows = projectTimeline({
       reminders: [
         medication({ id: "rem-a", schedule: dailyTimes(["13:00"]) }),
@@ -384,7 +384,7 @@ describe("projectTimeline what is next", () => {
       .toEqual([at(21)]);
   });
 
-  it("points at nothing once the day holds no unanswered dose ahead", () => {
+  it("points at nothing once the day holds nothing unanswered ahead", () => {
     const rows = projectTimeline({
       reminders: [medication()],
       instances: [answered({ status: "completed" })],
@@ -396,8 +396,8 @@ describe("projectTimeline what is next", () => {
   });
 
   /**
-   * A dose whose moment has passed but which nobody answered is overdue, not
-   * next. Deliberately independent of the Grace Period, which
+   * An Occurrence whose moment has passed but which nobody answered is overdue,
+   * not next. Deliberately independent of the Grace Period, which
    * `docs/specs/fused-timeline.md` leaves open for the sweep in #11 — this rule
    * must not quietly pick a value for it.
    */
@@ -413,7 +413,7 @@ describe("projectTimeline what is next", () => {
     expect(rows.some((row) => row.isNext)).toBe(false);
   });
 
-  it("points at a dose due at this very moment", () => {
+  it("points at an Occurrence due at this very moment", () => {
     const rows = projectTimeline({
       reminders: [medication()],
       instances: [],
@@ -424,7 +424,7 @@ describe("projectTimeline what is next", () => {
     expect(rows[0]?.isNext).toBe(true);
   });
 
-  it("points at one dose only when several share the soonest moment", () => {
+  it("points at one row only when several share the soonest moment", () => {
     const rows = projectTimeline({
       reminders: [
         medication({ id: "rem-a", schedule: dailyTimes(["09:00"]) }),
@@ -439,7 +439,7 @@ describe("projectTimeline what is next", () => {
       .toEqual(["rem-a"]);
   });
 
-  it("does not treat a deferred dose as the next thing to do", () => {
+  it("does not treat a deferred Occurrence as the next thing to do", () => {
     // A snooze is an answer to "not now". Treating it as next would put the
     // person straight back where they declined to be.
     const rows = projectTimeline({
@@ -476,7 +476,7 @@ describe("projectTimeline reminders it should not schedule", () => {
     expect(rows).toEqual([]);
   });
 
-  /** Stopping a medication does not unmake the doses already recorded. */
+  /** Stopping a medication does not unmake the Instances already recorded. */
   it("still shows what was recorded against a stopped reminder", () => {
     const rows = projectTimeline({
       reminders: [medication({ active: false })],

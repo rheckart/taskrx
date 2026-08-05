@@ -11,27 +11,27 @@
  * The two halves of a day are different kinds of thing. An **Occurrence** is
  * computed from a Schedule, has no identity, and is never stored. An
  * **Instance** is a stored record of what became of one. A day therefore has to
- * be assembled from both: moments the schedule predicts and nobody has answered
- * yet, plus moments that have a recorded answer — including answers at moments
- * the schedule does not predict at all, such as a dose logged after the fact.
+ * be assembled from both: moments the Schedule predicts and nobody has answered
+ * yet, plus moments that have a recorded answer.
  *
  * Both can describe the same moment, so they are deduplicated on the pairing of
  * **Reminder and scheduled time**, which is the key the lazy-lookup path in
  * `reminderInstancesRepo.findPendingForOccurrence` already uses. Where both
  * exist the Instance wins: a stored answer is a fact, and the Occurrence is only
- * a prediction that it would come due.
+ * a prediction that it would come due — including an Instance at a moment the
+ * Schedule does not predict at all, such as one recorded after the fact.
  *
  * Pairing on the pair matters in both directions. On the Reminder alone, a
- * second dose of the same medication would swallow the first. On the moment
- * alone, one medication's answer would settle another medication's dose.
+ * second Occurrence of the same Reminder would swallow the first. On the moment
+ * alone, one Reminder's answer would settle another Reminder's Occurrence.
  *
  * ## What this deliberately does not decide
  *
- * It does not mint Instances, and it does not decide that an unanswered dose has
- * become Missed — that is the sweep planner's job, and it needs a Grace Period
- * the spec has not chosen yet. A dose whose moment has passed with no answer
- * therefore stays `pending` here and simply is not "next". Nothing in this file
- * picks a Grace Period by implication.
+ * It does not mint Instances, and it does not decide that an unanswered
+ * Occurrence has become Missed — that is the sweep planner's job, and it needs a
+ * Grace Period the spec has not chosen yet. An Occurrence whose moment has
+ * passed with no answer therefore stays `pending` here and simply is not
+ * "next". Nothing in this file picks a Grace Period by implication.
  *
  * It is also Kind-neutral. Tasks have no screen until the fusion lands, but the
  * rule is the fused one, so that step is a new caller rather than a rewrite.
@@ -46,9 +46,9 @@ import { nextOccurrences } from "../schedule/occurrences";
 /**
  * The span the timeline covers, both bounds **inclusive**.
  *
- * Inclusive at the lower bound is the load-bearing half: a dose at 00:00 belongs
- * to the day beginning then, and an exclusive bound would drop it from every day
- * it could appear on.
+ * Inclusive at the lower bound is the load-bearing half: an Occurrence at 00:00
+ * belongs to the day beginning then, and an exclusive bound would drop it from
+ * every day it could appear on.
  */
 export interface TimelineWindow {
   readonly start: number;
@@ -78,7 +78,7 @@ export interface ProjectTimelineInput {
    * Every Reminder that could contribute to the window. Only `active` ones
    * predict new moments; an inactive one still supplies the name and dosage for
    * moments already recorded against it, because stopping a medication does not
-   * unmake the doses already taken.
+   * unmake the Instances already recorded.
    */
   readonly reminders: readonly Reminder[];
   readonly instances: readonly ReminderInstance[];
@@ -91,15 +91,26 @@ export interface ProjectTimelineInput {
  *
  * A bound is needed because `nextOccurrences` counts rather than ranges, and an
  * `interval` schedule has no horizon of its own. 64 is far past anything a real
- * day holds — it is a dose every 22 minutes — and it matches the engine's own
- * default, so a window is never truncated in practice. A caller projecting a
- * span long enough to exceed it would see the tail missing, which is why this is
- * stated rather than buried.
+ * day holds — one every 22 minutes — so a window is never truncated in practice.
+ * A caller projecting a span long enough to exceed it would see the tail
+ * missing, which is why this is stated rather than buried.
+ *
+ * It coincides with the engine's own `DEFAULT_COUNT` without being tied to it:
+ * that one is "how many to return when the caller does not say", this one is
+ * "how many can fit in a day". They answer different questions and should be
+ * free to diverge.
  */
 const MAX_OCCURRENCES_PER_REMINDER = 64;
 
-/** Reminder and scheduled time together — the deduplication key. */
-function keyFor(reminderId: string, scheduledTime: number): string {
+/**
+ * Reminder and scheduled time together — the deduplication key, and the same
+ * pairing a caller needs to key a rendered list. Exported so the two cannot
+ * drift into disagreeing about what makes a row unique.
+ */
+export function timelineRowKey(
+  reminderId: string,
+  scheduledTime: number
+): string {
   return `${reminderId}@${String(scheduledTime)}`;
 }
 
@@ -130,7 +141,7 @@ export function projectTimeline(
     // timeline that names nothing.
     if (reminder === undefined) continue;
 
-    claimed.add(keyFor(instance.reminderId, instance.scheduledTime));
+    claimed.add(timelineRowKey(instance.reminderId, instance.scheduledTime));
     rows.push({
       reminderId: reminder.id,
       instanceId: instance.id,
@@ -156,7 +167,7 @@ export function projectTimeline(
 
     for (const occurrence of occurrences) {
       if (occurrence.fireAt > window.end) break;
-      if (claimed.has(keyFor(reminder.id, occurrence.fireAt))) continue;
+      if (claimed.has(timelineRowKey(reminder.id, occurrence.fireAt))) continue;
 
       rows.push({
         reminderId: reminder.id,
@@ -171,9 +182,9 @@ export function projectTimeline(
     }
   }
 
-  // Chronological, with an explicit tie-break on `reminderId`: `Array.sort` is
-  // only stable with respect to the input array, and the input order here is the
-  // caller's, so without it a list of identical data reshuffles between renders.
+  // Chronological, with an explicit tie-break on `reminderId` for the reason
+  // `selectUpcomingOccurrences` gives at length: `Array.sort` is stable only
+  // with respect to the input array, and the input order here is the caller's.
   rows.sort((a, b) => {
     if (a.scheduledTime !== b.scheduledTime) {
       return a.scheduledTime - b.scheduledTime;

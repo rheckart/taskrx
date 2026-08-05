@@ -1,11 +1,17 @@
-import { useUser } from "@clerk/clerk-expo";
-import type { InstanceStatus, Reminder, TimelineRow } from "@taskrx/shared";
-import { projectTimeline } from "@taskrx/shared";
-import { Link, useRouter } from "expo-router";
-import { useCallback, useEffect, useState } from "react";
+import { useClerk, useUser } from "@clerk/clerk-expo";
+import type {
+  InstanceStatus,
+  Reminder,
+  TimelineRow,
+  TimelineWindow,
+} from "@taskrx/shared";
+import { projectTimeline, timelineRowKey } from "@taskrx/shared";
+import { Link, useFocusEffect, useRouter } from "expo-router";
+import { useCallback, useState } from "react";
 import type { ReactElement } from "react";
 import {
   ActivityIndicator,
+  Button,
   FlatList,
   Pressable,
   RefreshControl,
@@ -33,10 +39,7 @@ import { useUnifiedSync } from "../../src/sync/pull";
  */
 
 /** Local midnight to local end-of-day, `offset` days from the day holding `now`. */
-function dayWindow(
-  offset: number,
-  now: number
-): { readonly start: number; readonly end: number } {
+function dayWindow(offset: number, now: number): TimelineWindow {
   const base = new Date(now);
   const year = base.getFullYear();
   const month = base.getMonth();
@@ -91,7 +94,34 @@ function statusLabel(status: InstanceStatus, kind: Reminder["kind"]): string {
   }
 }
 
-function TimelineEntry({
+/**
+ * Both survive from the stub this screen replaced. Sign-out especially: it is
+ * the app's only route out of an account, and the timeline taking over the home
+ * surface is no reason to strand someone in one.
+ */
+function SignOutButton(): ReactElement {
+  const { signOut } = useClerk();
+
+  return <Button onPress={() => void signOut()} title="Sign out" />;
+}
+
+function UserBadge(): ReactElement | null {
+  const { isLoaded, user } = useUser();
+
+  if (!isLoaded || user === null) return null;
+
+  const email = user.primaryEmailAddress?.emailAddress;
+  const displayName =
+    user.fullName ?? user.username ?? user.firstName ?? email ?? "User";
+
+  return (
+    <Text numberOfLines={1} style={styles.accountName}>
+      {displayName}
+    </Text>
+  );
+}
+
+function TimelineRowView({
   row,
   onPress,
 }: {
@@ -163,7 +193,12 @@ export default function HomeScreen(): ReactElement {
     setWindowStart(window.start);
 
     try {
-      const active = await remindersRepo.list(userId, "medication");
+      // `includeInactive` because a stopped medication's recorded Instances are
+      // still part of the day. Which of these predict new Occurrences is the
+      // projection's decision, not this screen's — it skips inactive ones.
+      const reminders = await remindersRepo.list(userId, "medication", {
+        includeInactive: true,
+      });
       const instances = await instancesRepo.list({
         userId,
         reminderKind: "medication",
@@ -171,27 +206,7 @@ export default function HomeScreen(): ReactElement {
         until: window.end,
       });
 
-      // `remindersRepo.list` returns active reminders only, but a stopped
-      // medication's recorded doses are still part of the day — the projection
-      // drops an instance whose reminder it cannot name, so fetch those.
-      const known = new Map(active.map((r) => [r.id, r] as const));
-      const missing = [
-        ...new Set(
-          instances.map((i) => i.reminderId).filter((id) => !known.has(id))
-        ),
-      ];
-      const stopped = await Promise.all(
-        missing.map((id) => remindersRepo.get(id))
-      );
-
-      setRows(
-        projectTimeline({
-          reminders: [...active, ...stopped.filter((r) => r !== null)],
-          instances,
-          window,
-          now,
-        })
-      );
+      setRows(projectTimeline({ reminders, instances, window, now }));
       setError(null);
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : "Unknown error");
@@ -201,19 +216,32 @@ export default function HomeScreen(): ReactElement {
     }
   }, [userId, dayOffset]);
 
-  useEffect(() => {
-    void load();
-  }, [load]);
+  /**
+   * On focus, not on mount.
+   *
+   * Answering an Occurrence leaves this screen, writes the Instance, and comes
+   * back. A mount-only read would show the row still `pending` until a manual
+   * pull-to-refresh, so "something already handled stays visible in its handled
+   * state" would hold in the projection and not in the app. This also picks up
+   * rows a background pull merged while the screen was away.
+   */
+  useFocusEffect(
+    useCallback(() => {
+      void load();
+    }, [load])
+  );
 
   const onRefresh = useCallback((): void => {
     setRefreshing(true);
     void load();
   }, [load]);
 
-  const openDose = useCallback(
+  const openAnswer = useCallback(
     (row: TimelineRow): void => {
       router.push({
         pathname: "/dose/log",
+        // The route param is `medicationId` because that is the key the armed
+        // alarms already carry; see the note at the top of `dose/log.tsx`.
         params: {
           medicationId: row.reminderId,
           scheduledTime: String(row.scheduledTime),
@@ -266,15 +294,29 @@ export default function HomeScreen(): ReactElement {
           </Text>
         </Pressable>
 
+        {/*
+          Forward only as far as today. The ticket asks that "a previous day can
+          be viewed" and says nothing about future ones, and on a future day
+          every row is ahead of `now`, so the first would be badged NEXT — which
+          reads as "do this now" about something not due for a day.
+        */}
         <Pressable
           hitSlop={12}
+          disabled={dayOffset >= 0}
           onPress={() => {
-            setDayOffset((offset) => offset + 1);
+            setDayOffset((offset) => Math.min(0, offset + 1));
           }}
           accessibilityRole="button"
           accessibilityLabel="Next day"
         >
-          <Text style={styles.dayArrow}>›</Text>
+          <Text
+            style={[
+              styles.dayArrow,
+              dayOffset >= 0 ? styles.dayArrowOff : null,
+            ]}
+          >
+            ›
+          </Text>
         </Pressable>
       </View>
 
@@ -289,21 +331,21 @@ export default function HomeScreen(): ReactElement {
           <Text style={styles.emptyTitle}>Nothing scheduled</Text>
           <Text style={styles.emptyBody}>
             {dayOffset === 0
-              ? "You have no doses due today."
-              : `No doses were due ${dayLabel(dayOffset, windowStart).toLowerCase()}.`}
+              ? "You have nothing due today."
+              : `You had nothing due ${dayLabel(dayOffset, windowStart).toLowerCase()}.`}
           </Text>
         </View>
       ) : (
         <FlatList
           data={rows}
           keyExtractor={(row) =>
-            `${row.reminderId}@${String(row.scheduledTime)}`
+            timelineRowKey(row.reminderId, row.scheduledTime)
           }
           renderItem={({ item }) => (
-            <TimelineEntry
+            <TimelineRowView
               row={item}
               onPress={() => {
-                openDose(item);
+                openAnswer(item);
               }}
             />
           )}
@@ -324,12 +366,35 @@ export default function HomeScreen(): ReactElement {
         <Link href="/debug/notifications" style={styles.footerLink}>
           Debug
         </Link>
+        <Link href="/debug/stress-seed" style={styles.footerLink}>
+          Seed
+        </Link>
+      </View>
+
+      <View style={styles.accountBar}>
+        <UserBadge />
+        <SignOutButton />
       </View>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
+  accountBar: {
+    alignItems: "center",
+    borderTopColor: "#eee",
+    borderTopWidth: 1,
+    flexDirection: "row",
+    justifyContent: "space-between",
+    paddingBottom: 8,
+    paddingHorizontal: 16,
+    paddingTop: 4,
+  },
+  accountName: {
+    color: "#666",
+    flexShrink: 1,
+    fontSize: 13,
+  },
   center: {
     alignItems: "center",
     flex: 1,
@@ -344,6 +409,9 @@ const styles = StyleSheet.create({
     fontSize: 28,
     fontWeight: "400",
     paddingHorizontal: 8,
+  },
+  dayArrowOff: {
+    color: "#ccc",
   },
   dayBar: {
     alignItems: "center",
