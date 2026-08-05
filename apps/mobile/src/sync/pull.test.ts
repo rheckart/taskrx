@@ -43,15 +43,19 @@ const mocks = vi.hoisted(() => ({
   upsertReminders: vi.fn<(rows: readonly unknown[]) => Promise<number>>(),
   upsertInstances: vi.fn<(rows: readonly unknown[]) => Promise<number>>(),
   localIdForConvexId: vi.fn<(convexId: string) => Promise<string | null>>(),
+  getReminder: vi.fn<(id: string) => Promise<unknown>>(),
+  getInstance: vi.fn<(id: string) => Promise<unknown>>(),
 }));
 
 vi.mock("../db/repos/reminders", () => ({
   upsertMany: mocks.upsertReminders,
   localIdForConvexId: mocks.localIdForConvexId,
+  get: mocks.getReminder,
 }));
 
 vi.mock("../db/repos/reminderInstances", () => ({
   upsertMany: mocks.upsertInstances,
+  get: mocks.getInstance,
 }));
 
 // Imported by the module under test for the hook's subscriptions. Neither is
@@ -126,6 +130,10 @@ describe("applyRemotePull", () => {
     mocks.upsertReminders.mockResolvedValue(0);
     mocks.upsertInstances.mockResolvedValue(0);
     mocks.localIdForConvexId.mockResolvedValue("local-reminder-1");
+    // Default: the device has neither row yet, so every candidate applies. The
+    // conflict cases below give it one.
+    mocks.getReminder.mockResolvedValue(null);
+    mocks.getInstance.mockResolvedValue(null);
     vi.spyOn(console, "warn").mockImplementation(() => undefined);
   });
 
@@ -284,5 +292,177 @@ describe("applyRemotePull", () => {
 
     expect(mocks.upsertReminders).toHaveBeenCalledWith([]);
     expect(mocks.upsertInstances).toHaveBeenCalledWith([]);
+  });
+});
+
+/**
+ * The conflict rules, executed by the pass that applies them rather than only as
+ * pure functions.
+ *
+ * `packages/shared/src/sync/conflict.test.ts` runs the two decisions against a
+ * truth table and is the better place for boundary cases; it does not run them
+ * against a pull. Until issue #7's last criterion these lived inside the two
+ * `upsertMany` implementations, behind `getDb()` and so behind expo-sqlite,
+ * which no node test loads — the rule was proven of the decision and of the
+ * pass, never of the pair. These cases are that pair.
+ *
+ * Each asserts on what reaches the repository, which is the only observable the
+ * pass has, and states the rule as an outcome rather than as a call order.
+ */
+describe("applyRemotePull conflict rules", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mocks.upsertReminders.mockResolvedValue(0);
+    mocks.upsertInstances.mockResolvedValue(0);
+    mocks.localIdForConvexId.mockResolvedValue("local-reminder-1");
+    mocks.getReminder.mockResolvedValue(null);
+    mocks.getInstance.mockResolvedValue(null);
+    vi.spyOn(console, "warn").mockImplementation(() => undefined);
+  });
+
+  /**
+   * The safety-critical one — story 44 of `docs/specs/fused-timeline.md`, and
+   * the criterion issue #7 left unticked. A dose the person recorded as taken on
+   * this device is not erased by a copy arriving from another one, however much
+   * newer that copy is. `updatedAt` here is an hour ahead precisely so the rule
+   * cannot be mistaken for last-write-wins doing the work.
+   */
+  it("never lets a remote row overwrite a locally completed instance", async () => {
+    // Keyed by id rather than answered for anything, so this case alone also
+    // fails if the guard looks the local row up by the wrong identifier.
+    mocks.getInstance.mockImplementation((id: string) =>
+      Promise.resolve(
+        id === "local-instance-1"
+          ? { updatedAt: 1_700_000_000_000, status: "completed" }
+          : null
+      )
+    );
+
+    await pull(
+      [remoteReminder()],
+      [
+        remoteInstance({
+          status: "missed",
+          updatedAt: 1_700_003_600_000,
+        }),
+      ]
+    );
+
+    expect(mocks.upsertInstances).toHaveBeenCalledWith([]);
+  });
+
+  it("applies a remote answer to an instance still pending here", async () => {
+    mocks.getInstance.mockResolvedValue({
+      updatedAt: 1_700_000_000_000,
+      status: "pending",
+    });
+
+    await pull(
+      [remoteReminder()],
+      [remoteInstance({ status: "completed", updatedAt: 1_700_003_600_000 })]
+    );
+
+    const rows = mocks.upsertInstances.mock.calls[0]?.[0] as {
+      instance: Record<string, unknown>;
+    }[];
+    expect(rows).toHaveLength(1);
+    expect(rows[0]?.instance).toMatchObject({ status: "completed" });
+  });
+
+  /**
+   * A snooze is a deferral, not an answer, so it earns no protection — the
+   * asymmetry with `completed` above is the whole reason the instance rule is a
+   * separate function from the reminder one.
+   */
+  it("lets a newer remote answer replace a local snooze", async () => {
+    mocks.getInstance.mockResolvedValue({
+      updatedAt: 1_700_000_000_000,
+      status: "snoozed",
+    });
+
+    await pull(
+      [remoteReminder()],
+      [remoteInstance({ status: "completed", updatedAt: 1_700_003_600_000 })]
+    );
+
+    expect(mocks.upsertInstances.mock.calls[0]?.[0]).toHaveLength(1);
+  });
+
+  it("keeps a local reminder edit that is newer than the server's", async () => {
+    mocks.getReminder.mockResolvedValue({ updatedAt: 1_700_003_600_000 });
+
+    await pull([remoteReminder({ updatedAt: 1_700_000_000_000 })], []);
+
+    expect(mocks.upsertReminders).toHaveBeenCalledWith([]);
+  });
+
+  /** Local wins ties, so an equal timestamp is a skip rather than a rewrite. */
+  it("leaves a reminder alone when the timestamps are equal", async () => {
+    mocks.getReminder.mockResolvedValue({ updatedAt: 1_700_000_000_000 });
+
+    await pull([remoteReminder({ updatedAt: 1_700_000_000_000 })], []);
+
+    expect(mocks.upsertReminders).toHaveBeenCalledWith([]);
+  });
+
+  it("applies a reminder the server has edited more recently", async () => {
+    mocks.getReminder.mockResolvedValue({ updatedAt: 1_700_000_000_000 });
+
+    await pull(
+      [remoteReminder({ name: "Metformin XR", updatedAt: 1_700_003_600_000 })],
+      []
+    );
+
+    const rows = mocks.upsertReminders.mock.calls[0]?.[0] as {
+      reminder: Record<string, unknown>;
+    }[];
+    expect(rows).toHaveLength(1);
+    expect(rows[0]?.reminder).toMatchObject({ name: "Metformin XR" });
+  });
+
+  /**
+   * A refused row must cost one row, not the batch — the same property the
+   * parent-missing skip carries, asserted of this skip too because it is a
+   * different branch.
+   */
+  it("refuses only the conflicting instance, not the batch", async () => {
+    mocks.getInstance.mockImplementation((id: string) =>
+      Promise.resolve(
+        id === "local-instance-1"
+          ? { updatedAt: 1_700_000_000_000, status: "completed" }
+          : null
+      )
+    );
+
+    await pull(
+      [remoteReminder()],
+      [
+        remoteInstance({ status: "missed", updatedAt: 1_700_003_600_000 }),
+        remoteInstance({
+          _id: "convex-instance-2",
+          localId: "local-instance-2",
+          status: "completed",
+        }),
+      ]
+    );
+
+    const rows = mocks.upsertInstances.mock.calls[0]?.[0] as {
+      convexId: string;
+    }[];
+    expect(rows).toHaveLength(1);
+    expect(rows[0]?.convexId).toBe("convex-instance-2");
+  });
+
+  /**
+   * The guard reads the row it is about to overwrite, not some other one. An
+   * implementation that looked the local copy up by the Convex id — the same
+   * confusion `eecee06` made on the foreign key — would find nothing, decide
+   * every remote row applies, and silently lose the protection above.
+   */
+  it("compares against the local row under the device UUID", async () => {
+    await pull([remoteReminder()], [remoteInstance()]);
+
+    expect(mocks.getInstance).toHaveBeenCalledWith("local-instance-1");
+    expect(mocks.getReminder).toHaveBeenCalledWith("local-reminder-1");
   });
 });

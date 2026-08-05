@@ -3,10 +3,7 @@ import type {
   ReminderInstance,
   ReminderKind,
 } from "@taskrx/shared";
-import {
-  INSTANCE_STATUSES,
-  shouldApplyRemoteReminderInstance,
-} from "@taskrx/shared";
+import { INSTANCE_STATUSES } from "@taskrx/shared";
 
 import { getDb } from "../index";
 
@@ -572,10 +569,13 @@ export interface PulledReminderInstance {
  * Apply a batch of instances from a remote pull, returning how many were
  * written.
  *
- * `shouldApplyRemoteReminderInstance` carries the safety-critical rule: a local
- * row already `completed` is never overwritten, however new the remote copy is. An
- * Instance the person recorded on this device is not erased by a stale copy
- * from another. Everything else is last-write-wins, local winning ties.
+ * Every row handed here is written. The safety-critical rule that decides which
+ * rows those are — a local row already `completed` is never overwritten, however
+ * new the remote copy is, so an Instance the person recorded on this device is
+ * not erased by a stale copy from another — is `shouldApplyRemoteReminderInstance`,
+ * applied by `applyRemotePull` in `src/sync/pull.ts`. It ran in this loop until
+ * issue #7's last criterion, and moved because everything below `getDb()` is
+ * behind expo-sqlite and so cannot be executed by a node test.
  *
  * As on the reminder side, `convex_id` is written from the pulled document and
  * `sync_status` is `'synced'` with no enqueue — the content came from the
@@ -593,11 +593,6 @@ export async function upsertMany(
   let applied = 0;
 
   for (const { instance, convexId } of rows) {
-    const local = await get(instance.id);
-    if (!shouldApplyRemoteReminderInstance(local, instance)) {
-      continue;
-    }
-
     await db.runAsync(
       `INSERT INTO reminder_instances (
         id, reminder_id, user_id, reminder_kind, scheduled_time,

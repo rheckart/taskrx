@@ -2,6 +2,10 @@ import { useUser } from "@clerk/clerk-expo";
 import NetInfo, { type NetInfoState } from "@react-native-community/netinfo";
 import { api } from "@taskrx/convex";
 import type { Reminder, ReminderInstance } from "@taskrx/shared";
+import {
+  shouldApplyRemoteReminder,
+  shouldApplyRemoteReminderInstance,
+} from "@taskrx/shared";
 import { useQuery } from "convex/react";
 import { useEffect, useMemo, useState } from "react";
 
@@ -136,6 +140,24 @@ function convexDocToInstance(
  * parent, and an instance whose parent is absent is skipped rather than written
  * with a foreign key it cannot honour. `src/sync/pull.test.ts` executes both.
  *
+ * ## Why the conflict rules are decided here and not in the repositories
+ *
+ * Both `shouldApply…` guards used to live inside the two `upsertMany`
+ * implementations, one row at a time. That put the safety-critical rule — "a
+ * locally completed Instance is never overwritten by a stale remote copy" —
+ * behind `getDb()`, and so behind expo-sqlite, which does not load in a node
+ * test. The rule was executed as a pure function by
+ * `packages/shared/src/sync/conflict.test.ts` and the surrounding pass was
+ * executed by `pull.test.ts`, but nothing ran the two together: it was proven of
+ * the decision and of the pass, never of the pair. That gap is what issue #7
+ * left unticked.
+ *
+ * Deciding here closes it without inventing a database test seam, which
+ * `docs/specs/fused-timeline.md` forbids — and it is what that spec asks for
+ * anyway: "the on-device repositories persist what these functions decide. They
+ * must not contain the decisions themselves". The repositories are now exactly
+ * that, and their `upsertMany` writes every row it is handed.
+ *
  * It is exported for that reason alone; `useUnifiedSync` is its only production
  * caller, and callers that want the subscriptions should use the hook.
  */
@@ -143,8 +165,17 @@ export async function applyRemotePull(
   remoteReminders: readonly ConvexReminderDoc[],
   remoteInstances: readonly ConvexReminderInstanceDoc[]
 ): Promise<void> {
+  const applicableReminders: remindersRepo.PulledReminder[] = [];
+  for (const doc of remoteReminders) {
+    const candidate = convexDocToReminder(doc);
+    const local = await remindersRepo.get(candidate.reminder.id);
+    if (!shouldApplyRemoteReminder(local, candidate.reminder)) {
+      continue;
+    }
+    applicableReminders.push(candidate);
+  }
   // Parents first, and awaited: everything below reads the table this writes.
-  await remindersRepo.upsertMany(remoteReminders.map(convexDocToReminder));
+  await remindersRepo.upsertMany(applicableReminders);
 
   const resolved: instancesRepo.PulledReminderInstance[] = [];
   for (const doc of remoteInstances) {
@@ -163,7 +194,16 @@ export async function applyRemotePull(
       );
       continue;
     }
-    resolved.push(convexDocToInstance(doc, localReminderId));
+
+    const candidate = convexDocToInstance(doc, localReminderId);
+    const local = await instancesRepo.get(candidate.instance.id);
+    if (!shouldApplyRemoteReminderInstance(local, candidate.instance)) {
+      // The safety-critical skip: a dose this device recorded as taken is never
+      // replaced by a copy from another one. Unlike the parent-missing skip
+      // above there is nothing to retry — the local row is the answer.
+      continue;
+    }
+    resolved.push(candidate);
   }
   await instancesRepo.upsertMany(resolved);
 }

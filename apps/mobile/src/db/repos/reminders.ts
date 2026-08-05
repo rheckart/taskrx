@@ -5,12 +5,7 @@ import type {
   ScheduleTimes,
   Weekday,
 } from "@taskrx/shared";
-import {
-  PRIORITIES,
-  REMINDER_KINDS,
-  dailyTimes,
-  shouldApplyRemoteReminder,
-} from "@taskrx/shared";
+import { PRIORITIES, REMINDER_KINDS, dailyTimes } from "@taskrx/shared";
 
 import { getDb } from "../index";
 
@@ -691,8 +686,12 @@ export interface PulledReminder {
  * Apply a batch of reminders from a remote pull, returning how many were
  * written.
  *
- * Rows the local copy already beats are skipped by `shouldApplyRemoteReminder`
- * — last-write-wins, local winning ties.
+ * Every row handed here is written. Which rows those are is decided by
+ * `applyRemotePull` in `src/sync/pull.ts`, where `shouldApplyRemoteReminder`
+ * runs — last-write-wins, local winning ties. The decision used to live in this
+ * loop; it moved so a test could execute it, since everything below `getDb()`
+ * is behind expo-sqlite and unreachable from a node test. See that function's
+ * comment.
  *
  * Two things this does that its legacy twin did not, both deliberate:
  *
@@ -717,11 +716,6 @@ export async function upsertMany(
   let applied = 0;
 
   for (const { reminder, convexId, rxcui } of rows) {
-    const local = await get(reminder.id);
-    if (!shouldApplyRemoteReminder(local, reminder)) {
-      continue;
-    }
-
     await db.runAsync(
       `INSERT INTO reminders (
         id, user_id, kind, name, rxcui, dosage, instructions, schedule,
