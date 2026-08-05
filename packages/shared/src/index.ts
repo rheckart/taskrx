@@ -131,6 +131,18 @@ export type {
   ScheduleParseSuccess,
 } from "./parser/schedule-grammar";
 
+/**
+ * The timeline projection — the union of computed Occurrences and stored
+ * Instances that the home surface renders. Pure, Kind-neutral, and the only
+ * place the rules of "what does my day look like" live.
+ */
+export { projectTimeline } from "./timeline/projection";
+export type {
+  ProjectTimelineInput,
+  TimelineRow,
+  TimelineWindow,
+} from "./timeline/projection";
+
 export {
   shouldApplyRemoteReminder,
   shouldApplyRemoteReminderInstance,

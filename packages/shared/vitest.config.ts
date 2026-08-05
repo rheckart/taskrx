@@ -26,6 +26,10 @@ export default defineConfig({
         // real caller. Gated at 100% so a branch cannot be added to them
         // without a case pinning it.
         "src/sync/conflict.ts",
+        // The timeline projection is the rule the home screen renders, and the
+        // screen decides nothing itself. Gated so a branch cannot be added here
+        // without a case stating the rule it changes.
+        "src/timeline/projection.ts",
       ],
       exclude: ["src/**/*.test.ts", "src/**/index.ts"],
       thresholds: {
