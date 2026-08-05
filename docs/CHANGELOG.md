@@ -8,6 +8,57 @@ for commit discipline (POC tags use `0.x.x`).
 
 ## [Unreleased]
 
+### 2026-08-05 — A taken dose stays taken, on the server too
+
+Closes the criterion issue #7 left unticked, and the server-side hole its
+closing comment recorded but did not fix. Story 44 of the fused-timeline spec —
+"a dose recorded on one device is never overwritten by stale data from another"
+— was true of the device and false of the deployment.
+
+- `fix(convex): make a completed reminder instance terminal` — `markSkipped`,
+  `markMissed` and `snooze` patched `status` unconditionally after their
+  ownership check. A second device pushing an answer it decided before it
+  learned of the completion flipped the server copy, and a third install then
+  pulled `missed` for a dose that was taken — its own local guard cannot help,
+  because a fresh install has no local row to protect. All three now refuse, and
+  so does `create`'s upsert path, which is defence in depth rather than a live
+  hole: a replayed create carries the newest status its device holds and the
+  queue drains in order.
+
+  The refusal is a **no-op, not a throw**. The caller is the sync worker
+  draining its queue, where a stale entry is routine; throwing would retry it to
+  the dead-letter threshold and raise a data-loss warning for a write the server
+  was right to ignore. `does not report a refusal as an error` pins that choice.
+
+- `refactor(sync): decide the pull conflict rules where a test can run them` —
+  both `shouldApply…` guards lived inside the two `upsertMany` implementations,
+  behind `getDb()` and so behind expo-sqlite, which no node test loads. The rule
+  was executed as a pure function by `conflict.test.ts` and the surrounding pass
+  by `pull.test.ts`, but nothing ran the two together — proven of the decision
+  and of the pass, never of the pair, which is exactly what #7 left open. The
+  decisions moved up into `applyRemotePull`; the repositories now write every
+  row they are handed. This is what `docs/specs/fused-timeline.md` asks for —
+  "the on-device repositories persist what these functions decide" — and it
+  needed no new database test seam, which that spec forbids.
+
+One existing Convex case changed rather than being added to: `defaults an
+omitted status to pending` moved its fixture off `completed`, because it had
+been asserting that a completed instance demotes to pending — the corruption
+now forbidden. Its subject was the defaulting, not the starting status.
+
+Gates: `npm run verify` — 340 tests across three workspaces, 159 migration
+checks, harness guards. Every new assertion was mutation-checked separately, 11
+mutations, each caught by the case naming it.
+
+**Not closed here — the legacy tables in the deployment (#8).** `medications`
+and `doseLogs` still exist in the local dev deployment as empty, undeclared
+metadata; Convex keeps a table when you remove it from `schema.ts` rather than
+destroying data on a file edit. Confirmed empty this time rather than inferred:
+`inferredSchema: Never` on both. The production deployment `cool-impala-411`
+was recorded as uninspected in #8 and is now inspected — it holds **no tables at
+all**, so nothing was ever deployed there and nothing is at stake. Removing the
+two remaining tables is a dashboard action.
+
 ### 2026-08-03 — Criteria 6 and 9 verified on the device
 
 The last two `⏸️ Pending` POC criteria are now verified and, unlike the seven
