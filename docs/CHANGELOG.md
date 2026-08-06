@@ -8,6 +8,59 @@ for commit discipline (POC tags use `0.x.x`).
 
 ## [Unreleased]
 
+### 2026-08-06 — The Today timeline
+
+Closes #10. The home surface was a stub; it is now the day as one ordered
+list. The first thing in this sequence a person can actually see — the
+cutover, the status rename and the sync work before it produced nothing
+visible.
+
+- `feat(timeline): show the day as one ordered list` — `projectTimeline` in
+  `@taskrx/shared`, pure and under the 100% gate. A day is a union of two
+  different kinds of thing: Occurrences, computed from a Schedule and never
+  stored, and Reminder Instances, the stored record of what became of one. Both
+  can describe the same moment, so they are deduplicated on the pairing of
+  Reminder and scheduled time — the key the lazy-lookup path already used — and
+  the stored answer wins, because it is a fact where the Occurrence is only a
+  prediction. The screen picks the window, reads two tables, and renders the
+  result; it decides nothing.
+
+  Deliberately undecided here: an unanswered Occurrence whose moment has passed
+  stays `pending` rather than becoming Missed, because that needs the Grace
+  Period the spec leaves open for the sweep in #11. Nothing in the projection
+  picks one by implication. It is also Kind-neutral, so the fusion in #13 is a
+  new caller rather than a rewrite.
+
+- `fix(timeline): close the code-review findings` — the review caught that
+  replacing the stub had taken the app's **only sign-out path** with it
+  (`grep signOut apps/mobile` returned nothing), and that the handled-state
+  criterion held in the projection but not in the app: the list read on mount,
+  and answering navigates away and back. Reloads on focus now. Vocabulary
+  corrected to CONTEXT.md throughout — "dose" is the quantity of a drug, not a
+  scheduled or recorded taking, which are Occurrence and Reminder Instance.
+
+- `fix(timeline): collapse two stored answers claiming one moment` — **found on
+  the device, not by any test or either review axis.** Aug 2 rendered the 17:36
+  moment twice, once `pending` and once `completed`, with React's "two children
+  with the same key". The projection deduplicated an Occurrence against an
+  Instance but never an Instance against another Instance. Two should not
+  exist; two do, because of the duplicate-instance defect below. An answer now
+  beats `pending`, later `updatedAt` wins between two answers, and an exact tie
+  falls to the instance id.
+
+Gates: `npm run verify` — 372 tests across three workspaces, 159 migration
+checks, harness guards. 21 mutations against the projection, each caught by the
+case naming it. Verified on the Pixel 8 Pro against the issue #7 round-trip
+data.
+
+**Still open, and now visible as live rows rather than a note:** answering
+mints a duplicate `pending` Reminder Instance beside the `completed` one, and
+both reach Convex. The timeline no longer *renders* the duplicate, but both
+rows are still written and adherence still counts from them. It has no issue of
+its own. The other two findings from 2026-08-03 — the missing
+`POST_NOTIFICATIONS` request and the post-notification SQLite lock — are also
+untracked and unfixed.
+
 ### 2026-08-05 — A taken dose stays taken, on the server too
 
 Closes the criterion issue #7 left unticked, and the server-side hole its
