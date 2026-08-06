@@ -15,6 +15,7 @@ import {
 import { useToast } from "../../../src/components/useToast";
 import * as instancesRepo from "../../../src/db/repos/reminderInstances";
 import * as remindersRepo from "../../../src/db/repos/reminders";
+import { formatDayTime } from "../../../src/format/datetime";
 import { snoozeDose } from "../../../src/notifications/snooze";
 
 type ActionStatus = "idle" | "taking" | "skipping" | "snoozing" | "done";
@@ -74,15 +75,6 @@ function parseParams(params: Record<string, string | string[]>): {
     return null;
   }
   return { medicationId: rawMedicationId, scheduledTime };
-}
-
-function formatDateTime(date: Date): string {
-  return date.toLocaleString([], {
-    month: "short",
-    day: "numeric",
-    hour: "2-digit",
-    minute: "2-digit",
-  });
 }
 
 function urgencyLabel(scheduledTime: number): string {
@@ -297,7 +289,6 @@ export default function DoseLogScreen(): ReactElement {
   }
 
   const { medication, scheduledTime } = state;
-  const scheduledDate = new Date(scheduledTime);
   const isDone = actionStatus === "done";
 
   return (
@@ -314,7 +305,7 @@ export default function DoseLogScreen(): ReactElement {
             <Text style={styles.dosage}>{medication.dosage}</Text>
           ) : null}
           <Text style={styles.scheduledTime}>
-            Scheduled: {formatDateTime(scheduledDate)}
+            Scheduled: {formatDayTime(scheduledTime)}
           </Text>
           <Text
             style={[
@@ -329,9 +320,7 @@ export default function DoseLogScreen(): ReactElement {
         {isDone && completedAt !== null ? (
           <View style={styles.successCard}>
             <Text style={styles.successTitle}>Recorded</Text>
-            <Text style={styles.successBody}>
-              {formatDateTime(new Date(completedAt))}
-            </Text>
+            <Text style={styles.successBody}>{formatDayTime(completedAt)}</Text>
             <Pressable onPress={handleDone} style={styles.doneButton}>
               <Text style={styles.doneButtonText}>Done</Text>
             </Pressable>

@@ -5,6 +5,9 @@ import {
   assertNever,
   dailyTimes,
   intervalTimes,
+  isWellFormedSchedule,
+  noneTimes,
+  onceTimes,
   parseScheduleTimes,
   serializeScheduleTimes,
   weeklyTimes,
@@ -23,6 +26,10 @@ function describeExhaustively(schedule: ScheduleTimes): string {
       return `interval:${String(schedule.hours)}`;
     case "weekly":
       return `weekly:${String(schedule.daysOfWeek.length)}`;
+    case "once":
+      return `once:${String(schedule.at)}`;
+    case "none":
+      return "none";
     default:
       return assertNever(schedule);
   }
@@ -76,6 +83,17 @@ describe("ScheduleTimes constructors", () => {
     });
   });
 
+  it("tags a single-moment schedule with the instant it happens at", () => {
+    expect(onceTimes(Date.UTC(2026, 7, 7, 14, 0, 0))).toEqual({
+      type: "once",
+      at: Date.UTC(2026, 7, 7, 14, 0, 0),
+    });
+  });
+
+  it("tags an absent schedule, which carries no time at all", () => {
+    expect(noneTimes()).toEqual({ type: "none" });
+  });
+
   it("accepts an empty daily schedule, matching the C# default", () => {
     expect(dailyTimes([])).toEqual({ type: "daily", times: [] });
   });
@@ -85,6 +103,10 @@ describe("exhaustiveness", () => {
   it("dispatches every variant without a fallback", () => {
     expect(describeExhaustively(dailyTimes(["09:00"]))).toBe("daily:1");
     expect(describeExhaustively(intervalTimes(8, 0))).toBe("interval:8");
+    expect(describeExhaustively(onceTimes(1_700_000_000_000))).toBe(
+      "once:1700000000000"
+    );
+    expect(describeExhaustively(noneTimes())).toBe("none");
     expect(describeExhaustively(weeklyTimes([1, 3], ["09:00"]))).toBe(
       "weekly:2"
     );
@@ -99,6 +121,47 @@ describe("exhaustiveness", () => {
   it("still dispatches the handled variants in the incomplete switch", () => {
     expect(describeIncompletely(dailyTimes(["09:00"]))).toBe("daily:1");
     expect(describeIncompletely(intervalTimes(6, 0))).toBe("interval:6");
+  });
+});
+
+describe("isWellFormedSchedule", () => {
+  it("accepts a schedule that names at least one usable moment", () => {
+    expect(isWellFormedSchedule(dailyTimes(["09:00"]))).toBe(true);
+    expect(isWellFormedSchedule(weeklyTimes([1], ["09:00"]))).toBe(true);
+    expect(isWellFormedSchedule(intervalTimes(8, 0))).toBe(true);
+    expect(isWellFormedSchedule(onceTimes(1_700_000_000_000))).toBe(true);
+  });
+
+  it("accepts an absent schedule, because having no time is the point of it", () => {
+    expect(isWellFormedSchedule(noneTimes())).toBe(true);
+  });
+
+  it("rejects a recurring schedule with no moment in it", () => {
+    // The misconfiguration `none` replaced: it produces nothing and looks like a
+    // backlog item without being one.
+    expect(isWellFormedSchedule(dailyTimes([]))).toBe(false);
+    expect(isWellFormedSchedule(dailyTimes(["breakfast"]))).toBe(false);
+    expect(isWellFormedSchedule(weeklyTimes([], ["09:00"]))).toBe(false);
+    expect(isWellFormedSchedule(weeklyTimes([1], []))).toBe(false);
+  });
+
+  it("rejects an interval that never comes round", () => {
+    expect(isWellFormedSchedule(intervalTimes(0, 0))).toBe(false);
+    expect(isWellFormedSchedule(intervalTimes(8, Number.NaN))).toBe(false);
+  });
+
+  it("rejects a single moment that is not a moment", () => {
+    expect(isWellFormedSchedule(onceTimes(Number.NaN))).toBe(false);
+  });
+
+  it("accepts a single moment that has already passed, which is merely spent", () => {
+    expect(isWellFormedSchedule(onceTimes(0))).toBe(true);
+  });
+
+  it("throws on a variant it does not know", () => {
+    const unknown = { type: "monthly" } as unknown as ScheduleTimes;
+
+    expect(() => isWellFormedSchedule(unknown)).toThrow(/unhandled/i);
   });
 });
 
@@ -136,6 +199,19 @@ describe("serializeScheduleTimes", () => {
       Times: ["08:00:00"],
     });
   });
+
+  it("writes a single moment as an instant, the way an interval start is written", () => {
+    expect(
+      serializeScheduleTimes(onceTimes(Date.UTC(2026, 0, 1, 6, 0, 0)))
+    ).toEqual({
+      $type: "OnceTimes",
+      AtUtc: "2026-01-01T06:00:00.000Z",
+    });
+  });
+
+  it("writes an absent schedule as a discriminator with no members", () => {
+    expect(serializeScheduleTimes(noneTimes())).toEqual({ $type: "NoneTimes" });
+  });
 });
 
 describe("parseScheduleTimes", () => {
@@ -144,6 +220,8 @@ describe("parseScheduleTimes", () => {
       dailyTimes(["09:00", "21:30"]),
       intervalTimes(8, Date.UTC(2026, 0, 1, 6, 0, 0)),
       weeklyTimes([0, 2, 6], ["08:00", "20:00"]),
+      onceTimes(Date.UTC(2026, 7, 7, 14, 0, 0)),
+      noneTimes(),
     ];
 
     for (const schedule of schedules) {
@@ -181,6 +259,22 @@ describe("parseScheduleTimes", () => {
         Times: ["08:00:00"],
       })
     ).toEqual(weeklyTimes([0, 3, 6], ["08:00"]));
+  });
+
+  it("reads a single moment written with an offset rather than a Z", () => {
+    expect(
+      parseScheduleTimes({
+        $type: "OnceTimes",
+        AtUtc: "2026-08-07T14:00:00+00:00",
+      })
+    ).toEqual(onceTimes(Date.UTC(2026, 7, 7, 14, 0, 0)));
+  });
+
+  it("rejects a single moment whose instant is missing or unreadable", () => {
+    expect(parseScheduleTimes({ $type: "OnceTimes" })).toBeNull();
+    expect(
+      parseScheduleTimes({ $type: "OnceTimes", AtUtc: "not a date" })
+    ).toBeNull();
   });
 
   it("returns null for an unknown discriminator, matching the C# reader", () => {

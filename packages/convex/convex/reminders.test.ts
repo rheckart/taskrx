@@ -145,6 +145,82 @@ describe("reminders.create replayed for the same localId", () => {
   });
 });
 
+/**
+ * The schedule validator is a closed union, widened with the shared domain one
+ * (issue #12). It is the boundary that decides whether a malformed schedule is
+ * rejected or stored, so each variant is exercised through a real write rather
+ * than asserted against the validator's shape.
+ */
+describe("reminders.create and the schedule variants", () => {
+  it("stores a reminder that comes due at a single moment", async () => {
+    const t = deployment();
+    const id = await t.mutation(api.reminders.create, {
+      ...DEVICE_PUSH,
+      schedule: { type: "once", at: NOW + 86_400_000 },
+    });
+
+    expect(await t.query(api.reminders.get, { id })).toMatchObject({
+      schedule: { type: "once", at: NOW + 86_400_000 },
+    });
+  });
+
+  it("stores a reminder with no schedule at all", async () => {
+    const t = deployment();
+    const id = await t.mutation(api.reminders.create, {
+      ...DEVICE_PUSH,
+      schedule: { type: "none" },
+    });
+
+    expect(await t.query(api.reminders.get, { id })).toMatchObject({
+      schedule: { type: "none" },
+    });
+  });
+
+  it("moves a backlog reminder onto the timeline by giving it a moment", async () => {
+    const t = deployment();
+    const id = await t.mutation(api.reminders.create, {
+      ...DEVICE_PUSH,
+      schedule: { type: "none" },
+    });
+
+    await t.mutation(api.reminders.update, {
+      id,
+      schedule: { type: "once", at: NOW + 3_600_000 },
+      updatedAt: NOW + 60_000,
+    });
+
+    expect(await t.query(api.reminders.get, { id })).toMatchObject({
+      schedule: { type: "once", at: NOW + 3_600_000 },
+    });
+  });
+
+  it("rejects a schedule variant that is not in the union", async () => {
+    const t = deployment();
+
+    await expect(
+      t.mutation(api.reminders.create, {
+        ...DEVICE_PUSH,
+        // The point of spelling the union out: a malformed schedule fails at the
+        // boundary instead of round-tripping and only breaking on the device.
+        schedule: { type: "monthly", dayOfMonth: 1 } as unknown as {
+          type: "none";
+        },
+      })
+    ).rejects.toThrow();
+  });
+
+  it("rejects a single-moment schedule with no moment", async () => {
+    const t = deployment();
+
+    await expect(
+      t.mutation(api.reminders.create, {
+        ...DEVICE_PUSH,
+        schedule: { type: "once" } as unknown as { type: "none" },
+      })
+    ).rejects.toThrow();
+  });
+});
+
 describe("reminders.update", () => {
   it("leaves an omitted priority, tags and caregiverIds alone", async () => {
     const t = deployment();

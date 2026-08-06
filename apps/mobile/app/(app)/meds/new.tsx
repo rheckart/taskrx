@@ -1,6 +1,4 @@
 import { useUser } from "@clerk/clerk-expo";
-import type { ScheduleTimes, ScheduleType } from "@taskrx/shared";
-import { dailyTimes, intervalTimes } from "@taskrx/shared";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { useCallback, useMemo, useState } from "react";
 import type { ReactElement } from "react";
@@ -16,7 +14,10 @@ import {
 
 import {
   SchedulePicker,
-  type ScheduleValue,
+  defaultSchedule,
+  isWellFormedSchedule,
+  type EditableSchedule,
+  type EditableScheduleType,
 } from "../../../src/components/SchedulePicker";
 import { useToast } from "../../../src/components/useToast";
 import * as remindersRepo from "../../../src/db/repos/reminders";
@@ -30,69 +31,25 @@ import * as remindersRepo from "../../../src/db/repos/reminders";
  * legacy row to project from. Both the legacy table and its mirror are now
  * deleted.
  *
- * The form's own state is unchanged: `SchedulePicker` still speaks the POC
- * `(ScheduleType, ScheduleValue)` pair, and `toScheduleTimes` converts once at
- * save. Rewriting the picker is not this ticket's job and would be a change a
- * person can see.
+ * The form now holds a `ScheduleTimes` value and saves it unchanged. It used to
+ * hold the POC `(ScheduleType, ScheduleValue)` pair and convert at save; both
+ * halves of that pair went with the picker's rewrite for the two new variants,
+ * and with them the last mapping between two spellings of a schedule.
+ *
+ * Four variants are offered. `once` gives a medication with a single dose —
+ * a short course, a one-off injection — and `none` puts it in the Backlog, which
+ * for a medication means "I have this, I take it when I need it".
  */
 
-const TIME_PATTERN = /^([01]\d|2[0-3]):([0-5]\d)$/;
-
-function defaultSchedule(type: ScheduleType): ScheduleValue {
-  if (type === "daily") {
-    return { times: ["09:00"] };
-  }
-  return { hours: 8, startAt: Date.now() };
-}
-
-function isValidSchedule(type: ScheduleType, value: ScheduleValue): boolean {
-  if (type === "daily") {
-    if (!("times" in value)) {
-      return false;
-    }
-    const times = value.times;
-    if (times.length === 0) {
-      return false;
-    }
-    return times.every((t) => TIME_PATTERN.test(t));
-  }
-  if (!("hours" in value) || !("startAt" in value)) {
-    return false;
-  }
-  return value.hours > 0 && Number.isFinite(value.startAt);
-}
-
-/**
- * The form's `(scheduleType, value)` pair as the unified tagged union.
- *
- * Emits the domain union directly: same discriminator and member names the
- * `reminders.schedule` column already holds, degrading to `[]` / `0` when the
- * value does not match its declared type. That column is what
- * `notifications/scheduler.ts` arms alarms from, so the shape is load-bearing.
- *
- * This used to be one of three copies of the same mapping — the other two in
- * migration 005's backfill and the medication mirror, both SQL, with parity
- * asserted by reading them rather than by a test. Both are gone with the legacy
- * generation, so this is now the only place the conversion happens, which is
- * what makes the earlier decision not to extract it look right in hindsight.
- *
- * The degraded arms are unreachable from this screen (`onChangeType` replaces
- * the value whenever the type changes, and `canSave` rejects a mismatch before
- * `onSave` runs). They exist because `ScheduleValue` carries no discriminator
- * of its own, so the narrowing has to be written out.
- */
-function toScheduleTimes(
-  type: ScheduleType,
-  value: ScheduleValue
-): ScheduleTimes {
-  if (type === "daily") {
-    return dailyTimes("times" in value ? value.times : []);
-  }
-  return intervalTimes(
-    "hours" in value ? value.hours : 0,
-    "startAt" in value ? value.startAt : 0
-  );
-}
+const SCHEDULE_TYPES: readonly {
+  readonly type: EditableScheduleType;
+  readonly label: string;
+}[] = [
+  { type: "daily", label: "Daily" },
+  { type: "interval", label: "Interval" },
+  { type: "once", label: "Once" },
+  { type: "none", label: "No time" },
+];
 
 export default function NewMedicationScreen(): ReactElement {
   const router = useRouter();
@@ -110,16 +67,14 @@ export default function NewMedicationScreen(): ReactElement {
 
   const [name, setName] = useState<string>(initialName);
   const [dosage, setDosage] = useState<string>("");
-  const [scheduleType, setScheduleType] = useState<ScheduleType>("daily");
-  const [schedule, setSchedule] = useState<ScheduleValue>(() =>
+  const [schedule, setSchedule] = useState<EditableSchedule>(() =>
     defaultSchedule("daily")
   );
   const [saving, setSaving] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
   const { showToast, ToastContainer } = useToast();
 
-  const onChangeType = useCallback((next: ScheduleType): void => {
-    setScheduleType(next);
+  const onChangeType = useCallback((next: EditableScheduleType): void => {
     setSchedule(defaultSchedule(next));
   }, []);
 
@@ -132,8 +87,8 @@ export default function NewMedicationScreen(): ReactElement {
     if (trimmedName.length === 0) {
       return false;
     }
-    return isValidSchedule(scheduleType, schedule);
-  }, [isSignedIn, userId, trimmedName, scheduleType, schedule]);
+    return isWellFormedSchedule(schedule);
+  }, [isSignedIn, userId, trimmedName, schedule]);
 
   const onSave = useCallback(async (): Promise<void> => {
     if (userId === undefined) {
@@ -149,7 +104,7 @@ export default function NewMedicationScreen(): ReactElement {
         userId,
         kind: "medication",
         name: trimmedName,
-        schedule: toScheduleTimes(scheduleType, schedule),
+        schedule,
         ...(initialRxcui !== undefined ? { rxcui: initialRxcui } : {}),
         ...(dosageArg !== undefined ? { dosage: dosageArg } : {}),
       });
@@ -161,16 +116,7 @@ export default function NewMedicationScreen(): ReactElement {
       setSaving(false);
       showToast.error("Couldn't save — will retry on next sync");
     }
-  }, [
-    userId,
-    trimmedName,
-    initialRxcui,
-    dosage,
-    scheduleType,
-    schedule,
-    router,
-    showToast,
-  ]);
+  }, [userId, trimmedName, initialRxcui, dosage, schedule, router, showToast]);
 
   if (!isLoaded) {
     return (
@@ -222,51 +168,30 @@ export default function NewMedicationScreen(): ReactElement {
 
         <Text style={styles.label}>Schedule type</Text>
         <View style={styles.typeRow}>
-          <Pressable
-            onPress={() => {
-              onChangeType("daily");
-            }}
-            style={[
-              styles.typeButton,
-              scheduleType === "daily" ? styles.typeButtonActive : null,
-            ]}
-          >
-            <Text
+          {SCHEDULE_TYPES.map(({ type, label }) => (
+            <Pressable
+              key={type}
+              onPress={() => {
+                onChangeType(type);
+              }}
               style={[
-                styles.typeButtonText,
-                scheduleType === "daily" ? styles.typeButtonTextActive : null,
+                styles.typeButton,
+                schedule.type === type ? styles.typeButtonActive : null,
               ]}
             >
-              Daily
-            </Text>
-          </Pressable>
-          <Pressable
-            onPress={() => {
-              onChangeType("interval");
-            }}
-            style={[
-              styles.typeButton,
-              scheduleType === "interval" ? styles.typeButtonActive : null,
-            ]}
-          >
-            <Text
-              style={[
-                styles.typeButtonText,
-                scheduleType === "interval"
-                  ? styles.typeButtonTextActive
-                  : null,
-              ]}
-            >
-              Interval
-            </Text>
-          </Pressable>
+              <Text
+                style={[
+                  styles.typeButtonText,
+                  schedule.type === type ? styles.typeButtonTextActive : null,
+                ]}
+              >
+                {label}
+              </Text>
+            </Pressable>
+          ))}
         </View>
 
-        <SchedulePicker
-          scheduleType={scheduleType}
-          value={schedule}
-          onChange={setSchedule}
-        />
+        <SchedulePicker value={schedule} onChange={setSchedule} />
 
         {error !== null ? (
           <Text style={styles.errorText}>Save failed: {error}</Text>
@@ -367,6 +292,7 @@ const styles = StyleSheet.create({
   },
   typeRow: {
     flexDirection: "row",
+    flexWrap: "wrap",
     marginTop: 4,
   },
 });

@@ -2,7 +2,12 @@ import { describe, expect, it } from "vitest";
 
 import { createReminder, createReminderInstance } from "../domain/reminder";
 import type { Reminder, ReminderInstance } from "../domain/reminder";
-import { dailyTimes, intervalTimes } from "../domain/schedule-times";
+import {
+  dailyTimes,
+  intervalTimes,
+  noneTimes,
+  onceTimes,
+} from "../domain/schedule-times";
 
 import { projectTimeline } from "./projection";
 
@@ -588,6 +593,31 @@ describe("projectTimeline reminders it should not schedule", () => {
     });
 
     expect(shape(rows)).toEqual([[at(9), "completed"]]);
+  });
+
+  it("keeps a backlog reminder off the day entirely", () => {
+    // A Reminder with no Schedule has no moments to place, so it belongs to the
+    // Backlog surface rather than to any day. It reaches the timeline only once
+    // it has been acted on, as the Instance that act mints.
+    const rows = projectTimeline({
+      reminders: [medication({ schedule: noneTimes() })],
+      instances: [],
+      window: DAY,
+      now: DAY_START,
+    });
+
+    expect(rows).toEqual([]);
+  });
+
+  it("places a single-moment reminder on the day it falls on", () => {
+    const rows = projectTimeline({
+      reminders: [medication({ schedule: onceTimes(at(14)) })],
+      instances: [],
+      window: DAY,
+      now: DAY_START,
+    });
+
+    expect(shape(rows)).toEqual([[at(14), "pending"]]);
   });
 
   it("drops a recorded answer whose reminder is not in hand", () => {

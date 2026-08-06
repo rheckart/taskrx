@@ -47,7 +47,46 @@ export interface WeeklyTimes {
   readonly times: readonly string[];
 }
 
-export type ScheduleTimes = DailyTimes | IntervalTimes | WeeklyTimes;
+/**
+ * A single moment, and then never again.
+ *
+ * `at` is an instant, never a date with the time left off — see ADR 0006, which
+ * records why an all-day Reminder is a future variant of its own rather than a
+ * nullable field here.
+ *
+ * It has no C# counterpart: `ScheduleTimes.cs` had three subrecords and the
+ * archive is frozen, so this variant and `NoneTimes` are the first parts of the
+ * union this repository owns outright.
+ */
+export interface OnceTimes {
+  readonly type: "once";
+  /** Unix ms of the one moment this Reminder comes due. */
+  readonly at: number;
+}
+
+/**
+ * No schedule at all — the Backlog.
+ *
+ * A Reminder with this schedule produces no Occurrences and never appears on
+ * the timeline; it is rendered from the Reminder row itself, and completing one
+ * mints its Instance at the moment the person acts (ADR 0002).
+ *
+ * It replaces something that used to happen by accident. A `daily` schedule
+ * with no times also produces nothing, which looks like a Backlog item but is
+ * really a misconfiguration; after this variant the difference is expressible in
+ * the type, and `createReminder`'s default of an empty `daily` schedule is the
+ * one remaining place the two are still conflated.
+ */
+export interface NoneTimes {
+  readonly type: "none";
+}
+
+export type ScheduleTimes =
+  | DailyTimes
+  | IntervalTimes
+  | WeeklyTimes
+  | OnceTimes
+  | NoneTimes;
 
 export interface DailyTimesWire {
   readonly $type: "DailyTimes";
@@ -66,10 +105,26 @@ export interface WeeklyTimesWire {
   readonly Times: readonly string[];
 }
 
+/**
+ * `OnceTimes` on the wire. `AtUtc` mirrors `IntervalTimesWire.StartAtUtc`: both
+ * are instants, so both are written the way .NET writes a `DateTimeOffset`.
+ */
+export interface OnceTimesWire {
+  readonly $type: "OnceTimes";
+  readonly AtUtc: string;
+}
+
+/** `NoneTimes` on the wire — a discriminator with nothing under it. */
+export interface NoneTimesWire {
+  readonly $type: "NoneTimes";
+}
+
 export type ScheduleTimesWire =
   | DailyTimesWire
   | IntervalTimesWire
-  | WeeklyTimesWire;
+  | WeeklyTimesWire
+  | OnceTimesWire
+  | NoneTimesWire;
 
 /**
  * Compile-time exhaustiveness guard for tagged unions.
@@ -97,6 +152,58 @@ export function weeklyTimes(
   times: readonly string[]
 ): WeeklyTimes {
   return { type: "weekly", daysOfWeek: [...daysOfWeek], times: [...times] };
+}
+
+export function onceTimes(at: number): OnceTimes {
+  return { type: "once", at };
+}
+
+export function noneTimes(): NoneTimes {
+  return { type: "none" };
+}
+
+/**
+ * Whether a schedule carries what its own variant needs to produce Occurrences.
+ *
+ * The rule an entry surface asks before saving, kept here rather than in the
+ * form that asks it: what makes a schedule usable is a property of the schedule,
+ * and a second surface — the Backlog, which sets one too — would otherwise write
+ * its own copy of the answer.
+ *
+ * `none` is well formed by definition; having no time is the whole point of it.
+ * The rest need the field they are built around, and `daily`/`weekly` need at
+ * least one usable moment: a `daily` schedule with no times produces nothing,
+ * which is the misconfiguration `none` exists to replace.
+ *
+ * It is deliberately not a judgement about *when*. A `once` schedule whose
+ * instant has passed is well formed and simply spent — that is the state every
+ * one-off ends in, and it arrives that way from a pull.
+ *
+ * Throws for a variant it does not know, matching `nextOccurrences`: unreachable
+ * from typed callers, and reachable from a JSON boundary.
+ */
+export function isWellFormedSchedule(schedule: ScheduleTimes): boolean {
+  switch (schedule.type) {
+    case "daily":
+      return schedule.times.some(isUsableTime);
+    case "weekly":
+      return (
+        schedule.daysOfWeek.length > 0 && schedule.times.some(isUsableTime)
+      );
+    case "interval":
+      return schedule.hours > 0 && Number.isFinite(schedule.startAt);
+    case "once":
+      return Number.isFinite(schedule.at);
+    case "none":
+      return true;
+    default:
+      return assertNever(schedule);
+  }
+}
+
+/** A `"HH:MM"` the Occurrence engine will accept. */
+function isUsableTime(time: string): boolean {
+  return parseTimeOnly(time) !== null;
 }
 
 /**
@@ -252,6 +359,13 @@ export function serializeScheduleTimes(
         DaysOfWeek: [...schedule.daysOfWeek],
         Times: schedule.times.map(toTimeOnly),
       };
+    case "once":
+      return {
+        $type: "OnceTimes",
+        AtUtc: new Date(schedule.at).toISOString(),
+      };
+    case "none":
+      return { $type: "NoneTimes" };
     /* v8 ignore next 2 */
     default:
       return assertNever(schedule);
@@ -287,6 +401,12 @@ export function parseScheduleTimes(value: unknown): ScheduleTimes | null {
       if (daysOfWeek === null || times === null) return null;
       return weeklyTimes(daysOfWeek, times);
     }
+    case "OnceTimes": {
+      const at = parseInstant(value.AtUtc);
+      return at === null ? null : onceTimes(at);
+    }
+    case "NoneTimes":
+      return noneTimes();
     default:
       return null;
   }

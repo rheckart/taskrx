@@ -29,6 +29,7 @@ import type { Reminder } from "../domain/reminder";
 import type {
   DailyTimes,
   IntervalTimes,
+  OnceTimes,
   Weekday,
   WeeklyTimes,
 } from "../domain/schedule-times";
@@ -205,6 +206,24 @@ function intervalOccurrences(
   return results;
 }
 
+/**
+ * One moment and then nothing — the `once` variant.
+ *
+ * `count` never binds here: a single-moment schedule has exactly one occurrence
+ * to give, so the caller's count is a ceiling it cannot reach. The `<= fromMs`
+ * exclusion is the same boundary every other variant applies, which is what
+ * keeps "the occurrence that has just come due is behind you" one rule rather
+ * than four.
+ */
+function onceOccurrences(
+  source: OccurrenceSource,
+  schedule: OnceTimes,
+  fromMs: number
+): readonly ScheduledOccurrence[] {
+  if (schedule.at <= fromMs) return [];
+  return [occurrenceAt(source, schedule.at)];
+}
+
 function weeklyOccurrences(
   source: OccurrenceSource,
   schedule: WeeklyTimes,
@@ -244,7 +263,8 @@ function weeklyOccurrences(
  *
  * Returns fewer than `count` when the schedule cannot supply that many inside
  * its horizon: 60 local days for `daily`, 56 for `weekly`. `interval` has no
- * horizon and always returns exactly `count`.
+ * horizon and always returns exactly `count`. `once` returns at most one and
+ * `none` always returns nothing, whatever `count` says.
  *
  * Throws on a schedule variant this engine does not handle, mirroring the C#
  * `InvalidOperationException`. That arm is unreachable from typed callers — the
@@ -271,6 +291,13 @@ export function nextOccurrences(
       return intervalOccurrences(reminder, schedule, fromMs, count);
     case "weekly":
       return weeklyOccurrences(reminder, schedule, fromMs, count);
+    case "once":
+      return onceOccurrences(reminder, schedule, fromMs);
+    // A Backlog reminder has no moments at all, which is the whole point of the
+    // variant: it never reaches the timeline or the notification horizon, and is
+    // acted on from the Backlog surface instead.
+    case "none":
+      return [];
     default:
       return assertNever(schedule);
   }

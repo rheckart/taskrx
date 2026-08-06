@@ -5,6 +5,8 @@ import {
   createReminder,
   dailyTimes,
   intervalTimes,
+  noneTimes,
+  onceTimes,
   weeklyTimes,
 } from "../domain/index";
 
@@ -299,6 +301,38 @@ describe("nextOccurrences — weekly", () => {
 
     expect(occ).toHaveLength(8);
     expect(occ[7]?.fireAt).toBe(local(2026, 7, 6 + 49, 7));
+  });
+});
+
+describe("nextOccurrences — once", () => {
+  it("comes due exactly once, however many the caller asks for", () => {
+    const r = reminder(onceTimes(local(2026, 7, 10, 14)));
+
+    const occ = nextOccurrences(r, local(2026, 7, 3), 64);
+
+    expect(occ.map((o) => o.fireAt)).toEqual([local(2026, 7, 10, 14)]);
+  });
+
+  it("is spent once its moment has passed", () => {
+    const r = reminder(onceTimes(local(2026, 7, 10, 14)));
+
+    expect(nextOccurrences(r, local(2026, 7, 10, 14, 1), 64)).toEqual([]);
+  });
+
+  it("excludes a moment landing exactly on `from`, as every variant does", () => {
+    const at = local(2026, 7, 10, 14);
+    const r = reminder(onceTimes(at));
+
+    expect(nextOccurrences(r, at - 1, 64).map((o) => o.fireAt)).toEqual([at]);
+    expect(nextOccurrences(r, at, 64)).toEqual([]);
+  });
+});
+
+describe("nextOccurrences — none", () => {
+  it("never comes due, which is what puts a reminder in the Backlog", () => {
+    const r = reminder(noneTimes());
+
+    expect(nextOccurrences(r, local(2026, 7, 3), 64)).toEqual([]);
   });
 });
 

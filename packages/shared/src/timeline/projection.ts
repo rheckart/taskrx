@@ -28,10 +28,12 @@
  * ## What this deliberately does not decide
  *
  * It does not mint Instances, and it does not decide that an unanswered
- * Occurrence has become Missed — that is the sweep planner's job, and it needs a
- * Grace Period the spec has not chosen yet. An Occurrence whose moment has
- * passed with no answer therefore stays `pending` here and simply is not
- * "next". Nothing in this file picks a Grace Period by implication.
+ * Occurrence has become Missed — that is the sweep planner's job
+ * (`../sweep/planner.ts`), under the Grace Period ADR 0005 settled. An
+ * Occurrence whose moment has passed with no answer therefore stays `pending`
+ * here and simply is not "next", until a sweep has run and left a `missed`
+ * Instance for this projection to find. Nothing in this file applies a Grace
+ * Period of its own.
  *
  * It is also Kind-neutral. Tasks have no screen until the fusion lands, but the
  * rule is the fused one, so that step is a new caller rather than a rewrite.

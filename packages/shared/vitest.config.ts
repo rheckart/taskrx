@@ -30,6 +30,14 @@ export default defineConfig({
         // screen decides nothing itself. Gated so a branch cannot be added here
         // without a case stating the rule it changes.
         "src/timeline/projection.ts",
+        // The sweep planner decides what becomes Missed, which is what makes
+        // adherence honest about doses nobody answered. Its two boundaries are
+        // the Grace Period and the lookback, and neither may move without a
+        // case naming it.
+        "src/sweep/planner.ts",
+        // The Backlog completion rule is one branch and one ADR (0002); gated so
+        // that branch keeps its case.
+        "src/backlog/completion.ts",
       ],
       exclude: ["src/**/*.test.ts", "src/**/index.ts"],
       thresholds: {

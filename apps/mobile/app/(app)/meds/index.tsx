@@ -16,6 +16,7 @@ import {
 import { SkeletonList } from "../../../src/components/Skeleton";
 import * as instancesRepo from "../../../src/db/repos/reminderInstances";
 import * as remindersRepo from "../../../src/db/repos/reminders";
+import { formatDayTime } from "../../../src/format/datetime";
 import { useUnifiedSync } from "../../../src/sync/pull";
 
 const DAY_NAMES = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"] as const;
@@ -58,20 +59,22 @@ function describeSchedule(reminder: Reminder): string {
       const startLabel = `${start.getHours().toString().padStart(2, "0")}:${start.getMinutes().toString().padStart(2, "0")}`;
       return `Every ${String(schedule.hours)}h starting ${startLabel}`;
     }
+    case "once":
+      return `Once, ${new Date(schedule.at).toLocaleString([], {
+        month: "short",
+        day: "numeric",
+        hour: "2-digit",
+        minute: "2-digit",
+      })}`;
+    case "none":
+      return "In your backlog — no time set";
   }
 }
 
 function formatLastTaken(instance: ReminderInstance | null): string {
-  if (instance?.completedAt === undefined) {
-    return "Never";
-  }
-  const date = new Date(instance.completedAt);
-  return date.toLocaleString([], {
-    month: "short",
-    day: "numeric",
-    hour: "2-digit",
-    minute: "2-digit",
-  });
+  return instance?.completedAt === undefined
+    ? "Never"
+    : formatDayTime(instance.completedAt);
 }
 
 function MedicationRow({

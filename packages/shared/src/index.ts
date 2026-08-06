@@ -12,30 +12,6 @@
  */
 
 /**
- * The medication form's schedule inputs, and the only survivors of the POC
- * types.
- *
- * They are NOT the domain schedule — that is `ScheduleTimes`, a tagged union
- * that also covers `weekly`. These two are the shapes `SchedulePicker` edits,
- * discriminated by a separate `scheduleType` prop rather than by a field, and
- * `meds/new.tsx` converts them to `ScheduleTimes` on save.
- *
- * They stay here rather than moving into the app because the picker and the
- * form both import them, and they are due to be replaced wholesale when the
- * picker grows the `once` and `none` variants.
- */
-export type ScheduleType = "daily" | "interval";
-
-export interface DailySchedule {
-  readonly times: readonly string[];
-}
-
-export interface IntervalSchedule {
-  readonly hours: number;
-  readonly startAt: number;
-}
-
-/**
  * RxNorm search result shape returned by the Convex `rxnorm.search` action.
  *
  * The action maps the RxNorm approximateTerm.json response down to a stable,
@@ -65,6 +41,9 @@ export {
   createReminderInstance,
   dailyTimes,
   intervalTimes,
+  isWellFormedSchedule,
+  noneTimes,
+  onceTimes,
   parseScheduleTimes,
   serializeScheduleTimes,
   weeklyTimes,
@@ -79,7 +58,11 @@ export type {
   InstanceStatus,
   IntervalTimes,
   IntervalTimesWire,
+  NoneTimes,
+  NoneTimesWire,
   NotificationType,
+  OnceTimes,
+  OnceTimesWire,
   Priority,
   Reminder,
   ReminderInstance,
@@ -142,6 +125,25 @@ export type {
   TimelineRow,
   TimelineWindow,
 } from "./timeline/projection";
+
+/**
+ * The missed sweep — the rule that stops an unanswered moment from ceasing to
+ * exist, and the two values ADR 0005 settled for it. Pure; the caller persists
+ * what it decides and supplies the clock.
+ */
+export {
+  GRACE_PERIOD_MS,
+  SWEEP_LOOKBACK_MS,
+  planMissedSweep,
+} from "./sweep/planner";
+export type { MissedVerdict, PlanMissedSweepInput } from "./sweep/planner";
+
+/**
+ * The Backlog — Reminders with no Schedule, and what completing one records.
+ * See ADR 0002 for why the Instance is minted at the moment of the act.
+ */
+export { isBacklog, planBacklogCompletion } from "./backlog/completion";
+export type { BacklogCompletion } from "./backlog/completion";
 
 export {
   shouldApplyRemoteReminder,

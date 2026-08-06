@@ -20,6 +20,7 @@ import {
   registerNotificationResponseHandler,
   rescheduleAll,
 } from "../src/notifications";
+import { runMissedSweep } from "../src/sweep/runner";
 import { syncWorker } from "../src/sync/worker";
 
 function AuthRedirectGate(): ReactElement {
@@ -115,6 +116,54 @@ function NotificationBootstrap(): null {
     void rescheduleAll(userId).catch((error: unknown) => {
       console.error("[notifications] initial reschedule failed:", error);
     });
+
+    return () => {
+      subscription.remove();
+    };
+  }, [user?.id]);
+
+  return null;
+}
+
+/**
+ * Runs the missed sweep when the app comes to the foreground, so a moment
+ * nobody answered is recorded as Missed rather than quietly ceasing to exist.
+ *
+ * Foreground is the trigger `docs/specs/fused-timeline.md` names, and it is the
+ * only one the app can offer: the sweep is a decision about elapsed time, and
+ * nothing runs while the process is asleep. Bounded by the lookback in ADR 0005,
+ * which is what keeps returning after a long absence prompt.
+ *
+ * A failure is logged and dropped, like the reschedule beside it. The sweep is
+ * idempotent and runs again on the next foreground; blocking the UI on it would
+ * trade a delayed `missed` row for an unusable app.
+ *
+ * The spec also asks for a sweep before any Adherence read. There is no
+ * Adherence surface yet — `computeAdherence` still has no caller outside its own
+ * tests — so that trigger arrives with the screen that needs it.
+ */
+function SweepBootstrap(): null {
+  const { user } = useUser();
+
+  useEffect(() => {
+    const userId = user?.id;
+    if (userId === undefined) {
+      return;
+    }
+
+    const sweep = (): void => {
+      void runMissedSweep(userId).catch((error: unknown) => {
+        console.error("[sweep] missed sweep failed:", error);
+      });
+    };
+
+    const subscription = AppState.addEventListener("change", (next) => {
+      if (next === "active") {
+        sweep();
+      }
+    });
+
+    sweep();
 
     return () => {
       subscription.remove();
@@ -264,6 +313,7 @@ export default function RootLayout(): ReactElement {
       <ConvexProviderWithClerk client={convex} useAuth={useAuth}>
         <DatabaseBootstrap />
         <NotificationBootstrap />
+        <SweepBootstrap />
         <SyncBootstrap />
         <AuthRedirectGate />
       </ConvexProviderWithClerk>

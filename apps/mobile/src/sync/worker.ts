@@ -55,7 +55,9 @@ type ReminderSchedulePayload =
       readonly type: "weekly";
       readonly daysOfWeek: Weekday[];
       readonly times: string[];
-    };
+    }
+  | { readonly type: "once"; readonly at: number }
+  | { readonly type: "none" };
 
 /**
  * Payload written by `db/repos/reminders.ts`. A `delete` entry carries only

@@ -5,7 +5,7 @@ import type {
   ScheduleTimes,
   Weekday,
 } from "@taskrx/shared";
-import { PRIORITIES, REMINDER_KINDS, dailyTimes } from "@taskrx/shared";
+import { PRIORITIES, REMINDER_KINDS, noneTimes } from "@taskrx/shared";
 
 import { getDb } from "../index";
 
@@ -147,14 +147,21 @@ function toWeekdayArray(value: unknown): readonly Weekday[] {
  * consumes — that one exists for the archived C# API and is not what migration
  * 005 writes.
  *
- * An unrecognized or malformed blob degrades to an empty daily schedule, which
- * produces no notifications, rather than throwing. Losing a schedule is
- * recoverable by editing the reminder; a crash on the list screen is not.
+ * An unrecognized or malformed blob degrades to `none` rather than throwing: a
+ * crash on the list screen is not recoverable, and a row whose schedule cannot
+ * be read has, as far as this device can tell, no schedule.
+ *
+ * It used to degrade to an empty daily schedule. That is precisely the
+ * misconfiguration the `none` variant was added to replace — it produces no
+ * Occurrences while claiming to be a daily schedule — and it also stranded the
+ * row: there is no edit screen for an existing reminder, so the Backlog's "give
+ * it a time" is the only way back. Degrading to `none` puts a corrupt row
+ * exactly where it can be repaired.
  */
 function parseSchedule(json: string): ScheduleTimes {
   const parsed = parseJson(json);
   if (!isRecord(parsed)) {
-    return dailyTimes([]);
+    return noneTimes();
   }
 
   switch (parsed.type) {
@@ -171,8 +178,16 @@ function parseSchedule(json: string): ScheduleTimes {
         daysOfWeek: toWeekdayArray(parsed.daysOfWeek),
         times: toStringArray(parsed.times),
       };
+    case "once":
+      // A `once` with no readable instant names no moment at all, so it lands
+      // with the other unreadable blobs above.
+      return typeof parsed.at === "number"
+        ? { type: "once", at: parsed.at }
+        : noneTimes();
+    case "none":
+      return noneTimes();
     default:
-      return dailyTimes([]);
+      return noneTimes();
   }
 }
 

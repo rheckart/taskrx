@@ -23,6 +23,7 @@ import {
 import { SkeletonList } from "../../src/components/Skeleton";
 import * as instancesRepo from "../../src/db/repos/reminderInstances";
 import * as remindersRepo from "../../src/db/repos/reminders";
+import { runMissedSweep } from "../../src/sweep/runner";
 import { useUnifiedSync } from "../../src/sync/pull";
 
 /**
@@ -36,6 +37,13 @@ import { useUnifiedSync } from "../../src/sync/pull";
  *
  * Medications only, per issue #10. The projection is already Kind-neutral, so
  * the fusion in #13 widens the read below rather than rewriting anything.
+ *
+ * The one thing it does beyond read-and-render is run the missed sweep, so that
+ * a moment which has run out of time reads as Missed here rather than as still
+ * waiting for an answer. That is not a decision either — `runMissedSweep` wraps
+ * a pure planner — only an ordering, and the ordering is deliberate: the day is
+ * rendered first and re-projected after, so a long absence never leaves someone
+ * looking at a skeleton while hundreds of rows are written.
  */
 
 /** Local midnight to local end-of-day, `offset` days from the day holding `now`. */
@@ -192,7 +200,7 @@ export default function HomeScreen(): ReactElement {
     const window = dayWindow(dayOffset, now);
     setWindowStart(window.start);
 
-    try {
+    const project = async (): Promise<void> => {
       // `includeInactive` because a stopped medication's recorded Instances are
       // still part of the day. Which of these predict new Occurrences is the
       // projection's decision, not this screen's — it skips inactive ones.
@@ -208,11 +216,37 @@ export default function HomeScreen(): ReactElement {
 
       setRows(projectTimeline({ reminders, instances, window, now }));
       setError(null);
+    };
+
+    try {
+      await project();
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : "Unknown error");
     } finally {
       setLoading(false);
       setRefreshing(false);
+    }
+
+    // The sweep runs AFTER the day is on screen, and the day is re-projected
+    // only if it recorded something.
+    //
+    // Ordering it first would have been simpler to read, and wrong: someone
+    // coming back after a week away has a sweep with hundreds of rows to write,
+    // each its own insert and sync-queue entry, and the timeline would sit on a
+    // skeleton until all of them landed — against the criterion that opening the
+    // app after a long absence stays responsive. Rows the sweep settles were
+    // rendered a moment ago as `pending`, which is what they were.
+    //
+    // `SweepBootstrap` runs it on foreground too; the two are serialized, so
+    // whichever arrives second finds nothing to do.
+    try {
+      if ((await runMissedSweep(userId, now)) > 0) {
+        await project();
+      }
+    } catch (err: unknown) {
+      // Not surfaced: the timeline above is correct either way, and the sweep
+      // runs again on the next foreground.
+      console.error("[sweep] sweep after timeline read failed:", err);
     }
   }, [userId, dayOffset]);
 
@@ -359,6 +393,9 @@ export default function HomeScreen(): ReactElement {
       <View style={styles.footer}>
         <Link href="/meds" style={styles.footerLink}>
           Medications
+        </Link>
+        <Link href="/backlog" style={styles.footerLink}>
+          Backlog
         </Link>
         <Link href="/dose/history" style={styles.footerLink}>
           History

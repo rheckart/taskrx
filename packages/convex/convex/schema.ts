@@ -74,7 +74,15 @@ const weekdayValidator = v.union(
  * union out means Convex rejects the write, and the generated `Doc` type is a
  * tagged union the handlers can `switch` over exhaustively.
  *
- * Times are `"HH:MM"` local wall-clock strings; `startAt` is unix ms.
+ * Times are `"HH:MM"` local wall-clock strings; `startAt` and `at` are unix ms.
+ *
+ * `once` and `none` widen the union with the domain one in `@taskrx/shared`
+ * (issue #12); both are closed unions and the spec requires them to move
+ * together, so a schedule this validator admits is one the device can express
+ * and vice versa. `once` carries an instant rather than an optional date — see
+ * ADR 0006 — and `none` is the Backlog: a Reminder that produces no Occurrences
+ * at all, which until now was only expressible by accident as a `daily`
+ * schedule with no times.
  */
 export const scheduleTimesValidator = v.union(
   v.object({
@@ -90,6 +98,13 @@ export const scheduleTimesValidator = v.union(
     type: v.literal("weekly"),
     daysOfWeek: v.array(weekdayValidator),
     times: v.array(v.string()),
+  }),
+  v.object({
+    type: v.literal("once"),
+    at: v.number(),
+  }),
+  v.object({
+    type: v.literal("none"),
   })
 );
 

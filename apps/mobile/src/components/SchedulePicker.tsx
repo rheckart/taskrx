@@ -1,36 +1,54 @@
 import type {
-  DailySchedule,
-  IntervalSchedule,
-  ScheduleType,
+  DailyTimes,
+  IntervalTimes,
+  NoneTimes,
+  OnceTimes,
 } from "@taskrx/shared";
-import { useCallback, useMemo } from "react";
+import { isWellFormedSchedule } from "@taskrx/shared";
+import { useCallback } from "react";
 import type { ReactElement } from "react";
 import { Pressable, StyleSheet, Text, TextInput, View } from "react-native";
 
 /**
- * Schedule picker for the medication form.
+ * Schedule picker for the reminder form.
  *
- * Renders different inputs depending on `scheduleType`:
- *   - `daily`:    a list of HH:MM time slots the user can add/remove
- *   - `interval`: an hours field + a start datetime field
+ * It speaks the domain union directly — one value, discriminated by its own
+ * `type` field. It used to speak a POC pair (`DailySchedule` / `IntervalSchedule`
+ * with no discriminator, told apart by a separate `scheduleType` prop) that the
+ * form converted at save; `@taskrx/shared` carried those two shapes for this
+ * component alone and recorded that they were "due to be replaced wholesale when
+ * the picker grows the `once` and `none` variants". This is that.
  *
- * The component is fully controlled: the parent owns the value and
- * receives change callbacks. The serialized shape matches the SQLite
- * `schedule_times` JSON column (see plan §6.1):
- *   - daily:    `{ times: ["09:00", "21:00"] }`
- *   - interval: `{ hours: 8, startAt: <unix ms> }`
+ * Four of the five variants are editable here:
+ *   - `daily`:    a list of HH:MM time slots
+ *   - `interval`: an hours field and a start instant
+ *   - `once`:     a single instant (ADR 0006 — an instant, never a bare date)
+ *   - `none`:     nothing to edit; the reminder goes to the Backlog
  *
- * The `value` shape is discriminated by the `scheduleType` prop, not by
- * an internal `type` field — this matches `@taskrx/shared`'s
- * `DailySchedule` / `IntervalSchedule` types which have no discriminator.
+ * `weekly` is deliberately outside `EditableSchedule`. It has no UI yet, and
+ * narrowing the prop says so in the type rather than leaving a branch that
+ * renders an apology.
  */
 
-export type ScheduleValue = DailySchedule | IntervalSchedule;
+/** The schedule variants this component can edit. `weekly` has no UI yet. */
+export type EditableSchedule =
+  | DailyTimes
+  | IntervalTimes
+  | OnceTimes
+  | NoneTimes;
+
+export type EditableScheduleType = EditableSchedule["type"];
+
+/**
+ * Whether a schedule can be saved. The rule itself is `isWellFormedSchedule` in
+ * `@taskrx/shared` — what makes a schedule usable is a property of the schedule,
+ * and both surfaces that set one ask the same question.
+ */
+export { isWellFormedSchedule };
 
 export interface SchedulePickerProps {
-  readonly scheduleType: ScheduleType;
-  readonly value: ScheduleValue;
-  readonly onChange: (next: ScheduleValue) => void;
+  readonly value: EditableSchedule;
+  readonly onChange: (next: EditableSchedule) => void;
 }
 
 const TIME_PATTERN = /^([01]\d|2[0-3]):([0-5]\d)$/;
@@ -43,11 +61,6 @@ function pad2(n: number): string {
   return n.toString().padStart(2, "0");
 }
 
-function nowLocalDateTimeInputValue(): string {
-  const d = new Date();
-  return `${d.getFullYear().toString().padStart(4, "0")}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}T${pad2(d.getHours())}:${pad2(d.getMinutes())}`;
-}
-
 function localDateTimeInputToMs(value: string): number | null {
   const parsed = new Date(value).getTime();
   return Number.isFinite(parsed) ? parsed : null;
@@ -58,53 +71,73 @@ function msToLocalDateTimeInputValue(ms: number): string {
   return `${d.getFullYear().toString().padStart(4, "0")}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}T${pad2(d.getHours())}:${pad2(d.getMinutes())}`;
 }
 
+/**
+ * A fresh value of `type`, used when the person switches variant. Switching
+ * replaces the value rather than carrying fields across, because the variants
+ * share no field: an hours count means nothing to a single moment.
+ *
+ * These are presentation defaults — where the form starts someone off — not
+ * domain rules, which is why they live here and `isWellFormedSchedule` does not.
+ */
+export function defaultSchedule(type: EditableScheduleType): EditableSchedule {
+  switch (type) {
+    case "daily":
+      return { type: "daily", times: ["09:00"] };
+    case "interval":
+      return { type: "interval", hours: 8, startAt: Date.now() };
+    case "once":
+      // An hour out, so the moment is ahead of the person filling the form in
+      // rather than already behind them.
+      return { type: "once", at: Date.now() + 3_600_000 };
+    case "none":
+      return { type: "none" };
+  }
+}
+
 export function SchedulePicker({
-  scheduleType,
   value,
   onChange,
 }: SchedulePickerProps): ReactElement {
-  if (scheduleType === "daily") {
-    return <DailyPicker value={value} onChange={onChange} />;
+  switch (value.type) {
+    case "daily":
+      return <DailyPicker value={value} onChange={onChange} />;
+    case "interval":
+      return <IntervalPicker value={value} onChange={onChange} />;
+    case "once":
+      return <OncePicker value={value} onChange={onChange} />;
+    case "none":
+      return <NoneNotice />;
   }
-  return <IntervalPicker value={value} onChange={onChange} />;
 }
 
 function DailyPicker({
   value,
   onChange,
 }: {
-  readonly value: ScheduleValue;
-  readonly onChange: (next: ScheduleValue) => void;
+  readonly value: DailyTimes;
+  readonly onChange: (next: EditableSchedule) => void;
 }): ReactElement {
-  const times: readonly string[] = useMemo<readonly string[]>(() => {
-    if ("times" in value && Array.isArray(value.times)) {
-      return value.times.filter((t): t is string => typeof t === "string");
-    }
-    return [];
-  }, [value]);
+  const times = value.times;
 
   const updateTime = useCallback(
     (index: number, next: string): void => {
-      const updated = times.map((t, i) => (i === index ? next : t));
-      const daily: DailySchedule = { times: updated };
-      onChange(daily);
+      onChange({
+        type: "daily",
+        times: times.map((t, i) => (i === index ? next : t)),
+      });
     },
     [times, onChange]
   );
 
   const removeTime = useCallback(
     (index: number): void => {
-      const filtered = times.filter((_, i) => i !== index);
-      const daily: DailySchedule = { times: filtered };
-      onChange(daily);
+      onChange({ type: "daily", times: times.filter((_, i) => i !== index) });
     },
     [times, onChange]
   );
 
   const addTime = useCallback((): void => {
-    const next = [...times, "09:00"];
-    const daily: DailySchedule = { times: next };
-    onChange(daily);
+    onChange({ type: "daily", times: [...times, "09:00"] });
   }, [times, onChange]);
 
   return (
@@ -152,38 +185,76 @@ function DailyPicker({
   );
 }
 
-function IntervalPicker({
+/**
+ * A local wall-clock instant, entered as text. Shared by the two variants that
+ * carry one — an interval's start and a single moment — so the format, the
+ * parse and the "that is in the past" warning are written once.
+ */
+function InstantField({
+  label,
+  hint,
   value,
   onChange,
 }: {
-  readonly value: ScheduleValue;
-  readonly onChange: (next: ScheduleValue) => void;
+  readonly label: string;
+  readonly hint: string;
+  readonly value: number;
+  readonly onChange: (next: number) => void;
 }): ReactElement {
-  const hours =
-    "hours" in value && typeof value.hours === "number" ? value.hours : 8;
-  const startAt =
-    "startAt" in value && typeof value.startAt === "number"
-      ? value.startAt
-      : Date.now();
-
-  const onHoursChange = useCallback(
-    (next: string): void => {
-      const parsed = Number.parseInt(next, 10);
-      const safe = Number.isFinite(parsed) && parsed > 0 ? parsed : 0;
-      const interval: IntervalSchedule = { hours: safe, startAt };
-      onChange(interval);
-    },
-    [startAt, onChange]
-  );
-
-  const onStartChange = useCallback(
+  const onText = useCallback(
     (next: string): void => {
       const ms = localDateTimeInputToMs(next);
       if (ms === null) {
         return;
       }
-      const interval: IntervalSchedule = { hours, startAt: ms };
-      onChange(interval);
+      onChange(ms);
+    },
+    [onChange]
+  );
+
+  return (
+    <View>
+      <Text style={styles.label}>{label}</Text>
+      <TextInput
+        style={styles.input}
+        value={msToLocalDateTimeInputValue(value)}
+        onChangeText={onText}
+        placeholder="YYYY-MM-DDTHH:MM"
+        placeholderTextColor="#999"
+        autoCorrect={false}
+        autoCapitalize="none"
+      />
+      {value <= Date.now() ? (
+        <Text style={styles.invalidHint}>
+          That is in the past — nothing will fire for it.
+        </Text>
+      ) : null}
+      <Text style={styles.hint}>{hint}</Text>
+    </View>
+  );
+}
+
+function IntervalPicker({
+  value,
+  onChange,
+}: {
+  readonly value: IntervalTimes;
+  readonly onChange: (next: EditableSchedule) => void;
+}): ReactElement {
+  const { hours, startAt } = value;
+
+  const onHoursChange = useCallback(
+    (next: string): void => {
+      const parsed = Number.parseInt(next, 10);
+      const safe = Number.isFinite(parsed) && parsed > 0 ? parsed : 0;
+      onChange({ type: "interval", hours: safe, startAt });
+    },
+    [startAt, onChange]
+  );
+
+  const onStartChange = useCallback(
+    (startAt: number): void => {
+      onChange({ type: "interval", hours, startAt });
     },
     [hours, onChange]
   );
@@ -200,19 +271,46 @@ function IntervalPicker({
         placeholderTextColor="#999"
       />
 
-      <Text style={styles.label}>First dose at</Text>
-      <TextInput
-        style={styles.input}
-        value={msToLocalDateTimeInputValue(startAt)}
-        onChangeText={onStartChange}
-        placeholder={nowLocalDateTimeInputValue()}
-        placeholderTextColor="#999"
-        autoCorrect={false}
-        autoCapitalize="none"
+      <InstantField
+        label="First reminder at"
+        hint={`Format: YYYY-MM-DDTHH:MM (local time). Reminders fire every ${hours.toString()} hour${hours === 1 ? "" : "s"} from this start.`}
+        value={startAt}
+        onChange={onStartChange}
       />
+    </View>
+  );
+}
+
+function OncePicker({
+  value,
+  onChange,
+}: {
+  readonly value: OnceTimes;
+  readonly onChange: (next: EditableSchedule) => void;
+}): ReactElement {
+  const onAtChange = useCallback(
+    (at: number): void => {
+      onChange({ type: "once", at });
+    },
+    [onChange]
+  );
+
+  return (
+    <InstantField
+      label="Happens at"
+      hint="Format: YYYY-MM-DDTHH:MM (local time). This reminds you once, then it is done."
+      value={value.at}
+      onChange={onAtChange}
+    />
+  );
+}
+
+function NoneNotice(): ReactElement {
+  return (
+    <View>
       <Text style={styles.hint}>
-        Format: YYYY-MM-DDTHH:MM (local time). Reminders fire every {hours} hour
-        {hours === 1 ? "" : "s"} from this start.
+        No time at all. This goes to your Backlog, where you can complete it
+        whenever you get to it — or give it a time later.
       </Text>
     </View>
   );

@@ -53,6 +53,18 @@ export interface CreateReminderInstanceRowInput {
   readonly reminderId: string;
   readonly reminderKind: ReminderKind;
   readonly scheduledTime: number;
+  /**
+   * What the row starts as. Defaults to `pending`, which is what materializing
+   * an occurrence someone is about to answer means.
+   *
+   * Two callers open a row that is already settled, and neither is a user
+   * answering a prompt: the missed sweep mints `missed` for a moment that ran
+   * out of time (`src/sweep/runner.ts`), and the Backlog mints `completed` for a
+   * commitment that never had a moment at all (ADR 0002). Both decide the value
+   * in `@taskrx/shared`; this parameter is how the decision reaches the row.
+   */
+  readonly status?: InstanceStatus;
+  readonly completedAt?: number;
 }
 
 export interface ListInstancesFilter {
@@ -88,8 +100,8 @@ function rowToInstance(row: ReminderInstanceRow): ReminderInstance {
 }
 
 /**
- * Materialize a new pending instance for a scheduled occurrence.
- * Enqueues a `create` operation to the sync queue.
+ * Materialize a new instance for a scheduled occurrence — `pending` unless the
+ * caller says otherwise. Enqueues a `create` operation to the sync queue.
  */
 export async function create(
   input: CreateReminderInstanceRowInput
@@ -97,18 +109,22 @@ export async function create(
   const db = await getDb();
   const now = Date.now();
   const id = generateId();
+  const status = input.status ?? "pending";
+  const completedAt = input.completedAt ?? null;
 
   await db.runAsync(
     `INSERT INTO reminder_instances (
       id, reminder_id, user_id, reminder_kind, scheduled_time,
       status, completed_at, snoozed_until, snooze_count, notes,
       created_at, updated_at, sync_status
-    ) VALUES (?, ?, ?, ?, ?, 'pending', NULL, NULL, 0, NULL, ?, ?, 'pending')`,
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, NULL, 0, NULL, ?, ?, 'pending')`,
     id,
     input.reminderId,
     input.userId,
     input.reminderKind,
     input.scheduledTime,
+    status,
+    completedAt,
     now,
     now
   );
@@ -124,8 +140,8 @@ export async function create(
     reminderId: input.reminderId,
     reminderKind: input.reminderKind,
     scheduledTime: input.scheduledTime,
-    status: "pending",
-    completedAt: null,
+    status,
+    completedAt,
     snoozedUntil: null,
     snoozeCount: 0,
     notes: null,
