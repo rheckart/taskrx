@@ -8,6 +8,116 @@ for commit discipline (POC tags use `0.x.x`).
 
 ## [Unreleased]
 
+### 2026-08-06 — Missed doses stop vanishing, and a Reminder can happen once or never
+
+Closes #11 and #12. Two decisions were taken before either was written, as both
+tickets demand, and both are ADRs rather than comments so the next reader finds
+them where the other four live.
+
+- **ADR 0005 — a Grace Period of two hours and a lookback of seven days.** Two
+  hours is the width of "I took it with lunch instead of at breakfast"; below an
+  hour the sweep converts ordinary lateness into a permanent `missed` row, and
+  above about six the morning is still unsettled when the evening comes due.
+  Seven days is long enough to cover a phone left flat over a long weekend and
+  short enough that returning after months does not materialise thousands of
+  rows on one foreground. The consequence is stated rather than hidden: a moment
+  more than seven days old that was never answered stays absent permanently, so
+  a long gap reads as no data rather than as a wall of Missed.
+
+- **ADR 0006 — `once` carries an instant; all-day is not a variant yet.** Every
+  consumer downstream is keyed on an instant — occurrence generation, the
+  notification Horizon, the timeline's sort and its pairing key, and
+  `scheduledTime` with its four time-ordered indexes — so a nullable time would
+  have five consumers inventing five different midnights. An all-day Reminder
+  differs in behaviour, not just in precision, so it earns its own variant when
+  the timeline is ready to place one.
+
+- `feat(sweep): record what nobody answered` — `planMissedSweep` in
+  `@taskrx/shared`, pure and under the 100% gate. A moment out of time is in one
+  of two states and the caller does different things with them: no Instance
+  exists and one is minted already `missed`, or a `pending` Instance exists and
+  moves to `missed`. An answer is never overruled, `snoozed` included. The
+  device half (`src/sweep/runner.ts`) reads, hands over, and writes; its calls
+  are chained, because two overlapping sweeps would both read "no Instance at
+  09:00" and the fix for a moment that vanished would be a moment recorded
+  twice. It runs on foreground and again before the timeline reads, so a moment
+  the sweep has judged is not rendered as still answerable.
+
+  This is what makes Adherence honest: it counts Instances and excludes
+  `pending` ones, and until now the only moments that ever became rows were the
+  ones somebody acted on — which is why taking 1 dose in 30 scored 100%.
+
+- `feat(schedule): let a reminder happen once, or never` — the domain union and
+  the Convex validator widened together, as the spec requires of two closed
+  unions. `once` yields exactly one Occurrence and is spent; `none` yields none
+  at all, which is the Backlog. `none` replaces a misconfiguration that used to
+  impersonate it — an empty `daily` schedule also produces nothing — and
+  `isBacklog` is the one rule that tells the two apart.
+
+- `feat(backlog): a surface for commitments with no moment` — rendered from
+  `reminders` rows, because ADR 0002 makes a Backlog Reminder invisible to any
+  query over Instances until it is acted on. Completing one goes through
+  `planBacklogCompletion`, which mints the Instance at the moment of the act
+  with `scheduledTime` equal to `completedAt`; giving one a time is the ordinary
+  reminder update, and moves it onto the timeline.
+
+- `refactor(picker): speak the domain union` — `SchedulePicker` took a POC pair
+  with no discriminator, told apart by a separate `scheduleType` prop, and
+  `meds/new.tsx` converted at save. `@taskrx/shared` carried `ScheduleType`,
+  `DailySchedule` and `IntervalSchedule` for that component alone and recorded
+  they were "due to be replaced wholesale when the picker grows the `once` and
+  `none` variants". They are gone, and with them the last mapping between two
+  spellings of a schedule.
+
+- `fix(sweep): close the code-review findings` — the spec axis caught that the
+  planner **invented misses predating the Reminder itself**. Day-based Occurrence
+  generation has no start of its own, so a medication added this morning was
+  swept across the whole lookback and recorded as a week of doses nobody could
+  have taken — Adherence falling for a treatment that had not begun, which is
+  the exact inverse of what #11 asks for. Every fixture used `createdAt: 0`, so
+  no case could see it. The sweep now starts at the later of the lookback and
+  the Reminder's creation, and ADR 0005 records that second floor.
+
+  Three more from the same pass. The timeline **awaited** the sweep before
+  rendering, so the long-absence case the lookback exists for would have sat on
+  a skeleton through hundreds of writes; the day now renders first and
+  re-projects only if the sweep recorded something. A malformed `schedule`
+  column degraded to an empty `daily` schedule — reintroducing, at the read
+  path, the misconfiguration this ticket removed — and now degrades to `none`,
+  which also puts a corrupt row where it can be repaired, since the Backlog's
+  "give it a time" is the only edit path an existing reminder has. And schedule
+  validity had been written inside `SchedulePicker`, a domain rule outside the
+  one seam the spec names; it is `isWellFormedSchedule` in `@taskrx/shared` now,
+  asked by both surfaces that set a schedule.
+
+  The standards axis flagged a per-reminder ceiling in the planner as
+  contradicting ADR 0005's rejection of row bounds. It is a runaway guard rather
+  than the sweep's bound — the Occurrence engine counts rather than ranges, so
+  some count must be passed — and the ADR now says so rather than leaving the
+  two to look alike.
+
+Gates: `npm run verify` — 432 tests across three workspaces, 159 migration
+checks, harness guards. Every new assertion was mutation-checked separately: 10
+against the sweep planner, 4 against the backlog rule, 5 against the sweep
+runner, 4 against the schedule union and 2 against the Convex validator, each
+caught by the case naming it. The 1-of-30 case is now stated as a test rather
+than as a claim: the planner's verdicts are fed to `computeAdherence`, which
+reports 100% before the sweep and under 10% after.
+
+**Not decided here, and worth deciding:** completing a Backlog Reminder leaves
+it in the Backlog. The Instance records the act, but nothing in the domain says
+whether an unscheduled commitment is one-shot ("call the pharmacy") or standing
+("painkiller as needed"), and inventing a retirement rule for one Kind would
+have been guesswork on the other. Someone finished with one stops the Reminder
+itself. This belongs with the Task work in #13, where one-off tasks become the
+common case.
+
+**Also still open, and unchanged by this:** answering an occurrence still mints
+a duplicate `pending` Instance beside the answered one. The sweep now settles
+both rather than leaving the survivor `pending` forever, which is the right
+behaviour for rows that exist — but they should not both exist. It has no issue
+of its own.
+
 ### 2026-08-06 — The Today timeline
 
 Closes #10. The home surface was a stub; it is now the day as one ordered
