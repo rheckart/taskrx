@@ -174,6 +174,108 @@ describe("projectTimeline union of occurrences and instances", () => {
     ]);
   });
 
+  /**
+   * Found on a device, not in a test: the timeline rendered the 17:36 moment
+   * twice, once `pending` and once `completed`, and React raised "Encountered
+   * two children with the same key".
+   *
+   * Two Instances sharing one pairing is not hypothetical — answering currently
+   * mints a duplicate `pending` Instance beside the `completed` one, a defect
+   * recorded in `docs/CHANGELOG.md` on 2026-08-03 and still open. The pairing is
+   * what identifies a moment on the timeline, so it must hold across stored rows
+   * too, not only between a stored row and a predicted one. Rendering a broken
+   * list because the data upstream is broken is a second defect, not a symptom.
+   *
+   * The duplicate here is deliberately the *newer* row and the one that sorts
+   * first by id — the shape the live defect actually produces, since the stray
+   * `pending` is minted after the answer. An implementation resolving this on
+   * recency or on id alone would pick the wrong one and show a medication that
+   * was taken as still outstanding.
+   */
+  it.each([
+    ["answer first", ["inst-a-done", "inst-b-pending"]],
+    ["duplicate first", ["inst-b-pending", "inst-a-done"]],
+  ] as const)(
+    "keeps the answer, not the stray pending row (%s)",
+    (_order, ids) => {
+      const byId = {
+        "inst-a-done": answered({
+          id: "inst-a-done",
+          status: "completed",
+          updatedAt: 10,
+        }),
+        "inst-b-pending": answered({
+          id: "inst-b-pending",
+          status: "pending",
+          updatedAt: 99,
+        }),
+      };
+
+      const rows = projectTimeline({
+        reminders: [medication()],
+        instances: ids.map((id) => byId[id]),
+        window: DAY,
+        now: DAY_START,
+      });
+
+      expect(shape(rows)).toEqual([[at(9), "completed"]]);
+      expect(rows[0]?.instanceId).toBe("inst-a-done");
+    }
+  );
+
+  it("keeps the newer answer when two answers claim the same moment", () => {
+    const older = answered({
+      id: "inst-old",
+      status: "skipped",
+      updatedAt: 10,
+    });
+    const newer = answered({
+      id: "inst-new",
+      status: "completed",
+      updatedAt: 20,
+    });
+
+    // Both orders, because which one the caller happens to list first is not
+    // part of the rule.
+    for (const instances of [
+      [older, newer],
+      [newer, older],
+    ]) {
+      const rows = projectTimeline({
+        reminders: [medication()],
+        instances,
+        window: DAY,
+        now: DAY_START,
+      });
+
+      expect(rows).toHaveLength(1);
+      expect(rows[0]?.instanceId).toBe("inst-new");
+    }
+  });
+
+  /** Equal timestamps still have to resolve, or the row flickers between renders. */
+  it("settles on one row when the duplicates are the same age", () => {
+    const instances = [
+      answered({ id: "inst-b", status: "completed", updatedAt: 10 }),
+      answered({ id: "inst-a", status: "skipped", updatedAt: 10 }),
+    ];
+    const forwards = projectTimeline({
+      reminders: [medication()],
+      instances,
+      window: DAY,
+      now: DAY_START,
+    });
+    const backwards = projectTimeline({
+      reminders: [medication()],
+      instances: [...instances].reverse(),
+      window: DAY,
+      now: DAY_START,
+    });
+
+    expect(forwards).toHaveLength(1);
+    expect(forwards[0]?.instanceId).toBe(backwards[0]?.instanceId);
+  });
+
   it("does not let one reminder's answer settle another's occurrence", () => {
     const rows = projectTimeline({
       reminders: [

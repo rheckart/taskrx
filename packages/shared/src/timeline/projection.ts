@@ -118,6 +118,36 @@ function withinWindow(moment: number, window: TimelineWindow): boolean {
   return moment >= window.start && moment <= window.end;
 }
 
+/**
+ * Which of two Instances claiming the same pairing is the one to show.
+ *
+ * Two should not exist. One does, today: answering mints a duplicate `pending`
+ * Instance beside the `completed` one — recorded in `docs/CHANGELOG.md` on
+ * 2026-08-03, still open, and found here because a device rendered the same
+ * moment twice and React raised "two children with the same key".
+ *
+ * The pairing is what identifies a moment on the timeline, so it has to hold
+ * across stored rows as well as between stored and predicted ones. Resolving it
+ * is not a fix for the duplicate — the rows are still both written and both
+ * counted by adherence — but the timeline showing a taken medication as
+ * simultaneously taken and outstanding is a defect of its own.
+ *
+ * An answer beats `pending`, because a recorded answer is a fact and `pending`
+ * is only the absence of one. Between two answers the later `updatedAt` wins,
+ * and an exact tie falls to the instance id so the row cannot flicker between
+ * renders of identical data.
+ */
+function preferredInstance(
+  a: ReminderInstance,
+  b: ReminderInstance
+): ReminderInstance {
+  const aAnswered = a.status !== "pending";
+  const bAnswered = b.status !== "pending";
+  if (aAnswered !== bAnswered) return aAnswered ? a : b;
+  if (a.updatedAt !== b.updatedAt) return a.updatedAt > b.updatedAt ? a : b;
+  return a.id < b.id ? a : b;
+}
+
 export function projectTimeline(
   input: ProjectTimelineInput
 ): readonly TimelineRow[] {
@@ -128,11 +158,13 @@ export function projectTimeline(
     byId.set(reminder.id, reminder);
   }
 
-  const rows: TimelineRow[] = [];
-  const claimed = new Set<string>();
-
   // Stored answers first, so they own their moment before any prediction is
-  // considered for it.
+  // considered for it. Keyed by the pairing rather than appended, so two
+  // Instances claiming one moment collapse to the one that should be shown.
+  const claimed = new Map<
+    string,
+    { readonly instance: ReminderInstance; readonly reminder: Reminder }
+  >();
   for (const instance of instances) {
     if (!withinWindow(instance.scheduledTime, window)) continue;
 
@@ -141,7 +173,19 @@ export function projectTimeline(
     // timeline that names nothing.
     if (reminder === undefined) continue;
 
-    claimed.add(timelineRowKey(instance.reminderId, instance.scheduledTime));
+    const key = timelineRowKey(instance.reminderId, instance.scheduledTime);
+    const held = claimed.get(key);
+    claimed.set(key, {
+      reminder,
+      instance:
+        held === undefined
+          ? instance
+          : preferredInstance(held.instance, instance),
+    });
+  }
+
+  const rows: TimelineRow[] = [];
+  for (const { instance, reminder } of claimed.values()) {
     rows.push({
       reminderId: reminder.id,
       instanceId: instance.id,
