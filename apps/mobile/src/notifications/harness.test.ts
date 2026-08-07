@@ -314,7 +314,7 @@ describe("instance-at", () => {
 
   it("reports the instance id and status for the exact pairing", async () => {
     // Any status, not just pending: case 9 reads this back AFTER the dose has
-    // been answered, and `findPendingForOccurrence` would report none for a
+    // been answered, and `findAnswerableForOccurrence` would report none for a
     // row that exists and is completed.
     const at = Date.UTC(2026, 7, 3, 14, 22, 0);
     mocks.instancesList.mockResolvedValue([

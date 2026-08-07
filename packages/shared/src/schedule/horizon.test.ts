@@ -8,7 +8,7 @@ import {
   weeklyTimes,
 } from "../domain/index";
 
-import { selectUpcomingOccurrences } from "./horizon";
+import { selectMedicationHorizon } from "./horizon";
 
 function reminder(
   id: string,
@@ -28,6 +28,18 @@ function reminder(
   });
 }
 
+function task(id: string, schedule: ScheduleTimes): Reminder {
+  return createReminder({
+    id,
+    userId: "user-1",
+    kind: "task",
+    name: `Task ${id}`,
+    schedule,
+    createdAt: 0,
+    updatedAt: 0,
+  });
+}
+
 function fireAtOf(
   occurrences: readonly { readonly fireAt: number }[],
   index: number
@@ -41,9 +53,9 @@ function fireAtOf(
  */
 const NOON_UTC = new Date("2026-07-26T12:00:00Z").getTime();
 
-describe("selectUpcomingOccurrences", () => {
+describe("selectMedicationHorizon", () => {
   it("returns an empty array when maxTotal is 0", () => {
-    const result = selectUpcomingOccurrences(
+    const result = selectMedicationHorizon(
       [reminder("r1", dailyTimes(["09:00"]))],
       NOON_UTC,
       0
@@ -52,7 +64,7 @@ describe("selectUpcomingOccurrences", () => {
   });
 
   it("returns an empty array when maxTotal is negative", () => {
-    const result = selectUpcomingOccurrences(
+    const result = selectMedicationHorizon(
       [reminder("r1", dailyTimes(["09:00"]))],
       NOON_UTC,
       -5
@@ -61,13 +73,13 @@ describe("selectUpcomingOccurrences", () => {
   });
 
   it("returns an empty array when there are no reminders", () => {
-    expect(selectUpcomingOccurrences([], NOON_UTC, 64)).toHaveLength(0);
+    expect(selectMedicationHorizon([], NOON_UTC, 64)).toHaveLength(0);
   });
 
   it("skips inactive reminders entirely", () => {
     const active = reminder("active", dailyTimes(["09:00"]));
     const inactive = reminder("inactive", dailyTimes(["09:30"]), false);
-    const result = selectUpcomingOccurrences([active, inactive], NOON_UTC, 64);
+    const result = selectMedicationHorizon([active, inactive], NOON_UTC, 64);
     expect(result.length).toBeGreaterThan(0);
     expect(result.every((o) => o.reminderId === "active")).toBe(true);
   });
@@ -76,7 +88,7 @@ describe("selectUpcomingOccurrences", () => {
     const reminders = Array.from({ length: 10 }, (_, i) =>
       reminder(`r${String(i)}`, dailyTimes(["09:00"]))
     );
-    const result = selectUpcomingOccurrences(reminders, NOON_UTC, 64);
+    const result = selectMedicationHorizon(reminders, NOON_UTC, 64);
     expect(result).toHaveLength(64);
   });
 
@@ -86,7 +98,7 @@ describe("selectUpcomingOccurrences", () => {
       reminder("b", dailyTimes(["12:00", "18:00"])),
       reminder("c", weeklyTimes([0, 3], ["06:00", "15:00"])),
     ];
-    const result = selectUpcomingOccurrences(reminders, NOON_UTC, 12);
+    const result = selectMedicationHorizon(reminders, NOON_UTC, 12);
     const times = result.map((o) => o.fireAt);
     expect(times).toEqual([...times].sort((x, y) => x - y));
   });
@@ -100,7 +112,7 @@ describe("selectUpcomingOccurrences", () => {
       "b",
       intervalTimes(1, new Date("2026-07-26T12:30:00Z").getTime())
     );
-    const result = selectUpcomingOccurrences([a, b], NOON_UTC, 4);
+    const result = selectMedicationHorizon([a, b], NOON_UTC, 4);
     expect(result.map((o) => o.reminderId)).toEqual(["b", "a", "b", "a"]);
   });
 
@@ -110,14 +122,14 @@ describe("selectUpcomingOccurrences", () => {
       "b",
       intervalTimes(1, new Date("2026-07-26T13:00:00Z").getTime())
     );
-    const result = selectUpcomingOccurrences([a, b], NOON_UTC, 4);
+    const result = selectMedicationHorizon([a, b], NOON_UTC, 4);
     expect(result.filter((o) => o.reminderId === "b")).toHaveLength(4);
     expect(result.filter((o) => o.reminderId === "a")).toHaveLength(0);
   });
 
   it("never returns an occurrence at or before fromMs", () => {
     const past = reminder("past", dailyTimes(["06:00"]));
-    const result = selectUpcomingOccurrences([past], NOON_UTC, 4);
+    const result = selectMedicationHorizon([past], NOON_UTC, 4);
     expect(result).toHaveLength(4);
     for (const occurrence of result) {
       expect(occurrence.fireAt).toBeGreaterThan(NOON_UTC);
@@ -127,7 +139,7 @@ describe("selectUpcomingOccurrences", () => {
   it("schedules weekly reminders", () => {
     // NOON_UTC is Sunday 2026-07-26; day 3 is Wednesday.
     const weekly = reminder("weekly", weeklyTimes([3], ["08:00"]));
-    const result = selectUpcomingOccurrences([weekly], NOON_UTC, 2);
+    const result = selectMedicationHorizon([weekly], NOON_UTC, 2);
     expect(result.map((o) => o.fireAt)).toEqual([
       new Date("2026-07-29T08:00:00Z").getTime(),
       new Date("2026-08-05T08:00:00Z").getTime(),
@@ -142,7 +154,7 @@ describe("selectUpcomingOccurrences", () => {
     const daily = reminder("daily", dailyTimes(["10:00"]));
     // Sunday 2026-07-26 is day 0, so this fires later today at 20:00.
     const weekly = reminder("weekly", weeklyTimes([0], ["20:00"]));
-    const result = selectUpcomingOccurrences([daily, weekly], NOON_UTC, 3);
+    const result = selectMedicationHorizon([daily, weekly], NOON_UTC, 3);
     expect(result.map((o) => o.reminderId)).toEqual([
       "weekly",
       "daily",
@@ -150,11 +162,33 @@ describe("selectUpcomingOccurrences", () => {
     ]);
   });
 
+  it("leaves a task out of the medication Horizon entirely", () => {
+    const errand = task("t-errand", dailyTimes(["13:00"]));
+    expect(selectMedicationHorizon([errand], NOON_UTC, 64)).toHaveLength(0);
+  });
+
+  /**
+   * ADR 0003's whole argument, as a case: a bounded Horizon shared with tasks
+   * is one a dozen routine tasks can fill, leaving an evening dose unarmed.
+   * The tasks here are all sooner than the dose and there is room for exactly
+   * one alarm, so a Kind-blind selector arms a task and drops the dose.
+   */
+  it("never lets a task displace a dose from a full Horizon", () => {
+    const tasks = Array.from({ length: 12 }, (_, i) =>
+      task(`t-${String(i)}`, dailyTimes(["13:00"]))
+    );
+    const dose = reminder("insulin", dailyTimes(["21:00"]));
+
+    const result = selectMedicationHorizon([...tasks, dose], NOON_UTC, 1);
+
+    expect(result.map((o) => o.reminderId)).toEqual(["insulin"]);
+  });
+
   it("breaks ties on fireAt by reminderId, independent of input order", () => {
     const alpha = reminder("alpha", dailyTimes(["15:00"]));
     const bravo = reminder("bravo", dailyTimes(["15:00"]));
-    const forwards = selectUpcomingOccurrences([alpha, bravo], NOON_UTC, 2);
-    const backwards = selectUpcomingOccurrences([bravo, alpha], NOON_UTC, 2);
+    const forwards = selectMedicationHorizon([alpha, bravo], NOON_UTC, 2);
+    const backwards = selectMedicationHorizon([bravo, alpha], NOON_UTC, 2);
     expect(forwards.map((o) => o.reminderId)).toEqual(["alpha", "bravo"]);
     expect(backwards.map((o) => o.reminderId)).toEqual(["alpha", "bravo"]);
     expect(fireAtOf(forwards, 0)).toEqual(fireAtOf(forwards, 1));

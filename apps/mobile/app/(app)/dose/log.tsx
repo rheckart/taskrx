@@ -16,11 +16,30 @@ import { useToast } from "../../../src/components/useToast";
 import * as instancesRepo from "../../../src/db/repos/reminderInstances";
 import * as remindersRepo from "../../../src/db/repos/reminders";
 import { formatDayTime } from "../../../src/format/datetime";
-import { snoozeDose } from "../../../src/notifications/snooze";
+import { snoozeReminder } from "../../../src/notifications/snooze";
 
-type ActionStatus = "idle" | "taking" | "skipping" | "snoozing" | "done";
+type ActionStatus = "idle" | "completing" | "skipping" | "snoozing" | "done";
+
+/** How far a snooze defers a moment. Named once; the copy reads it too. */
+const SNOOZE_MINUTES = 15;
 
 /**
+ * The answer surface: what became of one Occurrence, of either Kind.
+ *
+ * It is reached three ways — a tap on the timeline, a tap on a notification,
+ * and the medication list's "log now" — and all three carry the same pairing of
+ * Reminder and scheduled time. Nothing about it was ever medication-specific
+ * except its words, which is why the fusion in #13 is a relabelling here rather
+ * than a second screen: a task is completed, skipped and snoozed through
+ * exactly these buttons.
+ *
+ * **The route path and the `medicationId` param are both frozen.** The param is
+ * the key already-armed alarms carry. The path is what `tap-handler.ts` builds
+ * its background deep link from *and* what the device harness types at `adb`
+ * (`scripts/notification-harness.sh`), so renaming it would put the harness and
+ * the app out of step on the one thing the harness exists to verify. Both names
+ * therefore stay medication-flavoured while the screen is not.
+ *
  * Reads and writes both go to the unified tables.
  *
  * Before the write-path cutover this screen read `reminder_instances` and
@@ -31,7 +50,7 @@ type ActionStatus = "idle" | "taking" | "skipping" | "snoozing" | "done";
  * Both the legacy table and the mirror are now deleted.
  *
  * With the instance written directly there is one row and one place to look
- * for it, so `findPendingForOccurrence` is both the dedupe and the load.
+ * for it, so `findAnswerableForOccurrence` is both the dedupe and the load.
  *
  * What still has to hold for a pre-cutover dose to resolve is the *pairing*.
  * Migration 005 preserved the medication's primary key as the reminder's and
@@ -39,14 +58,10 @@ type ActionStatus = "idle" | "taking" | "skipping" | "snoozing" | "done";
  * unchanged, so the `medicationId` an alarm armed by an older build carries
  * still names the reminder, and the instance backfilled from that dose still
  * sits at the same `(reminder, scheduled time)`.
- *
- * The route param is still `medicationId` — it is the key the alarms already
- * armed on the device carry (`notifications/scheduler.ts`), and renaming it
- * would drop taps on those.
  */
 interface LoadedState {
   readonly kind: "loaded";
-  readonly medication: Reminder;
+  readonly reminder: Reminder;
   readonly scheduledTime: number;
   readonly instance: ReminderInstance;
 }
@@ -77,14 +92,60 @@ function parseParams(params: Record<string, string | string[]>): {
   return { medicationId: rawMedicationId, scheduledTime };
 }
 
-function urgencyLabel(scheduledTime: number): string {
+/**
+ * Every Kind-specific word on this screen, decided once.
+ *
+ * ADR 0001 made the *stored* vocabulary Kind-neutral so that exactly one place
+ * per surface has to know the difference, and this is that place for the answer
+ * screen — the job `statusLabel` does on the timeline. Scattering `kind ===
+ * "medication" ?` through the render would put four of them back.
+ *
+ * "Dose" appears in none of them. CONTEXT.md defines a Dose as the quantity of
+ * a drug and lists using it for "a recorded taking" under _Avoid_; what these
+ * confirm is a Reminder Instance. ADR 0001 licenses showing a medication as
+ * *taken*, which is what they say.
+ *
+ * `snooze` is the one that is not merely wording. A task's deferral arms
+ * nothing until #14 gives it a Tier, so promising a reminder in fifteen minutes
+ * would be a lie; the medication keeps the promise it has always kept.
+ */
+interface KindWords {
+  readonly badge: string;
+  readonly due: string;
+  readonly complete: string;
+  readonly completed: string;
+  readonly skipped: string;
+  readonly snooze: string;
+}
+
+function wordsFor(kind: Reminder["kind"]): KindWords {
+  return kind === "medication"
+    ? {
+        badge: "MEDICATION",
+        due: "Time to take",
+        complete: "Mark taken",
+        completed: "Recorded as taken",
+        skipped: "Recorded as skipped",
+        snooze: `Snooze ${String(SNOOZE_MINUTES)} min`,
+      }
+    : {
+        badge: "TASK",
+        due: "Time to do it",
+        complete: "Mark done",
+        completed: "Recorded as done",
+        skipped: "Recorded as skipped",
+        snooze: "Put off for now",
+      };
+}
+
+function urgencyLabel(scheduledTime: number, words: KindWords): string {
   const now = Date.now();
   const diffMinutes = Math.round((now - scheduledTime) / 60_000);
   if (diffMinutes < -1) {
     return `Due in ${String(Math.abs(diffMinutes))} minutes`;
   }
   if (diffMinutes <= 1) {
-    return "Time to take";
+    return words.due;
   }
   return `Overdue by ${String(diffMinutes)} minutes`;
 }
@@ -105,41 +166,38 @@ export default function DoseLogScreen(): ReactElement {
 
   const load = useCallback(async (): Promise<void> => {
     if (userId === undefined || parsedParams === null) {
-      setState({ kind: "error", message: "Missing dose information." });
+      setState({ kind: "error", message: "Missing reminder information." });
       return;
     }
 
     try {
-      const medication = await remindersRepo.get(parsedParams.medicationId);
-      if (medication === null) {
-        setState({
-          kind: "error",
-          message: "Medication not found. It may have been deleted.",
-        });
+      const reminder = await remindersRepo.get(parsedParams.medicationId);
+      if (reminder === null) {
+        setState({ kind: "error", message: "This reminder no longer exists." });
         return;
       }
 
-      // One lookup, not two: the pending instance for this exact
+      // One lookup, not two: the unanswered instance for this exact
       // `(reminder, scheduled time)` pairing is the row the buttons below act
       // on. Minting it here rather than at alarm time is what keeps the table a
       // record of what the user did rather than a materialized copy of the
       // schedule.
       //
-      // Be precise about what a miss means, because it is narrower than it
-      // looks: `findPendingForOccurrence` filters `status = 'pending'`, so a
-      // null is "no *unanswered* instance", not "this occurrence has never been
-      // answered". Reopening an occurrence already taken or skipped therefore
-      // mints a second, pending instance beside the answered one — reachable by
-      // tapping the same alarm twice, since `autoCancel` does not retract an
-      // alarm the user already acted on from a different surface.
+      // "Unanswered" includes `snoozed`, which is why this is
+      // `findAnswerableForOccurrence` and not the `findPendingForOccurrence` it
+      // replaces. A snooze is a deferral, not an answer, so coming back to the
+      // same moment after one has to find the row it already made rather than
+      // open a second beside it. That mattered the moment snoozing began
+      // writing a status at all — before, a snoozed row stayed `pending` and
+      // the narrower query happened to find it.
       //
-      // Carried over deliberately rather than introduced here: the dose-log
-      // path this replaces filtered identically (`findPendingForDose`), so the
-      // behaviour is unchanged, which is what this ticket asks for. The fix
-      // belongs with the timeline projection, which deduplicates on exactly
-      // this pairing across every status.
+      // What is still not covered, deliberately: reopening a moment already
+      // completed or skipped mints a second, pending instance beside the
+      // answered one. That is issue #21, it predates this screen, and the
+      // timeline already deduplicates on exactly this pairing so it does not
+      // render twice.
       const instance =
-        (await instancesRepo.findPendingForOccurrence(
+        (await instancesRepo.findAnswerableForOccurrence(
           userId,
           parsedParams.medicationId,
           parsedParams.scheduledTime
@@ -148,22 +206,21 @@ export default function DoseLogScreen(): ReactElement {
           userId,
           reminderId: parsedParams.medicationId,
           // Off the reminder, never hardcoded: the same occurrence pairing
-          // reaches this screen for a `task` reminder once the timeline
-          // lands, and `reminder_kind` is what decides whether the instance
-          // counts toward Adherence.
-          reminderKind: medication.kind,
+          // reaches this screen for a `task` reminder, and `reminder_kind` is
+          // what decides whether the instance counts toward Adherence.
+          reminderKind: reminder.kind,
           scheduledTime: parsedParams.scheduledTime,
         }));
 
       setState({
         kind: "loaded",
-        medication,
+        reminder,
         scheduledTime: parsedParams.scheduledTime,
         instance,
       });
     } catch (err: unknown) {
       const message =
-        err instanceof Error ? err.message : "Failed to load dose";
+        err instanceof Error ? err.message : "Failed to load reminder";
       setState({ kind: "error", message });
     }
   }, [parsedParams, userId]);
@@ -174,24 +231,25 @@ export default function DoseLogScreen(): ReactElement {
     }
   }, [load, isLoaded]);
 
-  const handleMarkTaken = useCallback(async (): Promise<void> => {
+  const handleComplete = useCallback(async (): Promise<void> => {
     if (state.kind !== "loaded") {
       return;
     }
-    setActionStatus("taking");
+    const words = wordsFor(state.reminder.kind);
+    setActionStatus("completing");
     setError(null);
     try {
       const now = Date.now();
       await instancesRepo.markCompleted(state.instance.id, now);
       setCompletedAt(now);
       setActionStatus("done");
-      showToast.success("Dose recorded");
+      showToast.success(words.completed);
     } catch (err: unknown) {
       const message =
-        err instanceof Error ? err.message : "Failed to mark taken";
+        err instanceof Error ? err.message : "Failed to record it";
       setError(message);
       setActionStatus("idle");
-      showToast.error("Couldn't record dose — will retry on next sync");
+      showToast.error("Couldn't record it — will retry on next sync");
     }
   }, [state, showToast]);
 
@@ -199,22 +257,40 @@ export default function DoseLogScreen(): ReactElement {
     if (state.kind !== "loaded") {
       return;
     }
+    const words = wordsFor(state.reminder.kind);
     setActionStatus("skipping");
     setError(null);
     try {
       await instancesRepo.markSkipped(state.instance.id);
       setCompletedAt(Date.now());
       setActionStatus("done");
-      showToast.success("Dose skipped");
+      showToast.success(words.skipped);
     } catch (err: unknown) {
-      const message =
-        err instanceof Error ? err.message : "Failed to skip dose";
+      const message = err instanceof Error ? err.message : "Failed to skip it";
       setError(message);
       setActionStatus("idle");
       showToast.error("Couldn't record skip — will retry on next sync");
     }
   }, [state, showToast]);
 
+  /**
+   * Snoozing writes the deferral down and then arms the deferred reminder.
+   *
+   * The status write is the half that was missing. Snoozing used to arm a
+   * notification and leave the Instance `pending`, so nothing about the deferral
+   * was recorded: the timeline still showed the moment as unanswered, the sweep
+   * would later call it Missed, and Adherence — which treats a snoozed dose as a
+   * clinical fact and a snoozed task as a mere reschedule — never saw one of
+   * either. `snoozed` is the status that makes both of those true.
+   *
+   * The order matters. The row is written first, so a failure to arm still
+   * leaves the deferral recorded rather than losing it; an armed alarm with no
+   * row would be the reverse trade, and the row is the thing that syncs.
+   *
+   * `armed` is false for a task, which has no Tier of its own until #14. The
+   * toast says what actually happened rather than promising a reminder that is
+   * not coming.
+   */
   const handleSnooze = useCallback(async (): Promise<void> => {
     if (state.kind !== "loaded") {
       return;
@@ -222,10 +298,23 @@ export default function DoseLogScreen(): ReactElement {
     setActionStatus("snoozing");
     setError(null);
     try {
-      await snoozeDose(state.medication.id, state.scheduledTime, 15);
+      // One instant, decided here and passed on. The stored deferral and the
+      // armed alarm have to name the same moment, and two readings of the clock
+      // would let them drift apart.
+      const snoozeUntil = Date.now() + SNOOZE_MINUTES * 60_000;
+      await instancesRepo.markSnoozed(state.instance.id, snoozeUntil);
+      const armed = await snoozeReminder(
+        state.reminder.id,
+        state.scheduledTime,
+        snoozeUntil
+      );
       setCompletedAt(Date.now());
       setActionStatus("done");
-      showToast.info("Reminder snoozed 15 minutes");
+      showToast.info(
+        armed
+          ? `Reminder snoozed ${String(SNOOZE_MINUTES)} minutes`
+          : "Put off for now"
+      );
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : "Failed to snooze";
       setError(message);
@@ -234,8 +323,16 @@ export default function DoseLogScreen(): ReactElement {
     }
   }, [state, showToast]);
 
+  /**
+   * Back to the timeline, not to `/meds`.
+   *
+   * The timeline is where both Kinds live and where every route into this
+   * screen but one now starts, so sending a finished task to the medication
+   * list would strand it somewhere it does not appear. It is also the right
+   * destination for a dose: the row just answered is on it, in its new state.
+   */
   const handleDone = useCallback((): void => {
-    router.replace("/meds");
+    router.replace("/");
   }, [router]);
 
   if (!isLoaded) {
@@ -249,7 +346,7 @@ export default function DoseLogScreen(): ReactElement {
   if (!isSignedIn || userId === undefined) {
     return (
       <View style={styles.center}>
-        <Text>Sign in to log a dose.</Text>
+        <Text>Sign in to answer a reminder.</Text>
       </View>
     );
   }
@@ -257,12 +354,12 @@ export default function DoseLogScreen(): ReactElement {
   if (parsedParams === null) {
     return (
       <View style={styles.center}>
-        <Text style={styles.errorTitle}>Invalid dose link</Text>
+        <Text style={styles.errorTitle}>Invalid reminder link</Text>
         <Text style={styles.errorBody}>
-          Open this screen from a medication reminder notification.
+          Open this screen from your timeline or from a reminder notification.
         </Text>
         <Pressable onPress={handleDone} style={styles.doneButton}>
-          <Text style={styles.doneButtonText}>Go to medications</Text>
+          <Text style={styles.doneButtonText}>Go to my day</Text>
         </Pressable>
       </View>
     );
@@ -279,16 +376,17 @@ export default function DoseLogScreen(): ReactElement {
   if (state.kind === "error") {
     return (
       <View style={styles.center}>
-        <Text style={styles.errorTitle}>Could not load dose</Text>
+        <Text style={styles.errorTitle}>Could not load this reminder</Text>
         <Text style={styles.errorBody}>{state.message}</Text>
         <Pressable onPress={handleDone} style={styles.doneButton}>
-          <Text style={styles.doneButtonText}>Go to medications</Text>
+          <Text style={styles.doneButtonText}>Go to my day</Text>
         </Pressable>
       </View>
     );
   }
 
-  const { medication, scheduledTime } = state;
+  const { reminder, scheduledTime } = state;
+  const words = wordsFor(reminder.kind);
   const isDone = actionStatus === "done";
 
   return (
@@ -300,9 +398,10 @@ export default function DoseLogScreen(): ReactElement {
         keyboardShouldPersistTaps="handled"
       >
         <View style={styles.card}>
-          <Text style={styles.medName}>{medication.name}</Text>
-          {medication.dosage !== undefined ? (
-            <Text style={styles.dosage}>{medication.dosage}</Text>
+          <Text style={styles.kindLabel}>{words.badge}</Text>
+          <Text style={styles.reminderName}>{reminder.name}</Text>
+          {reminder.dosage !== undefined ? (
+            <Text style={styles.dosage}>{reminder.dosage}</Text>
           ) : null}
           <Text style={styles.scheduledTime}>
             Scheduled: {formatDayTime(scheduledTime)}
@@ -313,7 +412,7 @@ export default function DoseLogScreen(): ReactElement {
               scheduledTime < Date.now() - 5 * 60_000 && styles.urgencyOverdue,
             ]}
           >
-            {urgencyLabel(scheduledTime)}
+            {urgencyLabel(scheduledTime, words)}
           </Text>
         </View>
 
@@ -328,18 +427,18 @@ export default function DoseLogScreen(): ReactElement {
         ) : (
           <View style={styles.actions}>
             <Pressable
-              onPress={() => void handleMarkTaken()}
+              onPress={() => void handleComplete()}
               disabled={actionStatus !== "idle"}
               style={[
                 styles.actionButton,
-                styles.takenButton,
+                styles.completeButton,
                 actionStatus !== "idle" && styles.actionButtonDisabled,
               ]}
             >
-              {actionStatus === "taking" ? (
+              {actionStatus === "completing" ? (
                 <ActivityIndicator color="#fff" />
               ) : (
-                <Text style={styles.actionButtonText}>Mark Taken</Text>
+                <Text style={styles.actionButtonText}>{words.complete}</Text>
               )}
             </Pressable>
 
@@ -371,7 +470,7 @@ export default function DoseLogScreen(): ReactElement {
               {actionStatus === "snoozing" ? (
                 <ActivityIndicator color="#fff" />
               ) : (
-                <Text style={styles.actionButtonText}>Snooze 15 min</Text>
+                <Text style={styles.actionButtonText}>{words.snooze}</Text>
               )}
             </Pressable>
           </View>
@@ -451,7 +550,14 @@ const styles = StyleSheet.create({
     fontSize: 18,
     fontWeight: "600",
   },
-  medName: {
+  kindLabel: {
+    color: "#666",
+    fontSize: 11,
+    fontWeight: "700",
+    letterSpacing: 1,
+    marginBottom: 6,
+  },
+  reminderName: {
     fontSize: 22,
     fontWeight: "700",
   },
@@ -482,7 +588,7 @@ const styles = StyleSheet.create({
     fontSize: 18,
     fontWeight: "600",
   },
-  takenButton: {
+  completeButton: {
     backgroundColor: "#34c759",
   },
   urgency: {

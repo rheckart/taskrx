@@ -104,7 +104,7 @@ describe("projectTimeline ordering", () => {
   /**
    * Two reminders due at the same instant need a total order, or the list
    * reshuffles between renders of identical data. Same tie-break as
-   * `selectUpcomingOccurrences`, and for the same reason.
+   * `selectMedicationHorizon`, and for the same reason.
    */
   it("breaks a tie on reminder id so equal moments do not reshuffle", () => {
     const input = {
@@ -631,5 +631,160 @@ describe("projectTimeline reminders it should not schedule", () => {
     });
 
     expect(rows).toEqual([]);
+  });
+});
+
+/**
+ * The fusion itself — issue #13, and the reason every ticket before it existed.
+ *
+ * The projection was written Kind-neutral from the start, so these cases pin a
+ * property rather than introduce one: the day is ordered by time and by nothing
+ * else, and a row carries its Kind so the surface can tell one from the other.
+ * A regression here is somebody reintroducing a Kind filter or a Kind sort.
+ */
+describe("projectTimeline fuses both Kinds into one day", () => {
+  function task(overrides: Partial<Reminder> = {}): Reminder {
+    return {
+      ...createReminder({
+        id: "rem-pharmacy",
+        userId: "user-1",
+        kind: "task",
+        name: "Call the pharmacy",
+        schedule: dailyTimes(["10:00"]),
+        createdAt: 0,
+        updatedAt: 0,
+      }),
+      ...overrides,
+    };
+  }
+
+  it("interleaves a task with a dose in time order", () => {
+    const rows = projectTimeline({
+      reminders: [
+        task({ id: "rem-pharmacy", schedule: dailyTimes(["10:00"]) }),
+        medication({ id: "rem-metformin", schedule: dailyTimes(["09:00"]) }),
+        task({ id: "rem-walk", schedule: dailyTimes(["18:00"]) }),
+        medication({ id: "rem-statin", schedule: dailyTimes(["21:00"]) }),
+      ],
+      instances: [],
+      window: DAY,
+      now: DAY_START,
+    });
+
+    expect(rows.map((row) => [row.scheduledTime, row.kind])).toEqual([
+      [at(9), "medication"],
+      [at(10), "task"],
+      [at(18), "task"],
+      [at(21), "medication"],
+    ]);
+  });
+
+  it("carries each row's Kind, so a dose and a task can be told apart", () => {
+    const rows = projectTimeline({
+      reminders: [task(), medication()],
+      instances: [],
+      window: DAY,
+      now: DAY_START,
+    });
+
+    expect(rows.map((row) => [row.name, row.kind])).toEqual([
+      ["Metformin", "medication"],
+      ["Call the pharmacy", "task"],
+    ]);
+  });
+
+  it("gives a task no dosage to render", () => {
+    const rows = projectTimeline({
+      reminders: [task()],
+      instances: [],
+      window: DAY,
+      now: DAY_START,
+    });
+
+    expect(rows.map((row) => row.dosage)).toEqual([undefined]);
+  });
+
+  /**
+   * "Next" is the soonest unanswered moment, full stop. A dose does not jump
+   * the queue ahead of a task that comes first — the person is being told what
+   * to do now, and at 09:00 that is the task.
+   */
+  it("badges the soonest unanswered moment as next whichever Kind it is", () => {
+    const rows = projectTimeline({
+      reminders: [
+        task({ id: "rem-pharmacy", schedule: dailyTimes(["09:00"]) }),
+        medication({ id: "rem-metformin", schedule: dailyTimes(["13:00"]) }),
+      ],
+      instances: [],
+      window: DAY,
+      now: DAY_START,
+    });
+
+    expect(rows.filter((row) => row.isNext).map((row) => row.kind)).toEqual([
+      "task",
+    ]);
+  });
+
+  /**
+   * A snooze is the one answer that names a second moment, and a Kind whose
+   * Tier has no trigger yet has nothing else to show for it. The row stays where
+   * it was — `scheduledTime` is the instant it occupies, and half the
+   * deduplication key — and carries the deferral so a surface can say when.
+   */
+  it("reports where a snooze deferred a moment to, without moving it", () => {
+    const rows = projectTimeline({
+      reminders: [task()],
+      instances: [
+        answered({
+          reminderId: "rem-pharmacy",
+          reminderKind: "task",
+          scheduledTime: at(10),
+          status: "snoozed",
+          snoozedUntil: at(14),
+        }),
+      ],
+      window: DAY,
+      now: DAY_START,
+    });
+
+    expect(
+      rows.map((row) => [row.scheduledTime, row.status, row.snoozedUntil])
+    ).toEqual([[at(10), "snoozed", at(14)]]);
+  });
+
+  it("reports no deferral for a moment nobody has deferred", () => {
+    const rows = projectTimeline({
+      reminders: [task()],
+      instances: [],
+      window: DAY,
+      now: DAY_START,
+    });
+
+    expect(rows.map((row) => row.snoozedUntil)).toEqual([undefined]);
+  });
+
+  it("keeps a task's answer on its own moment rather than settling a dose", () => {
+    const rows = projectTimeline({
+      reminders: [
+        task({ id: "rem-pharmacy", schedule: dailyTimes(["09:00"]) }),
+        medication({ id: "rem-metformin", schedule: dailyTimes(["09:00"]) }),
+      ],
+      instances: [
+        answered({
+          id: "inst-task",
+          reminderId: "rem-pharmacy",
+          reminderKind: "task",
+          scheduledTime: at(9),
+          status: "completed",
+        }),
+      ],
+      window: DAY,
+      now: DAY_START,
+    });
+
+    expect(rows.map((row) => [row.reminderId, row.status])).toEqual([
+      ["rem-metformin", "pending"],
+      ["rem-pharmacy", "completed"],
+    ]);
   });
 });

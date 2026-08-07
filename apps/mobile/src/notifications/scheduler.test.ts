@@ -21,6 +21,24 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
  *
  * Everything below Notifee is mocked. The subject is which ids the cancel pass
  * selects, and a real notifee would pull react-native into a node test.
+ *
+ * ## Why these assert on calls, which the spec normally forbids
+ *
+ * `docs/specs/fused-timeline.md` § "What makes a good test here" rules out
+ * asserting "which collaborator was called", and every case below does exactly
+ * that. It is the documented exception the same spec grants — "notification
+ * delivery… cannot be tested without an operating system" — and it is narrower
+ * than it looks: arming an alarm *is* the observable behaviour here. These
+ * functions return nothing, write nothing, and change no state a test can read;
+ * the only thing that happens is the call. There is no return value to prefer.
+ *
+ * Two consequences are honoured deliberately. Cases stay phrased as outcomes
+ * ("leaves a pending snooze armed") rather than as call transcripts. And no rule
+ * that *can* be executed in the shared package is re-pinned here: ADR 0003's
+ * "a task never displaces a dose from a full Horizon" belongs to
+ * `horizon.test.ts`, where it runs against a pure function. What the Tier cases
+ * below add is the wiring — that this module asks `selectMedicationHorizon` and
+ * `entersMedicationHorizon` at all, which no pure test can see.
  */
 
 /**
@@ -37,7 +55,7 @@ const mocks = vi.hoisted(() => ({
     vi.fn<
       (
         notification: { id: string },
-        trigger: { alarmManager: { type: string } }
+        trigger: { timestamp: number; alarmManager: { type: string } }
       ) => Promise<void>
     >(),
   list: vi.fn(),
@@ -66,11 +84,21 @@ vi.mock("../db/repos/reminders", () => ({
 
 const { buildNotificationId, rescheduleAll, SNOOZE_NOTIFICATION_ID_PREFIX } =
   await import("./scheduler");
-const { snoozeDose } = await import("./snooze");
+const { snoozeReminder } = await import("./snooze");
 
 const USER = "user_owner";
 /** 2026-07-29T12:00:00Z, fixed so occurrence ids are computed, not guessed. */
 const NOW = Date.UTC(2026, 6, 29, 12, 0, 0);
+/**
+ * The instant a snooze defers to, decided by the caller.
+ *
+ * Deliberately NOT `NOW + 15 * 60_000`. The clock is frozen at `NOW` in these
+ * tests, so a `snoozeReminder` that ignored this argument and recomputed the
+ * instant from `Date.now()` would land on exactly the same number and the case
+ * below would pass while asserting nothing. An offset no recomputation would
+ * arrive at is what gives that assertion teeth.
+ */
+const SNOOZE_UNTIL = NOW + 37 * 60_000 + 1_234;
 
 /** One active daily reminder at 08:00 — enough to produce a desired set. */
 const REMINDER = {
@@ -135,10 +163,10 @@ afterEach(() => {
 
 describe("rescheduleAll cancel pass", () => {
   it("leaves a pending snooze armed", async () => {
-    // The exact id `snoozeDose` would have written, built by the real code
+    // The exact id `snoozeReminder` would have written, built by the real code
     // rather than hand-spelled, so a change to the id format cannot make this
     // test quietly stop describing a real snooze.
-    await snoozeDose("rem-metformin", NOW - 3_600_000, 15);
+    await snoozeReminder("rem-metformin", NOW - 3_600_000, SNOOZE_UNTIL);
     const snoozeId = onlyCreatedId();
     expect(snoozeId).toMatch(/^snooze-/);
 
@@ -163,7 +191,7 @@ describe("rescheduleAll cancel pass", () => {
   });
 
   it("distinguishes the two within a single pass", async () => {
-    await snoozeDose("rem-metformin", NOW - 3_600_000, 15);
+    await snoozeReminder("rem-metformin", NOW - 3_600_000, SNOOZE_UNTIL);
     const snoozeId = onlyCreatedId();
     mocks.createTriggerNotification.mockClear();
 
@@ -213,15 +241,101 @@ describe("rescheduleAll idempotence", () => {
   });
 });
 
-describe("snoozeDose alarm primitive", () => {
+describe("snoozeReminder alarm primitive", () => {
   it("arms SET_ALARM_CLOCK, the primitive the scheduler uses", async () => {
-    await snoozeDose("rem-metformin", NOW - 3_600_000, 15);
+    await snoozeReminder("rem-metformin", NOW - 3_600_000, SNOOZE_UNTIL);
 
     const [call] = mocks.createTriggerNotification.mock.calls;
     if (call === undefined) {
-      throw new Error("snoozeDose armed no notification at all");
+      throw new Error("snoozeReminder armed no notification at all");
     }
     const [, trigger] = call;
     expect(trigger.alarmManager.type).toBe("SET_ALARM_CLOCK");
+  });
+});
+
+/**
+ * ADR 0003, at the two places this module can arm an alarm.
+ *
+ * Every case is stated as "nothing was armed" rather than "the right thing was
+ * armed", because the guarantee is an absence: a task must not reach an
+ * alarm-clock primitive or the bounded Horizon, whatever else changes about how
+ * medications are scheduled.
+ *
+ * The rule that a task cannot *displace* a dose from a full Horizon is not here.
+ * It is a property of `selectMedicationHorizon`, it runs against that pure
+ * function in `packages/shared/src/schedule/horizon.test.ts`, and re-pinning it
+ * through mocks would state one rule twice in the weaker of the two mediums.
+ * What is left here is only what a pure test cannot see: that this module asks
+ * the Tier question at all.
+ */
+describe("the medication Tier admits no tasks", () => {
+  const TASK = { ...REMINDER, id: "rem-pharmacy", kind: "task" };
+
+  it("arms nothing when a task is snoozed, and says it armed nothing", async () => {
+    mocks.get.mockResolvedValue(TASK);
+
+    const armed = await snoozeReminder(
+      "rem-pharmacy",
+      NOW - 3_600_000,
+      SNOOZE_UNTIL
+    );
+
+    expect(armed).toBe(false);
+    expect(createdIds()).toEqual([]);
+  });
+
+  it("arms nothing when the reminder is not on this device", async () => {
+    // A row that is absent is a row not known to be a medication. Reachable
+    // from a stale deep link naming a task this device has not pulled, or one
+    // just deleted.
+    mocks.get.mockResolvedValue(null);
+
+    const armed = await snoozeReminder(
+      "rem-unknown",
+      NOW - 3_600_000,
+      SNOOZE_UNTIL
+    );
+
+    expect(armed).toBe(false);
+    expect(createdIds()).toEqual([]);
+  });
+
+  it("still arms a snooze for a medication", async () => {
+    // Beside the two above, so "arms nothing, ever" cannot pass for a fix.
+    const armed = await snoozeReminder(
+      "rem-metformin",
+      NOW - 3_600_000,
+      SNOOZE_UNTIL
+    );
+
+    expect(armed).toBe(true);
+    expect(createdIds()).toHaveLength(1);
+  });
+
+  it("arms the snooze at the instant the caller decided, not one of its own", async () => {
+    // The Instance the caller has already written names `SNOOZE_UNTIL`. A
+    // second reading of the clock in here would arm a different moment and
+    // build a different id from it.
+    await snoozeReminder("rem-metformin", NOW - 3_600_000, SNOOZE_UNTIL);
+
+    const [call] = mocks.createTriggerNotification.mock.calls;
+    if (call === undefined) {
+      throw new Error("snoozeReminder armed no notification at all");
+    }
+    const [notification, trigger] = call;
+    expect(trigger.timestamp).toBe(SNOOZE_UNTIL);
+    expect(notification.id).toContain(String(SNOOZE_UNTIL));
+  });
+
+  it("leaves a task out of the alarms rescheduleAll arms", async () => {
+    mocks.list.mockResolvedValue([REMINDER, TASK]);
+
+    await rescheduleAll(USER);
+
+    expect(createdIds().length).toBeGreaterThan(0);
+    expect(createdIds().every((id) => id.startsWith("rem-metformin-"))).toBe(
+      true
+    );
   });
 });

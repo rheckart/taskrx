@@ -288,4 +288,78 @@ describe("computeAdherence", () => {
       expect(dayTaken(stats, 0)).toBe(1);
     });
   });
+
+  describe("Adherence is medication-only", () => {
+    /**
+     * The rule stated as the person experiences it: a productive week must not
+     * disguise a bad medication week. Half the doses were taken, so the figure
+     * is 50% — and stays 50% however many tasks were ticked off beside them.
+     */
+    it("does not move the medication figure when a week of tasks is completed", () => {
+      const from = local(2026, 7, 1);
+      const to = from + 7 * MS_PER_DAY;
+
+      const doses = [
+        instance(from + 8 * MS_PER_HOUR, "completed"),
+        instance(from + 20 * MS_PER_HOUR, "missed"),
+      ];
+      const tasks = Array.from({ length: 7 }, (_, day) =>
+        instance(
+          from + day * MS_PER_DAY + 10 * MS_PER_HOUR,
+          "completed",
+          "task"
+        )
+      );
+
+      const withoutTasks = computeAdherence(doses, from, to);
+      const withTasks = computeAdherence([...doses, ...tasks], from, to);
+
+      expect(withoutTasks.percent).toBe(50);
+      expect(withTasks).toEqual(withoutTasks);
+    });
+
+    it("does not let a missed task count as a missed dose", () => {
+      const from = local(2026, 7, 1);
+      const to = from + MS_PER_DAY;
+      const instances = [
+        instance(from + 8 * MS_PER_HOUR, "completed"),
+        instance(from + 14 * MS_PER_HOUR, "missed", "task"),
+      ];
+
+      const stats = computeAdherence(instances, from, to);
+
+      expect(stats.total).toBe(1);
+      expect(stats.missed).toBe(0);
+      expect(stats.percent).toBe(100);
+    });
+
+    it("does not let a skipped task count as a skipped dose", () => {
+      const from = local(2026, 7, 1);
+      const to = from + MS_PER_DAY;
+      const instances = [
+        instance(from + 8 * MS_PER_HOUR, "completed"),
+        instance(from + 14 * MS_PER_HOUR, "skipped", "task"),
+      ];
+
+      const stats = computeAdherence(instances, from, to);
+
+      expect(stats.total).toBe(1);
+      expect(stats.skipped).toBe(0);
+      expect(stats.percent).toBe(100);
+    });
+
+    it("leaves a day with only tasks out of the daily breakdown", () => {
+      const from = local(2026, 7, 1);
+      const to = from + 2 * MS_PER_DAY;
+      const instances = [
+        instance(from + 8 * MS_PER_HOUR, "completed"),
+        instance(from + MS_PER_DAY + 9 * MS_PER_HOUR, "completed", "task"),
+      ];
+
+      const stats = computeAdherence(instances, from, to);
+
+      expect(stats.daily).toHaveLength(1);
+      expect(dayDate(stats, 0)).toBe("2026-07-01");
+    });
+  });
 });

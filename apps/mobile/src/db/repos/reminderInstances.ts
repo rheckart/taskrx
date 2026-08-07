@@ -3,7 +3,7 @@ import type {
   ReminderInstance,
   ReminderKind,
 } from "@taskrx/shared";
-import { INSTANCE_STATUSES } from "@taskrx/shared";
+import { ANSWERABLE_STATUSES, INSTANCE_STATUSES } from "@taskrx/shared";
 
 import { getDb } from "../index";
 
@@ -335,25 +335,37 @@ export async function markMissed(id: string): Promise<ReminderInstance> {
 }
 
 /**
- * Find the pending instance for an exact reminder + scheduled time, if one
- * has already been materialized. Keeps a notification tap from creating a
- * second row for the same occurrence.
+ * Find the still-answerable instance for an exact reminder + scheduled time, if
+ * one has already been materialized. Keeps a notification tap, or a second visit
+ * to the same moment, from creating a duplicate row for one occurrence.
+ *
+ * Which statuses those are is `ANSWERABLE_STATUSES` in `@taskrx/shared`, not a
+ * literal list here — the timeline asks the same question to decide whether a
+ * row is still tappable, and a row the list offers while this lookup refuses is
+ * a button that does nothing. The `IN` list is built from that constant rather
+ * than spelled beside it, so the two cannot drift.
+ *
+ * It filtered `pending` alone while it was called `findPendingForOccurrence`,
+ * which would open a second row beside every snooze. That was harmless only
+ * while snoozing wrote no status at all.
  */
-export async function findPendingForOccurrence(
+export async function findAnswerableForOccurrence(
   userId: string,
   reminderId: string,
   scheduledTime: number
 ): Promise<ReminderInstance | null> {
   const db = await getDb();
+  const statusList = ANSWERABLE_STATUSES.map(() => "?").join(", ");
   const row = await db.getFirstAsync<ReminderInstanceRow>(
     `SELECT * FROM reminder_instances
      WHERE user_id = ? AND reminder_id = ? AND scheduled_time = ?
-       AND status = 'pending'
+       AND status IN (${statusList})
      ORDER BY created_at DESC
      LIMIT 1`,
     userId,
     reminderId,
-    scheduledTime
+    scheduledTime,
+    ...ANSWERABLE_STATUSES
   );
   return row === null ? null : rowToInstance(row);
 }

@@ -50,6 +50,33 @@ export const INSTANCE_STATUSES = [
 export type InstanceStatus = (typeof INSTANCE_STATUSES)[number];
 
 /**
+ * The statuses a person can still act on.
+ *
+ * `pending` is the obvious one. `snoozed` is the one worth stating: a snooze is
+ * a deferral, not an answer — "not now" rather than "no" — so the moment is
+ * still outstanding and the row it produced is the row a later visit settles.
+ * Treating a snooze as answered would make snoozing the one way to put a moment
+ * permanently out of reach, and would open a second Instance beside it every
+ * time the person came back.
+ *
+ * `completed` and `skipped` are answers. `missed` is the sweep's verdict rather
+ * than the person's, and is excluded for now with the rest — a moment that ran
+ * out of time is reopened rather than reused, which is the behaviour it has
+ * always had. Widening this to admit it belongs with the duplicate-instance
+ * work in #21, where reopening an answered moment is the subject.
+ *
+ * It lives here rather than in the two callers because they would otherwise
+ * each carry a copy: the on-device repository builds its `WHERE status IN (…)`
+ * from it, and the timeline decides from it whether a row is still tappable. A
+ * row the list offers and the lookup refuses is a button that does nothing.
+ */
+export const ANSWERABLE_STATUSES = ["pending", "snoozed"] as const;
+
+export function isAnswerable(status: InstanceStatus): boolean {
+  return (ANSWERABLE_STATUSES as readonly InstanceStatus[]).includes(status);
+}
+
+/**
  * `TaskRx.Core.NotificationType`, used by the notification log.
  *
  * `taken` here is NOT the `InstanceStatus` member ADR 0001 renamed. This enum

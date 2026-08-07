@@ -38,6 +38,11 @@ export default defineConfig({
         // The Backlog completion rule is one branch and one ADR (0002); gated so
         // that branch keeps its case.
         "src/backlog/completion.ts",
+        // Tier decides which Reminders may be armed with an alarm-clock
+        // primitive and which may occupy the bounded medication Horizon
+        // (ADR 0003). A branch added here without a case is a task quietly
+        // competing with a dose.
+        "src/notifications/tier.ts",
       ],
       exclude: ["src/**/*.test.ts", "src/**/index.ts"],
       thresholds: {

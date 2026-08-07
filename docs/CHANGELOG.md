@@ -8,6 +8,126 @@ for commit discipline (POC tags use `0.x.x`).
 
 ## [Unreleased]
 
+### 2026-08-06 — Tasks on the timeline: the fusion becomes real
+
+Closes #13. A task can be added, it sits beside the doses in time order, and it
+can be completed. This is the ticket the whole sequence existed for — the
+cutover, the rename, the sync work, the projection and the sweep produced
+nothing a person could see, and this is where the product idea first works end
+to end.
+
+- `feat(tasks): a second Kind, reachable` — `tasks/new.tsx` writes a
+  `task`-kind Reminder with all five Schedule variants and none of the
+  medication fields. A separate screen rather than `meds/new.tsx` with a Kind
+  toggle, because the ticket asks that dosage, RxCUI, pill count and refill
+  threshold be *absent* and not disabled, and a form hiding four fields and an
+  entry point is two forms wearing one. What the two genuinely share — the
+  schedule — is shared as a component.
+
+- `feat(schedule): the weekly picker` — the last variant with no UI. It arrives
+  now because "a weekday-only commitment does not nag me on Sunday" is a task
+  story, and until a task could exist there was nothing that shape belonged to.
+  Everything under it has supported `weekly` since the cutover; only the form
+  could not say it, and `meds/index.tsx` has carried a rendering arm for a
+  reminder nothing could author. Offered on the medication form too, which is
+  the one thing here the ticket did not ask for: a weekly medication — a
+  methotrexate dose, an injection on one day — is not a task-specific idea, and
+  hiding a variant the picker beside it already renders would have been an
+  arbitrary gap rather than a boundary.
+
+- `feat(timeline): one list, both Kinds` — two lines. #10 wrote `projectTimeline`
+  Kind-neutral and left the narrowing in the screen's two reads, so dropping the
+  `"medication"` filters is the whole change to what the day contains. A dose and
+  a task are told apart three ways, because one signal always fails somebody: a
+  coloured left edge for a scan, the word beside the name for a read and for a
+  colour-blind eye, and the same word spoken into the accessibility label, which
+  is the only channel a screen reader has.
+
+- `fix(adherence): tasks stop counting` — **the defect this ticket would
+  otherwise have shipped.** `computeAdherence` excluded a *snoozed* task and
+  counted every other one, so a week of ticked-off tasks would have pulled the
+  medication figure toward 100% — story 37's "a productive week cannot disguise
+  a bad medication week", inverted. Worse through the sweep, which mints `missed`
+  for any Occurrence that ran out of time and does not care which Kind: a
+  forgotten task would have read as a medication failure. It was unreachable
+  while no task could exist and live from the moment one could.
+
+- `fix(notifications): a task cannot displace a dose` — the other defect the
+  fusion would have made live. `rescheduleAll` read every Kind and armed all of
+  them with `SET_ALARM_CLOCK` into the bounded 64-slot Horizon, which is exactly
+  what ADR 0003 forbids: a dozen routine tasks can fill that set and leave an
+  evening insulin dose unarmed, silently and with no error. Tier is now a
+  function of Kind in `@taskrx/shared` rather than an assumption, and
+  `selectUpcomingOccurrences` is `selectMedicationHorizon` — the old name would
+  have been a lie in the one place it matters most. `scheduleForReminder` and
+  the snooze path are guarded too; the snooze was how the app's last
+  `SET_EXACT_AND_ALLOW_WHILE_IDLE` once survived a migration off it.
+
+- `fix(reminders): a snooze is written down` — snoozing armed a notification and
+  left the Instance `pending`, so nothing about the deferral was recorded: the
+  timeline still showed the moment unanswered, the sweep would later call it
+  Missed, and Adherence — which treats a snoozed dose as a clinical fact and a
+  snoozed task as a mere reschedule — never saw one of either. The status is now
+  written before the alarm is armed, so a failure to arm still leaves the
+  deferral recorded. `isAnswerable` in `@taskrx/shared` is what stops that
+  becoming a trap: a snooze is "not now", not "no", so the row stays tappable and
+  the on-device lookup finds it rather than opening a second beside it. The
+  timeline and the repository ask the same function, because a row the list
+  offers and the lookup refuses is a button that does nothing.
+
+- `fix(timeline): close the code-review findings` — four, of which two were
+  live defects rather than tidying. **The "next" row could not be told apart at
+  a glance**: `entryNext` painted its left edge blue, overriding the Kind
+  colour on precisely the one row the eye goes to first. It now says "next"
+  with the tint and the badge, which are signals the Kind colour does not use.
+  And **a reminder this device could not find was still armed** — the fallback
+  title was "Medication", but a row that is absent is a row not known to be a
+  medication, so a task reached from a stale deep link before its pull landed
+  took the alarm-clock primitive. ADR 0003 says "by construction rather than by
+  policy"; an unfound row now arms nothing either.
+
+  The two smaller ones: the snooze instant was read from the clock twice, once
+  for the stored `snoozedUntil` and once inside the arming, so the row and the
+  alarm could name moments milliseconds apart — `snoozeReminder` now takes the
+  instant the caller already wrote. And the schedule-type chooser had been
+  copied byte-for-byte into both creation forms; it is `ScheduleTypeChooser`
+  beside the picker now, which is where the thing the two forms genuinely share
+  already lived.
+
+  Vocabulary, from the same pass: "Dose recorded" and "Dose skipped" were
+  CONTEXT.md's own _Avoid_ for the Dose entry — using it for a recorded taking —
+  and the fixtures had reached for "chore", which is _Avoid_ for Task.
+
+Gates: `npm run verify` — 461 tests across three workspaces, 159 migration
+checks, harness guards. Every new assertion was mutation-checked separately: 6
+against Tier, 4 against the adherence rule, 7 against the fused projection, 5
+against `isAnswerable`, and 4 against the on-device Tier and clock guards, each
+caught by the case naming it. One did not, at first: the case pinning that the
+snooze arms the caller's instant used a fixture of `NOW + 15 minutes`, which is
+exactly what a re-read of the frozen test clock produces, so it passed against
+the mutation it existed to catch. The fixture is an offset no recomputation
+arrives at now, and it says so.
+
+**Deliberately not here, and stated so on the screen.** A snoozed task records
+its deferral and arms nothing, because Tier is Kind and the task Tier has no
+trigger until #14 — so the button says "Put off for now" rather than promising a
+reminder that is not coming, and the timeline row reads "Snoozed until 14:35"
+rather than an unqualified "Snoozed". That label is the whole visible content of
+a task's deferral until #14 gives it a trigger. The row does **not** move to the
+new moment: `scheduledTime` is the instant an Instance occupies (ADR 0002) and
+half the pairing key every stored answer is found by, so moving it would unmake
+the deduplication. The medication path is untouched, which is what keeps Phase
+1's device evidence valid.
+
+**Not closed, and now reachable in one more way:** #21, the duplicate `pending`
+Instance minted when an already-answered moment is reopened. The snooze case is
+closed by `isAnswerable`; completed and skipped are not, and belong there. Two
+more, both flagged by the spec review and both left: an overdue **task** stops
+being actionable once the sweep calls it Missed, which is story 34 and the same
+`missed` exclusion #21 owns; and `dose/history.tsx` stays medication-only, so a
+completed task appears on the timeline and not in History — the honest home for
+that is the Adherence surface in #16.
+
 ### 2026-08-06 — Missed doses stop vanishing, and a Reminder can happen once or never
 
 Closes #11 and #12. Two decisions were taken before either was written, as both

@@ -14,10 +14,10 @@ import {
 
 import {
   SchedulePicker,
+  ScheduleTypeChooser,
   defaultSchedule,
   isWellFormedSchedule,
   type EditableSchedule,
-  type EditableScheduleType,
 } from "../../../src/components/SchedulePicker";
 import { useToast } from "../../../src/components/useToast";
 import * as remindersRepo from "../../../src/db/repos/reminders";
@@ -36,20 +36,14 @@ import * as remindersRepo from "../../../src/db/repos/reminders";
  * halves of that pair went with the picker's rewrite for the two new variants,
  * and with them the last mapping between two spellings of a schedule.
  *
- * Four variants are offered. `once` gives a medication with a single dose —
+ * All five variants are offered. `once` gives a medication with a single dose —
  * a short course, a one-off injection — and `none` puts it in the Backlog, which
- * for a medication means "I have this, I take it when I need it".
+ * for a medication means "I have this, I take it when I need it". `weekly`
+ * arrives with the picker's own weekly UI in #13: nothing about it is
+ * task-specific, and a weekly medication (a methotrexate dose, an injection on
+ * one day) has been expressible in the domain and unwritable in the app since
+ * the cutover — `meds/index.tsx` has carried a rendering arm for one all along.
  */
-
-const SCHEDULE_TYPES: readonly {
-  readonly type: EditableScheduleType;
-  readonly label: string;
-}[] = [
-  { type: "daily", label: "Daily" },
-  { type: "interval", label: "Interval" },
-  { type: "once", label: "Once" },
-  { type: "none", label: "No time" },
-];
 
 export default function NewMedicationScreen(): ReactElement {
   const router = useRouter();
@@ -73,10 +67,6 @@ export default function NewMedicationScreen(): ReactElement {
   const [saving, setSaving] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
   const { showToast, ToastContainer } = useToast();
-
-  const onChangeType = useCallback((next: EditableScheduleType): void => {
-    setSchedule(defaultSchedule(next));
-  }, []);
 
   const trimmedName = name.trim();
   const userId = user?.id;
@@ -167,29 +157,7 @@ export default function NewMedicationScreen(): ReactElement {
         ) : null}
 
         <Text style={styles.label}>Schedule type</Text>
-        <View style={styles.typeRow}>
-          {SCHEDULE_TYPES.map(({ type, label }) => (
-            <Pressable
-              key={type}
-              onPress={() => {
-                onChangeType(type);
-              }}
-              style={[
-                styles.typeButton,
-                schedule.type === type ? styles.typeButtonActive : null,
-              ]}
-            >
-              <Text
-                style={[
-                  styles.typeButtonText,
-                  schedule.type === type ? styles.typeButtonTextActive : null,
-                ]}
-              >
-                {label}
-              </Text>
-            </Pressable>
-          ))}
-        </View>
+        <ScheduleTypeChooser value={schedule.type} onChange={setSchedule} />
 
         <SchedulePicker value={schedule} onChange={setSchedule} />
 
@@ -269,30 +237,5 @@ const styles = StyleSheet.create({
     color: "#fff",
     fontSize: 16,
     fontWeight: "600",
-  },
-  typeButton: {
-    borderColor: "#ccc",
-    borderRadius: 6,
-    borderWidth: 1,
-    marginRight: 8,
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-  },
-  typeButtonActive: {
-    backgroundColor: "#007aff",
-    borderColor: "#007aff",
-  },
-  typeButtonText: {
-    color: "#333",
-    fontSize: 14,
-    fontWeight: "500",
-  },
-  typeButtonTextActive: {
-    color: "#fff",
-  },
-  typeRow: {
-    flexDirection: "row",
-    flexWrap: "wrap",
-    marginTop: 4,
   },
 });

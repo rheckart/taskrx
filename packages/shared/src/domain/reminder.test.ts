@@ -1,10 +1,12 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  ANSWERABLE_STATUSES,
   INSTANCE_STATUSES,
   NOTIFICATION_TYPES,
   PRIORITIES,
   REMINDER_KINDS,
+  isAnswerable,
 } from "./enums";
 import {
   createCaregiver,
@@ -43,6 +45,41 @@ describe("enums", () => {
   it("keeps snoozed distinct from skipped, which adherence depends on", () => {
     expect(INSTANCE_STATUSES).toContain("snoozed");
     expect(INSTANCE_STATUSES).toContain("skipped");
+  });
+});
+
+describe("isAnswerable", () => {
+  it("leaves an unanswered moment open", () => {
+    expect(isAnswerable("pending")).toBe(true);
+  });
+
+  /**
+   * The rule that earns this function. A snooze says "not now", so the moment
+   * is still outstanding — treating it as answered would make snoozing the one
+   * way to put something permanently out of reach.
+   */
+  it("leaves a snoozed moment open, because a deferral is not an answer", () => {
+    expect(isAnswerable("snoozed")).toBe(true);
+  });
+
+  it("closes a moment the person has answered", () => {
+    expect(isAnswerable("completed")).toBe(false);
+    expect(isAnswerable("skipped")).toBe(false);
+  });
+
+  it("closes a moment that ran out of time", () => {
+    expect(isAnswerable("missed")).toBe(false);
+  });
+
+  it("has an opinion about every status there is", () => {
+    // Adding a status without deciding whether it is answerable would leave the
+    // on-device lookup and the timeline's tappability to guess separately.
+    for (const status of INSTANCE_STATUSES) {
+      expect(typeof isAnswerable(status)).toBe("boolean");
+    }
+    expect(
+      ANSWERABLE_STATUSES.every((s) => INSTANCE_STATUSES.includes(s))
+    ).toBe(true);
   });
 });
 

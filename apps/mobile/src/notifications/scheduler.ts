@@ -1,5 +1,9 @@
 import type { Reminder, ScheduledOccurrence } from "@taskrx/shared";
-import { nextOccurrences, selectUpcomingOccurrences } from "@taskrx/shared";
+import {
+  entersMedicationHorizon,
+  nextOccurrences,
+  selectMedicationHorizon,
+} from "@taskrx/shared";
 import notifee, {
   AlarmType,
   AndroidImportance,
@@ -15,8 +19,13 @@ import * as remindersRepo from "../db/repos/reminders";
  * is created, and the user's per-channel sound / importance / DND overrides are
  * keyed to it. Renaming the constant is safe; changing this *string* is not —
  * it would orphan the existing channel and silently reset every override the
- * user had set. The value therefore stays `medication_reminders` even though
- * the scheduler now also fires for `task` reminders.
+ * user had set.
+ *
+ * Everything armed from this module is on the medication Tier and lands on this
+ * channel; a task never reaches it (ADR 0003). Tasks get their own channel with
+ * their own importance in #14, which is the point of a separate Tier — a task
+ * inheriting a HIGH-importance channel that bypasses Do Not Disturb is the
+ * behaviour the split exists to prevent.
  */
 export const MEDICATION_REMINDER_CHANNEL_ID = "medication_reminders";
 export const MEDICATION_REMINDER_CHANNEL_NAME = "Medication Reminders";
@@ -32,7 +41,7 @@ const DEFAULT_UPCOMING_COUNT = 10;
  * iOS enforces a hard cap of 64 pending local notifications per app.
  * Android has no cap but 64 is a natural rolling horizon and keeps parity
  * with the future iOS build. Selection is global across all active reminders
- * (see `selectUpcomingOccurrences` in `@taskrx/shared`), not per-reminder.
+ * (see `selectMedicationHorizon` in `@taskrx/shared`), not per-reminder.
  */
 const MAX_GLOBAL_TRIGGERS = 64;
 
@@ -169,12 +178,18 @@ function buildTrigger(scheduledTime: number): TimestampTrigger {
  * Intended for the debug screen (test-one-reminder scenarios). Production
  * paths should call `rescheduleAll`, which uses the global 64-occurrence
  * horizon.
+ *
+ * A task is refused for the same reason `rescheduleAll` skips one: everything
+ * this arms is a `SET_ALARM_CLOCK` trigger on the medication channel, and
+ * ADR 0003 keeps that primitive for doses. The check is here rather than at the
+ * debug screen because the guarantee belongs to whatever arms the alarm, not to
+ * whoever happens to call it.
  */
 export async function scheduleForReminder(
   reminder: Reminder,
   count = DEFAULT_UPCOMING_COUNT
 ): Promise<void> {
-  if (!reminder.active || count <= 0) {
+  if (!reminder.active || !entersMedicationHorizon(reminder) || count <= 0) {
     return;
   }
 
@@ -213,10 +228,13 @@ export async function cancelAll(): Promise<void> {
 /**
  * Refreshes the schedule for the given user using a diff-based algorithm:
  *
- *   1. Load active reminders from the local SQLite repo — every kind, so a
- *      `task` reminder alarms exactly like a `medication` one.
- *   2. Compute the desired 64 soonest occurrences across ALL active reminders
- *      (global selection — see `selectUpcomingOccurrences`).
+ *   1. Load active reminders from the local SQLite repo.
+ *   2. Compute the desired 64 soonest occurrences across every active
+ *      **medication** — `selectMedicationHorizon` drops the tasks, so this
+ *      bounded set can never be filled by tasks at a dose's expense
+ *      (ADR 0003). Task delivery is its own Tier, on its own budget, and lands
+ *      in #14; until then a task appears on the timeline without arming
+ *      anything.
  *   3. Read the currently-scheduled notification IDs from Notifee.
  *   4. Cancel only the notifications that are no longer in the desired set.
  *   5. Create only the notifications that are missing.
@@ -229,11 +247,16 @@ export async function cancelAll(): Promise<void> {
  *
  * Reading `reminders` rather than `medications` is what makes a `weekly`
  * schedule produce alarms at all — the POC engine had no shape for one.
+ *
+ * The list is still read unfiltered, because the diff's cancel pass has to see
+ * the whole desired set to decide what is stale, and a task simply contributes
+ * nothing to it. Filtering the read instead would work today and break the
+ * moment tasks are armed from a second budget.
  */
 export async function rescheduleAll(userId: string): Promise<void> {
   const reminders = await remindersRepo.list(userId);
 
-  const desired = selectUpcomingOccurrences(
+  const desired = selectMedicationHorizon(
     reminders,
     Date.now(),
     MAX_GLOBAL_TRIGGERS

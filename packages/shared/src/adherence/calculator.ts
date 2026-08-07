@@ -2,7 +2,25 @@
  * The adherence calculator, ported from `AdherenceCalculator.Compute` in
  * `TaskRx.Core/AdherenceCalculator.cs` on the `archive/dotnet-maui` branch.
  *
+ * ## Adherence is medication-only
+ *
+ * A task never contributes, in any status. CONTEXT.md defines Adherence as "the
+ * proportion of a person's medication commitments they actually met" and says
+ * so outright: "a medication concept only — tasks never contribute to it." The
+ * spec's user story 37 gives the reason from the person's side — "I want my
+ * tasks excluded from that figure, so that a productive week cannot disguise a
+ * bad medication week" — and a completed task counted in both halves of
+ * `completed / total` does exactly that disguising, pulling the figure toward
+ * 100% for a week in which no dose was taken at all.
+ *
+ * This was latent until the fused timeline: `reminder_kind` has been on every
+ * Instance since the unified tables landed, but no task could be created, so
+ * every row this saw was a medication one.
+ *
  * ## Divergence from the C#: the Snoozed denominator
+ *
+ * Kind-neutral in the C# because the C# has one Kind. What follows is now the
+ * medication half of the rule; the task half is "excluded", above.
  *
  * `AdherenceCalculator.cs:7-15` filters out `Pending`, then counts only
  * `Taken`/`Missed`/`Skipped` toward `total`. A `Snoozed` instance therefore
@@ -68,15 +86,19 @@ export interface AdherenceStats {
 }
 
 /**
- * Whether `instance` counts toward the denominator, per the Snoozed
- * treatment documented above. `AdherenceCalculator.cs:8`'s
- * `i.Status != InstanceStatus.Pending`, refined to also drop a snoozed task.
+ * Whether `instance` counts toward the denominator, per the two rules
+ * documented above. `AdherenceCalculator.cs:8`'s
+ * `i.Status != InstanceStatus.Pending`, refined by Kind.
+ *
+ * The Kind test comes first and covers every status, so a completed task cannot
+ * inflate the figure and a missed one cannot deflate it. That matters for
+ * `missed` in particular: nobody records a missed task deliberately — the sweep
+ * mints those on its own for any Occurrence that ran out of time, so without
+ * this a forgotten task would read as a medication failure.
  */
 function countsTowardTotal(instance: ReminderInstance): boolean {
+  if (instance.reminderKind === "task") return false;
   if (instance.status === "pending") return false;
-  if (instance.status === "snoozed" && instance.reminderKind === "task") {
-    return false;
-  }
   return true;
 }
 

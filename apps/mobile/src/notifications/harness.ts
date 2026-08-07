@@ -295,16 +295,16 @@ async function runSeedDueReminder(
 /**
  * Reports the instances at one exact `(reminder, scheduled time)` pairing.
  *
- * Status-blind on purpose. `findPendingForOccurrence` — what `/dose/log` uses
- * to load — filters to `pending`, so it reports nothing for an occurrence that
- * has been answered, and case 9 reads this back precisely because the dose was
- * answered. What the caller is asking is "did the screen land on the right
- * occurrence", not "is it still unanswered".
+ * Status-blind on purpose. `findAnswerableForOccurrence` — what `/dose/log` uses
+ * to load — filters to `ANSWERABLE_STATUSES`, so it reports nothing for an
+ * occurrence that has been answered, and case 9 reads this back precisely
+ * because the dose was answered. What the caller is asking is "did the screen
+ * land on the right occurrence", not "is it still unanswered".
  *
  * `completed` is reported separately from the first row because an answered
  * occurrence carries MORE THAN ONE instance on a real device: `/dose/log`
- * re-runs its load after the write, finds no pending instance (the one it held
- * is now completed) and mints a fresh one. `list` orders by `scheduled_time`,
+ * re-runs its load after the write, finds no answerable instance (the one it
+ * held is now completed) and mints a fresh one. `list` orders by `scheduled_time`,
  * which is equal across all of them, so which row came first was effectively
  * arbitrary — and case 9 read the duplicate and reported a recorded dose as
  * unrecorded. Sorting by `createdAt` makes the first row the one the screen

@@ -16,7 +16,7 @@
  *
  * Both can describe the same moment, so they are deduplicated on the pairing of
  * **Reminder and scheduled time**, which is the key the lazy-lookup path in
- * `reminderInstancesRepo.findPendingForOccurrence` already uses. Where both
+ * `reminderInstancesRepo.findAnswerableForOccurrence` already uses. Where both
  * exist the Instance wins: a stored answer is a fact, and the Occurrence is only
  * a prediction that it would come due — including an Instance at a moment the
  * Schedule does not predict at all, such as one recorded after the fact.
@@ -35,8 +35,11 @@
  * Instance for this projection to find. Nothing in this file applies a Grace
  * Period of its own.
  *
- * It is also Kind-neutral. Tasks have no screen until the fusion lands, but the
- * rule is the fused one, so that step is a new caller rather than a rewrite.
+ * It is also Kind-neutral, and since #13 that is load-bearing rather than
+ * anticipatory: the home surface hands it both Kinds and renders the one list
+ * that comes back. A Kind filter or a Kind-aware sort appearing below would
+ * unmake the fusion, which is why the cases pin the property rather than the
+ * shipped shape.
  *
  * Pure: no clock, no database, no globals. The caller supplies `now`.
  */
@@ -67,6 +70,19 @@ export interface TimelineRow {
   readonly scheduledTime: number;
   /** `pending` for an Occurrence with no Instance behind it. */
   readonly status: InstanceStatus;
+  /**
+   * The moment a `snoozed` Instance was deferred to; `undefined` for every
+   * other status.
+   *
+   * Carried, not acted on. The row stays at `scheduledTime` — that is the
+   * instant it occupies on the timeline (ADR 0002) and the half of the
+   * deduplication key that makes a moment identifiable, so moving it would
+   * unmake the pairing every stored answer is found by. This exists so a
+   * surface can say *when* the person deferred it to instead of an unqualified
+   * "Snoozed", which is all a snooze amounts to for a Kind whose Tier has no
+   * trigger yet.
+   */
+  readonly snoozedUntil: number | undefined;
   /**
    * The one entry the person should act on now: the soonest unanswered moment
    * at or after `now`. At most one row carries it, and none does on a day whose
@@ -196,6 +212,7 @@ export function projectTimeline(
       kind: reminder.kind,
       scheduledTime: instance.scheduledTime,
       status: instance.status,
+      snoozedUntil: instance.snoozedUntil,
       isNext: false,
     });
   }
@@ -223,13 +240,16 @@ export function projectTimeline(
         kind: reminder.kind,
         scheduledTime: occurrence.fireAt,
         status: "pending",
+        // An Occurrence nobody has answered has no deferral to report — there
+        // is no Instance to have recorded one.
+        snoozedUntil: undefined,
         isNext: false,
       });
     }
   }
 
   // Chronological, with an explicit tie-break on `reminderId` for the reason
-  // `selectUpcomingOccurrences` gives at length: `Array.sort` is stable only
+  // `selectMedicationHorizon` gives at length: `Array.sort` is stable only
   // with respect to the input array, and the input order here is the caller's.
   rows.sort((a, b) => {
     if (a.scheduledTime !== b.scheduledTime) {

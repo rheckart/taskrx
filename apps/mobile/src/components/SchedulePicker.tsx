@@ -3,6 +3,8 @@ import type {
   IntervalTimes,
   NoneTimes,
   OnceTimes,
+  Weekday,
+  WeeklyTimes,
 } from "@taskrx/shared";
 import { isWellFormedSchedule } from "@taskrx/shared";
 import { useCallback } from "react";
@@ -19,20 +21,25 @@ import { Pressable, StyleSheet, Text, TextInput, View } from "react-native";
  * component alone and recorded that they were "due to be replaced wholesale when
  * the picker grows the `once` and `none` variants". This is that.
  *
- * Four of the five variants are editable here:
+ * All five variants are editable here:
  *   - `daily`:    a list of HH:MM time slots
+ *   - `weekly`:   a set of weekdays, and the same time slots on each
  *   - `interval`: an hours field and a start instant
  *   - `once`:     a single instant (ADR 0006 — an instant, never a bare date)
  *   - `none`:     nothing to edit; the reminder goes to the Backlog
  *
- * `weekly` is deliberately outside `EditableSchedule`. It has no UI yet, and
- * narrowing the prop says so in the type rather than leaving a branch that
- * renders an apology.
+ * `weekly` was the last one without a UI. It arrives with the Task work rather
+ * than earlier because it is what "a weekday-only commitment does not nag me on
+ * Sunday" needs, and until a Task could exist there was nothing that shape of
+ * commitment belonged to. Everything under it — the domain variant, the SQLite
+ * column, the Convex validator, `nextOccurrences` — has supported it all along;
+ * only the form could not say it.
  */
 
-/** The schedule variants this component can edit. `weekly` has no UI yet. */
+/** The schedule variants this component can edit — now the whole union. */
 export type EditableSchedule =
   | DailyTimes
+  | WeeklyTimes
   | IntervalTimes
   | OnceTimes
   | NoneTimes;
@@ -83,6 +90,11 @@ export function defaultSchedule(type: EditableScheduleType): EditableSchedule {
   switch (type) {
     case "daily":
       return { type: "daily", times: ["09:00"] };
+    case "weekly":
+      // Weekdays, which is what "weekly rather than daily" almost always means
+      // — the person is excluding the weekend. Sunday is 0, matching both
+      // `Date.getDay()` and the domain's `Weekday`.
+      return { type: "weekly", daysOfWeek: [1, 2, 3, 4, 5], times: ["09:00"] };
     case "interval":
       return { type: "interval", hours: 8, startAt: Date.now() };
     case "once":
@@ -94,6 +106,66 @@ export function defaultSchedule(type: EditableScheduleType): EditableSchedule {
   }
 }
 
+/**
+ * The variant chooser that sits above the picker.
+ *
+ * Both creation forms offer the same five variants under the same labels, and
+ * both replace the value wholesale on a switch, so this was byte-identical in
+ * each of them — the list, the row of `Pressable`s, and five styles. What
+ * genuinely differs between a medication and a task is the fields around the
+ * schedule, not the schedule itself.
+ *
+ * The order is the order a person is likely to want, not the order of the
+ * union: recurring first, then the two that end.
+ */
+const SCHEDULE_TYPES: readonly {
+  readonly type: EditableScheduleType;
+  readonly label: string;
+}[] = [
+  { type: "daily", label: "Daily" },
+  { type: "weekly", label: "Weekly" },
+  { type: "interval", label: "Interval" },
+  { type: "once", label: "Once" },
+  { type: "none", label: "No time" },
+];
+
+export function ScheduleTypeChooser({
+  value,
+  onChange,
+}: {
+  readonly value: EditableScheduleType;
+  /** Receives a fresh default value for the chosen variant, not the bare type. */
+  readonly onChange: (next: EditableSchedule) => void;
+}): ReactElement {
+  return (
+    <View style={styles.typeRow}>
+      {SCHEDULE_TYPES.map(({ type, label }) => (
+        <Pressable
+          key={type}
+          onPress={() => {
+            onChange(defaultSchedule(type));
+          }}
+          style={[
+            styles.typeButton,
+            value === type ? styles.typeButtonActive : null,
+          ]}
+          accessibilityRole="radio"
+          accessibilityState={{ selected: value === type }}
+        >
+          <Text
+            style={[
+              styles.typeButtonText,
+              value === type ? styles.typeButtonTextActive : null,
+            ]}
+          >
+            {label}
+          </Text>
+        </Pressable>
+      ))}
+    </View>
+  );
+}
+
 export function SchedulePicker({
   value,
   onChange,
@@ -101,6 +173,8 @@ export function SchedulePicker({
   switch (value.type) {
     case "daily":
       return <DailyPicker value={value} onChange={onChange} />;
+    case "weekly":
+      return <WeeklyPicker value={value} onChange={onChange} />;
     case "interval":
       return <IntervalPicker value={value} onChange={onChange} />;
     case "once":
@@ -110,34 +184,36 @@ export function SchedulePicker({
   }
 }
 
-function DailyPicker({
-  value,
+/**
+ * The list of `"HH:MM"` slots, shared by the two variants that carry one.
+ *
+ * `daily` and `weekly` differ only in which days the slots apply to, so the
+ * editing, the validation hint and the add/remove affordances are written once
+ * and each variant supplies what to do with the new list.
+ */
+function TimesEditor({
+  times,
   onChange,
 }: {
-  readonly value: DailyTimes;
-  readonly onChange: (next: EditableSchedule) => void;
+  readonly times: readonly string[];
+  readonly onChange: (next: readonly string[]) => void;
 }): ReactElement {
-  const times = value.times;
-
   const updateTime = useCallback(
     (index: number, next: string): void => {
-      onChange({
-        type: "daily",
-        times: times.map((t, i) => (i === index ? next : t)),
-      });
+      onChange(times.map((t, i) => (i === index ? next : t)));
     },
     [times, onChange]
   );
 
   const removeTime = useCallback(
     (index: number): void => {
-      onChange({ type: "daily", times: times.filter((_, i) => i !== index) });
+      onChange(times.filter((_, i) => i !== index));
     },
     [times, onChange]
   );
 
   const addTime = useCallback((): void => {
-    onChange({ type: "daily", times: [...times, "09:00"] });
+    onChange([...times, "09:00"]);
   }, [times, onChange]);
 
   return (
@@ -181,6 +257,111 @@ function DailyPicker({
       <Pressable onPress={addTime} style={styles.addButton} hitSlop={8}>
         <Text style={styles.addButtonText}>+ Add time</Text>
       </Pressable>
+    </View>
+  );
+}
+
+function DailyPicker({
+  value,
+  onChange,
+}: {
+  readonly value: DailyTimes;
+  readonly onChange: (next: EditableSchedule) => void;
+}): ReactElement {
+  const onTimesChange = useCallback(
+    (times: readonly string[]): void => {
+      onChange({ type: "daily", times });
+    },
+    [onChange]
+  );
+
+  return <TimesEditor times={value.times} onChange={onTimesChange} />;
+}
+
+/**
+ * `Weekday` is `0 | 1 | ... | 6` and `Date.getDay()` uses the same ordinals, so
+ * the index into this tuple is the domain value and needs no mapping.
+ */
+const WEEKDAYS: readonly { readonly day: Weekday; readonly label: string }[] = [
+  { day: 0, label: "Sun" },
+  { day: 1, label: "Mon" },
+  { day: 2, label: "Tue" },
+  { day: 3, label: "Wed" },
+  { day: 4, label: "Thu" },
+  { day: 5, label: "Fri" },
+  { day: 6, label: "Sat" },
+];
+
+function WeeklyPicker({
+  value,
+  onChange,
+}: {
+  readonly value: WeeklyTimes;
+  readonly onChange: (next: EditableSchedule) => void;
+}): ReactElement {
+  const { daysOfWeek, times } = value;
+
+  const toggleDay = useCallback(
+    (day: Weekday): void => {
+      // Rebuilt from the canonical list rather than appended to, so the stored
+      // order is always Sunday-first however the person tapped them in. Two
+      // schedules covering the same days should not differ as JSON.
+      const selected = new Set(daysOfWeek);
+      if (selected.has(day)) {
+        selected.delete(day);
+      } else {
+        selected.add(day);
+      }
+      onChange({
+        type: "weekly",
+        daysOfWeek: WEEKDAYS.map((w) => w.day).filter((d) => selected.has(d)),
+        times,
+      });
+    },
+    [daysOfWeek, times, onChange]
+  );
+
+  const onTimesChange = useCallback(
+    (nextTimes: readonly string[]): void => {
+      onChange({ type: "weekly", daysOfWeek, times: nextTimes });
+    },
+    [daysOfWeek, onChange]
+  );
+
+  return (
+    <View>
+      <Text style={styles.label}>Days</Text>
+      <View style={styles.dayRow}>
+        {WEEKDAYS.map(({ day, label }) => {
+          const on = daysOfWeek.includes(day);
+          return (
+            <Pressable
+              key={label}
+              onPress={() => {
+                toggleDay(day);
+              }}
+              style={[styles.dayButton, on ? styles.dayButtonOn : null]}
+              accessibilityRole="checkbox"
+              accessibilityState={{ checked: on }}
+              accessibilityLabel={label}
+            >
+              <Text
+                style={[
+                  styles.dayButtonText,
+                  on ? styles.dayButtonTextOn : null,
+                ]}
+              >
+                {label}
+              </Text>
+            </Pressable>
+          );
+        })}
+      </View>
+      {daysOfWeek.length === 0 ? (
+        <Text style={styles.invalidHint}>Pick at least one day.</Text>
+      ) : null}
+
+      <TimesEditor times={times} onChange={onTimesChange} />
     </View>
   );
 }
@@ -327,6 +508,31 @@ const styles = StyleSheet.create({
     fontSize: 15,
     fontWeight: "500",
   },
+  dayButton: {
+    borderColor: "#ccc",
+    borderRadius: 6,
+    borderWidth: 1,
+    paddingHorizontal: 10,
+    paddingVertical: 8,
+  },
+  dayButtonOn: {
+    backgroundColor: "#007aff",
+    borderColor: "#007aff",
+  },
+  dayButtonText: {
+    color: "#333",
+    fontSize: 14,
+    fontWeight: "500",
+  },
+  dayButtonTextOn: {
+    color: "#fff",
+  },
+  dayRow: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 6,
+    marginTop: 4,
+  },
   hint: {
     color: "#666",
     fontSize: 13,
@@ -374,5 +580,31 @@ const styles = StyleSheet.create({
     alignItems: "center",
     flexDirection: "row",
     marginTop: 8,
+  },
+  typeButton: {
+    borderColor: "#ccc",
+    borderRadius: 6,
+    borderWidth: 1,
+    marginBottom: 8,
+    marginRight: 8,
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+  },
+  typeButtonActive: {
+    backgroundColor: "#007aff",
+    borderColor: "#007aff",
+  },
+  typeButtonText: {
+    color: "#333",
+    fontSize: 14,
+    fontWeight: "500",
+  },
+  typeButtonTextActive: {
+    color: "#fff",
+  },
+  typeRow: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    marginTop: 4,
   },
 });

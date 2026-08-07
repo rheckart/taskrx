@@ -31,6 +31,7 @@ export type RxNormSearchResponse = readonly RxNormSearchResult[];
  * there is no longer a second set to migrate across from.
  */
 export {
+  ANSWERABLE_STATUSES,
   INSTANCE_STATUSES,
   NOTIFICATION_TYPES,
   PRIORITIES,
@@ -41,6 +42,7 @@ export {
   createReminderInstance,
   dailyTimes,
   intervalTimes,
+  isAnswerable,
   isWellFormedSchedule,
   noneTimes,
   onceTimes,
@@ -74,8 +76,20 @@ export type {
   WeeklyTimesWire,
 } from "./domain/index";
 
-export { nextOccurrences, selectUpcomingOccurrences } from "./schedule/index";
+export { nextOccurrences, selectMedicationHorizon } from "./schedule/index";
 export type { OccurrenceSource, ScheduledOccurrence } from "./schedule/index";
+
+/**
+ * Tier — the delivery guarantee a Reminder's notifications get, derived from
+ * Kind and from nothing else. See ADR 0003: a task is not in the medication
+ * Horizon at all, so it cannot displace a dose.
+ *
+ * Only the question the app actually asks is exported. `Tier` and `TIERS` stay
+ * inside the module until something outside needs to name a Tier rather than
+ * test for one — which is what #14 will do when tasks get a trigger of their
+ * own.
+ */
+export { entersMedicationHorizon } from "./notifications/tier";
 
 /**
  * Adherence scoring and refill planning, ported from `TaskRx.Core`. Both are

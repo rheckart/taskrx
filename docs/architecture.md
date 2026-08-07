@@ -21,8 +21,8 @@ This document describes the architecture of the TaskRx proof-of-concept. The Pha
 │  │ @taskrx/shared               │  │         │  - enforces userId on all    │
 │  │  - scheduleEngine (daily,    │  │         │    reads/writes              │
 │  │    interval)                 │  │         └──────────────┬───────────────┘
-│  │  - selectUpcomingOccurrences │  │                        │
-│  │    (global 64 horizon)       │  │                        │
+│  │  - selectMedicationHorizon   │  │                        │
+│  │    (global 64, doses only)   │  │                        │
 │  │  - conflict resolution       │  │                        │
 │  │  - permission-state derive   │  │                        │
 │  └──────────────────────────────┘  │                        │
@@ -56,7 +56,7 @@ This document describes the architecture of the TaskRx proof-of-concept. The Pha
 2. **Convex is the source of truth in the cloud.** Sync pushes local changes up and pulls remote changes in.
 3. **The notification scheduler reads from SQLite, never from Convex.** This is why reminders fire offline.
 4. **Schedule computation is pure + deterministic.** Given a med config + current time, `@taskrx/shared` returns the next N dose times. No DB calls inside the engine.
-5. **Notification horizon is global, not per-reminder.** `selectUpcomingOccurrences` picks the 64 soonest occurrences across ALL active reminders — iOS-cap-safe and, when both A@21:00 and B@10min-from-now exist, B always wins over A regardless of what A already had scheduled.
+5. **Notification horizon is global, not per-reminder — and medications only.** `selectMedicationHorizon` picks the 64 soonest occurrences across ALL active *medication* reminders — iOS-cap-safe and, when both A@21:00 and B@10min-from-now exist, B always wins over A regardless of what A already had scheduled. Tasks are excluded by construction rather than by policy (ADR 0003): everything in this set is armed with `SET_ALARM_CLOCK`, and a bounded set shared with tasks is one that tasks can fill at a dose's expense. Task-Tier delivery is issue #14.
 6. **Sync queue drains until MAX_ATTEMPTS (5) failures; then dead-letters.** Dead-lettered entries are retained (never deleted) for inspection and manual requeue.
 7. **Conflict resolution rules live in one tested place.** `@taskrx/shared/sync/conflict` — local wins ties, and a locally `completed` instance is never overwritten by a remote pull.
 8. **An unanswered Occurrence becomes Missed by a sweep, not by a query.** Instances are minted lazily, so a moment nobody answers has no row at all. `planMissedSweep` in `@taskrx/shared` decides which moments have run out of time; `apps/mobile/src/sweep/runner.ts` persists the verdicts, serialized so two foregrounds cannot mint one moment twice. The Grace Period (2h) and lookback (7 days) are ADR 0005.
@@ -179,7 +179,7 @@ Two pure functions consumed by both repo `upsertMany` paths:
 
 1. User saves a medication → repo writes to SQLite and enqueues a sync entry.
 2. `rescheduleAll(userId)` reads all active reminders from SQLite.
-3. `selectUpcomingOccurrences(reminders, Date.now(), 64)` from `@taskrx/shared` returns the 64 soonest occurrences **across all reminders** (not per-reminder). This is iOS-cap-safe and ensures a reminder with a closer next occurrence always displaces one with a farther next occurrence, regardless of how many alarms the farther reminder already has.
+3. `selectMedicationHorizon(reminders, Date.now(), 64)` from `@taskrx/shared` returns the 64 soonest occurrences **across all medication reminders** (not per-reminder; tasks never enter this set). This is iOS-cap-safe and ensures a reminder with a closer next occurrence always displaces one with a farther next occurrence, regardless of how many alarms the farther reminder already has.
 4. **Diff, don't rebuild:** read current pending trigger IDs from notify-kit, compare against the desired 64:
    - Cancel only the notifications that are no longer in the desired set.
    - Create only the notifications that are missing.
