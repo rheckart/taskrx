@@ -204,8 +204,15 @@ fi
 # that would otherwise compose into "THE APP DOES NOT READ THE PLATFORM" about a
 # phone nobody plugged in, written into an evidence artifact. It also polls to a
 # 180s deadline, which is the same spin-out shape case 10 has.
+# Case 13 joins for a reason of its own. It is a REPRODUCTION and is expected to
+# FAIL on a real device until issue #23 is fixed, so it is the case most likely
+# to be read quickly and believed. With no device its probes come back empty and
+# its delivery poll would spin to a deadline minutes out — and "REPRODUCED — the
+# database is unwritable" is not a sentence to write about a phone nobody
+# plugged in.
 for probe in "10 case10_task_tier_delivery" "11 case11_task_flood_preserves_doses" \
-             "12 case12_fresh_install_asks_to_notify"; do
+             "12 case12_fresh_install_asks_to_notify" \
+             "13 case13_db_after_notification"; do
   set -- $probe
   probe_n="$1"; probe_fn="$2"
   if ! declare -F "$probe_fn" >/dev/null; then

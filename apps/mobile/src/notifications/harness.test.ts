@@ -93,6 +93,9 @@ const mocks = vi.hoisted(() => ({
     >(),
   dbGetAllAsync:
     vi.fn<(sql: string, ...args: unknown[]) => Promise<unknown[]>>(),
+  dbGetFirstAsync:
+    vi.fn<(sql: string, ...args: unknown[]) => Promise<unknown>>(),
+  dbExecAsync: vi.fn<(sql: string) => Promise<void>>(),
 }));
 
 vi.mock("../db", () => ({
@@ -100,6 +103,8 @@ vi.mock("../db", () => ({
     Promise.resolve({
       runAsync: mocks.dbRunAsync,
       getAllAsync: mocks.dbGetAllAsync,
+      getFirstAsync: mocks.dbGetFirstAsync,
+      execAsync: mocks.dbExecAsync,
     }),
 }));
 
@@ -189,6 +194,12 @@ beforeEach(() => {
   mocks.queueDeadLettered.mockResolvedValue([]);
   mocks.syncStatus.mockReturnValue("idle");
   mocks.dbGetAllAsync.mockResolvedValue([]);
+  mocks.dbExecAsync.mockResolvedValue(undefined);
+  mocks.dbGetFirstAsync.mockImplementation((sql: string) =>
+    Promise.resolve(
+      sql.includes("journal_mode") ? { journal_mode: "delete" } : { timeout: 0 }
+    )
+  );
   mocks.dbRunAsync.mockResolvedValue({ changes: 0, lastInsertRowId: 0 });
 });
 
@@ -225,6 +236,144 @@ describe("parseHarnessSpec", () => {
     const parsed = parseHarnessSpec(spec("instance-at", "r1", "5"));
     expect(parsed.delayMs).toBe(1000);
     expect(parsed.value).toBe(5);
+  });
+});
+
+/**
+ * The probe issue #23 turns on.
+ *
+ * Its job is to tell three states apart that the app currently reports as one
+ * silence: the database is writable, the database is locked, and something else
+ * went wrong. The device case reads its verdict out of these field names, so a
+ * rename here is a case that greps for nothing — the same fragility case 12's
+ * fields carry, and pinned for the same reason.
+ *
+ * The `BEGIN IMMEDIATE`/`ROLLBACK` pair is the subject rather than an
+ * implementation detail: it is what takes the write lock without leaving a row
+ * behind, on a device somebody may probe repeatedly, and a probe that wrote
+ * would move the adherence numbers it is meant to be protecting.
+ */
+describe("db-probe", () => {
+  it("reports a writable database with the pragmas it actually read", async () => {
+    const out = await runHarnessAction(
+      parseHarnessSpec(spec("db-probe")),
+      SIGNED_OUT
+    );
+
+    expect(out).toContain("db_writable=yes");
+    expect(out).toContain("db_lockable=yes");
+    expect(out).toContain("journal_mode=delete");
+    expect(out).toContain("busy_timeout=0");
+  });
+
+  it("reports a lock as a lock, and carries the reason verbatim", async () => {
+    // The whole point. `docs/poc-results.md` records this failure from one
+    // session with the cause guessed; a probe that flattened it to a boolean
+    // would lose the difference between a lock, a corrupt journal and a missing
+    // table.
+    // The write path, which is what actually fails on the device.
+    mocks.dbRunAsync.mockRejectedValueOnce(
+      new Error("Error code : database is locked")
+    );
+
+    const out = await runHarnessAction(
+      parseHarnessSpec(spec("db-probe")),
+      SIGNED_OUT
+    );
+
+    expect(out).toContain("db_writable=no");
+    expect(out).toContain("database is locked");
+  });
+
+  it("separates taking a lock from committing a write", async () => {
+    // The distinction the device forced. Taking a RESERVED lock only needs no
+    // other connection WRITING; committing needs EXCLUSIVE, which also needs no
+    // other connection READING. Measured on the Pixel: the lock succeeded and
+    // the write failed in the same second, and a probe that reported one number
+    // would have called that database healthy.
+    mocks.dbRunAsync.mockRejectedValueOnce(
+      new Error("Error code : database is locked")
+    );
+
+    const out = await runHarnessAction(
+      parseHarnessSpec(spec("db-probe")),
+      SIGNED_OUT
+    );
+
+    expect(out).toContain("db_lockable=yes");
+    expect(out).toContain("db_writable=no");
+  });
+
+  it("reports the write's error, not the lock probe's, when both are known", async () => {
+    // The write is the operation the product actually performs, so its failure
+    // is the one worth carrying. A probe that reported whichever failed first
+    // would hand back the less specific of two errors.
+    mocks.dbExecAsync.mockRejectedValueOnce(new Error("lock probe error"));
+    mocks.dbRunAsync.mockRejectedValueOnce(new Error("write error"));
+
+    const out = await runHarnessAction(
+      parseHarnessSpec(spec("db-probe")),
+      SIGNED_OUT
+    );
+
+    expect(out).toContain("db_error=write error");
+  });
+
+  it("writes only to its own table, never to a domain one", async () => {
+    // A probe that inserted would corrupt the `reminder_instances` rows
+    // adherence is computed from, on a device being tested repeatedly. Stated
+    // as an outcome of the SQL it runs: a transaction opened and rolled back,
+    // and no statement that writes.
+    await runHarnessAction(parseHarnessSpec(spec("db-probe")), SIGNED_OUT);
+
+    const written = mocks.dbRunAsync.mock.calls.map(([sql]) => sql).join(" ");
+    expect(written).not.toMatch(/reminder|sync_queue|_migrations/);
+    // And the row it does write is removed again, so a device probed a hundred
+    // times still holds nothing.
+    expect(written).toContain("INSERT INTO _db_probe");
+    expect(written).toContain("DELETE FROM _db_probe");
+  });
+
+  it("leaves no transaction open when the lock probe fails", async () => {
+    // Otherwise the first failure poisons every later probe in the same
+    // process, and the case reports a lock this action created.
+    mocks.dbExecAsync.mockRejectedValueOnce(new Error("database is locked"));
+
+    await runHarnessAction(parseHarnessSpec(spec("db-probe")), SIGNED_OUT);
+
+    expect(mocks.dbExecAsync.mock.calls.map(([sql]) => sql)).toContain(
+      "ROLLBACK"
+    );
+  });
+
+  it("still reports the pragmas when the lock probe throws", async () => {
+    mocks.dbExecAsync.mockRejectedValueOnce(new Error("database is locked"));
+
+    expect(
+      await runHarnessAction(parseHarnessSpec(spec("db-probe")), SIGNED_OUT)
+    ).toContain("journal_mode=delete");
+  });
+
+  it("still answers in the shape the case parses when even the pragmas throw", async () => {
+    // The state that would otherwise produce `journal_mode=` with nothing after
+    // it. A database locked hard enough to refuse a PRAGMA is exactly when this
+    // probe is most worth reading, and the shell greps these fields — an empty
+    // one is a case that concludes nothing and says so unclearly.
+    mocks.dbGetFirstAsync.mockRejectedValue(new Error("database is locked"));
+
+    const out = await runHarnessAction(
+      parseHarnessSpec(spec("db-probe")),
+      SIGNED_OUT
+    );
+
+    expect(out).toMatch(/journal_mode=\S/);
+    expect(out).toContain("db_writable=");
+  });
+
+  it("answers signed out — a lock is not a property of a user", async () => {
+    expect(
+      await runHarnessAction(parseHarnessSpec(spec("db-probe")), SIGNED_OUT)
+    ).not.toContain("signed_in=false");
   });
 });
 

@@ -615,6 +615,21 @@ notifee_has_asked() {
     | grep -c 'permission_requested" value="true"' || true
 }
 
+# ── Case 13 only: what is actually on disk beside the database. ─────────────
+#
+# A `-journal` file here is a HOT JOURNAL — left behind by a connection killed
+# mid-transaction — and it is the one explanation that fits the detail issue #23
+# says does not fit the others: the lock reportedly survives `am kill` and a
+# verified-fresh process, which no in-memory connection conflict can do. A
+# `-wal`/`-shm` pair means the journal mode changed under us.
+#
+# `run-as` needs a debuggable build, which is what this harness drives. Prints
+# names only, never contents: the database holds someone's medication history.
+sqlite_files() {
+  adb_run exec-out run-as "$PKG" ls files/SQLite 2>/dev/null \
+    | tr -d '\r' | tr '\n' ' ' | sed 's/ *$//'
+}
+
 # The system permission dialog, matched on the permission controller's own view
 # id rather than on the word "Allow" — the text is localised and the id is not,
 # and a case that could only run on an English phone would report a device in
@@ -2034,6 +2049,130 @@ case12_fresh_install_asks_to_notify() {
   fi
 }
 
+# Issue #23: after a notification fires, every SQLite write fails with
+# "database is locked".
+#
+# ── THIS CASE IS A REPRODUCTION, AND IT IS EXPECTED TO FAIL TODAY. ──────────
+# It exists before any fix, deliberately. `docs/poc-results.md` records the lock
+# from a single session with its cause GUESSED — "stated as a suspicion, not a
+# diagnosis" — and a fix chosen against an anecdote cannot be shown to have
+# worked. This turns the anecdote into a reading that can go green.
+#
+# The shape is taken from the workaround the lock already forced on this file:
+# cases 8 and 9 cannot share an invocation, because case 8 fires a notification
+# and case 9 then cannot write. So the reproduction is exactly that sequence,
+# with the write reduced to its smallest form — a lock acquisition that leaves
+# no row behind — and with the state that would explain it captured at the same
+# moment rather than reasoned about afterwards.
+#
+# What it records either way, because a repro that only says "it failed" moves
+# nobody forward:
+#   * `journal_mode` and `busy_timeout`, read from the connection. Rollback
+#     journal with a zero timeout means a second writer fails INSTANTLY.
+#   * the SQLite directory listing, so a hot `-journal` is visible if present.
+#   * the app's verbatim error.
+#   * whether the notification actually posted — without that, the case has not
+#     reached the state it is about, and says so instead of reporting a verdict.
+#
+# A PASS here means the product property holds: a write succeeds after a
+# notification has fired. When that happens, `--auth` should also run 8 and 9 in
+# one invocation, and the two-pass workaround in this header can go.
+case13_db_after_notification() {
+  if ! device_attached; then
+    add_unevaluated 13 db_after_notification no_device \
+      "NO DEVICE (instrument, not product): no device is attached (adb get-state is not \"device\"), so this case was never run. Nothing here is a statement about the database."
+    return
+  fi
+  if ! fresh_app_process; then
+    add_unevaluated 13 db_after_notification setup_failed \
+      "SETUP FAILED (not a product failure): the app process could not be restarted, so this case would have run against a process that may ALREADY be holding the lock it is trying to reproduce — which is the one starting state that makes its verdict meaningless."
+    return
+  fi
+  require_reachable 13 db_after_notification || return
+  require_signed_in 13 db_after_notification || return
+  grant_exact
+
+  # The baseline, and it is load-bearing. If the database is already unwritable
+  # before any notification has fired, then whatever this case observes later is
+  # not caused by the notification and the reproduction has proved nothing.
+  local before files_before
+  before="$(harness db-probe x 0 "$HARNESS_SLOW_BUDGET_S")"
+  files_before="$(sqlite_files)"
+  if [[ -z "$before" ]]; then
+    add_unevaluated 13 db_after_notification setup_failed \
+      "SETUP FAILED (not a product failure): the app did not answer the probe before the notification, so there is no baseline to compare against."
+    return
+  fi
+  # `db_writable`, NOT `db_lockable`. The first version of this case gated on a
+  # lock acquisition, which passed while a real write failed in the same second —
+  # so it declared a healthy baseline on a database that could not be written to,
+  # and then reported the seed's failure as a setup problem. The two readings are
+  # both kept because their disagreement is the diagnosis, but only the one that
+  # matches what the product does may gate a verdict.
+  if ! printf '%s' "$before" | grep -q "db_writable=yes"; then
+    add_unevaluated 13 db_after_notification setup_failed \
+      "SETUP FAILED (not a product failure): the database was ALREADY unwritable before any notification fired, so nothing this case goes on to observe can be attributed to one. The app reported: ${before} | files: ${files_before:-unreadable}. Restart the app and re-run."
+    return
+  fi
+
+  harness cleanup-seeded x 0 "$HARNESS_SLOW_BUDGET_S" >/dev/null
+
+  local label seeded fire_at armed
+  label="dblock-$(date +%s)"
+  # `harness_once`, not `harness`: a retry on a write seeds a second reminder.
+  seeded="$(harness_once seed-due-reminder "$label" "$TAP_LEAD_MS" "$HARNESS_SLOW_BUDGET_S")"
+  fire_at="$(printf '%s' "$seeded" | grep -oE 'fire_at=[0-9]+' | head -1 | cut -d= -f2)"
+  armed="$(printf '%s' "$seeded" | grep -oE 'armed=[0-9]+' | head -1 | cut -d= -f2)"
+
+  if [[ -z "$fire_at" || "$fire_at" == "none" ]]; then
+    add_unevaluated 13 db_after_notification setup_failed \
+      "SETUP FAILED (not a product failure): no reminder was seeded, so no notification was ever going to fire. The app answered: ${seeded:-<nothing>}"
+    return
+  fi
+
+  # Background it: the case is about a notification arriving the way one really
+  # arrives, and the headless JS context that suspicion points at only exists
+  # when the app is not in front of the person.
+  adb_shell input keyevent KEYCODE_HOME >/dev/null 2>&1
+  local posted=0 post_deadline
+  post_deadline=$(( fire_at / 1000 + TAP_POST_GRACE_S ))
+  while (( $(date +%s) < post_deadline )); do
+    posted="$(notification_has "$label")"
+    (( posted >= 1 )) && break
+    sleep 5
+  done
+
+  if (( posted < 1 )); then
+    harness cleanup-seeded x 0 "$HARNESS_SLOW_BUDGET_S" >/dev/null
+    add_unevaluated 13 db_after_notification setup_failed \
+      "SETUP FAILED (not a product failure): the seeded reminder never posted (armed=${armed} for ${fire_at}), so the app never reached the state this case is about. Nothing was measured about the database."
+    return
+  fi
+
+  # The measurement. Taken through a deep link, which brings the app forward —
+  # that is the same route the person takes when they tap the notification to
+  # log the dose, which is the moment the lock was originally reported at.
+  local after files_after
+  after="$(harness db-probe x 0 "$HARNESS_SLOW_BUDGET_S")"
+  files_after="$(sqlite_files)"
+
+  harness cleanup-seeded x 0 "$HARNESS_SLOW_BUDGET_S" >/dev/null
+
+  if [[ -z "$after" ]]; then
+    add_unevaluated 13 db_after_notification setup_failed \
+      "SETUP FAILED (not a product failure): the notification posted, and the app then did not answer the probe at all. Silence is not a locked database — it is an app that could not be reached. before=${before} | files after: ${files_after:-unreadable}"
+    return
+  fi
+
+  if printf '%s' "$after" | grep -q "db_writable=yes"; then
+    add_result 13 db_after_notification true \
+      "the database is still writable after a notification fired. before=[${before}] after=[${after}] files_before=[${files_before:-unreadable}] files_after=[${files_after:-unreadable}] armed=${armed} for ${fire_at}"
+  else
+    add_result 13 db_after_notification false \
+      "REPRODUCED — the database is unwritable after a notification fired, and was writable before it. before=[${before}] after=[${after}] files_before=[${files_before:-unreadable}] files_after=[${files_after:-unreadable}] armed=${armed} for ${fire_at}. A \`-journal\` in files_after is a hot journal and explains why the lock survives a fresh process; a journal_mode of \`delete\` with busy_timeout 0 explains why a second writer fails instantly rather than waiting."
+  fi
+}
+
 run_case() {
   case "$1" in
     1) case1_killed_app ;;
@@ -2048,6 +2187,7 @@ run_case() {
     10) case10_task_tier_delivery ;;
     11) case11_task_flood_preserves_doses ;;
     12) case12_fresh_install_asks_to_notify ;;
+    13) case13_db_after_notification ;;
     *) echo "unknown case: $1" >&2; return 2 ;;
   esac
 }
@@ -2058,7 +2198,7 @@ notification-harness.sh — adb-driven notification test harness
 
   --list          List cases
   --purge         Hard-delete every row cases 8 and 9 seeded (Convex, then device)
-  --case N        Run case N (1..12)
+  --case N        Run case N (1..13)
   --all           Run cases 1-7, 10-11: the local-only delivery baseline
   --auth          Run cases 8-9: need a signed-in app and a reachable Convex.
                   Prefer `--case 8` then `--case 9` as separate invocations —
@@ -2169,6 +2309,7 @@ list_cases() {
 10 task_tier_delivery       A task notifies at its time and never registers as the next alarm clock
 11 task_flood_preserves_doses  A full task budget still leaves the dose armed and holding the alarm clock
 12 fresh_install_asks_to_notify [signed in] POST_NOTIFICATIONS revoked and never asked: the app asks, and then DELIVERS
+13 db_after_notification    [signed in] Issue #23 repro: is SQLite still writable after a notification fired? Expected to FAIL until fixed
 EOF
 }
 

@@ -44,7 +44,7 @@ import {
  *
  * The actions split into two families, and the split is not cosmetic:
  *
- * - **Local-only** (`schedule` … `notification-status`) drive notifee with
+ * - **Local-only** (`schedule` … `db-probe`) drive notifee with
  *   in-memory data and run on a fresh, signed-out install. Harness cases 1-7
  *   use these, which is why that suite can be the delivery baseline on any
  *   device.
@@ -65,6 +65,7 @@ export type HarnessAction =
   | "pending-ids"
   | "exact-alarm-status"
   | "notification-status"
+  | "db-probe"
   | "auth-status"
   | "seed-due-reminder"
   | "instance-at"
@@ -122,6 +123,7 @@ const VALID_ACTIONS: readonly HarnessAction[] = [
   "pending-ids",
   "exact-alarm-status",
   "notification-status",
+  "db-probe",
   "auth-status",
   "seed-due-reminder",
   "instance-at",
@@ -633,6 +635,139 @@ async function runPurgeSeeded(userId: string): Promise<string> {
   );
 }
 
+/**
+ * Asks SQLite three questions that issue #23 turns on, and writes nothing.
+ *
+ * `docs/poc-results.md` records that once an alarm has posted, every write
+ * fails with "database is locked" — and records it as a suspicion, from one
+ * session, never run to ground. It is why harness cases 8 and 9 cannot share an
+ * invocation. This is the reading that turns it into a measurement.
+ *
+ * **`BEGIN IMMEDIATE` rather than a real INSERT.** It takes the same RESERVED
+ * lock a write takes, and it is the step that actually fails when another
+ * connection holds the database — so it reproduces the fault exactly, while
+ * `ROLLBACK` guarantees nothing is left behind. A probe that inserted a row
+ * would be a probe that corrupts adherence data on a device somebody is
+ * testing, and this one may be run repeatedly.
+ *
+ * The journal mode is reported beside it because the two are the same question.
+ * In rollback-journal mode (the expo-sqlite default, and what the device shows —
+ * no `-wal` sidecar) a writer locks the whole file, and with `busy_timeout` at 0
+ * a second writer fails INSTANTLY instead of waiting. Both numbers are read from
+ * the connection rather than assumed, so a future fix that sets them is visible
+ * here rather than merely believed.
+ *
+ * The error is returned VERBATIM. "Locked" is not the only way this can fail,
+ * and a probe that flattened every failure to a boolean would hide the
+ * difference between a lock, a corrupt journal and a missing table.
+ */
+/**
+ * One PRAGMA, as a string, never throwing.
+ *
+ * The column name differs per pragma — `journal_mode` returns `journal_mode`,
+ * `busy_timeout` returns `timeout` — so the single value is taken positionally
+ * rather than by a name this would have to keep a table of.
+ *
+ * Only ever called with literals from this module; the name is not a parameter
+ * any caller outside it can reach.
+ */
+async function readPragma(
+  db: Awaited<ReturnType<typeof getDb>>,
+  name: "journal_mode" | "busy_timeout"
+): Promise<string> {
+  try {
+    // `string | number` rather than `unknown`: a PRAGMA returns one scalar, and
+    // `unknown` would reach `String()` as a possible object — which lints, and
+    // rightly, since `[object Object]` in an evidence artifact is a field that
+    // looks like a reading and is not one.
+    const row = await db.getFirstAsync<Record<string, string | number>>(
+      `PRAGMA ${name}`
+    );
+    const value = row === null ? undefined : Object.values(row)[0];
+    return value === undefined ? "none" : String(value);
+  } catch (error: unknown) {
+    return `error:${error instanceof Error ? error.message : String(error)}`;
+  }
+}
+
+/**
+ * Runs one probe, never throwing, and always leaving the connection clean.
+ *
+ * The rollback on failure is not tidiness: a transaction left open by a failed
+ * probe makes every later probe in the same process report a lock this action
+ * created, and the case would then blame the notification for it.
+ */
+async function attempt(
+  db: Awaited<ReturnType<typeof getDb>>,
+  body: () => Promise<void>
+): Promise<{ ok: boolean; error: string | null }> {
+  try {
+    await body();
+    return { ok: true, error: null };
+  } catch (error: unknown) {
+    try {
+      await db.execAsync("ROLLBACK");
+    } catch {
+      // Expected whenever no transaction was open. Swallowed deliberately —
+      // reporting it would mask the real error above.
+    }
+    return {
+      ok: false,
+      error: error instanceof Error ? error.message : String(error),
+    };
+  }
+}
+
+async function runDbProbe(): Promise<string> {
+  const db = await getDb();
+
+  // Read before the lock probe, so a database too locked to write still reports
+  // the two settings that explain why. Each pragma catches for itself: sharing
+  // one `try` meant the second field kept a fallback the first field's failure
+  // had already made unreachable, which is dead code wearing the costume of a
+  // safety net.
+  const journalMode = await readPragma(db, "journal_mode");
+  const busyTimeout = await readPragma(db, "busy_timeout");
+
+  // TWO probes, and the DIFFERENCE between them is the diagnosis.
+  //
+  // Measured on the device 2026-08-07: the lock probe passed and a real write
+  // failed, in the same second. That is not noise, it is a fingerprint. Taking
+  // a RESERVED lock only requires that no other connection is WRITING;
+  // committing requires EXCLUSIVE, which additionally requires that no other
+  // connection is READING. A probe that stopped at `BEGIN IMMEDIATE` therefore
+  // reports a healthy database while every real write fails — which is exactly
+  // what the first version of this did, and it very nearly sent the
+  // investigation off believing the lock had gone away.
+  const lockable = await attempt(db, async () => {
+    await db.execAsync("BEGIN IMMEDIATE");
+    await db.execAsync("ROLLBACK");
+  });
+
+  // A COMMITTED write, because that is the operation that actually fails. Its
+  // own table, so nothing here can touch the `reminder_instances` rows
+  // adherence is computed from — this may be run on a device repeatedly, and a
+  // probe that moved a real number would be worse than no probe. The row is
+  // deleted immediately; the empty table is left behind on purpose, since
+  // creating it is itself a write and doing that once is cheaper than doing it
+  // every probe.
+  const writable = await attempt(db, async () => {
+    await db.execAsync(
+      "CREATE TABLE IF NOT EXISTS _db_probe (id INTEGER PRIMARY KEY)"
+    );
+    await db.runAsync("INSERT INTO _db_probe (id) VALUES (1)");
+    await db.runAsync("DELETE FROM _db_probe WHERE id = 1");
+  });
+
+  return (
+    `db_writable=${writable.ok ? "yes" : "no"} ` +
+    `db_lockable=${lockable.ok ? "yes" : "no"} ` +
+    `journal_mode=${journalMode} ` +
+    `busy_timeout=${busyTimeout} ` +
+    `db_error=${(writable.error ?? lockable.error ?? "none").replace(/\s+/g, " ")}`
+  );
+}
+
 export async function runHarnessAction(
   spec: HarnessSpec,
   context: HarnessContext
@@ -683,6 +818,8 @@ export async function runHarnessAction(
         `exact_alarm_granted=${String(permission.exactAlarmGranted)}`
       );
     }
+    case "db-probe":
+      return runDbProbe();
     case "auth-status":
       return userId === null
         ? SIGNED_OUT_REPLY
