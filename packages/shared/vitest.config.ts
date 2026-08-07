@@ -10,6 +10,12 @@ export default defineConfig({
       reporter: ["text", "html"],
       include: [
         "src/adherence/calculator.ts",
+        // The draft is what stands between a typed phrase and a written
+        // Reminder: whether the parser was understood, what a failed read falls
+        // back to, and which fields a Kind correction may not carry across. A
+        // branch added here without a case is a task saved with a dosage, or an
+        // entry surface with nothing to show.
+        "src/parser/draft.ts",
         "src/parser/extractors.ts",
         "src/parser/lexicon.ts",
         "src/parser/patterns.ts",

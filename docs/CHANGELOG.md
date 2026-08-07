@@ -8,6 +8,94 @@ for commit discipline (POC tags use `0.x.x`).
 
 ## [Unreleased]
 
+### 2026-08-07 — Type a phrase, get the right Reminder
+
+Closes #15. The natural-language parser has been in this repository since the
+port — deterministic, offline, 100% covered, ported line for line from
+`ReminderParser.cs` with its ten xUnit cases translated — and it has had zero
+callers outside its own test file the entire time. `packages/shared/src/parser`
+is 1,377 lines of engine that nothing ever started. This ticket is a screen and
+about 170 lines of glue, and it makes capture work for both Kinds at once, which
+is why the spec calls it the primary creation surface.
+
+- `feat(shared): the reviewable draft between a phrase and a Reminder` — a
+  `ReminderDraft` is deliberately *not* a `Reminder`: no id, no owner, no
+  timestamps, because none of the three is the parser's to guess. Three rules
+  live in `parser/draft.ts` so the screen holds none of them.
+
+  `readPhrase` **always returns a draft**, including for the two inputs the
+  parser refuses (no tokens at all; no token that could serve as a name). That is
+  what makes "a phrase that cannot be parsed falls back to entering the Reminder
+  directly" structural rather than a branch someone has to remember to write —
+  there is no state in which the entry surface has nothing to show. The fallback
+  keeps the typed phrase as the name and takes **no** schedule at all: the parse
+  reached that arm without producing a reminder, so nothing it saw about *when*
+  is worth keeping, and `none` puts the reminder in the Backlog until a person
+  gives it a time. A guessed time would have been the one failure mode a
+  medication reminder must not have.
+
+  `withKind` drops `dosage`, `pillsRemaining`, `pillsPerDose`,
+  `refillReminderDays` and `rxcui` when a draft becomes a task. Kind detection
+  is the parser's most confident guess and its most visible mistake — "urgent
+  call the surgery about the biopsy result" reads as a medication, because past
+  three meaningful words the grammar assumes a drug name — so correcting it is
+  the likeliest correction there is. Hiding those fields behind a
+  `kind === "task"` check in the form would still have *saved* them: a task with
+  a 20mg dose.
+
+  `withName` drops the `rxcui`, because an RxNorm concept id is not an
+  independent field — it asserts that *this name* is that concept. Pick
+  "Metformin Hydrochloride 500 MG Oral Tablet" from the lookup, shorten it to
+  "Metformin", and without this the row saves claiming an identity for a name
+  nobody verified. `rxcui` lives on the draft rather than in the screen's own
+  state precisely so both rules can be functions with cases behind them; held in
+  the surface, "a task carries no drug identity" would have been a
+  `kind === "task"` check in a screen, which is the extraction being incomplete.
+
+  The module joins the 100% coverage gate, and all 26 mutants of it were killed.
+
+- `feat(mobile): one box that produces either Kind` — `app/(app)/add.tsx`, in
+  two stages. Type; then review a form, not a confirmation dialog. Every field
+  the parser filled in is the field you correct, in place, and "Edit phrase"
+  goes back with the phrase still in the box. What the parser could not place is
+  named on screen ("Not used: …") rather than dropped, because a phrase parses
+  *around* those tokens — without saying so, a word that had no effect looks
+  exactly like a word that did.
+
+  The supply counts open by themselves when the phrase named any of them, and
+  sit behind one tap when it named none. A misread is not only a number read
+  wrongly — it is also "30 pills" that landed in the unused words — so a form
+  with no route to that number would make the parser's silence unappealable;
+  three empty count boxes on arrival would be the six-field form this surface
+  exists to replace.
+
+  It is the primary creation surface rather than the first of seven identical
+  footer links, so `+ Add` is the one that gets the button. `/tasks/new` and the
+  medication form stay reachable: this screen falls back to a form of its own
+  for a phrase it cannot read, but retiring a working surface is not this
+  ticket's to do.
+
+  It is the first caller to pass `priority` to `remindersRepo.create`, which
+  that module's `enqueueExternalWrite` comment had flagged as needing provenance
+  the schema does not carry. The exposure is bounded and named at the top of the
+  screen: it applies only when an enqueue fails after its row write, only to
+  `priority`, which no scheduling decision reads (ADR 0003 derives Tier from
+  Kind), and the device keeps the chosen value regardless. Discarding a typed
+  "urgent" to avoid it would have been the larger lie.
+
+- `refactor(mobile): drug search becomes a component, schedules get one voice` —
+  `meds/search.tsx` was a screen, and a screen is exactly one entry point. The
+  entry surface needs the same RxNorm search while holding a draft, and a round
+  trip through the router would either lose the draft or serialize it into route
+  params and rebuild it — a second definition of what a draft is. `DrugSearch`
+  now takes an `onPick`; the search screen keeps the only part that was ever
+  route-specific, which is where a pick goes. `describeSchedule` moves out of
+  `meds/index.tsx` to `src/format/schedule.ts` and takes a `ScheduleTimes`
+  rather than a whole `Reminder`, because the review card needs the same
+  sentence and a draft is not a Reminder. It stays in `apps/mobile`: it reaches
+  for the device locale and time zone, which is what a replayable package must
+  not do.
+
 ### 2026-08-07 — The app asks whether it may remind you
 
 Closes #20, and it is the most consequential thing fixed since the sweep. The

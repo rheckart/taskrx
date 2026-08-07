@@ -451,6 +451,22 @@ export default function HomeScreen(): ReactElement {
       )}
 
       <View style={styles.footer}>
+        {/*
+          First, filled, and the only one that says "+" for both Kinds. The spec
+          asks that natural-language entry be "the primary creation surface for
+          both Kinds", and first-among-seven-identical-text-links is not that —
+          it is one more link in a row of them. It gets the button, so the thing
+          a person opens this app to do reads as the thing to press.
+
+          The two hand-entry forms stay reachable rather than being retired
+          here: this screen falls back to a form of its own for a phrase it
+          cannot read, but "+ Task" is still the shorter road when there was
+          never a phrase to type, and taking a working surface away is not this
+          ticket's to do.
+        */}
+        <Link href="/add" style={[styles.footerLink, styles.footerLinkPrimary]}>
+          + Add
+        </Link>
         <Link href="/tasks/new" style={styles.footerLink}>
           + Task
         </Link>
@@ -592,17 +608,32 @@ const styles = StyleSheet.create({
     color: "#c00",
     textAlign: "center",
   },
+  // Wrapping, since #15 added a seventh link: on a narrow phone the row used to
+  // squeeze every label until they ran together rather than moving one down.
   footer: {
     borderTopColor: "#eee",
     borderTopWidth: 1,
+    columnGap: 16,
     flexDirection: "row",
-    justifyContent: "space-around",
+    flexWrap: "wrap",
+    justifyContent: "center",
+    paddingHorizontal: 12,
     paddingVertical: 12,
+    rowGap: 8,
   },
   footerLink: {
     color: "#007aff",
     fontSize: 15,
     fontWeight: "500",
+  },
+  footerLinkPrimary: {
+    backgroundColor: "#007aff",
+    borderRadius: 6,
+    color: "#fff",
+    fontWeight: "700",
+    overflow: "hidden",
+    paddingHorizontal: 12,
+    paddingVertical: 6,
   },
   kindTag: {
     borderRadius: 4,

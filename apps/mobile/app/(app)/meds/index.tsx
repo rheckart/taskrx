@@ -17,59 +17,8 @@ import { SkeletonList } from "../../../src/components/Skeleton";
 import * as instancesRepo from "../../../src/db/repos/reminderInstances";
 import * as remindersRepo from "../../../src/db/repos/reminders";
 import { formatDayTime } from "../../../src/format/datetime";
+import { describeSchedule } from "../../../src/format/schedule";
 import { useUnifiedSync } from "../../../src/sync/pull";
-
-const DAY_NAMES = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"] as const;
-
-/**
- * Renders a reminder's schedule.
- *
- * Switching on the tagged union replaces the two `as` casts this held while it
- * read `medications`, where `scheduleTimes` was an untyped blob and the shape
- * had to be asserted per branch.
- *
- * The `weekly` arm does not render today, and an earlier version of this
- * comment was wrong to say it was "newly reachable" — that implied weekly
- * reminders existed and were being hidden. None can be created here: the only
- * writer is `meds/new.tsx`, and `SchedulePicker` offers `daily` and `interval`
- * alone. The pull path can now deliver one, so this is no longer strictly
- * unreachable — a reminder authored elsewhere against the same account would
- * render through it — but nothing in this app authors one yet. The arm exists
- * because the switch must be total over the union, and it stops being
- * decorative when the picker grows a weekly option.
- */
-function describeSchedule(reminder: Reminder): string {
-  const schedule = reminder.schedule;
-  switch (schedule.type) {
-    case "daily":
-      return schedule.times.length === 0
-        ? "Daily (no times set)"
-        : `Daily at ${schedule.times.join(", ")}`;
-    case "weekly": {
-      if (schedule.daysOfWeek.length === 0 || schedule.times.length === 0) {
-        return "Weekly (not fully set)";
-      }
-      // `Weekday` is `0 | 1 | ... | 6` and `DAY_NAMES` has seven entries, so
-      // the index is total and needs no fallback.
-      const days = schedule.daysOfWeek.map((d) => DAY_NAMES[d]);
-      return `${days.join(", ")} at ${schedule.times.join(", ")}`;
-    }
-    case "interval": {
-      const start = new Date(schedule.startAt);
-      const startLabel = `${start.getHours().toString().padStart(2, "0")}:${start.getMinutes().toString().padStart(2, "0")}`;
-      return `Every ${String(schedule.hours)}h starting ${startLabel}`;
-    }
-    case "once":
-      return `Once, ${new Date(schedule.at).toLocaleString([], {
-        month: "short",
-        day: "numeric",
-        hour: "2-digit",
-        minute: "2-digit",
-      })}`;
-    case "none":
-      return "In your backlog — no time set";
-  }
-}
 
 function formatLastTaken(instance: ReminderInstance | null): string {
   return instance?.completedAt === undefined
@@ -92,7 +41,7 @@ function MedicationRow({
       {med.dosage !== undefined ? (
         <Text style={styles.rowDosage}>{med.dosage}</Text>
       ) : null}
-      <Text style={styles.rowSchedule}>{describeSchedule(med)}</Text>
+      <Text style={styles.rowSchedule}>{describeSchedule(med.schedule)}</Text>
       <Text style={styles.rowLastTaken}>
         Last taken: {formatLastTaken(lastTaken)}
       </Text>

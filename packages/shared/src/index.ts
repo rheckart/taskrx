@@ -131,6 +131,19 @@ export type {
   ReminderParseResult,
 } from "./parser/reminder-parser";
 
+/**
+ * The reviewable draft between a typed phrase and a saved Reminder — what the
+ * natural-language entry surface shows before it writes anything, and the rules
+ * for correcting it. `parseReminder` returns a whole `Reminder`; a draft is only
+ * the part a person can see and put right.
+ */
+export { isSavableDraft, readPhrase, withKind, withName } from "./parser/draft";
+export type {
+  PhraseReading,
+  ReadPhraseOptions,
+  ReminderDraft,
+} from "./parser/draft";
+
 export {
   isGrammarToken,
   parseScheduleGrammar,
