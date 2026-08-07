@@ -16,7 +16,7 @@ import { convex, isConvexConfigured } from "../src/api/convex";
 import { authConfig, isClerkKeyConfigured } from "../src/config/clerk";
 import { getDb } from "../src/db";
 import {
-  createNotificationChannel,
+  createNotificationChannels,
   registerNotificationResponseHandler,
   rescheduleAll,
 } from "../src/notifications";
@@ -77,7 +77,7 @@ function NotificationBootstrap(): null {
   const unsubscribeRef = useRef<(() => void) | null>(null);
 
   useEffect(() => {
-    void createNotificationChannel().catch((error: unknown) => {
+    void createNotificationChannels().catch((error: unknown) => {
       console.error("[notifications] failed to create channel:", error);
     });
 
@@ -180,7 +180,7 @@ function SweepBootstrap(): null {
  */
 function LocalNotificationBootstrap(): null {
   useEffect(() => {
-    void createNotificationChannel().catch((error: unknown) => {
+    void createNotificationChannels().catch((error: unknown) => {
       console.error("[notifications] failed to create channel:", error);
     });
   }, []);

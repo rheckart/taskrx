@@ -182,6 +182,52 @@ else
   bad "restore_device exited non-zero with no device — the EXIT trap would stop early"
 fi
 
+# 5d — the two task-Tier cases, run end to end with nothing attached.
+#
+# Checked by RUNNING them rather than by asserting they call `require_reachable`,
+# for the reason this file exists at all: the invariant has been evaded by
+# shapes nobody thought to describe. Both read counts back out of the app, and
+# with no device those reads are empty strings — which is the input that
+# produced the false verdict this file was written after.
+#
+# The timing half is specific to case 10 and not hypothetical. It polls for a
+# notification to a deadline minutes out, and `notification_has` answers 0 for
+# an absent device exactly as it does for one that has not posted yet — so a
+# case that entered that loop with nothing attached would spin out its whole
+# budget before recording anything, inside a gate that is supposed to be
+# device-free and fast. The same shape as the `adb logcat` block in check 5.
+for probe in "10 case10_task_tier_delivery" "11 case11_task_flood_preserves_doses"; do
+  set -- $probe
+  probe_n="$1"; probe_fn="$2"
+  if ! declare -F "$probe_fn" >/dev/null; then
+    bad "$probe_fn is not defined"
+    continue
+  fi
+  results=()
+  start=$SECONDS
+  "$probe_fn" >/dev/null 2>&1
+  elapsed=$(( SECONDS - start ))
+  recorded="${results[0]:-}"
+  if [[ -z "$recorded" ]]; then
+    bad "$probe_fn recorded no result at all"
+    continue
+  fi
+  # `pass:null` and not `pass:false`. Both the entry probe and `add_result`'s
+  # choke point enforce this, which is belt and braces on purpose: these two
+  # cases are the ones whose FAIL text names a missing dose alarm, and that is
+  # the last sentence in this repository that should ever be written about a
+  # phone nobody plugged in.
+  case "$recorded" in
+    *'"pass":null'*) ok "case $probe_n records pass:null with no device" ;;
+    *) bad "case $probe_n reached a verdict with no device: $recorded" ;;
+  esac
+  if (( elapsed > 10 )); then
+    bad "case $probe_n took ${elapsed}s with no device — it is polling something that will never answer"
+  else
+    ok "case $probe_n returns promptly with no device"
+  fi
+done
+
 # 6 — the report has to PARSE. `detail` is built from dumpsys output, which is
 # arbitrary text this script does not control, so a backslash in it must be
 # escaped before the quote or the evidence file is unreadable. Both writers

@@ -8,6 +8,152 @@ for commit discipline (POC tags use `0.x.x`).
 
 ## [Unreleased]
 
+### 2026-08-07 — A task reminder that cannot cost a dose its alarm
+
+Closes #14. Tasks notify at their time, on their own Tier, and the guarantee
+that they can never displace a dose is now structural at the operating-system
+layer rather than at ours.
+
+- **ADR 0007 — the Task Tier is WorkManager, not an inexact alarm.** The
+  mechanism ADR 0003 left open and the spec listed as a question to settle
+  first. `alarmManager: false` on a notify-kit timestamp trigger schedules a
+  `OneTimeWorkRequest` instead of an alarm, so the two Tiers are not two
+  parameters of one API but two subsystems: a task consumes a work request, a
+  dose consumes an exact-alarm slot, and no quantity of the former can exhaust
+  the latter. The rejected alternative was an inexact alarm — it delivers about
+  as well and keeps both Kinds inside AlarmManager, where the difference between
+  them is one enum value in one expression, which is a policy again.
+
+  **The trap is recorded because it nearly is the default.** Omitting
+  `alarmManager` reads as "no alarm manager" and means the opposite:
+  notify-kit's validator defaults a timestamp trigger *to* AlarmManager with
+  `SET_EXACT_AND_ALLOW_WHILE_IDLE`, so a task built without that line takes an
+  exact, Doze-bypassing alarm on the exact-alarm budget — silently. The
+  library's own TypeScript comment and the older upstream documentation
+  disagree about which is the default, so both claims were checked against the
+  shipped validator and the shipped Java rather than believed.
+
+- `feat(notifications): a second budget, counted separately` —
+  `selectTaskHorizon` in `@taskrx/shared` beside `selectMedicationHorizon`,
+  both now one selector with a different Tier predicate. The two read disjoint
+  sets of Reminders, so "a task never displaces a dose" is not an ordering rule
+  that could be got wrong but an absence of any shared quantity to order. The
+  task budget is 32 and is *not* a share of the medication 64; raising it cannot
+  cost a dose its alarm, which is the property ADR 0003 asks for.
+
+- `fix(notifications): the two Tiers are diffed in one pass` — **the defect this
+  ticket would otherwise have shipped, and it arrives from the direction ADR
+  0003 does not look.** `getTriggerNotificationIds()` returns every pending
+  trigger regardless of subsystem, because notify-kit keeps one table, so a
+  reschedule that knew about only medications computes every task trigger as
+  stale and cancels it — and one that knew only tasks does the same to the
+  doses. `_layout.tsx` reschedules on every transition to `active`, so that
+  would have been one app switch wide, which is the exact shape of the snooze
+  defect this module was already burned by. Task triggers carry a `task-` id
+  namespace, the cancel pass reads the union of both desired sets, and the
+  suite pins it in both directions.
+
+- `feat(notifications): a deferred task comes back` — the snooze path chooses
+  its Tier from the Kind exactly as the scheduler does. A task's deferral armed
+  nothing at all until now, which is why #13's button said "Put off for now"
+  rather than promising a reminder; it promises one now, and the Kind-specific
+  `snooze` word is gone from the answer screen because the button finally means
+  the same thing on both. This is the likeliest side door for a task to borrow
+  the alarm-clock primitive — a person *asking* to be reminded again — and it
+  is not hypothetical: it is how the app's last `SET_EXACT_AND_ALLOW_WHILE_IDLE`
+  survived a migration that had moved every other path off it.
+
+- `feat(notifications): a task channel of its own` — `task_reminders` at DEFAULT
+  importance beside the HIGH-importance medication channel, so a task sounds and
+  sits in the shade rather than bypassing Do Not Disturb (story 29). Two
+  channels also let a person silence their tasks without touching their doses,
+  which one channel could not offer. `createNotificationChannel` is
+  `createNotificationChannels`.
+
+- `test(harness): device cases 10 and 11` — a task notifies at its time and
+  never registers as the device's next alarm clock; and a completely full task
+  budget still leaves the dose armed and holding that registration. Both are
+  local-only, so both join the `--all` baseline. Neither alone would mean
+  anything: a build that armed no tasks would sail through 11, and one that
+  armed every task with `SET_ALARM_CLOCK` — the failure ADR 0003 exists to
+  prevent — would sail through 10. Case 11 asserts the flood filled the budget
+  *before* it concludes anything about the dose, and reads the budget back from
+  the app rather than spelling the number twice.
+
+  Both are gated by `verify-harness-guards.sh`, with a timing check as well as
+  the usual `pass:null` one. That is not ceremony: case 10 polls for delivery to
+  a deadline minutes out, and `notification_has` answers 0 for an absent device
+  exactly as it does for one that has not posted yet, so a case that entered
+  that loop unattached would spin out its whole budget inside a gate that is
+  meant to be device-free. Verified by mutation — it took 295s and the guard
+  caught it.
+
+- `fix(harness): make case 11 able to fail` — **the review found the case
+  proving nothing, and both axes found it independently.** The flood was 40
+  `daily` tasks at 00:05–00:20 against a dose ten minutes out, so every task was
+  *later* than the dose, not sooner — and the inline comment claiming otherwise
+  was simply false. A Kind-blind scheduler orders purely by time, so it would
+  have ranked the dose first, armed it, and passed the case written to catch
+  exactly that. The second error was quieter: 40 tasks clear the task budget of
+  32 but not the **medication** budget of 64, and 64 is the number a Kind-blind
+  scheduler would be ranking both Kinds inside — with fewer tasks than that
+  there is room for the flood and the dose, so the displacement branch is
+  unreachable however the times are ordered.
+
+  It is now 80 `once` tasks, each a minute out and a second apart, all before
+  the dose. `once` rather than `daily` because a daily schedule's next occurrence
+  depends on the wall clock, and an unfalsifiable case that passes at 3pm is
+  worse than no case. The shell asserts both premises — the flood exceeds the
+  medication budget, and the task budget actually filled — *before* it reads any
+  verdict about the dose, and reports a failure of either as the case having
+  proved nothing rather than as a product pass. Both budgets are reported by the
+  app so neither number is spelled twice. Two node cases now pin the fixture's
+  premises, and each was mutation-checked against the original mistake it exists
+  to catch.
+
+- `refactor(notifications): one table for what the Tiers are told` — also from
+  the review. Channel, importance, press action and alarm primitive were a
+  `kind === "medication" ?` at each of them, five such branches inside one
+  object literal in `snooze.ts` and a parallel pair of builders in
+  `scheduler.ts`. That is the shape where one arm gets edited and the other does
+  not, and here the consequence of drift is a task on the alarm-clock
+  primitive — which is not hypothetical, it is how the snooze kept
+  `SET_EXACT_AND_ALLOW_WHILE_IDLE` through the migration that removed it
+  everywhere else. `TIER_DELIVERY` is now a record keyed by Tier, read by both
+  arming paths, and legible as a table. `Tier` is exported from `@taskrx/shared`
+  for the first time, because it is finally a value worth holding rather than a
+  question worth asking.
+
+Gates: `npm run verify` — 491 tests across three workspaces, 159 migration
+checks, 16 harness guards. Every new assertion was mutation-checked separately:
+13 mutations against the two Horizons and the Tier predicates, 15 against the
+on-device Tier wiring and the cancel pass, and 2 against the corrected flood
+fixture, each caught by the case naming it. One mutation was worth more than the
+assertion it was aimed at: an over-broad `startsWith` in the harness's own count
+meant a reminder id of `t-1-other` would be counted as a trigger of `t-1`, which
+for case 11 is a budget reported as full when it was not — the count is now
+exact about the remainder, and the case that found it says why.
+
+Two assertions are **not** mutation-killed and are kept anyway, stated here
+rather than left to be discovered: "a zero budget arms nothing" and "an empty
+reminder list arms nothing" hold whether or not the early return exists, since
+`slice(0, 0)` is empty too. They are parity with the medication Horizon's own
+two, where a reader comparing the blocks would notice a gap.
+
+**Not verified on a device.** No Android device was attached for this work, so
+cases 10 and 11 have been written, guarded and mutation-checked but never run,
+and the ticket asks that the trigger mechanism be verified on a device rather
+than assumed from documentation. What replaces that here is weaker and is worth
+naming as weaker: the mechanism was read out of the shipped `validateTrigger.ts`
+and `TimestampTriggerModel.java` in `node_modules`, which is stronger than the
+documentation — the two disagree — and no substitute for `--all` on a phone.
+
+**Deliberately not here.** The `medicationId` compatibility key is absent from a
+task's payload, because it names a legacy table no task has ever had a row in
+and `tap-handler.ts` already prefers `reminderId`. `scheduleForReminder` now
+routes by Kind rather than refusing a task, since the debug screen it serves has
+no business deciding a Tier either.
+
 ### 2026-08-06 — Tasks on the timeline: the fusion becomes real
 
 Closes #13. A task can be added, it sits beside the doses in time order, and it

@@ -15,7 +15,7 @@ import {
 import {
   cancelAll,
   checkNotificationPermission,
-  createNotificationChannel,
+  createNotificationChannels,
   getPendingCount,
   MEDICATION_REMINDER_CHANNEL_ID,
   requestPermissions,
@@ -66,7 +66,7 @@ export default function NotificationsDebugScreen(): ReactElement {
   }, []);
 
   useEffect(() => {
-    void createNotificationChannel().catch(() => {
+    void createNotificationChannels().catch(() => {
       // Channel may already exist; ignore.
     });
     void refresh();

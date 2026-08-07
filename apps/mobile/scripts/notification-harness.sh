@@ -1276,6 +1276,117 @@ case7_weekly_schedule() {
   fi
 }
 
+# ── Task Tier cases (10, 11) ───────────────────────────────────────────────
+#
+# The second Tier ADR 0003 called for and ADR 0007 chose a mechanism for. Both
+# are local-only, so both belong in the `--all` baseline: a task needs no
+# Clerk subject to be armed, and the whole point of the split is that it holds
+# on any install.
+#
+# Case 10 asserts a task IS delivered and 11 asserts a dose STILL is. Neither
+# alone is enough. A build that armed no tasks at all would sail through 11,
+# and a build that armed every task with `SET_ALARM_CLOCK` — the pre-ADR-0003
+# behaviour, and the one that leaves an evening insulin dose silently unarmed —
+# would sail through 10.
+
+# Delivery through WorkManager is DEFERRABLE by design, which is the trade the
+# task Tier makes. A one-time work request with an initial delay runs at or
+# after that delay, batched with whatever else the OS has queued, so a fixed
+# `sleep` past the fire time is a coin flip in the way case 4 documents for
+# inexact alarms. Poll well past it instead, and only call non-delivery once
+# the whole budget has elapsed.
+TASK_DELIVERY_SLACK_S=180
+
+case10_task_tier_delivery() {
+  require_reachable 10 task_tier_delivery || return
+  # Granted deliberately. If the exact-alarm appop were denied, EVERY trigger
+  # would degrade and "no alarm-clock treatment" would prove nothing about the
+  # app's own choice. Under a grant, an alarm-clock registration is available
+  # for the taking and the task not taking it is a decision.
+  grant_exact
+  harness cancel-all >/dev/null
+  local out armed ids fire_at nac label posted deadline
+  label="task-tier-$(date +%s)"
+  out="$(harness schedule-task "$label" 90000)"
+  armed="$(printf '%s' "$out" | grep -oE "task_armed=[0-9]+" | cut -d= -f2)"
+  ids="$(printf '%s' "$out" | grep -oE "task_ids=[^ ]*" | cut -d= -f2)"
+  fire_at="$(printf '%s' "$out" | grep -oE "fire_at=[0-9]+" | cut -d= -f2)"
+
+  if [[ -z "$armed" || "$armed" == "0" ]]; then
+    add_result 10 task_tier_delivery false "no task trigger was armed: ${out:-unreachable}"
+    return
+  fi
+
+  # The task must not have registered itself as the device's next alarm clock.
+  # That is the same reading case 2 uses to PROVE `setAlarmClock` for a dose,
+  # so the two cases are one instrument pointed at both Kinds.
+  nac="$(next_alarm_clock)"
+  if printf '%s' "$nac" | grep -q "$fire_at"; then
+    add_result 10 task_tier_delivery false "a task took the alarm-clock treatment: next_alarm_clock=$nac matches fire_at=$fire_at"
+    return
+  fi
+
+  posted=0
+  deadline=$(( $(date +%s) + 90 + TASK_DELIVERY_SLACK_S ))
+  while (( $(date +%s) < deadline )); do
+    posted="$(notification_has "$label")"
+    (( posted >= 1 )) && break
+    sleep 10
+  done
+
+  harness cancel-all >/dev/null
+
+  if (( posted >= 1 )); then
+    add_result 10 task_tier_delivery true "task notified at its time without the alarm-clock treatment; armed=$armed ids=$ids next_alarm_clock=$nac"
+  else
+    add_result 10 task_tier_delivery false "NOT posted within 90s+${TASK_DELIVERY_SLACK_S}s; armed=$armed ids=$ids"
+  fi
+}
+
+case11_task_flood_preserves_doses() {
+  require_reachable 11 task_flood_preserves_doses || return
+  grant_exact
+  harness cancel-all >/dev/null
+  local out dose_armed task_armed task_budget dose_budget flood dose_at nac
+  out="$(harness schedule-task-flood "flood-$(date +%s)" 600000)"
+  dose_armed="$(printf '%s' "$out" | grep -oE "dose_armed=[0-9]+" | cut -d= -f2)"
+  task_armed="$(printf '%s' "$out" | grep -oE "task_armed=[0-9]+" | cut -d= -f2)"
+  task_budget="$(printf '%s' "$out" | grep -oE "task_budget=[0-9]+" | cut -d= -f2)"
+  dose_budget="$(printf '%s' "$out" | grep -oE "dose_budget=[0-9]+" | cut -d= -f2)"
+  flood="$(printf '%s' "$out" | grep -oE "flood=[0-9]+" | cut -d= -f2)"
+  dose_at="$(printf '%s' "$out" | grep -oE "dose_at=[0-9]+" | cut -d= -f2)"
+
+  if [[ -z "$dose_armed" || -z "$task_armed" || -z "$task_budget" ||
+        -z "$dose_budget" || -z "$flood" || -z "$dose_at" ]]; then
+    add_result 11 task_flood_preserves_doses false "could not read the counts back: ${out:-unreachable}"
+    return
+  fi
+
+  # `next-alarm-clock` naming the dose is the strongest form of the claim
+  # available from outside the app: not merely that a trigger exists under the
+  # dose's id, but that the OS is holding the alarm-clock registration for it
+  # with the task budget completely full.
+  nac="$(next_alarm_clock)"
+  harness cancel-all >/dev/null
+
+  # The two premises first, and a failure of either is reported as the case
+  # proving NOTHING rather than as a product verdict. A case that concluded "the
+  # dose survived" from a flood too small to have threatened it would be the
+  # worst possible outcome here: a green tick against the one failure this
+  # ticket exists to prevent.
+  if (( flood <= dose_budget )); then
+    add_result 11 task_flood_preserves_doses false "the flood ($flood) does not exceed the medication budget ($dose_budget), so a Kind-blind scheduler would have armed the dose anyway and the case proved nothing"
+  elif (( task_armed < task_budget )); then
+    add_result 11 task_flood_preserves_doses false "the flood did not fill the task budget, so the case proved nothing: task_armed=$task_armed budget=$task_budget"
+  elif (( dose_armed < 1 )); then
+    add_result 11 task_flood_preserves_doses false "A DOSE WAS LEFT UNARMED with $task_armed tasks armed — the failure ADR 0003 exists to prevent"
+  elif ! printf '%s' "$nac" | grep -q "$dose_at"; then
+    add_result 11 task_flood_preserves_doses false "the dose is armed but not as the next alarm clock: expected $dose_at, next_alarm_clock=$nac"
+  else
+    add_result 11 task_flood_preserves_doses true "$flood tasks (> the $dose_budget medication budget) filled the task Tier ($task_armed/$task_budget) and the dose still holds the alarm clock: $nac"
+  fi
+}
+
 # ── Signed-in cases (8, 9) ─────────────────────────────────────────────────
 #
 # Both need a Clerk session, so neither is in `--all`. See `require_signed_in`.
@@ -1625,6 +1736,8 @@ run_case() {
     7) case7_weekly_schedule ;;
     8) case8_notification_tap ;;
     9) case9_offline_queue_drain ;;
+    10) case10_task_tier_delivery ;;
+    11) case11_task_flood_preserves_doses ;;
     *) echo "unknown case: $1" >&2; return 2 ;;
   esac
 }
@@ -1635,8 +1748,8 @@ notification-harness.sh — adb-driven notification test harness
 
   --list          List cases
   --purge         Hard-delete every row cases 8 and 9 seeded (Convex, then device)
-  --case N        Run case N (1..9)
-  --all           Run cases 1-7: the local-only delivery baseline
+  --case N        Run case N (1..11)
+  --all           Run cases 1-7, 10-11: the local-only delivery baseline
   --auth          Run cases 8-9: need a signed-in app and a reachable Convex.
                   Prefer `--case 8` then `--case 9` as separate invocations —
                   case 8 fires a notification, after which the app's SQLite
@@ -1644,10 +1757,11 @@ notification-harness.sh — adb-driven notification test harness
                   itself up. See constraint 6a.
   --output PATH   JSON report destination
 
-`--all` deliberately stops at 7. Cases 1-7 assert delivery against a fresh,
-signed-out install, which is what lets any device produce a baseline; cases 8
-and 9 assert the signed-in tree and report themselves unevaluated without a
-session, so including them would make every baseline run incomplete.
+`--all` deliberately skips 8 and 9 rather than stopping at a number. Cases 1-7
+and 10-11 assert delivery against a fresh, signed-out install, which is what
+lets any device produce a baseline; cases 8 and 9 assert the signed-in tree and
+report themselves unevaluated without a session, so including them would make
+every baseline run incomplete.
 
 Env: TASKRX_PKG ANDROID_SERIAL METRO_URL VERBOSE=1 SKIP_DOZE=1 SKIP_REBOOT=1
 
@@ -1740,6 +1854,8 @@ list_cases() {
 7  weekly_schedule          Mon/Wed/Fri weekly reminder arms 3 alarms at 09:00 device-local
 8  notification_tap         [signed in] Tapping the posted notification opens /dose/log pre-filled
 9  offline_queue_drain      [signed in] Airplane mode: doses queue, then reach Convex on reconnect
+10 task_tier_delivery       A task notifies at its time and never registers as the next alarm clock
+11 task_flood_preserves_doses  A full task budget still leaves the dose armed and holding the alarm clock
 EOF
 }
 
@@ -1768,7 +1884,7 @@ while [[ $# -gt 0 ]]; do
     --list) list_cases; exit 0 ;;
     --purge) purge_seeded; exit $? ;;
     --case) cases_to_run+=("$2"); shift 2 ;;
-    --all) cases_to_run=(1 2 3 4 5 6 7); shift ;;
+    --all) cases_to_run=(1 2 3 4 5 6 7 10 11); shift ;;
     --auth) cases_to_run+=(8 9); shift ;;
     --output) output="$2"; shift 2 ;;
     *) echo "unknown arg: $1" >&2; usage; exit 2 ;;

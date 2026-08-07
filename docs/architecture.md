@@ -23,6 +23,8 @@ This document describes the architecture of the TaskRx proof-of-concept. The Pha
 │  │    interval)                 │  │         └──────────────┬───────────────┘
 │  │  - selectMedicationHorizon   │  │                        │
 │  │    (global 64, doses only)   │  │                        │
+│  │  - selectTaskHorizon         │  │                        │
+│  │    (separate 32, tasks only) │  │                        │
 │  │  - conflict resolution       │  │                        │
 │  │  - permission-state derive   │  │                        │
 │  └──────────────────────────────┘  │                        │
@@ -30,7 +32,8 @@ This document describes the architecture of the TaskRx proof-of-concept. The Pha
 │           ▼                        │                        │
 │  ┌──────────────────────────────┐  │                        │
 │  │ react-native-notify-kit      │  │                        │
-│  │  - SET_ALARM_CLOCK triggers  │  │                        │
+│  │  - SET_ALARM_CLOCK for doses │  │                        │
+│  │  - WorkManager for tasks     │  │                        │
 │  │  - diff-based reschedule     │  │                        │
 │  │  - degrades gracefully on    │  │                        │
 │  │    permission denial         │  │                        │
@@ -56,7 +59,7 @@ This document describes the architecture of the TaskRx proof-of-concept. The Pha
 2. **Convex is the source of truth in the cloud.** Sync pushes local changes up and pulls remote changes in.
 3. **The notification scheduler reads from SQLite, never from Convex.** This is why reminders fire offline.
 4. **Schedule computation is pure + deterministic.** Given a med config + current time, `@taskrx/shared` returns the next N dose times. No DB calls inside the engine.
-5. **Notification horizon is global, not per-reminder — and medications only.** `selectMedicationHorizon` picks the 64 soonest occurrences across ALL active *medication* reminders — iOS-cap-safe and, when both A@21:00 and B@10min-from-now exist, B always wins over A regardless of what A already had scheduled. Tasks are excluded by construction rather than by policy (ADR 0003): everything in this set is armed with `SET_ALARM_CLOCK`, and a bounded set shared with tasks is one that tasks can fill at a dose's expense. Task-Tier delivery is issue #14.
+5. **Notification horizon is global, not per-reminder — and there is one per Tier.** `selectMedicationHorizon` picks the 64 soonest occurrences across ALL active *medication* reminders — iOS-cap-safe and, when both A@21:00 and B@10min-from-now exist, B always wins over A regardless of what A already had scheduled. `selectTaskHorizon` does the same for tasks on a separate budget of 32. The two read disjoint sets of Reminders, so neither can shorten the other (ADR 0003), and they are armed through different OS subsystems, so neither can exhaust the other's capacity (ADR 0007). A full task budget costs a dose nothing.
 6. **Sync queue drains until MAX_ATTEMPTS (5) failures; then dead-letters.** Dead-lettered entries are retained (never deleted) for inspection and manual requeue.
 7. **Conflict resolution rules live in one tested place.** `@taskrx/shared/sync/conflict` — local wins ties, and a locally `completed` instance is never overwritten by a remote pull.
 8. **An unanswered Occurrence becomes Missed by a sweep, not by a query.** Instances are minted lazily, so a moment nobody answers has no row at all. `planMissedSweep` in `@taskrx/shared` decides which moments have run out of time; `apps/mobile/src/sweep/runner.ts` persists the verdicts, serialized so two foregrounds cannot mint one moment twice. The Grace Period (2h) and lookback (7 days) are ADR 0005.
@@ -179,15 +182,19 @@ Two pure functions consumed by both repo `upsertMany` paths:
 
 1. User saves a medication → repo writes to SQLite and enqueues a sync entry.
 2. `rescheduleAll(userId)` reads all active reminders from SQLite.
-3. `selectMedicationHorizon(reminders, Date.now(), 64)` from `@taskrx/shared` returns the 64 soonest occurrences **across all medication reminders** (not per-reminder; tasks never enter this set). This is iOS-cap-safe and ensures a reminder with a closer next occurrence always displaces one with a farther next occurrence, regardless of how many alarms the farther reminder already has.
-4. **Diff, don't rebuild:** read current pending trigger IDs from notify-kit, compare against the desired 64:
-   - Cancel only the notifications that are no longer in the desired set.
-   - Create only the notifications that are missing.
-   - Deterministic IDs `${medicationId}-${scheduledTime}` make the diff safe.
+3. Each Tier's desired set is computed from its own budget: `selectMedicationHorizon(reminders, now, 64)` returns the 64 soonest occurrences **across all medication reminders**, and `selectTaskHorizon(reminders, now, 32)` the 32 soonest across all tasks. Both are global rather than per-reminder, so a reminder with a closer next occurrence always displaces one with a farther next occurrence regardless of how many triggers the farther reminder already has. Neither selection sees the other Kind's reminders at all.
+4. **Diff, don't rebuild — in one pass over both Tiers:** read current pending trigger IDs from notify-kit, compare against the union of the two desired sets:
+   - Cancel only the notifications that are in neither desired set.
+   - Create only the notifications that are missing, each with its own Tier's trigger.
+   - Deterministic IDs `${reminderId}-${scheduledTime}` for a dose and `task-${reminderId}-${scheduledTime}` for a task make the diff safe. The namespaces must stay disjoint: `getTriggerNotificationIds()` returns both subsystems' triggers, so a pass that knew about only one Tier would cancel the other's as stale.
    - Idempotent: two consecutive `rescheduleAll` calls with unchanged data cancel and create nothing.
-5. Each new trigger is built with `AlarmType.SET_ALARM_CLOCK` — see the AlarmType decision below.
-6. When a notification fires and the user taps it, the tap handler navigates to `/dose/log` with `medicationId` and `scheduledTime`.
-7. Dose logging writes to SQLite and enqueues sync.
+5. A dose trigger is built with `AlarmType.SET_ALARM_CLOCK` — see the AlarmType decision below. A task trigger is built with `alarmManager: false`, which schedules it through WorkManager instead; see ADR 0007, including why omitting that key gives an exact alarm rather than none.
+6. When a notification fires and the user taps it, the tap handler navigates to `/dose/log` with the reminder id and `scheduledTime`. It is Kind-neutral: a task tap lands on the same answer screen, which already speaks both Kinds.
+7. Answering writes a Reminder Instance to SQLite and enqueues sync.
+
+### The two channels
+
+`medication_reminders` is HIGH importance so a dose bypasses Do Not Disturb and alerts audibly. `task_reminders` is DEFAULT: it sounds and appears in the shade, and does not push past DND or take over the screen. Separate channels also let a person silence their task reminders without touching their doses, which one shared channel would not allow. Both id strings are frozen — Android keys the user's per-channel overrides to them.
 
 ### AlarmType decision — why `SET_ALARM_CLOCK`
 
@@ -224,10 +231,10 @@ The `checkExactAlarmPermission()` function reads the real notify-kit `getNotific
 
 ## Testing
 
-- `packages/shared` — 294 vitest cases, the only workspace with a coverage gate (100% across statements/branches/functions/lines). The gate's `include[]` now also lists `src/sync/conflict.ts`, `src/timeline/projection.ts`, `src/sweep/planner.ts` and `src/backlog/completion.ts`; `src/notifications/permission-state.ts` is still specced but unmeasured.
+- `packages/shared` — 348 vitest cases, the only workspace with a coverage gate (100% across statements/branches/functions/lines). The gate's `include[]` now also lists `src/sync/conflict.ts`, `src/timeline/projection.ts`, `src/sweep/planner.ts`, `src/backlog/completion.ts` and `src/notifications/tier.ts`; `src/notifications/permission-state.ts` is still specced but unmeasured.
 - `packages/convex` — 55 `convex-test` cases run against an in-memory deployment, including the schedule validator's five variants and the two malformed payloads it must reject.
-- `apps/mobile` — 73 vitest cases: `SyncWorker.drain()` re-entrancy, `rescheduleAll`'s cancel pass, the pull merge, the harness actions, and the missed sweep's persistence pass (mint vs settle, and two overlapping sweeps).
-- `apps/mobile/scripts/notification-harness.sh` — adb-driven bash script; **7 cases** (killed-app, `SET_ALARM_CLOCK` primitive in use, Doze, exact-alarm-denied fallback, boot reschedule, 30-med stress, weekly schedule). Emits JSON to `.omo/evidence/`. See `docs/poc-results.md` for which cases have run against current code — as of 2026-07-30, none have.
+- `apps/mobile` — 87 vitest cases: `SyncWorker.drain()` re-entrancy, `rescheduleAll`'s two-Tier cancel pass and which trigger each Kind is armed with, the pull merge, the harness actions, and the missed sweep's persistence pass (mint vs settle, and two overlapping sweeps).
+- `apps/mobile/scripts/notification-harness.sh` — adb-driven bash script; **11 cases**, of which `--all` runs the nine local-only ones (killed-app, `SET_ALARM_CLOCK` primitive in use, Doze, exact-alarm-denied fallback, boot reschedule, 30-med stress, weekly schedule, task-Tier delivery, task flood vs dose) and `--auth` the two signed-in ones. Emits JSON to `.omo/evidence/`. See `docs/poc-results.md` for which cases have run against current code.
 - Hidden `/harness` deep-link route in the app (`apps/mobile/app/harness.tsx`) is invoked by the harness via `adb shell am start`. Security carve-out in `AuthRedirectGate` bypasses the sign-in redirect for that route only — notifications are local, so the harness must work on a fresh install.
 
 ## Security

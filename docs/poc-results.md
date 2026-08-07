@@ -20,6 +20,26 @@ This document tracks the 13 success criteria from the POC plan §3. Each row sho
 > historical case-5 ambiguity. See "Case 5 was measuring the wrong thing" below
 > before reading any pre-2026-07-30 verdict in this file.
 
+> **The suite is no longer seven cases (2026-08-07, issue #14).** The task Tier
+> got a trigger, and with it harness cases **10** (a task notifies at its time
+> and never registers as the device's next alarm clock) and **11** (a full task
+> budget still leaves the dose armed and holding that registration). `--all` now
+> runs nine local-only cases rather than seven.
+>
+> **Neither has ever been run.** No device was attached for that work. They are
+> written, guarded by `verify-harness-guards.sh` and mutation-checked, and that
+> is all — every "seven cases" claim above remains true of the runs it describes
+> and says nothing about these two. Issue #14 asks that the chosen trigger
+> mechanism be verified on a device rather than assumed from documentation; what
+> stands in for that so far is a reading of notify-kit's shipped validator and
+> its native `TimestampTriggerModel`, which is stronger than the documentation —
+> the two contradict each other — and is not a device run.
+>
+> The baseline above is also **not yet re-checked against this work**, which is
+> the question it exists to answer. Nothing in the medication path changed
+> behaviourally, but "nothing changed behaviourally" is a claim about a diff and
+> the baseline is a claim about a phone.
+
 > **Write-path cutover checked against that baseline (2026-07-31, issue #6).**
 > All seven cases pass again at commit `1bb8928` with a clean tree, on the same
 > Pixel 8 Pro and the same OS build, and every verdict matches the baseline.
@@ -238,6 +258,8 @@ See `docs/poc-notification-tests.md` for the (now-executable) test cases. The ma
 | Boot reschedule | ✅ Pass | Case 5 — `before=3 after=3`, receiver landing ~61s after the first unlock (2026-07-30; see "Case 5 was measuring the wrong thing") |
 | Exact-alarm denied fallback | ✅ Pass | Case 4 — reported denied AND still delivered inexactly (`window=+33s718ms`) |
 | `SET_ALARM_CLOCK` primitive in dumpsys | ✅ Pass | Case 2 — `window=0`, `exactAllowReason=permission`, registered as the device's next alarm clock with a matching timestamp |
+| Task-Tier delivery | ⏸️ Pending | Case 10, added for issue #14 — written, guarded and mutation-checked, never run. No device was attached for that work. The claim it will test is that a task notifies at its time and never registers as the device's next alarm clock |
+| Task flood vs dose alarm | ⏸️ Pending | Case 11, added for issue #14 — same, never run. It asserts the task budget filled completely *before* concluding anything about the dose, so a run that cannot fill it reports itself unproven rather than passing |
 
 ### Day 8 — Stress tests
 

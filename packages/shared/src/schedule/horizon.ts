@@ -1,8 +1,50 @@
 import type { Reminder } from "../domain/reminder";
-import { entersMedicationHorizon } from "../notifications/tier";
+import {
+  entersMedicationHorizon,
+  entersTaskHorizon,
+} from "../notifications/tier";
 
 import { nextOccurrences } from "./occurrences";
 import type { ScheduledOccurrence } from "./types";
+
+/**
+ * The soonest `maxTotal` occurrences across every active Reminder the Tier
+ * predicate admits, soonest first.
+ *
+ * Both Horizons are this function with a different predicate, and that is the
+ * point rather than a saving: a shared selector cannot develop one ordering
+ * rule for doses and another for tasks, and neither call can see a Reminder the
+ * other owns. What differs between the two is which Kinds enter and how many
+ * fit — everything the OS is then asked for differs too, and that is decided by
+ * the caller in `apps/mobile`, not here.
+ */
+function selectHorizon(
+  reminders: readonly Reminder[],
+  fromMs: number,
+  maxTotal: number,
+  admits: (reminder: Reminder) => boolean
+): readonly ScheduledOccurrence[] {
+  if (maxTotal <= 0) {
+    return [];
+  }
+
+  const candidates: ScheduledOccurrence[] = [];
+  for (const reminder of reminders) {
+    if (!reminder.active || !admits(reminder)) {
+      continue;
+    }
+    candidates.push(...nextOccurrences(reminder, fromMs, maxTotal));
+  }
+
+  candidates.sort((a, b) => {
+    if (a.fireAt !== b.fireAt) {
+      return a.fireAt - b.fireAt;
+    }
+    return a.reminderId < b.reminderId ? -1 : 1;
+  });
+
+  return candidates.slice(0, maxTotal);
+}
 
 /**
  * The medication Horizon: the next `maxTotal` occurrences across all active
@@ -56,24 +98,35 @@ export function selectMedicationHorizon(
   fromMs: number,
   maxTotal: number
 ): readonly ScheduledOccurrence[] {
-  if (maxTotal <= 0) {
-    return [];
-  }
+  return selectHorizon(reminders, fromMs, maxTotal, entersMedicationHorizon);
+}
 
-  const candidates: ScheduledOccurrence[] = [];
-  for (const reminder of reminders) {
-    if (!reminder.active || !entersMedicationHorizon(reminder)) {
-      continue;
-    }
-    candidates.push(...nextOccurrences(reminder, fromMs, maxTotal));
-  }
-
-  candidates.sort((a, b) => {
-    if (a.fireAt !== b.fireAt) {
-      return a.fireAt - b.fireAt;
-    }
-    return a.reminderId < b.reminderId ? -1 : 1;
-  });
-
-  return candidates.slice(0, maxTotal);
+/**
+ * The task Horizon: the next `maxTotal` occurrences across all active **task**
+ * reminders, soonest first.
+ *
+ * A separate selection over a disjoint set of Reminders, which is what makes
+ * ADR 0003's guarantee structural. Nothing here can affect what
+ * `selectMedicationHorizon` returns — not the number of tasks, not how soon
+ * they are, not their priority — because the two functions never consider the
+ * same Reminder.
+ *
+ * The ordering rules are the medication Horizon's, for the same reasons: the
+ * soonest occurrences win globally rather than per reminder, so one chatty task
+ * cannot crowd out a quieter one that is due first, and the `reminderId`
+ * tie-break keeps a re-run byte-identical so the caller's diff finds nothing to
+ * do.
+ *
+ * `maxTotal` is the caller's, and it is a much smaller number than the
+ * medication 64 — see `MAX_TASK_TRIGGERS` in `apps/mobile`, and ADR 0007 for
+ * why a bound exists at all when the mechanism underneath imposes none.
+ *
+ * Pure, so it can be unit-tested without a native module.
+ */
+export function selectTaskHorizon(
+  reminders: readonly Reminder[],
+  fromMs: number,
+  maxTotal: number
+): readonly ScheduledOccurrence[] {
+  return selectHorizon(reminders, fromMs, maxTotal, entersTaskHorizon);
 }

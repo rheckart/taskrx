@@ -105,9 +105,10 @@ function parseParams(params: Record<string, string | string[]>): {
  * confirm is a Reminder Instance. ADR 0001 licenses showing a medication as
  * *taken*, which is what they say.
  *
- * `snooze` is the one that is not merely wording. A task's deferral arms
- * nothing until #14 gives it a Tier, so promising a reminder in fifteen minutes
- * would be a lie; the medication keeps the promise it has always kept.
+ * `snooze` was here too while a task's deferral armed nothing — promising a
+ * reminder in fifteen minutes would have been a lie on one Kind and a kept
+ * promise on the other. #14 gave the task Tier a trigger, so the button means
+ * the same thing on both and says so once.
  */
 interface KindWords {
   readonly badge: string;
@@ -115,7 +116,6 @@ interface KindWords {
   readonly complete: string;
   readonly completed: string;
   readonly skipped: string;
-  readonly snooze: string;
 }
 
 function wordsFor(kind: Reminder["kind"]): KindWords {
@@ -126,7 +126,6 @@ function wordsFor(kind: Reminder["kind"]): KindWords {
         complete: "Mark taken",
         completed: "Recorded as taken",
         skipped: "Recorded as skipped",
-        snooze: `Snooze ${String(SNOOZE_MINUTES)} min`,
       }
     : {
         badge: "TASK",
@@ -134,7 +133,6 @@ function wordsFor(kind: Reminder["kind"]): KindWords {
         complete: "Mark done",
         completed: "Recorded as done",
         skipped: "Recorded as skipped",
-        snooze: "Put off for now",
       };
 }
 
@@ -287,9 +285,11 @@ export default function DoseLogScreen(): ReactElement {
    * leaves the deferral recorded rather than losing it; an armed alarm with no
    * row would be the reverse trade, and the row is the thing that syncs.
    *
-   * `armed` is false for a task, which has no Tier of its own until #14. The
-   * toast says what actually happened rather than promising a reminder that is
-   * not coming.
+   * `armed` is false only for a reminder this device cannot find — unreachable
+   * from here, since the screen refuses to render when that same lookup returns
+   * null. The toast still branches on it rather than assuming, because the one
+   * thing worse than an unhelpful message is promising a reminder that was
+   * never armed.
    */
   const handleSnooze = useCallback(async (): Promise<void> => {
     if (state.kind !== "loaded") {
@@ -470,7 +470,9 @@ export default function DoseLogScreen(): ReactElement {
               {actionStatus === "snoozing" ? (
                 <ActivityIndicator color="#fff" />
               ) : (
-                <Text style={styles.actionButtonText}>{words.snooze}</Text>
+                <Text style={styles.actionButtonText}>
+                  {`Snooze ${String(SNOOZE_MINUTES)} min`}
+                </Text>
               )}
             </Pressable>
           </View>

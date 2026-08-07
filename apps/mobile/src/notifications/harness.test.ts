@@ -1,40 +1,80 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 /**
- * Executable coverage for the harness action layer's AUTH-DEPENDENT actions.
+ * Executable coverage for the harness actions a device case cannot check for
+ * itself.
  *
- * The actions that existed before this file (`schedule`, `pending-count`, ...)
- * are local-only and are already exercised on-device by harness cases 1-7. The
- * ones added here are not: they write to SQLite as a signed-in user, so a
- * mistake in them corrupts the very rows the case under test then reads back,
- * and the failure surfaces as a product FAIL in an evidence artifact rather
- * than as a broken test.
+ * Most local-only actions are absent from this file on purpose: `schedule` and
+ * `pending-count` are checked by cases 1-7 actually running on a phone, and a
+ * node test would only restate them. What is here is the two families where the
+ * device case is not self-checking.
  *
- * Two properties are worth stating because they are the ones that make the
+ * **The auth-dependent actions** (`seed-due-reminder`, `instance-at`, …) write
+ * to SQLite as a signed-in user, so a mistake in them corrupts the very rows the
+ * case then reads back, and the failure surfaces as a product FAIL in an
+ * evidence artifact rather than as a broken test.
+ *
+ * **The two task-Tier actions** (`schedule-task`, `schedule-task-flood`) are
+ * local-only, and are here because cases 10 and 11 read their verdicts out of
+ * numbers these actions report and fixtures these actions build. A device
+ * cannot tell a case that proved something from one whose fixture could never
+ * have failed — and the first version of the flood could not: every task was
+ * scheduled *later* than the dose, so a Kind-blind scheduler would have ranked
+ * the dose first and passed. Both review axes caught it and neither a test nor
+ * the device would have. The cases pinning the fixture's two premises exist so
+ * that the next such mistake is caught here.
+ *
+ * Three properties are worth stating because they are the ones that make the
  * device cases trustworthy rather than merely green:
  *
  * - **A signed-out run must write NOTHING.** `docs/poc-results.md` records
  *   criteria as pending rather than failed when they were never run, and the
  *   same discipline applies here: an action that cannot identify the user must
  *   report that and stop, not seed rows under a guessed id.
- * - **`seed-due-reminder` arms through `rescheduleAll`, not through notifee
- *   directly.** In the signed-in tree `rescheduleAll` runs on every foreground
- *   and cancels every trigger outside the schedule-derived desired set, so an
- *   alarm armed any other way is swept away before it can fire (harness
- *   constraint 11). The assertion that it delegates is therefore load-bearing.
+ * - **`seed-due-reminder` arms through `rescheduleAll`, and the task actions
+ *   through `armReminders` — never through notifee directly.** In the signed-in
+ *   tree `rescheduleAll` runs on every foreground and cancels every trigger
+ *   outside the schedule-derived desired set, so an alarm armed any other way is
+ *   swept away before it can fire (harness constraint 11). For the task actions
+ *   the reason is different and just as load-bearing: case 10's entire claim is
+ *   about *which trigger the app chooses*, and a harness that built its own
+ *   trigger would be verifying the harness.
+ * - **A fixture must be able to fail.** See above.
  *
  * Everything below the repositories is mocked: the subject is which rows and
  * calls each action produces, and a real `expo-sqlite` would pull React Native
  * into a node test.
+ *
+ * ## Why these assert on collaborators, which the spec normally forbids
+ *
+ * `docs/specs/fused-timeline.md` § "What makes a good test here" rules out
+ * asserting "which collaborator was called", and the delegation cases do
+ * exactly that. It is the same documented exception `scheduler.test.ts` argues
+ * at length — notification delivery "cannot be tested without an operating
+ * system", and arming a trigger *is* the observable behaviour, with no return
+ * value to prefer. The delegation is not an implementation detail here but the
+ * property under test: an action that armed the right notification by the wrong
+ * route would be retracted on the next foreground, or would prove nothing about
+ * the app's own choice of trigger. Everything else below asserts on the strings
+ * these actions return, which is what the shell reads.
  */
 
 const mocks = vi.hoisted(() => ({
   getTriggerNotificationIds: vi.fn<() => Promise<string[]>>(),
   createTriggerNotification: vi.fn<() => Promise<void>>(),
-  createNotificationChannel: vi.fn<() => Promise<void>>(),
+  createNotificationChannels: vi.fn<() => Promise<void>>(),
   cancelAll: vi.fn<() => Promise<void>>(),
   scheduleForReminder: vi.fn<() => Promise<void>>(),
   rescheduleAll: vi.fn<(userId: string) => Promise<void>>(),
+  armReminders: vi.fn<
+    (
+      reminders: readonly {
+        id: string;
+        kind: string;
+        schedule: { type: string; at?: number };
+      }[]
+    ) => Promise<void>
+  >(),
   checkExactAlarmPermission: vi.fn<() => Promise<boolean>>(),
   remindersCreate: vi.fn(),
   remindersList: vi.fn(),
@@ -72,12 +112,27 @@ vi.mock("react-native-notify-kit", () => ({
   TriggerType: { TIMESTAMP: 0 },
 }));
 
+/**
+ * The budgets the mocked scheduler reports, spelled once.
+ *
+ * The flood case asserts against these rather than against literals, which is
+ * the whole reason `schedule-task-flood` reports its budgets back at all: a
+ * test that hardcoded the numbers would keep passing on the day one of them
+ * moved, while the shell case it stands in for started proving nothing.
+ */
+const TASK_BUDGET = 32;
+const DOSE_BUDGET = 64;
+
 vi.mock("./index", () => ({
   MEDICATION_REMINDER_CHANNEL_ID: "medication_reminders",
-  createNotificationChannel: mocks.createNotificationChannel,
+  MAX_TASK_TRIGGERS: TASK_BUDGET,
+  MAX_GLOBAL_TRIGGERS: DOSE_BUDGET,
+  taskIdPrefixFor: (reminderId: string) => `task-${reminderId}-`,
+  createNotificationChannels: mocks.createNotificationChannels,
   cancelAll: mocks.cancelAll,
   scheduleForReminder: mocks.scheduleForReminder,
   rescheduleAll: mocks.rescheduleAll,
+  armReminders: mocks.armReminders,
 }));
 
 vi.mock("./permissions", () => ({
@@ -168,6 +223,131 @@ describe("parseHarnessSpec", () => {
     const parsed = parseHarnessSpec(spec("instance-at", "r1", "5"));
     expect(parsed.delayMs).toBe(1000);
     expect(parsed.value).toBe(5);
+  });
+});
+
+/**
+ * The two task-Tier actions, which back device cases 10 and 11.
+ *
+ * They are local-only, unlike everything else in this file, and they are here
+ * for a different reason than the auth-dependent ones: what makes them
+ * trustworthy is that they arm through the app's OWN scheduler. A harness that
+ * built its own trigger would verify the harness, and case 10's whole claim is
+ * about which trigger the app chooses — so the delegation is the thing under
+ * test, exactly as it is for `seed-due-reminder`.
+ *
+ * The counts each reports are what the shell case reads its verdict from, and
+ * a case that cannot tell "the budget filled" from "nothing was armed" proves
+ * nothing at all.
+ */
+describe("schedule-task", () => {
+  it("arms the task through the app's own scheduler", async () => {
+    await runHarnessAction(
+      parseHarnessSpec(spec("schedule-task", "t-1", "90000")),
+      SIGNED_OUT
+    );
+
+    expect(mocks.createTriggerNotification).not.toHaveBeenCalled();
+    const [handed] = mocks.armReminders.mock.calls[0] ?? [];
+    expect(handed?.map((reminder) => reminder.kind)).toEqual(["task"]);
+  });
+
+  it("reports the ids it armed and the moment they fire", async () => {
+    mocks.getTriggerNotificationIds.mockResolvedValue([
+      `task-t-1-${String(NOW + 90_000)}`,
+      // A medication left over from an earlier case, and a lookalike whose
+      // reminder id merely starts with this one's. Neither is this task, and a
+      // count that swept them in would report a budget as full when it was not.
+      `t-1-${String(NOW + 90_000)}`,
+      `task-t-1-other-${String(NOW + 90_000)}`,
+    ]);
+
+    const result = await runHarnessAction(
+      parseHarnessSpec(spec("schedule-task", "t-1", "90000")),
+      SIGNED_OUT
+    );
+
+    expect(result).toContain("task_armed=1");
+    expect(result).toContain(`task_ids=task-t-1-${String(NOW + 90_000)}`);
+    expect(result).toContain(`fire_at=${String(NOW + 90_000)}`);
+  });
+});
+
+describe("schedule-task-flood", () => {
+  it("hands over more tasks than EITHER budget can hold, so the case can prove something", async () => {
+    await runHarnessAction(
+      parseHarnessSpec(spec("schedule-task-flood", "f-1", "600000")),
+      SIGNED_OUT
+    );
+
+    const [handed = []] = mocks.armReminders.mock.calls[0] ?? [];
+    const tasks = handed.filter((reminder) => reminder.kind === "task");
+    // Clearing the task budget only makes the Tier full. Clearing the
+    // MEDICATION budget is what makes the case falsifiable at all: with fewer
+    // tasks than that, a Kind-blind scheduler ranking both Kinds in one 64-slot
+    // set has room for the flood AND the dose, arms the dose, and passes.
+    expect(tasks.length).toBeGreaterThan(TASK_BUDGET);
+    expect(tasks.length).toBeGreaterThan(DOSE_BUDGET);
+  });
+
+  it("schedules every task sooner than the dose", async () => {
+    // The other half of falsifiability, and the half the first version got
+    // wrong. A Kind-blind scheduler orders purely by time, so tasks scheduled
+    // AFTER the dose leave it ranked first and armed — the case would pass
+    // against the exact failure it exists to catch.
+    const doseAt = NOW + 600_000;
+    await runHarnessAction(
+      parseHarnessSpec(spec("schedule-task-flood", "f-1", "600000")),
+      SIGNED_OUT
+    );
+
+    const [handed = []] = mocks.armReminders.mock.calls[0] ?? [];
+    const taskMoments = handed
+      .filter((reminder) => reminder.kind === "task")
+      .map((reminder) => reminder.schedule);
+
+    expect(taskMoments.length).toBeGreaterThan(0);
+    expect(
+      taskMoments.every(
+        (schedule) =>
+          schedule.type === "once" &&
+          schedule.at !== undefined &&
+          schedule.at > NOW &&
+          schedule.at < doseAt
+      )
+    ).toBe(true);
+  });
+
+  it("arms exactly one medication alongside them", async () => {
+    await runHarnessAction(
+      parseHarnessSpec(spec("schedule-task-flood", "f-1", "600000")),
+      SIGNED_OUT
+    );
+
+    const [handed = []] = mocks.armReminders.mock.calls[0] ?? [];
+    expect(
+      handed.filter((reminder) => reminder.kind === "medication")
+    ).toHaveLength(1);
+  });
+
+  it("counts each Tier separately and names the budget it filled", async () => {
+    const doseAt = NOW + 600_000;
+    mocks.getTriggerNotificationIds.mockResolvedValue([
+      `f-1-dose-${String(doseAt)}`,
+      `task-f-1-task-0-${String(NOW + 60_000)}`,
+      `task-f-1-task-1-${String(NOW + 60_000)}`,
+    ]);
+
+    const result = await runHarnessAction(
+      parseHarnessSpec(spec("schedule-task-flood", "f-1", "600000")),
+      SIGNED_OUT
+    );
+
+    expect(result).toContain("dose_armed=1");
+    expect(result).toContain("task_armed=2");
+    expect(result).toContain(`task_budget=${String(TASK_BUDGET)}`);
+    expect(result).toContain(`dose_budget=${String(DOSE_BUDGET)}`);
+    expect(result).toContain(`dose_at=${String(doseAt)}`);
   });
 });
 

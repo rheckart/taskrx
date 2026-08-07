@@ -97,9 +97,9 @@ function statusLabel(row: TimelineRow): string {
       return "Missed";
     case "snoozed":
       // Named with its new moment, because that moment is the whole content of
-      // a snooze. For a task nothing else marks the deferral at all — its Tier
-      // has no trigger until #14 — so an unqualified "Snoozed" would be the only
-      // trace of a decision the person made and could not see the result of.
+      // a snooze: it is when the reminder comes back, on either Tier since #14
+      // gave the task Tier a trigger. An unqualified "Snoozed" would leave the
+      // person no way to see what they had decided.
       return row.snoozedUntil === undefined
         ? "Snoozed"
         : `Snoozed until ${timeLabel(row.snoozedUntil)}`;

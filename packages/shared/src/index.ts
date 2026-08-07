@@ -76,7 +76,11 @@ export type {
   WeeklyTimesWire,
 } from "./domain/index";
 
-export { nextOccurrences, selectMedicationHorizon } from "./schedule/index";
+export {
+  nextOccurrences,
+  selectMedicationHorizon,
+  selectTaskHorizon,
+} from "./schedule/index";
 export type { OccurrenceSource, ScheduledOccurrence } from "./schedule/index";
 
 /**
@@ -84,12 +88,21 @@ export type { OccurrenceSource, ScheduledOccurrence } from "./schedule/index";
  * Kind and from nothing else. See ADR 0003: a task is not in the medication
  * Horizon at all, so it cannot displace a dose.
  *
- * Only the question the app actually asks is exported. `Tier` and `TIERS` stay
- * inside the module until something outside needs to name a Tier rather than
- * test for one — which is what #14 will do when tasks get a trigger of their
- * own.
+ * All of it is exported now, because #14 gave the task Tier a trigger. The two
+ * budgets answer "which set does this Reminder belong to", and `Tier` itself is
+ * finally a value worth holding: `apps/mobile` keys its channel, importance,
+ * press action and alarm primitive off it in one record, which is what stops
+ * "medication or task?" being asked five times in a row at each arming site.
+ *
+ * `TIERS` stays inside the module — nothing outside has needed to enumerate
+ * them.
  */
-export { entersMedicationHorizon } from "./notifications/tier";
+export {
+  entersMedicationHorizon,
+  entersTaskHorizon,
+  tierFor,
+} from "./notifications/tier";
+export type { Tier } from "./notifications/tier";
 
 /**
  * Adherence scoring and refill planning, ported from `TaskRx.Core`. Both are

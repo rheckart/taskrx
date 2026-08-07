@@ -1,7 +1,5 @@
-import { entersMedicationHorizon } from "@taskrx/shared";
+import { tierFor } from "@taskrx/shared";
 import notifee, {
-  AlarmType,
-  AndroidImportance,
   type Notification,
   TriggerType,
   type TimestampTrigger,
@@ -10,9 +8,10 @@ import notifee, {
 import * as remindersRepo from "../db/repos/reminders";
 
 import {
+  androidFor,
   buildNotificationId as buildBaseNotificationId,
-  MEDICATION_REMINDER_CHANNEL_ID,
   SNOOZE_NOTIFICATION_ID_PREFIX,
+  TIER_DELIVERY,
 } from "./scheduler";
 
 /**
@@ -35,18 +34,20 @@ import {
  * no legacy row to name at all. Both tables are gone now; `reminders` is simply
  * where a reminder lives.
  *
- * ## Why a task arms nothing, and says so
+ * ## The Tier follows the Kind here too
  *
- * Everything below is medication-Tier: the medication channel, HIGH importance,
- * and `SET_ALARM_CLOCK`. ADR 0003 keeps that combination for doses, so a task
- * cannot borrow it by the side door of asking to be reminded again — which is
- * exactly how the app's *last* `SET_EXACT_AND_ALLOW_WHILE_IDLE` survived a
- * migration that had moved every other path off it.
+ * A snooze is the one path a person reaches by *asking* to be reminded again,
+ * which makes it the likeliest side door for a task to borrow the alarm-clock
+ * primitive — and that is not a hypothetical: it is exactly how the app's last
+ * `SET_EXACT_AND_ALLOW_WHILE_IDLE` survived a migration that had moved every
+ * other path off it. So the Tier is decided from the Kind here as it is in
+ * `scheduler.ts`: a dose is deferred with `SET_ALARM_CLOCK` on the medication
+ * channel, a task with the ordinary trigger on the task channel (ADR 0007),
+ * and no argument passed in can swap them.
  *
- * So for a task this records the deferral and arms nothing, and the boolean
- * says which happened rather than leaving the caller to guess: the person is
- * told their task was deferred, not that they will be reminded. Task-Tier
- * delivery is #14, and this is the second place that will need a trigger.
+ * A task's deferral armed nothing at all until #14, because the task Tier had
+ * no trigger to arm. It has one now, so the boolean below is `false` only for a
+ * reminder this device cannot find.
  *
  * Renamed from `snoozeDose`: "dose" is the quantity of a drug (CONTEXT.md), and
  * what is being deferred here is an Occurrence of either Kind.
@@ -58,18 +59,23 @@ export async function snoozeReminder(
 ): Promise<boolean> {
   const reminder = await remindersRepo.get(reminderId);
 
-  // A reminder this device cannot find arms nothing either. ADR 0003 makes the
-  // exclusion hold "by construction rather than by policy", and a row that is
-  // absent is a row not known to be a medication — a not-yet-pulled or
-  // just-deleted task reached from a stale deep link would otherwise take the
-  // alarm-clock primitive on the medication channel. The fallback this replaces
-  // armed one under the title "Medication", and is unreachable in practice
-  // anyway: `/dose/log` refuses to render at all when this same lookup returns
-  // null.
-  if (reminder === null || !entersMedicationHorizon(reminder)) {
+  // A reminder this device cannot find arms nothing. ADR 0003 makes the Tier
+  // split hold "by construction rather than by policy", and a row that is
+  // absent is a row of no known Kind — a not-yet-pulled or just-deleted task
+  // reached from a stale deep link would otherwise have to be guessed at, and
+  // the fallback this replaces guessed "Medication" and took the alarm-clock
+  // primitive. It is unreachable in practice anyway: `/dose/log` refuses to
+  // render at all when this same lookup returns null.
+  if (reminder === null) {
     return false;
   }
 
+  // One question, asked once. Everything the two Tiers are told differently is
+  // `TIER_DELIVERY`'s job, so this file no longer decides a channel, an
+  // importance, a press action or an alarm primitive — it only says which Tier
+  // the deferral is on, and the table beside the scheduler answers the rest in
+  // the same words the scheduler gets.
+  const tier = tierFor(reminder.kind);
   const dosageLabel =
     reminder.dosage !== undefined ? ` (${reminder.dosage})` : "";
 
@@ -89,37 +95,30 @@ export async function snoozeReminder(
     title: `${reminder.name}${dosageLabel} (snoozed)`,
     body: `Reminder snoozed for ${String(snoozeMinutes)} minutes`,
     data: {
-      medicationId: reminderId,
+      // `reminderId` is the post-cutover key and `medicationId` the one alarms
+      // armed before it carry; `tap-handler.ts` prefers the first and accepts
+      // the second. A task snooze sends only the new name, because no task
+      // alarm predates the cutover and the old one would be a lie about which
+      // table the id belongs to. This is the one thing here that is genuinely
+      // about the Kind rather than about the Tier, which is why it is the one
+      // thing the table below does not answer.
+      ...(tier === "medication" ? { medicationId: reminderId } : {}),
+      reminderId,
       scheduledTime: String(scheduledTime),
       snoozed: "true",
     },
-    android: {
-      channelId: MEDICATION_REMINDER_CHANNEL_ID,
-      smallIcon: "ic_launcher",
-      pressAction: {
-        // Not renamed with ADR 0001 — see `scheduler.ts` for why this string
-        // is frozen.
-        id: "mark-taken",
-        launchActivity: "default",
-      },
-      importance: AndroidImportance.HIGH,
-      autoCancel: true,
-    },
+    android: androidFor(tier),
   };
 
   const trigger: TimestampTrigger = {
     type: TriggerType.TIMESTAMP,
     timestamp: snoozeUntil,
-    alarmManager: {
-      // The same primitive `scheduler.ts` arms, and for the same reason it
-      // documents at length there. This was the last `SET_EXACT_AND_ALLOW_WHILE_IDLE`
-      // in the app: todo 7 moved the scheduler off it and never reached this
-      // file, leaving the invariant `README.md` states unqualified — "do not
-      // revert the notification AlarmType" — true everywhere except the one
-      // path a user reaches by asking to be reminded again. Doze is the lesser
-      // risk for an alarm 15 minutes out; OEM aggressive-kill is the real one.
-      type: AlarmType.SET_ALARM_CLOCK,
-    },
+    // Read from the same table the scheduler arms from, rather than chosen
+    // again here. This path is where the app's last
+    // `SET_EXACT_AND_ALLOW_WHILE_IDLE` survived a migration that moved every
+    // other one off it, and it survived precisely because it named its own
+    // primitive.
+    alarmManager: TIER_DELIVERY[tier].alarmManager,
   };
 
   await notifee.createTriggerNotification(notification, trigger);

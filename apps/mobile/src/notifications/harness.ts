@@ -1,4 +1,9 @@
-import { createReminder, dailyTimes, weeklyTimes } from "@taskrx/shared";
+import {
+  createReminder,
+  dailyTimes,
+  onceTimes,
+  weeklyTimes,
+} from "@taskrx/shared";
 import notifee, {
   AlarmType,
   AndroidImportance,
@@ -15,11 +20,15 @@ import { syncWorker } from "../sync/worker";
 import { checkExactAlarmPermission } from "./permissions";
 
 import {
+  MAX_GLOBAL_TRIGGERS,
+  MAX_TASK_TRIGGERS,
   MEDICATION_REMINDER_CHANNEL_ID,
+  armReminders,
   cancelAll,
-  createNotificationChannel,
+  createNotificationChannels,
   rescheduleAll,
   scheduleForReminder,
+  taskIdPrefixFor,
 } from "./index";
 
 /**
@@ -46,6 +55,8 @@ import {
 export type HarnessAction =
   | "schedule"
   | "schedule-weekly"
+  | "schedule-task"
+  | "schedule-task-flood"
   | "cancel-all"
   | "pending-count"
   | "pending-ids"
@@ -100,6 +111,8 @@ const HARNESS_REMINDER_DOSAGE = "1 tablet";
 const VALID_ACTIONS: readonly HarnessAction[] = [
   "schedule",
   "schedule-weekly",
+  "schedule-task",
+  "schedule-task-flood",
   "cancel-all",
   "pending-count",
   "pending-ids",
@@ -135,7 +148,7 @@ export function parseHarnessSpec(segments: readonly string[]): HarnessSpec {
 }
 
 async function runSchedule(spec: HarnessSpec): Promise<string> {
-  await createNotificationChannel();
+  await createNotificationChannels();
   const scheduledTime = Date.now() + spec.delayMs;
   const trigger: TimestampTrigger = {
     type: TriggerType.TIMESTAMP,
@@ -191,7 +204,7 @@ const WEEKLY_COUNT = 3;
  * against real device-local time, not the app's own assertion.
  */
 async function runScheduleWeekly(spec: HarnessSpec): Promise<string> {
-  await createNotificationChannel();
+  await createNotificationChannels();
   const now = Date.now();
   const reminder = createReminder({
     id: spec.id,
@@ -211,6 +224,175 @@ async function runScheduleWeekly(spec: HarnessSpec): Promise<string> {
     .map((id) => id.slice(spec.id.length + 1))
     .sort();
   return `weekly_fire_ats=${fireAts.join(",")}`;
+}
+
+/**
+ * The pending trigger ids under `prefix` whose remainder matches `rest`.
+ *
+ * A `startsWith` alone is not enough to COUNT with, and the difference is not
+ * academic: a reminder id of `t-1-other` produces `task-t-1-other-…`, which
+ * starts with `task-t-1-`. The medication namespace has the same property and
+ * documents it as a known limitation, because there nothing turns on it — here
+ * a verdict does. Case 11 concludes "the task budget is full" from a count, and
+ * a count inflated by ids belonging to something else would report a case as
+ * proven when it had proven nothing.
+ */
+function armedUnder(
+  ids: readonly string[],
+  prefix: string,
+  rest: RegExp
+): readonly string[] {
+  return ids.filter(
+    (id) => id.startsWith(prefix) && rest.test(id.slice(prefix.length))
+  );
+}
+
+/**
+ * Arms one task through the production path, for the task-Tier delivery case.
+ *
+ * `armReminders` rather than a direct notifee write, for the same reason
+ * `seed-due-reminder` uses `rescheduleAll`: what is under test is the app's own
+ * choice of trigger, and a harness that spelled the trigger out itself would
+ * verify the harness. It reports the armed ids so the shell can check that they
+ * are in the task id namespace, and the fire time so it knows when to look for
+ * the notification.
+ *
+ * A `once` schedule, not `daily`: one task, one moment, nothing left armed
+ * afterwards to confuse the next case.
+ */
+async function runScheduleTask(spec: HarnessSpec): Promise<string> {
+  await createNotificationChannels();
+  const now = Date.now();
+  const fireAt = now + spec.delayMs;
+  const reminder = createReminder({
+    id: spec.id,
+    userId: "harness",
+    kind: "task",
+    name: `${HARNESS_REMINDER_MARKER} ${spec.id}`,
+    schedule: onceTimes(fireAt),
+    createdAt: now,
+    updatedAt: now,
+  });
+
+  await armReminders([reminder]);
+
+  const armed = armedUnder(
+    await notifee.getTriggerNotificationIds(),
+    taskIdPrefixFor(spec.id),
+    /^\d+$/
+  );
+  return (
+    `task_armed=${String(armed.length)} ` +
+    `task_ids=${armed.join(",")} ` +
+    `fire_at=${String(fireAt)}`
+  );
+}
+
+/**
+ * How many tasks the non-displacement case arms alongside one medication.
+ *
+ * It has to clear **both** budgets, and the second one is the one that makes
+ * the case mean anything:
+ *
+ *   * More than `MAX_TASK_TRIGGERS`, so the task Tier fills completely. Until
+ *     it does, "the dose is still armed" says nothing — there was room for
+ *     everybody.
+ *   * More than `MAX_GLOBAL_TRIGGERS`, because that is the budget a Kind-blind
+ *     scheduler would be ranking both Kinds inside. With fewer tasks than 64
+ *     such a scheduler arms all of them AND the dose, so the failure this case
+ *     exists to catch cannot occur and the case passes a broken build.
+ *
+ * The first version of this got the second condition wrong and the fixture
+ * wrong with it, which is recorded here rather than quietly corrected: 40
+ * `daily` tasks at 00:05–00:20, against a dose ten minutes out. Every one of
+ * those tasks was *later* than the dose, not sooner, so a purely time-ordered
+ * Kind-blind selector would have ranked the dose first and armed it. Both
+ * review axes caught it independently.
+ */
+const FLOOD_TASK_COUNT = 80;
+
+/**
+ * Arms a flood of tasks and one medication together, for the non-displacement
+ * case.
+ *
+ * **Every task fires before the dose, and that is the whole fixture.** A
+ * Kind-blind scheduler orders purely by time — which is what this app did
+ * before ADR 0003 — so with 80 task occurrences in the next few minutes and one
+ * dose ten minutes out, it fills its 64 slots with tasks and the dose is never
+ * armed at all. That is the failure this case exists to catch, and on a real
+ * device it is silent: no error, no warning, the alarm simply is not there.
+ * Tasks scheduled *after* the dose would let that same scheduler rank the dose
+ * first and pass.
+ *
+ * `once` rather than `daily` for exactly that reason. A daily schedule's next
+ * occurrence depends on the device's wall clock, so "sooner than the dose"
+ * would hold or not hold depending on what time the case happened to run — and
+ * an unfalsifiable case that passes at 3pm is worse than no case.
+ *
+ * Reports both counts, both budgets and the dose's own ids, so the shell can
+ * assert the case's own premises before it reads a verdict out of them: that
+ * the task budget really did fill, that the flood was large enough to have
+ * displaced the dose had the Tiers shared a budget, and that the dose is still
+ * armed. Any of those alone would pass something broken — a scheduler that
+ * armed no tasks at all satisfies the last.
+ */
+async function runScheduleTaskFlood(spec: HarnessSpec): Promise<string> {
+  await createNotificationChannels();
+  const now = Date.now();
+  const doseAt = now + spec.delayMs;
+
+  const reminders = [
+    createReminder({
+      id: `${spec.id}-dose`,
+      userId: "harness",
+      kind: "medication",
+      name: `${HARNESS_REMINDER_MARKER} ${spec.id} dose`,
+      dosage: HARNESS_REMINDER_DOSAGE,
+      schedule: onceTimes(doseAt),
+      createdAt: now,
+      updatedAt: now,
+    }),
+    ...Array.from({ length: FLOOD_TASK_COUNT }, (_, index) =>
+      createReminder({
+        id: `${spec.id}-task-${String(index)}`,
+        userId: "harness",
+        kind: "task",
+        name: `${HARNESS_REMINDER_MARKER} ${spec.id} task ${String(index)}`,
+        // A minute out and one second apart, so every one of them is sooner
+        // than the dose and no two share an instant — the ordering the case
+        // depends on is then a fact about the fixture rather than about the
+        // tie-break.
+        schedule: onceTimes(now + 60_000 + index * 1_000),
+        createdAt: now,
+        updatedAt: now,
+      })
+    ),
+  ];
+
+  await armReminders(reminders);
+
+  const pending = await notifee.getTriggerNotificationIds();
+  const doseIds = armedUnder(pending, `${spec.id}-dose-`, /^\d+$/);
+  const taskIds = armedUnder(
+    pending,
+    `${taskIdPrefixFor(spec.id)}task-`,
+    // `<index>-<fireAt>`: the flood's own reminder ids carry the index.
+    /^\d+-\d+$/
+  );
+
+  // Both budgets are reported rather than left for the shell to know, so the
+  // case can check its own premises without a second copy of either number
+  // going stale the day one of them moves. `flood` against `dose_budget` is
+  // the premise that a Kind-blind scheduler would have dropped the dose here.
+  return (
+    `dose_armed=${String(doseIds.length)} ` +
+    `task_armed=${String(taskIds.length)} ` +
+    `task_budget=${String(MAX_TASK_TRIGGERS)} ` +
+    `dose_budget=${String(MAX_GLOBAL_TRIGGERS)} ` +
+    `flood=${String(FLOOD_TASK_COUNT)} ` +
+    `dose_ids=${doseIds.join(",")} ` +
+    `dose_at=${String(doseAt)}`
+  );
 }
 
 /**
@@ -262,7 +444,7 @@ async function runSeedDueReminder(
   spec: HarnessSpec,
   userId: string
 ): Promise<string> {
-  await createNotificationChannel();
+  await createNotificationChannels();
 
   const target = new Date(nextWholeMinute(Date.now() + spec.delayMs));
   const hhmm = `${pad2(target.getHours())}:${pad2(target.getMinutes())}`;
@@ -456,6 +638,10 @@ export async function runHarnessAction(
       return runSchedule(spec);
     case "schedule-weekly":
       return runScheduleWeekly(spec);
+    case "schedule-task":
+      return runScheduleTask(spec);
+    case "schedule-task-flood":
+      return runScheduleTaskFlood(spec);
     case "cancel-all": {
       await cancelAll();
       return "cancelled all trigger notifications";

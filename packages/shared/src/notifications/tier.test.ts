@@ -3,7 +3,7 @@ import { describe, expect, it } from "vitest";
 import type { Reminder, ScheduleTimes } from "../domain/index";
 import { createReminder, dailyTimes } from "../domain/index";
 
-import { entersMedicationHorizon, tierFor } from "./tier";
+import { entersMedicationHorizon, entersTaskHorizon, tierFor } from "./tier";
 
 function reminder(
   kind: Reminder["kind"],
@@ -55,5 +55,45 @@ describe("entersMedicationHorizon", () => {
     expect(
       entersMedicationHorizon(reminder("medication", { priority: "low" }))
     ).toBe(true);
+  });
+});
+
+describe("entersTaskHorizon", () => {
+  it("admits a task", () => {
+    expect(entersTaskHorizon(reminder("task"))).toBe(true);
+  });
+
+  it("refuses a medication", () => {
+    expect(entersTaskHorizon(reminder("medication"))).toBe(false);
+  });
+
+  it("refuses a low-priority medication, because Tier is Kind and not Priority", () => {
+    expect(entersTaskHorizon(reminder("medication", { priority: "low" }))).toBe(
+      false
+    );
+  });
+
+  it("admits a low-priority task, for the same reason", () => {
+    expect(entersTaskHorizon(reminder("task", { priority: "low" }))).toBe(true);
+  });
+});
+
+/**
+ * The two budgets partition the Reminders rather than sharing them. This is
+ * what ADR 0003 means by "by construction": there is no Kind that competes for
+ * both, and none that falls through and is armed by neither.
+ */
+describe("the two Horizons together", () => {
+  it("admits every Kind to exactly one of them", () => {
+    for (const kind of ["medication", "task"] as const) {
+      const subject = reminder(kind);
+      expect([
+        entersMedicationHorizon(subject),
+        entersTaskHorizon(subject),
+      ]).toContainEqual(true);
+      expect(entersMedicationHorizon(subject)).not.toBe(
+        entersTaskHorizon(subject)
+      );
+    }
   });
 });

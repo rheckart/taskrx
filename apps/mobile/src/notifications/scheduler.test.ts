@@ -37,8 +37,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
  * that *can* be executed in the shared package is re-pinned here: ADR 0003's
  * "a task never displaces a dose from a full Horizon" belongs to
  * `horizon.test.ts`, where it runs against a pure function. What the Tier cases
- * below add is the wiring — that this module asks `selectMedicationHorizon` and
- * `entersMedicationHorizon` at all, which no pure test can see.
+ * below add is what no pure test can see — that this module asks each Tier's
+ * selector at all, and which trigger it then asks the operating system for.
  */
 
 /**
@@ -51,13 +51,15 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 const mocks = vi.hoisted(() => ({
   getTriggerNotificationIds: vi.fn<() => Promise<string[]>>(),
   cancelTriggerNotifications: vi.fn<(ids: string[]) => Promise<void>>(),
-  createTriggerNotification:
-    vi.fn<
-      (
-        notification: { id: string },
-        trigger: { timestamp: number; alarmManager: { type: string } }
-      ) => Promise<void>
-    >(),
+  createTriggerNotification: vi.fn<
+    (
+      notification: { id: string; android: { channelId: string } },
+      trigger: {
+        timestamp: number;
+        alarmManager: { type: string } | false;
+      }
+    ) => Promise<void>
+  >(),
   list: vi.fn(),
   get: vi.fn(),
 }));
@@ -73,7 +75,7 @@ vi.mock("react-native-notify-kit", () => ({
     SET_ALARM_CLOCK: "SET_ALARM_CLOCK",
     SET_EXACT_AND_ALLOW_WHILE_IDLE: "SET_EXACT_AND_ALLOW_WHILE_IDLE",
   },
-  AndroidImportance: { HIGH: 4 },
+  AndroidImportance: { HIGH: 4, DEFAULT: 3 },
   TriggerType: { TIMESTAMP: 0 },
 }));
 
@@ -82,8 +84,14 @@ vi.mock("../db/repos/reminders", () => ({
   get: mocks.get,
 }));
 
-const { buildNotificationId, rescheduleAll, SNOOZE_NOTIFICATION_ID_PREFIX } =
-  await import("./scheduler");
+const {
+  buildNotificationId,
+  buildTaskNotificationId,
+  MEDICATION_REMINDER_CHANNEL_ID,
+  rescheduleAll,
+  SNOOZE_NOTIFICATION_ID_PREFIX,
+  TASK_REMINDER_CHANNEL_ID,
+} = await import("./scheduler");
 const { snoozeReminder } = await import("./snooze");
 
 const USER = "user_owner";
@@ -125,6 +133,30 @@ function createdIds(): string[] {
   return mocks.createTriggerNotification.mock.calls.map(
     ([notification]) => notification.id
   );
+}
+
+/**
+ * What was armed for one id: the channel it lands on and the alarm primitive
+ * behind it — the two things that distinguish a Tier from the other.
+ *
+ * Throws rather than returning undefined so a case cannot assert about a
+ * notification that was never armed and pass on the strength of two undefineds
+ * matching.
+ */
+function armedFor(id: string): { channelId: string; alarmManager: unknown } {
+  const call = mocks.createTriggerNotification.mock.calls.find(
+    ([notification]) => notification.id === id
+  );
+  if (call === undefined) {
+    throw new Error(
+      `nothing was armed for ${id}; armed: ${createdIds().join(", ") || "(none)"}`
+    );
+  }
+  const [notification, trigger] = call;
+  return {
+    channelId: notification.android.channelId,
+    alarmManager: trigger.alarmManager,
+  };
 }
 
 /**
@@ -241,38 +273,40 @@ describe("rescheduleAll idempotence", () => {
   });
 });
 
-describe("snoozeReminder alarm primitive", () => {
-  it("arms SET_ALARM_CLOCK, the primitive the scheduler uses", async () => {
-    await snoozeReminder("rem-metformin", NOW - 3_600_000, SNOOZE_UNTIL);
-
-    const [call] = mocks.createTriggerNotification.mock.calls;
-    if (call === undefined) {
-      throw new Error("snoozeReminder armed no notification at all");
-    }
-    const [, trigger] = call;
-    expect(trigger.alarmManager.type).toBe("SET_ALARM_CLOCK");
-  });
-});
+/*
+ * `snoozeReminder alarm primitive` stood here, asserting that a snooze arms
+ * `SET_ALARM_CLOCK`. It is gone rather than kept: "gives a snoozed medication
+ * the alarm-clock primitive on its own channel" below asserts the same thing
+ * and the channel with it, and now does so beside the task case that makes it
+ * a distinction rather than a constant.
+ */
 
 /**
- * ADR 0003, at the two places this module can arm an alarm.
+ * ADR 0003 and ADR 0007, at the two places this module can arm a reminder.
  *
- * Every case is stated as "nothing was armed" rather than "the right thing was
- * armed", because the guarantee is an absence: a task must not reach an
- * alarm-clock primitive or the bounded Horizon, whatever else changes about how
- * medications are scheduled.
+ * The guarantee is no longer an absence. Until #14 a task was armed with
+ * nothing at all, so every case here read "nothing was armed"; now a task IS
+ * armed, and what has to hold is that it is armed *differently* — an ordinary
+ * WorkManager-backed trigger on the task channel, never the alarm-clock
+ * primitive on the medication one. "Armed nothing" would now pass for a
+ * regression that simply dropped task delivery.
  *
  * The rule that a task cannot *displace* a dose from a full Horizon is not here.
- * It is a property of `selectMedicationHorizon`, it runs against that pure
- * function in `packages/shared/src/schedule/horizon.test.ts`, and re-pinning it
- * through mocks would state one rule twice in the weaker of the two mediums.
- * What is left here is only what a pure test cannot see: that this module asks
- * the Tier question at all.
+ * It is a property of the two selectors, it runs against those pure functions in
+ * `packages/shared/src/schedule/horizon.test.ts`, and re-pinning it through
+ * mocks would state one rule twice in the weaker of the two mediums. What is
+ * left here is only what a pure test cannot see: which trigger this module asks
+ * the operating system for.
  */
-describe("the medication Tier admits no tasks", () => {
-  const TASK = { ...REMINDER, id: "rem-pharmacy", kind: "task" };
+describe("the Tier a reminder is armed on follows its Kind", () => {
+  const TASK = {
+    ...REMINDER,
+    id: "rem-pharmacy",
+    kind: "task",
+    dosage: undefined,
+  };
 
-  it("arms nothing when a task is snoozed, and says it armed nothing", async () => {
+  it("gives a snoozed task an ordinary trigger on the task channel", async () => {
     mocks.get.mockResolvedValue(TASK);
 
     const armed = await snoozeReminder(
@@ -281,14 +315,19 @@ describe("the medication Tier admits no tasks", () => {
       SNOOZE_UNTIL
     );
 
-    expect(armed).toBe(false);
-    expect(createdIds()).toEqual([]);
+    expect(armed).toBe(true);
+    expect(armedFor(onlyCreatedId())).toEqual({
+      channelId: TASK_REMINDER_CHANNEL_ID,
+      // Not `undefined`. Omitting the key makes notify-kit's validator default
+      // the trigger to an exact alarm, so "no alarmManager" and "alarmManager
+      // false" are opposite instructions and only one of them is this Tier's.
+      alarmManager: false,
+    });
   });
 
   it("arms nothing when the reminder is not on this device", async () => {
-    // A row that is absent is a row not known to be a medication. Reachable
-    // from a stale deep link naming a task this device has not pulled, or one
-    // just deleted.
+    // A row that is absent is a row of no known Kind. Reachable from a stale
+    // deep link naming a task this device has not pulled, or one just deleted.
     mocks.get.mockResolvedValue(null);
 
     const armed = await snoozeReminder(
@@ -301,8 +340,9 @@ describe("the medication Tier admits no tasks", () => {
     expect(createdIds()).toEqual([]);
   });
 
-  it("still arms a snooze for a medication", async () => {
-    // Beside the two above, so "arms nothing, ever" cannot pass for a fix.
+  it("gives a snoozed medication the alarm-clock primitive on its own channel", async () => {
+    // Beside the task case above, so a scheduler that armed one Tier for
+    // everything cannot pass either half.
     const armed = await snoozeReminder(
       "rem-metformin",
       NOW - 3_600_000,
@@ -310,7 +350,10 @@ describe("the medication Tier admits no tasks", () => {
     );
 
     expect(armed).toBe(true);
-    expect(createdIds()).toHaveLength(1);
+    expect(armedFor(onlyCreatedId())).toEqual({
+      channelId: MEDICATION_REMINDER_CHANNEL_ID,
+      alarmManager: { type: "SET_ALARM_CLOCK" },
+    });
   });
 
   it("arms the snooze at the instant the caller decided, not one of its own", async () => {
@@ -328,14 +371,105 @@ describe("the medication Tier admits no tasks", () => {
     expect(notification.id).toContain(String(SNOOZE_UNTIL));
   });
 
-  it("leaves a task out of the alarms rescheduleAll arms", async () => {
-    mocks.list.mockResolvedValue([REMINDER, TASK]);
+  it("arms a scheduled task, so that it notifies at its time", async () => {
+    mocks.list.mockResolvedValue([TASK]);
 
     await rescheduleAll(USER);
 
     expect(createdIds().length).toBeGreaterThan(0);
-    expect(createdIds().every((id) => id.startsWith("rem-metformin-"))).toBe(
+    expect(createdIds().every((id) => id.startsWith(`task-${TASK.id}-`))).toBe(
       true
     );
+  });
+
+  it("arms each Kind with its own trigger in a single pass", async () => {
+    mocks.list.mockResolvedValue([REMINDER, TASK]);
+
+    await rescheduleAll(USER);
+
+    // The soonest occurrence of each, which is enough: every id in a Tier is
+    // built by one call with one trigger builder.
+    const doseId = createdIds().find((id) => id.startsWith(`${REMINDER.id}-`));
+    const taskId = createdIds().find((id) => id.startsWith(`task-${TASK.id}-`));
+    if (doseId === undefined || taskId === undefined) {
+      throw new Error(
+        `one Kind was armed and the other was not: ${createdIds().join(", ")}`
+      );
+    }
+
+    expect(armedFor(doseId).alarmManager).toEqual({ type: "SET_ALARM_CLOCK" });
+    expect(armedFor(taskId).alarmManager).toBe(false);
+  });
+
+  it("never arms a task with the primitive it reserves for doses", async () => {
+    mocks.list.mockResolvedValue([REMINDER, TASK]);
+
+    await rescheduleAll(USER);
+
+    const taskArmings = createdIds()
+      .filter((id) => id.startsWith("task-"))
+      .map((id) => armedFor(id));
+    expect(taskArmings.length).toBeGreaterThan(0);
+    expect(taskArmings.every((armed) => armed.alarmManager === false)).toBe(
+      true
+    );
+    expect(
+      taskArmings.every((armed) => armed.channelId === TASK_REMINDER_CHANNEL_ID)
+    ).toBe(true);
+  });
+});
+
+/**
+ * The failure that one shared id space would produce, which no pure test can
+ * reach: `getTriggerNotificationIds` returns both Tiers' triggers, so a cancel
+ * pass that did not know about one Kind would compute the other's as stale and
+ * retract it. `_layout.tsx` reschedules on every transition to `active`, so
+ * that would be one app switch away — the same shape as the snooze defect this
+ * file was written for.
+ */
+describe("rescheduleAll cancels neither Tier's triggers as the other's", () => {
+  const TASK = {
+    ...REMINDER,
+    id: "rem-pharmacy",
+    kind: "task",
+    dosage: undefined,
+  };
+
+  it("leaves an armed task alone while arming a dose", async () => {
+    mocks.list.mockResolvedValue([REMINDER, TASK]);
+    await rescheduleAll(USER);
+    const taskIds = createdIds().filter((id) => id.startsWith("task-"));
+    expect(taskIds.length).toBeGreaterThan(0);
+
+    mocks.getTriggerNotificationIds.mockResolvedValue(taskIds);
+    mocks.cancelTriggerNotifications.mockClear();
+
+    await rescheduleAll(USER);
+
+    expect(cancelledIds()).toEqual([]);
+  });
+
+  it("leaves an armed dose alone while arming a task", async () => {
+    mocks.list.mockResolvedValue([REMINDER, TASK]);
+    await rescheduleAll(USER);
+    const doseIds = createdIds().filter((id) => !id.startsWith("task-"));
+    expect(doseIds.length).toBeGreaterThan(0);
+
+    mocks.getTriggerNotificationIds.mockResolvedValue(doseIds);
+    mocks.cancelTriggerNotifications.mockClear();
+
+    await rescheduleAll(USER);
+
+    expect(cancelledIds()).toEqual([]);
+  });
+
+  it("still cancels a task trigger whose reminder is gone", async () => {
+    // Beside the two above, so "never cancels anything" cannot pass for a fix.
+    const staleId = buildTaskNotificationId("rem-discontinued", NOW + 60_000);
+    mocks.getTriggerNotificationIds.mockResolvedValue([staleId]);
+
+    await rescheduleAll(USER);
+
+    expect(cancelledIds()).toContain(staleId);
   });
 });

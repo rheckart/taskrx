@@ -52,3 +52,18 @@ export function tierFor(kind: ReminderKind): Tier {
 export function entersMedicationHorizon(reminder: Reminder): boolean {
   return tierFor(reminder.kind) === "medication";
 }
+
+/**
+ * Whether a Reminder is eligible for the task Horizon — the separate, smaller
+ * budget the task Tier is armed from.
+ *
+ * The two predicates partition the Reminders rather than ranking them. That is
+ * the whole of ADR 0003's "by construction": a Kind is admitted to exactly one
+ * budget, so there is no ordering, no count of tasks, and no priority value in
+ * which a task occupies a slot a dose needed. Filling the task budget entirely
+ * costs the medication Horizon nothing, because the two selections never see
+ * the same Reminder.
+ */
+export function entersTaskHorizon(reminder: Reminder): boolean {
+  return tierFor(reminder.kind) === "task";
+}
