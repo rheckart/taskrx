@@ -1334,12 +1334,42 @@ case10_task_tier_delivery() {
     sleep 10
   done
 
+  if (( posted >= 1 )); then
+    harness cancel-all >/dev/null
+    add_result 10 task_tier_delivery true "task notified at its time without the alarm-clock treatment; armed=$armed ids=$ids next_alarm_clock=$nac"
+    return
+  fi
+
+  # ── Nothing posted. Establish WHY before calling it a delivery failure. ────
+  #
+  # A trigger that was RETRACTED never had the chance to fire, and reporting
+  # that as "the task Tier does not deliver" is the same class of false verdict
+  # as blaming a renamed dumpsys section for an absent device. Measured, on this
+  # rig, before this branch existed: the case scored a product FAIL while the
+  # mechanism underneath was working perfectly — WorkManager ran the job on
+  # time and posted the notification when asked directly.
+  #
+  # The cause is constraint 11 and the app being SIGNED IN. `_layout.tsx` calls
+  # `rescheduleAll` on every transition to `active`, and every deep link this
+  # case sends makes exactly that transition; its cancel pass removes every
+  # trigger outside the schedule-derived desired set, and this case's task is
+  # armed from an in-memory Reminder that no SQLite row backs. So the trigger is
+  # gone before its moment arrives. That is why the local-only baseline is
+  # documented as a SIGNED-OUT suite — a real task lives in `reminders`, is
+  # selected by `selectTaskHorizon`, and is re-armed rather than retracted.
+  #
+  # `pending-ids` distinguishes the two states cheaply: the id still pending
+  # with no notification is a genuine delivery failure; the id gone is the rig.
+  local still auth
+  still="$(harness pending-ids "$label" 0)"
+  auth="$(harness auth-status "$label" 0)"
   harness cancel-all >/dev/null
 
-  if (( posted >= 1 )); then
-    add_result 10 task_tier_delivery true "task notified at its time without the alarm-clock treatment; armed=$armed ids=$ids next_alarm_clock=$nac"
+  if [[ -n "$still" ]] && ! printf '%s' "$still" | grep -q "$ids"; then
+    add_unevaluated 10 task_tier_delivery setup_failed \
+      "the trigger was RETRACTED before its moment, so delivery was never exercised: armed $ids, and it is no longer pending. This is constraint 11 — the app answered '${auth}', and while signed in \`rescheduleAll\` runs on every foreground and cancels every trigger not derived from SQLite, which this rig-armed one is not. Run the local-only baseline against a signed-out app."
   else
-    add_result 10 task_tier_delivery false "NOT posted within 90s+${TASK_DELIVERY_SLACK_S}s; armed=$armed ids=$ids"
+    add_result 10 task_tier_delivery false "NOT posted within 90s+${TASK_DELIVERY_SLACK_S}s, and the trigger was still pending, so it was armed and did not fire; armed=$armed ids=$ids pending=${still:-unreadable}"
   fi
 }
 

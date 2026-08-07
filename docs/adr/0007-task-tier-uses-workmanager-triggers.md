@@ -81,3 +81,12 @@ copying these numbers.
 11 cover them: that a task notifies at its time and never registers as the
 device's next alarm clock, and that a completely full task budget still leaves
 the dose armed and holding that registration.
+
+Both were run on a Pixel 8 Pro / Android 17 on 2026-08-07 and both pass, as do
+the seven medication cases beside them. The mechanism above is therefore an
+observation and not only a reading of the source: `WM-SystemJobScheduler`
+scheduled the work with `Minimum latency: +59s968ms`, `WM-WorkerWrapper`
+reported `Worker result SUCCESS` for `app.notifee.core.Worker` under the tag
+`trigger:task-…`, and the notification posted at the armed second — through
+WorkManager, with no alarm registered and the device's next alarm clock
+untouched.

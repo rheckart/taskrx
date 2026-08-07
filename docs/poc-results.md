@@ -26,19 +26,34 @@ This document tracks the 13 success criteria from the POC plan §3. Each row sho
 > budget still leaves the dose armed and holding that registration). `--all` now
 > runs nine local-only cases rather than seven.
 >
-> **Neither has ever been run.** No device was attached for that work. They are
-> written, guarded by `verify-harness-guards.sh` and mutation-checked, and that
-> is all — every "seven cases" claim above remains true of the runs it describes
-> and says nothing about these two. Issue #14 asks that the chosen trigger
-> mechanism be verified on a device rather than assumed from documentation; what
-> stands in for that so far is a reading of notify-kit's shipped validator and
-> its native `TimestampTriggerModel`, which is stronger than the documentation —
-> the two contradict each other — and is not a device run.
+> **All nine pass, verified 2026-08-07** on the same Pixel 8 Pro / Android 17 /
+> API 37, against commit `b695d4f` with a clean tree. Every "seven cases" claim
+> above remains true of the runs it describes; this is the run that covers the
+> other two.
 >
-> The baseline above is also **not yet re-checked against this work**, which is
-> the question it exists to answer. Nothing in the medication path changed
-> behaviourally, but "nothing changed behaviourally" is a claim about a diff and
-> the baseline is a claim about a phone.
+> Case 10 delivered the task at its time and left the device's next alarm clock
+> alone. Case 11 armed 80 tasks — more than the 64-slot medication budget a
+> Kind-blind scheduler would rank them inside — filled the task Tier completely
+> (32/32), and the dose was still armed and still holding the alarm-clock
+> registration. The mechanism was watched fire in logcat rather than inferred:
+> `Minimum latency: +59s968ms`, then `Worker result SUCCESS` for
+> `app.notifee.core.Worker` under the tag `trigger:task-…`.
+>
+> **The baseline above is re-checked and matches**, which is the question it
+> exists to answer: cases 1-7 all pass with the same verdicts, including
+> `before=3 after=3` on the boot receiver and `pending_count=30` on the stress
+> cap. Evidence: `.omo/evidence/issue-14-task-tier-all-cases.json`,
+> `issue-14-case-3-doze.json`, `issue-14-case-5-boot.json`.
+>
+> **Two rig conditions worth knowing before the next run**, both hit here. The
+> local-only suite needs the app **signed out** — signed in, `rescheduleAll`
+> retracts any trigger the rig armed that no SQLite row backs (constraint 11),
+> and case 10 scored a product FAIL for a mechanism that was working until it
+> was taught to tell that apart. And cases 3 and 5 each end with the device
+> asleep or rebooted, so the keyguard comes up and blocks everything after them
+> in an `--all` sweep; run them as separate invocations. Case 5 additionally
+> needs a **human** — Android withholds `ACTION_BOOT_COMPLETED` until the first
+> unlock after a reboot, and a PIN cannot be typed over adb.
 
 > **Write-path cutover checked against that baseline (2026-07-31, issue #6).**
 > All seven cases pass again at commit `1bb8928` with a clean tree, on the same
@@ -258,8 +273,8 @@ See `docs/poc-notification-tests.md` for the (now-executable) test cases. The ma
 | Boot reschedule | ✅ Pass | Case 5 — `before=3 after=3`, receiver landing ~61s after the first unlock (2026-07-30; see "Case 5 was measuring the wrong thing") |
 | Exact-alarm denied fallback | ✅ Pass | Case 4 — reported denied AND still delivered inexactly (`window=+33s718ms`) |
 | `SET_ALARM_CLOCK` primitive in dumpsys | ✅ Pass | Case 2 — `window=0`, `exactAllowReason=permission`, registered as the device's next alarm clock with a matching timestamp |
-| Task-Tier delivery | ⏸️ Pending | Case 10, added for issue #14 — written, guarded and mutation-checked, never run. No device was attached for that work. The claim it will test is that a task notifies at its time and never registers as the device's next alarm clock |
-| Task flood vs dose alarm | ⏸️ Pending | Case 11, added for issue #14 — same, never run. It asserts the task budget filled completely *before* concluding anything about the dose, so a run that cannot fill it reports itself unproven rather than passing |
+| Task-Tier delivery | ✅ Pass | Case 10 (issue #14, 2026-08-07) — the task notified at its time and the device's next alarm clock stayed the unrelated 09:00 one, so it took none of the alarm-clock treatment. WorkManager was watched running the job: `Minimum latency: +59s968ms` then `Worker result SUCCESS` for `app.notifee.core.Worker` |
+| Task flood vs dose alarm | ✅ Pass | Case 11 (issue #14, 2026-08-07) — 80 tasks, more than the 64-slot medication budget, filled the task Tier 32/32 and the dose still held the alarm-clock registration. The case asserts both premises before reading a verdict, so a run that cannot fill the budget reports itself unproven rather than passing |
 
 ### Day 8 — Stress tests
 

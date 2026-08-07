@@ -140,13 +140,51 @@ reminder list arms nothing" hold whether or not the early return exists, since
 `slice(0, 0)` is empty too. They are parity with the medication Horizon's own
 two, where a reader comparing the blocks would notice a gap.
 
-**Not verified on a device.** No Android device was attached for this work, so
-cases 10 and 11 have been written, guarded and mutation-checked but never run,
-and the ticket asks that the trigger mechanism be verified on a device rather
-than assumed from documentation. What replaces that here is weaker and is worth
-naming as weaker: the mechanism was read out of the shipped `validateTrigger.ts`
-and `TimestampTriggerModel.java` in `node_modules`, which is stronger than the
-documentation — the two disagree — and no substitute for `--all` on a phone.
+**Verified on the device, 2026-08-07.** Pixel 8 Pro / Android 17 / API 37,
+against commit `b695d4f` with a clean tree. **All nine local-only cases pass**,
+which is both halves of what the ticket asks: the new Tier works, and the
+medication baseline from #5 is unchanged.
+
+- **Case 10 — the task Tier delivers, without the alarm-clock treatment.** The
+  task notified at its time, and the device's next alarm clock stayed the
+  unrelated 09:00 one rather than becoming the task's moment. That second half
+  is the same reading case 2 uses to *prove* `setAlarmClock` for a dose, so the
+  two cases are one instrument pointed at both Kinds.
+- **Case 11 — the guarantee, measured.** 80 tasks, more than the 64-slot
+  medication budget a Kind-blind scheduler would have been ranking them inside,
+  filled the task Tier completely (32/32) — and the dose was still armed and
+  still held the alarm-clock registration.
+- **The mechanism itself was watched fire.** `WM-SystemJobScheduler` scheduled
+  the work with `Minimum latency: +59s968ms`, `WM-WorkerWrapper` reported
+  `Worker result SUCCESS` for `app.notifee.core.Worker` under the tag
+  `trigger:task-…` at the armed second, and the notification posted. ADR 0007's
+  claim about `alarmManager: false` is now an observation rather than a reading
+  of the source.
+- **Medication delivery re-verified:** killed-app delivery, the
+  `SET_ALARM_CLOCK` primitive in `dumpsys`, deep Doze (`IDLE >
+  IDLE_MAINTENANCE > …`, never returning to `ACTIVE` before the alarm fired),
+  the exact-alarm-denied degradation, boot rescheduling (`before=3 after=3`,
+  cross-checked against the OS per-uid tally), the 30-reminder stress cap and
+  the weekly schedule. Every verdict matches the #5 baseline.
+
+Evidence: `.omo/evidence/issue-14-task-tier-all-cases.json` (cases 1, 2, 4, 6,
+7, 10, 11), `issue-14-case-3-doze.json`, `issue-14-case-5-boot.json`. Cases 3
+and 5 are separate invocations because each ends with the device asleep or
+rebooted, and the keyguard that comes up then blocks every case after it — the
+first `--all` attempt lost six cases that way, and reported them **unevaluated
+rather than failed**, which is the harness's guards doing exactly their job.
+
+- `fix(harness): case 10 tells a retracted trigger from an undelivered one` —
+  **found by running it, and it had reported a product FAIL for a working
+  mechanism.** With the app signed in, every deep link the case sends brings it
+  to the foreground, `_layout.tsx` calls `rescheduleAll`, and its cancel pass
+  removes the rig's task trigger because no SQLite row backs it — constraint 11,
+  and the reason the local-only suite is documented as a signed-out one. The
+  case now reads `pending-ids` before concluding: the id gone is a retraction and
+  is recorded `unevaluated / setup_failed` naming the cause and the sign-in
+  state; the id still pending with nothing posted is the genuine delivery
+  failure it always meant. A rig condition must not be reportable as a product
+  verdict, which is the whole premise of `verify-harness-guards.sh`.
 
 **Deliberately not here.** The `medicationId` compatibility key is absent from a
 task's payload, because it names a legacy table no task has ever had a row in
