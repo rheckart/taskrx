@@ -17,6 +17,12 @@ export interface PermissionResult {
   readonly status: PermissionStatus;
   readonly canAskAgain: boolean;
   readonly exactAlarmGranted: boolean;
+  /**
+   * Carried rather than re-derived from `status`, so that a caller handing this
+   * to `@taskrx/shared` is handing it the platform's answer instead of a second
+   * opinion about what `partial` implies.
+   */
+  readonly notificationGranted: boolean;
 }
 
 /**
@@ -112,7 +118,30 @@ async function buildResult(
     status: snapshot.status,
     canAskAgain,
     exactAlarmGranted: snapshot.exactAlarmGranted,
+    notificationGranted: snapshot.notificationGranted,
   };
+}
+
+/**
+ * Opens the per-app notification settings, where a refused notification
+ * permission can be turned back on.
+ *
+ * The only route left after a denial: on Android 13+ a repeat
+ * `requestPermission()` for a refused runtime permission returns without
+ * showing the person anything.
+ *
+ * The iOS branch is not speculative tidiness. notify-kit's
+ * `openNotificationSettings` calls into native only on Android and otherwise
+ * resolves immediately, and the blocking banner IS reachable on iOS — so
+ * without this the button under "Reminders are turned off" would do nothing at
+ * all, which is a worse failure than the missing warning it was added to fix.
+ */
+export async function openNotificationSettings(): Promise<void> {
+  if (Platform.OS !== "android") {
+    await Linking.openSettings();
+    return;
+  }
+  await notifee.openNotificationSettings();
 }
 
 /**

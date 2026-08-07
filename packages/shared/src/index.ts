@@ -189,12 +189,18 @@ export {
   NOTIFICATION_AUTH_DENIED,
   NOTIFICATION_AUTH_NOT_DETERMINED,
   NOTIFICATION_AUTH_PROVISIONAL,
+  derivePermissionGap,
   derivePermissionStatus,
   isExactAlarmGranted,
+  shouldRequestNotificationPermission,
 } from "./notifications/permission-state";
 export type {
   AndroidAlarmSetting,
   NotificationAuthorization,
+  PermissionGap,
+  PermissionGateInput,
+  PermissionRemedy,
+  PermissionSeverity,
   PermissionSnapshot,
   PermissionSnapshotInput,
   PermissionStatus,

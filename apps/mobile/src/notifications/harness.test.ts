@@ -76,6 +76,7 @@ const mocks = vi.hoisted(() => ({
     ) => Promise<void>
   >(),
   checkExactAlarmPermission: vi.fn<() => Promise<boolean>>(),
+  checkNotificationPermission: vi.fn(),
   remindersCreate: vi.fn(),
   remindersList: vi.fn(),
   remindersSoftDelete: vi.fn<(id: string) => Promise<void>>(),
@@ -137,6 +138,7 @@ vi.mock("./index", () => ({
 
 vi.mock("./permissions", () => ({
   checkExactAlarmPermission: mocks.checkExactAlarmPermission,
+  checkNotificationPermission: mocks.checkNotificationPermission,
 }));
 
 vi.mock("../db/repos/reminders", () => ({
@@ -223,6 +225,79 @@ describe("parseHarnessSpec", () => {
     const parsed = parseHarnessSpec(spec("instance-at", "r1", "5"));
     expect(parsed.delayMs).toBe(1000);
     expect(parsed.value).toBe(5);
+  });
+});
+
+/**
+ * The action case 12 holds against `dumpsys package`.
+ *
+ * Its whole value is that it reports what the APP believes, from the app's own
+ * platform query, so that a device case can check the two readings agree across
+ * a change of state. A constant agrees in one state and cannot follow the OS
+ * into the other — which is how the POC's hardcoded `checkExactAlarmPermission`
+ * survived for so long, and is the failure `.omo/plans/convex-expo-revisit.md`
+ * todo 6 forbids by name.
+ *
+ * Pinned here because the shell case reads its verdict out of these exact
+ * field names, and a rename would leave case 12 grepping for nothing and
+ * concluding the app disagreed with the OS.
+ */
+describe("notification-status", () => {
+  it("reports the app's own reading of all three fields", async () => {
+    mocks.checkNotificationPermission.mockResolvedValue({
+      status: "denied",
+      canAskAgain: false,
+      exactAlarmGranted: true,
+      notificationGranted: false,
+    });
+
+    const out = await runHarnessAction(
+      parseHarnessSpec(spec("notification-status")),
+      SIGNED_OUT
+    );
+
+    expect(out).toBe(
+      "notification_status=denied notifications_granted=false exact_alarm_granted=true"
+    );
+  });
+
+  it("follows the platform rather than reporting a constant", async () => {
+    // The two readings a hardcoded boolean could not both produce. Case 12
+    // takes exactly this pair — once with POST_NOTIFICATIONS revoked and once
+    // after the person has allowed it — and a value that did not move would
+    // mean the app was not asking the platform at all.
+    mocks.checkNotificationPermission.mockResolvedValue({
+      status: "authorized",
+      canAskAgain: false,
+      exactAlarmGranted: true,
+      notificationGranted: true,
+    });
+
+    expect(
+      await runHarnessAction(
+        parseHarnessSpec(spec("notification-status")),
+        SIGNED_OUT
+      )
+    ).toContain("notifications_granted=true");
+  });
+
+  it("answers signed out, because the permission is not a user's property", async () => {
+    mocks.checkNotificationPermission.mockResolvedValue({
+      status: "undetermined",
+      canAskAgain: true,
+      exactAlarmGranted: true,
+      notificationGranted: false,
+    });
+
+    // Case 12 reads this BEFORE it can know whether the session survived, and a
+    // `signed_in=false` here would be recorded by the shell as the case never
+    // having run.
+    expect(
+      await runHarnessAction(
+        parseHarnessSpec(spec("notification-status")),
+        SIGNED_OUT
+      )
+    ).toContain("notification_status=undetermined");
   });
 });
 

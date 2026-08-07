@@ -196,7 +196,16 @@ fi
 # case that entered that loop with nothing attached would spin out its whole
 # budget before recording anything, inside a gate that is supposed to be
 # device-free and fast. The same shape as the `adb logcat` block in check 5.
-for probe in "10 case10_task_tier_delivery" "11 case11_task_flood_preserves_doses"; do
+#
+# Case 12 joins them, and it is the one with the sharpest edge: it REVOKES
+# POST_NOTIFICATIONS before it measures anything, and its "the app never asked"
+# branch is the loudest FAIL text in this file. With no device, `pm revoke` is a
+# no-op that reports nothing and the dialog poll finds nothing — the two inputs
+# that would otherwise compose into "THE APP DOES NOT READ THE PLATFORM" about a
+# phone nobody plugged in, written into an evidence artifact. It also polls to a
+# 180s deadline, which is the same spin-out shape case 10 has.
+for probe in "10 case10_task_tier_delivery" "11 case11_task_flood_preserves_doses" \
+             "12 case12_fresh_install_asks_to_notify"; do
   set -- $probe
   probe_n="$1"; probe_fn="$2"
   if ! declare -F "$probe_fn" >/dev/null; then

@@ -17,7 +17,10 @@ import * as remindersRepo from "../db/repos/reminders";
 import * as syncQueueRepo from "../db/repos/syncQueue";
 import { syncWorker } from "../sync/worker";
 
-import { checkExactAlarmPermission } from "./permissions";
+import {
+  checkExactAlarmPermission,
+  checkNotificationPermission,
+} from "./permissions";
 
 import {
   MAX_GLOBAL_TRIGGERS,
@@ -41,7 +44,7 @@ import {
  *
  * The actions split into two families, and the split is not cosmetic:
  *
- * - **Local-only** (`schedule` … `exact-alarm-status`) drive notifee with
+ * - **Local-only** (`schedule` … `notification-status`) drive notifee with
  *   in-memory data and run on a fresh, signed-out install. Harness cases 1-7
  *   use these, which is why that suite can be the delivery baseline on any
  *   device.
@@ -61,6 +64,7 @@ export type HarnessAction =
   | "pending-count"
   | "pending-ids"
   | "exact-alarm-status"
+  | "notification-status"
   | "auth-status"
   | "seed-due-reminder"
   | "instance-at"
@@ -117,6 +121,7 @@ const VALID_ACTIONS: readonly HarnessAction[] = [
   "pending-count",
   "pending-ids",
   "exact-alarm-status",
+  "notification-status",
   "auth-status",
   "seed-due-reminder",
   "instance-at",
@@ -657,6 +662,26 @@ export async function runHarnessAction(
     case "exact-alarm-status": {
       const granted = await checkExactAlarmPermission();
       return `exact_alarm_granted=${String(granted)}`;
+    }
+    /**
+     * The app's OWN reading of whether it may post a notification.
+     *
+     * Reported so a device case can hold it against `dumpsys package`, which
+     * reads the same permission from the other side. Agreement across a change
+     * is the only external evidence that this is a real platform query rather
+     * than the kind of hardcoded boolean the POC shipped for exact alarms — a
+     * constant agrees with the OS in one state and cannot follow it into the
+     * other. Deliberately does NOT prompt: a status read that changed the state
+     * it reports would be useless to case 12, which is measuring what the app
+     * believed before anybody was asked.
+     */
+    case "notification-status": {
+      const permission = await checkNotificationPermission();
+      return (
+        `notification_status=${permission.status} ` +
+        `notifications_granted=${String(permission.notificationGranted)} ` +
+        `exact_alarm_granted=${String(permission.exactAlarmGranted)}`
+      );
     }
     case "auth-status":
       return userId === null

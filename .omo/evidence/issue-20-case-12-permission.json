@@ -1,0 +1,10 @@
+{
+  "timestamp": "2026-08-07T15:12:11+00:00",
+  "package": "com.taskrx.mobile",
+  "provenance": { "commit": "3c4bfcee76046d52ca9cd9a03b90bcf149f5ff4b", "branch": "main", "dirty": true, "dirty_files": "apps/mobile/app/(app)/index.tsx apps/mobile/app/_layout.tsx apps/mobile/scripts/notification-harness.sh apps/mobile/scripts/verify-harness-guards.sh apps/mobile/src/components/NotificationPermissionBanner.tsx apps/mobile/src/notifications/harness.test.ts apps/mobile/src/notifications/harness.ts apps/mobile/src/notifications/index.ts apps/mobile/src/notifications/permission-gate.test.ts apps/mobile/src/notifications/permission-gate.ts apps/mobile/src/notifications/permission-provider.tsx apps/mobile/src/notifications/permissions.ts docs/architecture.md docs/CHANGELOG.md docs/poc-results.md packages/shared/src/index.ts packages/shared/src/notifications/permission-state.test.ts packages/shared/src/notifications/permission-state.ts packages/shared/vitest.config.ts" },
+  "device": { "serial": "38220DLJG000JK", "release": "17", "sdk": "37", "fingerprint": "google/husky/husky:17/CP2A.260705.006/15641320:user/release-keys" },
+  "summary": { "passed": 1, "failed": 0, "unevaluated": 0 },
+  "cases": [
+    {"case":12,"name":"fresh_install_asks_to_notify","pass":true,"outcome":"pass","detail":"asked, was allowed, and DELIVERED. From POST_NOTIFICATIONS revoked (granted=false), its user-set/user-fixed flags cleared and notify-kit's permission_requested flag cleared — a never-asked state established entirely from outside the app — a cold launch through the dev-client entry URL with no deep link and no debug screen put the system prompt on screen within 180s. After Allow the OS reads granted=true and the app reads '[harness] result: notification_status=authorized notifications_granted=true exact_alarm_granted=true'. A reminder seeded through the production scheduler (armed=32 for 1786115520000) then POSTED — not merely armed."}
+  ]
+}

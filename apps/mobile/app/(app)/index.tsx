@@ -15,6 +15,7 @@ import {
   View,
 } from "react-native";
 
+import { NotificationPermissionBanner } from "../../src/components/NotificationPermissionBanner";
 import { SkeletonList } from "../../src/components/Skeleton";
 import * as instancesRepo from "../../src/db/repos/reminderInstances";
 import * as remindersRepo from "../../src/db/repos/reminders";
@@ -353,6 +354,15 @@ export default function HomeScreen(): ReactElement {
 
   return (
     <View style={styles.container}>
+      {/*
+        Above the day, not inside it. The banner's subject is whether ANY of the
+        rows below can reach the person at all — issue #20's silent state, where
+        every alarm fires and Android discards every notification — so it cannot
+        sit among them as though it were one more thing due at a time. It decides
+        nothing itself and renders nothing when reminders can arrive.
+      */}
+      <NotificationPermissionBanner />
+
       <View style={styles.dayBar}>
         <Pressable
           hitSlop={12}

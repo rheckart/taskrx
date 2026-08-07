@@ -25,9 +25,17 @@ export {
   checkNotificationPermission,
   checkExactAlarmPermission,
   openExactAlarmSettings,
+  openNotificationSettings,
 } from "./permissions";
 
 export type { PermissionStatus, PermissionResult } from "./permissions";
+
+export {
+  applyPermissionRemedy,
+  syncNotificationPermission,
+} from "./permission-gate";
+
+export type { PermissionGateState } from "./permission-gate";
 
 export {
   registerNotificationResponseHandler,

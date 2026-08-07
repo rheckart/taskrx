@@ -49,6 +49,14 @@ apps/mobile/dist
 # because it is the only evidence that the pull path works on a real device,
 # and because its `not_verified` list is the honest boundary of that claim.
 !.omo/evidence/issue-7-round-trip-verification.json
+# Exception: case 12, the run proving the app asks for POST_NOTIFICATIONS and
+# then actually delivers. Same rule — `docs/poc-results.md` cites it as what
+# closes issue #20, the most consequential defect this project has shipped, and
+# a citation to a file on one machine is not evidence. Worth more than most:
+# the same case was also run against a build that never asks and recorded the
+# FAIL, so this artifact is a verdict from an instrument known to be able to
+# return the other answer.
+!.omo/evidence/issue-20-case-12-permission.json
 
 # Agent tooling scratch state (written anywhere in the tree, not just the root)
 .omc/

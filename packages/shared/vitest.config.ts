@@ -43,6 +43,13 @@ export default defineConfig({
         // (ADR 0003). A branch added here without a case is a task quietly
         // competing with a dose.
         "src/notifications/tier.ts",
+        // Whether the app asks for permission to notify at all, and what it
+        // tells someone whose answer leaves reminders undeliverable (issue
+        // #20). The defect that motivated it was silent by construction — the
+        // alarm fires, Android discards the notification, nothing reports it —
+        // so a branch added here without a case is a reminder that vanishes
+        // with nobody the wiser.
+        "src/notifications/permission-state.ts",
       ],
       exclude: ["src/**/*.test.ts", "src/**/index.ts"],
       thresholds: {

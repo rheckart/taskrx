@@ -8,6 +8,167 @@ for commit discipline (POC tags use `0.x.x`).
 
 ## [Unreleased]
 
+### 2026-08-07 — The app asks whether it may remind you
+
+Closes #20, and it is the most consequential thing fixed since the sweep. The
+app's entire purpose is delivering a medication reminder on time; for anyone who
+installed it and did not go looking through a debug screen, it delivered none —
+silently, with no error, no empty state and no warning. `requestPermissions()`
+had exactly one caller in the whole codebase, `app/(app)/debug/notifications.tsx`
+line 78, and nothing on any real path called it. The alarm fired at the armed
+millisecond, notify-kit ran, and the framework threw
+`SecurityException: POST_NOTIFICATIONS permission is not granted` and dropped the
+notification. The person found out by missing doses.
+
+**Every check in place said delivery worked, and each was right about what it
+measured.** The device harness passed 9/9 because it grants the permission at
+startup (constraint 12) and because opening the debug screen requests it as a
+side effect. `docs/poc-results.md` criterion #5 was a genuine PASS — the alarm
+really does fire. It just never asserted that a notification reaches somebody.
+That distinction is now the shape of the case that guards it.
+
+- `feat(notifications): ask on a path a person actually walks` — a
+  `NotificationPermissionProvider` in the signed-in tree, prompting once per run
+  and re-reading on every transition to `active`. Gated on `isSignedIn` because
+  the issue asks for the request "not on cold start before there is anything to
+  be reminded about", and a fresh install's cold start *is* the sign-in screen.
+  The foreground re-read is the whole answer to "a denial reversed later from
+  Settings is picked up without reinstalling", and it is the same trigger the
+  reschedule and the missed sweep already use, for the same reason.
+
+  `asked` is a ref, deliberately not persisted. It exists only to stop the app
+  asking twice in one run; storing it across runs would be a cached permission
+  verdict, which is the exact shape of the POC stub that todo 6 of
+  `.omo/plans/convex-expo-revisit.md` forbids by name.
+
+- `feat(notifications): a refusal that says so` — a banner above the Today
+  timeline. Two severities and they are different sentences: `blocking` means
+  nothing reaches you, `degraded` means it reaches you late. Painting both red
+  would teach people to scroll past the one that means something — which is why
+  the exact-alarm gap, real since Phase 1 and never rendered anywhere but the
+  debug screen, gets its own wording rather than borrowing this one's. Each
+  carries the button that resolves it: the OS prompt, the per-app notification
+  settings, or the alarm settings, and the platform is re-read on return.
+
+- `feat(shared): the two decisions live where a test can run them` —
+  `shouldRequestNotificationPermission` and `derivePermissionGap` widen
+  `permission-state.ts` rather than inventing a second representation, as the
+  issue asks. `asked` is not derivable from the snapshot and that is the point:
+  `undetermined` before the prompt and `undetermined` after a dismissed prompt
+  are the same platform state and call for opposite behaviour. The module joins
+  the 100% coverage gate — a defect that is silent by construction is one a
+  branch can be added to without anybody noticing.
+
+- `fix(shared): an unrecognised authorization is not permission` —
+  `derivePermissionStatus` had a `default:` arm reading an out-of-union value as
+  authorized. Unreachable through the mobile mapper, and wrong in the same
+  direction as every other defect in this area: it would have gone on believing
+  it held a permission nobody granted. It now reads as `undetermined`, which
+  asks.
+
+- `test(harness): device case 12, and the only case that revokes the grant` —
+  from POST_NOTIFICATIONS revoked, its `user-set`/`user-fixed` flags cleared,
+  and notify-kit's own `permission_requested` flag cleared. All three are
+  needed, and none of them alone is a fresh install; see constraint 14 below for
+  what each one costs to get wrong. The case launches through the dev-client
+  entry URL — no deep link, no debug screen — waits for the system dialog to
+  appear on its own, allows it, and then asserts that a reminder seeded through
+  the production scheduler **posts**. Not that an alarm is armed. It is excluded
+  from `--all` for the reason it exists: it removes the grant every other
+  delivery case depends on.
+
+  "The app reads the platform rather than a constant" is settled by the two
+  steps together rather than by a reading of its own — a hardcoded `true` would
+  never have raised the dialog, and a hardcoded `false` could not report
+  `authorized` afterwards. That is not a weaker check than asking the app
+  directly; it is the only one available, because asking is what spends the
+  prompt.
+
+- `fix(harness): give case 12 the no-device bail its siblings did not need` —
+  `fresh_app_process` ends in `wait_for_app_ready`, which polls to a 180s
+  deadline for an answer a detached device will never give. Cases 8 and 9 reach
+  the same helper and get away with it only because nothing runs them without a
+  device; `verify-harness-guards.sh` runs this one. Verified by mutation — with
+  the bail removed the guard script hung past two minutes, inside a gate that is
+  meant to be device-free. `restore_device` now re-grants the permission too:
+  every path out of case 12 that is not the happy one leaves it revoked, and a
+  phone left silently unable to show a reminder because a test was cancelled is
+  the same class of harm as the airplane mode that check 5c guards.
+
+Four of the five things the review found were in code written to prevent exactly
+their own failure mode, which is worth recording rather than quietly fixing:
+
+- **The prompt could re-open on top of itself.** `asked` was set from the
+  resolved result of `requestPermissions()`. On Android the dialog is its own
+  activity, so dismissing it resumes the host and RN emits AppState `active` —
+  which re-entered the provider while the request was still awaiting, read
+  `asked === false`, and raised the dialog again. A prompt somebody cannot get
+  away from is worse than the missing prompt this whole entry is about. The gate
+  now takes an `onPrompt` callback that fires immediately *before* the dialog
+  goes up. The case pinning it had to be rewritten once: the first version made
+  the mutation recurse until the runner crashed, and both branches ended at
+  `undetermined`, so the assertion could not tell a second dialog from none.
+
+- **Case 12 read silence from the app as a product FAIL.** `pm revoke` kills the
+  package, so the status deep link went into a process still re-bundling from
+  Metro; an empty reply then composed into "THE APP DOES NOT READ THE PLATFORM"
+  — the loudest claim in the file — written into a committed artifact. This is
+  the same shape as the false verdict `verify-harness-guards.sh` exists after,
+  arriving from a direction that guard does not cover: the device is present, so
+  `add_result`'s choke point lets it through. The read that produced it is gone
+  entirely (constraint 14), and the branch with it.
+
+- **A "the app never asked" verdict could be about an app that never ran.** The
+  restart's return value was discarded, so a dev client that never finished
+  bundling produced no dialog for the same 180s as an app that does not ask. The
+  case now proves the app was alive — and reports what it answered — before it
+  will call the absence of a prompt a defect. That check earned itself on the
+  mutation run, where it correctly recorded `pending_count=59` beside the FAIL.
+
+- **The blocking banner named Android, on a string reachable from iOS**, and its
+  button called notify-kit's `openNotificationSettings`, which is a no-op off
+  Android — a dead end under the words "Reminders are turned off". The copy in
+  `@taskrx/shared` names no operating system, which is the guardrail that keeps
+  platform concerns behind `src/notifications/`, and the mobile adapter falls
+  back to `Linking.openSettings()`.
+
+Gates: `npm run verify` — 519 tests across three workspaces, 159 migration
+checks, harness guards. Every new assertion was mutation-checked separately, 13
+mutations, each caught by the case naming it.
+
+**Verified on the Pixel 8 Pro / Android 17**, and the case was proven able to
+fail before its pass was believed. Against the shipped code it passes: prompt on
+screen from a cold launch, Allow, both sides reading granted, and a reminder
+seeded through the production scheduler POSTING. Against a build with
+`shouldRequestNotificationPermission` forced to `false` — the pre-#20 app — it
+fails with "THE APP NEVER ASKED", and correctly reports that the app was running
+throughout rather than blaming a dead process. Evidence:
+`.omo/evidence/issue-20-case-12-permission.json`.
+
+**Constraint 14, and it is why the first run of case 12 reported a defect that
+was not there.** `pm revoke` plus `pm clear-permission-flags` does NOT reproduce
+a fresh install: notify-kit records that it has asked in the app's own
+SharedPreferences (`app.notifee.core.xml`, `permission_requested`), and derives
+NOT_DETERMINED from it — the upstream #1237 fix this app depends on. No `pm`
+command reaches that file. With the flag set the app reads `denied` on a
+permission nobody was ever asked about and correctly declines to prompt, because
+Android will not show a dialog for a spent permission.
+
+The case had also set that flag itself. Its "what does the app believe" pre-read
+went in through a deep link, the deep link mounted the provider, the provider
+raised the dialog, and the next deep link brought the harness activity in front
+of it — spending the prompt during setup, unobserved, and then reporting the app
+for not asking. The pre-read is gone: the never-asked state is now established
+AND verified entirely from outside the app (`run-as` clears the flag, and the
+file is read back to check), and the app is asked what it believes only after
+the dialog has been answered, when asking costs nothing. "Not a hardcoded
+boolean" is settled by the two steps instead — a constant `true` would never
+have raised the dialog, and a constant `false` could not report `authorized`
+afterwards.
+
+**Not closed here.** The remaining finding from 2026-08-03 — the
+post-notification SQLite lock — is still untracked and unfixed.
+
 ### 2026-08-07 — A task reminder that cannot cost a dose its alarm
 
 Closes #14. Tasks notify at their time, on their own Tier, and the guarantee

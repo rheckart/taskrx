@@ -20,6 +20,7 @@ import {
   registerNotificationResponseHandler,
   rescheduleAll,
 } from "../src/notifications";
+import { NotificationPermissionProvider } from "../src/notifications/permission-provider";
 import { runMissedSweep } from "../src/sweep/runner";
 import { syncWorker } from "../src/sync/worker";
 
@@ -315,7 +316,16 @@ export default function RootLayout(): ReactElement {
         <NotificationBootstrap />
         <SweepBootstrap />
         <SyncBootstrap />
-        <AuthRedirectGate />
+        {/*
+          Wraps the routes rather than sitting beside the bootstraps, because
+          unlike them it has something to say: the Today screen reads its state
+          to render the banner that tells someone their reminders are being
+          discarded. It asks for POST_NOTIFICATIONS once a session is present —
+          before issue #20 nothing in the app ever asked at all.
+        */}
+        <NotificationPermissionProvider>
+          <AuthRedirectGate />
+        </NotificationPermissionProvider>
       </ConvexProviderWithClerk>
     </ClerkProvider>
   );

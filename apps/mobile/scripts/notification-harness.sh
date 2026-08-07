@@ -9,14 +9,15 @@
 # rather than by eyeballing the device.
 #
 # ── EMPIRICALLY-VALIDATED CONSTRAINTS ──────────────────────────────────────
-# Learned by running against a Pixel 8 Pro on Android 17 (API 37). Thirteen
+# Learned by running against a Pixel 8 Pro on Android 17 (API 37). Fourteen
 # constraints: 1-7 below, then 8 (deep Doze is blocked by a pending
 # wake-from-idle alarm), 9 (`dumpsys alarm` is mostly NOT pending alarms), 10
 # (silence from adb is not a fact about the device), 11 (in the signed-in tree
 # `rescheduleAll` sweeps away any alarm it did not derive), 12 (an ungranted
-# POST_NOTIFICATIONS silently discards every delivery), and 13 (`adb shell`
-# re-parses the URL you pass it), which are documented inline at their point
-# of use.
+# POST_NOTIFICATIONS silently discards every delivery), 13 (`adb shell`
+# re-parses the URL you pass it), and 14 (`pm` cannot restore the never-asked
+# permission state, and asking the app about it is what spends it), which are
+# documented inline at their point of use.
 # Do not "simplify" these away; each one caused a real false result.
 #
 #  1. DEEP LINKS MUST CONTAIN A REAL PATH, NOT JUST A HOST.
@@ -113,6 +114,7 @@
 #   apps/mobile/scripts/notification-harness.sh --all --output report.json
 #   apps/mobile/scripts/notification-harness.sh --case 8 --output tap.json
 #   apps/mobile/scripts/notification-harness.sh --case 9 --output drain.json
+#   apps/mobile/scripts/notification-harness.sh --case 12 --output permission.json
 #
 # RUN 8 AND 9 IN SEPARATE INVOCATIONS. `--auth` runs both, and case 9 then
 # reports SETUP FAILED every time: case 8 lets a notification fire, and from
@@ -133,6 +135,7 @@
 # do not need the app after their setup, so the lock afterwards is harmless.
 #
 # Env: TASKRX_PKG ANDROID_SERIAL METRO_URL VERBOSE=1 SKIP_DOZE=1 SKIP_REBOOT=1
+#      PERMISSION_PROMPT_TIMEOUT_S (default 180 — case 12)
 #      BOOT_UNLOCK_TIMEOUT_S (default 300) BOOT_REGISTER_TIMEOUT_S (default 300)
 #      BOOT_ALARM_COUNT (default 3) CONVEX_DEVICE_PORT (default 3210)
 #      SYNC_BUDGET_S (default 60 — criterion 9's own wording)
@@ -186,6 +189,13 @@ TAP_LEAD_MS="${TAP_LEAD_MS:-120000}"
 # exact alarm lands within ~100ms, but the process may have to be started to
 # run the headless JS that posts it.
 TAP_POST_GRACE_S="${TAP_POST_GRACE_S:-60}"
+# Case 12 only. How long to wait for the app to put the system permission
+# dialog on screen after a cold launch. Generous because this is a dev client:
+# the process has to start, fetch its bundle from Metro, restore the Clerk
+# session and render the signed-in tree before anything asks. A short budget
+# here would report "the app never asked" about an app that was still booting —
+# the exact false verdict constraint 10 exists to prevent.
+PERMISSION_PROMPT_TIMEOUT_S="${PERMISSION_PROMPT_TIMEOUT_S:-180}"
 
 script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 repo_root="$(cd "$script_dir/../../.." && pwd)"
@@ -526,14 +536,99 @@ deny_exact()       { adb_shell cmd appops set "$PKG" SCHEDULE_EXACT_ALARM deny  
 # reads the state back so a result can say which it ran under.
 #
 # It is worth knowing WHY a real device can be missing it: `pm clear` revokes
-# runtime permissions, and in this app the only caller of `requestPermissions()`
-# is the debug screen — so a fresh install never asks. That is a product gap,
-# recorded in docs/poc-results.md, not something this grant fixes.
+# runtime permissions, and until issue #20 the only caller of
+# `requestPermissions()` was the debug screen — so a fresh install never asked,
+# and this grant was papering over a product defect rather than a rig gap. The
+# app now asks on the signed-in path; CASE 12 is what proves it, and it is the
+# one case that must undo this grant to mean anything.
 grant_post()       { adb_shell pm grant "$PKG" android.permission.POST_NOTIFICATIONS >/dev/null 2>&1 || true; }
 notification_permission() {
   adb_shell dumpsys package "$PKG" 2>/dev/null \
     | grep -m1 "android.permission.POST_NOTIFICATIONS: granted=" \
     | grep -oE 'granted=(true|false)' | tr -d '\r'
+}
+
+# ── Case 12 only: put the app back in the state a FRESH INSTALL is in. ───────
+#
+# `pm revoke` alone is not that state. It leaves the USER_SET/USER_FIXED flags
+# the earlier grant or denial wrote, and with those set Android answers a
+# runtime request without showing anybody a dialog — so the app would look to
+# case 12 exactly as it looks after a second refusal, and "the app never asked"
+# and "the app asked and was refused" would be indistinguishable. Clearing the
+# flags is what makes the next request produce a real prompt.
+#
+# `pm clear` would be the genuine article and is what `docs/poc-results.md`
+# records the defect against, but it also wipes SQLite and the Clerk session,
+# and this case needs a signed-in app to have anything to be reminded about.
+# The permission state it reproduces is identical; the session is not destroyed.
+# Recorded as the difference it is rather than described as a fresh install.
+#
+# Both commands are per-package. `pm reset-permissions` takes no package and
+# would reset every app on the phone, which is not a thing a test may do to
+# somebody's device.
+#
+# ── Constraint 14: `pm` CANNOT RESTORE THE NEVER-ASKED STATE, AND ASKING THE
+# APP ABOUT IT IS WHAT SPENDS IT. ───────────────────────────────────────────
+#
+# AND NOT EVEN THAT IS ENOUGH. notify-kit records that it has asked in the app's
+# OWN SharedPreferences — `app.notifee.core.xml`, `permission_requested` — and
+# derives NOT_DETERMINED from it, which is the upstream #1237 fix the app relies
+# on. No `pm` command reaches that file, so with the flag left set the app reads
+# `denied` on a permission nobody has ever been asked about, and correctly
+# declines to prompt: Android will not show a dialog for a spent permission.
+#
+# Measured, and it is how the first run of case 12 failed. The case's own setup
+# raised the dialog, its next deep link brought the harness activity in front of
+# it, and the flag was set — so the case then reported "THE APP NEVER ASKED"
+# about an app that had asked moments earlier, in the setup, unobserved.
+#
+# `run-as` reaches it and works on the debug build this harness drives. This is
+# what `pm clear` does wholesale; doing it by hand is what lets the Clerk session
+# and SQLite survive, which the signed-in half of this case needs.
+#
+# THE APP MUST BE DEAD when this runs, or Android flushes the in-memory
+# SharedPreferences back over the deletion on exit. `pm revoke` above kills the
+# package, which is why the order here is not arbitrary.
+NOTIFEE_PREFS="shared_prefs/app.notifee.core.xml"
+reset_post() {
+  adb_shell pm revoke "$PKG" android.permission.POST_NOTIFICATIONS >/dev/null 2>&1 || true
+  adb_shell pm clear-permission-flags "$PKG" \
+    android.permission.POST_NOTIFICATIONS user-set user-fixed >/dev/null 2>&1 || true
+  # Explicitly, rather than relying on `pm revoke` above having killed the
+  # package: it only does that when it CHANGES something, so on a re-run where
+  # the permission is already revoked the app is left running — and a running
+  # app writes its in-memory SharedPreferences back over the deletion below when
+  # it exits. The deletion would appear to succeed and the flag would return.
+  kill_app_realistically
+  adb_run exec-out run-as "$PKG" rm -f "$NOTIFEE_PREFS" >/dev/null 2>&1 || true
+}
+
+# Whether notify-kit still believes it has asked.
+#
+# Read from the FILE rather than by asking the app, and that is the whole point:
+# every question put to the app arrives through a deep link, which mounts the
+# provider, which asks — so a probe for "has the prompt been spent" would spend
+# it. This is the one precondition in this case that can be checked without
+# touching the thing being measured.
+notifee_has_asked() {
+  adb_run exec-out run-as "$PKG" cat "$NOTIFEE_PREFS" 2>/dev/null \
+    | grep -c 'permission_requested" value="true"' || true
+}
+
+# The system permission dialog, matched on the permission controller's own view
+# id rather than on the word "Allow" — the text is localised and the id is not,
+# and a case that could only run on an English phone would report a device in
+# any other language as one where the app never asked.
+PERMISSION_ALLOW_ID="com.android.permissioncontroller:id/permission_allow_button"
+permission_dialog_showing() { ui_dump | grep -q "$PERMISSION_ALLOW_ID"; }
+
+# Dismiss without answering. BACK, not "Don't allow": a dismissal leaves the
+# permission undetermined and still askable, where a refusal would spend the
+# prompt this case is about to measure.
+dismiss_permission_dialog() {
+  permission_dialog_showing || return 0
+  adb_shell input keyevent KEYCODE_BACK >/dev/null 2>&1
+  sleep 2
 }
 
 # ── Constraint 13: `adb shell` RE-PARSES WHATEVER YOU HAND IT. ──────────────
@@ -692,6 +787,14 @@ restore_device() {
   # the device back on stock Doze constants — leaving a phone with a 30s
   # min_time_to_alarm would quietly change its real battery behaviour.
   adb_shell settings delete global device_idle_constants >/dev/null 2>&1 || true
+  # Case 12 revokes POST_NOTIFICATIONS, and every path out of it that is not the
+  # happy one leaves it revoked. The rig grants it at startup, so granted IS the
+  # state this script found the phone in, and restoring it is not an
+  # accommodation — it is refusing to leave somebody's phone silently unable to
+  # show a reminder because a test was cancelled part-way. Same reasoning as
+  # `airplane_off` above, and the same silence: nothing on the device looks
+  # wrong afterwards.
+  grant_post
 }
 
 # ── Results ────────────────────────────────────────────────────────────────
@@ -1755,6 +1858,182 @@ case9_offline_queue_drain() {
   fi
 }
 
+# Issue #20: a fresh install never asked for POST_NOTIFICATIONS, so no reminder
+# ever arrived.
+#
+# ── WHY THIS CASE COULD NOT BE ONE OF 1-11 ─────────────────────────────────
+# Every existing delivery case runs under `grant_post`, which the rig issues at
+# startup precisely so no case can fail for a permission the rig never granted
+# (constraint 12). That grant is also what HID this defect: the app was arming
+# alarms Android discarded, and nine green cases said delivery worked. The same
+# was true of the debug screen — opening it requests the permission as a side
+# effect, so anybody who went looking found the app working.
+#
+# So this case is the one that must revoke the grant, and it must never reach
+# the app through a route that asks on its own behalf. It launches through the
+# dev-client entry URL, which is how a person's tap starts a dev build and
+# carries no route, and it never opens `/debug/notifications`.
+#
+# ── WHAT IT ASSERTS, IN ORDER ──────────────────────────────────────────────
+#   1. The OS reads `granted=false` and the APP agrees. The second half is what
+#      distinguishes a real platform query from the hardcoded boolean the POC
+#      shipped for exact alarms — a constant agrees in one state and cannot
+#      follow the OS into the other, and this case reads it in both.
+#   2. Launched cold, the app asks — with no deep link, no debug screen and no
+#      tap from the harness beyond the launch itself.
+#   3. After the person allows it, the OS and the app both read granted.
+#   4. **A notification actually POSTS.** The criterion this case exists for is
+#      not that an alarm was armed. `docs/poc-results.md` criterion #5 was a
+#      genuine PASS on an armed alarm the whole time the app was delivering
+#      nothing, which is exactly how a defect this size stayed invisible.
+#
+# Signed-in, and so not part of `--all`: step 4 seeds a real reminder and lets
+# the production scheduler arm it, for the reason constraint 11 gives — in this
+# tree an alarm armed any other way is swept away before it can fire.
+case12_fresh_install_asks_to_notify() {
+  # Before `fresh_app_process`, and not merely for tidiness: that helper ends in
+  # `wait_for_app_ready`, which polls to a 180s deadline for an answer a
+  # detached device will never give — so an unplugged cable would spin this case
+  # out for three minutes inside a gate that must stay device-free and fast.
+  # Cases 8 and 9 reach the same helper first and get away with it only because
+  # nothing runs them without a device; the guard script runs this one.
+  if ! device_attached; then
+    add_unevaluated 12 fresh_install_asks_to_notify no_device \
+      "NO DEVICE (instrument, not product): no device is attached (adb get-state is not \"device\"), so this case was never run. Nothing here is a statement about whether the app asks for permission to notify."
+    return
+  fi
+  if ! fresh_app_process; then
+    add_unevaluated 12 fresh_install_asks_to_notify setup_failed \
+      "SETUP FAILED (not a product failure): the app process could not be restarted, so the prompt this case measures would have been attributed to a process that had already made its permission decision. Nothing was measured."
+    return
+  fi
+  require_reachable 12 fresh_install_asks_to_notify || return
+  require_signed_in 12 fresh_install_asks_to_notify || return
+  grant_exact
+
+  # ── 1. Back to never-asked, WITHOUT asking the app anything. ─────────────
+  #
+  # Nothing below reads the app's own view of the permission before the launch,
+  # and that is a correction rather than an omission. The first version did, and
+  # the read is what broke it: every question to the app goes through a deep
+  # link, the deep link mounts the provider, the provider asks — and the next
+  # deep link brings the harness activity in front of the dialog and spends it.
+  # The case then measured its own setup and blamed the app.
+  #
+  # So the never-asked state is established from OUTSIDE the app, and verified
+  # from outside it too. What the app believes is read only AFTER the dialog has
+  # been answered, at which point asking costs nothing.
+  reset_post
+
+  local before_os before_flag
+  before_os="$(notification_permission)"
+  before_flag="$(notifee_has_asked)"
+
+  if [[ "$before_os" != "granted=false" ]]; then
+    add_unevaluated 12 fresh_install_asks_to_notify setup_failed \
+      "SETUP FAILED (not a product failure): POST_NOTIFICATIONS could not be put back into its not-granted state — the OS still reports '${before_os:-unreadable}'. With the permission already held there is nothing for the app to ask for, so the case would have passed without exercising anything."
+    return
+  fi
+  if [[ "$before_flag" != "0" ]]; then
+    add_unevaluated 12 fresh_install_asks_to_notify setup_failed \
+      "SETUP FAILED (not a product failure): notify-kit still records that it has asked (${NOTIFEE_PREFS}, permission_requested=true), so it reports DENIED rather than NOT_DETERMINED and the app will correctly decline to prompt for a permission Android would not show a dialog for. This is the rig failing to reproduce a fresh install, not the app failing to ask. \`run-as\` needs a debuggable build; on a release build use \`pm clear\` and sign in again."
+    return
+  fi
+
+  # ── 2. Launch the way a person launches it, and wait to be asked. ────────
+  #
+  # `kill_app_realistically` rather than `fresh_app_process`, deliberately: that
+  # helper ends in `wait_for_app_ready`, which deep-links until the app answers
+  # — and every one of those links is the activity switch that cancels the very
+  # dialog this case is waiting for. The launch below is the whole interaction,
+  # and the dialog poll is its own readiness signal.
+  kill_app_realistically
+  launch_app
+
+  local asked=0 deadline
+  deadline=$(( $(date +%s) + PERMISSION_PROMPT_TIMEOUT_S ))
+  while (( $(date +%s) < deadline )); do
+    if ! device_attached; then break; fi
+    if permission_dialog_showing; then asked=1; break; fi
+    sleep 5
+  done
+
+  if (( asked == 0 )); then
+    # Establish that the app was RUNNING before concluding it did not ask. A dev
+    # client that never finished bundling produces no dialog for the same 180s as
+    # an app that does not ask, and only one of those is a defect. Safe to probe
+    # here and nowhere earlier: there is no dialog left to cancel.
+    local alive
+    alive="$(harness pending-count x 0 "$HARNESS_SLOW_BUDGET_S")"
+    if [[ -z "$alive" ]]; then
+      add_unevaluated 12 fresh_install_asks_to_notify setup_failed \
+        "SETUP FAILED (not a product failure): no permission dialog appeared, and the app does not answer a deep link either — so it never came up, and its silence says nothing about whether it asks. Check Metro and \`adb reverse tcp:8081 tcp:8081\`."
+      return
+    fi
+    add_result 12 fresh_install_asks_to_notify false \
+      "THE APP NEVER ASKED. Launched cold with POST_NOTIFICATIONS not granted, its user-set/user-fixed flags cleared and notify-kit's own permission_requested flag cleared, no permission dialog appeared within ${PERMISSION_PROMPT_TIMEOUT_S}s — and the app was running throughout (it answered '${alive}'). This is issue #20 exactly: the alarms would still be armed, still fire on time, and Android would discard every notification with nothing on screen to say so."
+    return
+  fi
+
+  # ── 3. Allow it, and check the OS and the app together. ──────────────────
+  #
+  # This is also where "the app reads the platform rather than a constant" is
+  # settled, and the pair is the two steps rather than two readings: a hardcoded
+  # `true` would never have raised the dialog in step 2, and a hardcoded `false`
+  # could not report `authorized` here.
+  tap_node "$PERMISSION_ALLOW_ID"
+  sleep 3
+  local after_os after_app
+  after_os="$(notification_permission)"
+  after_app="$(harness notification-status)"
+
+  if [[ "$after_os" != "granted=true" ]]; then
+    add_result 12 fresh_install_asks_to_notify false \
+      "the dialog appeared and allowing it did not grant the permission: the OS still reports '${after_os:-unreadable}'. app reading: '${after_app}'"
+    return
+  fi
+  if ! printf '%s' "$after_app" | grep -q "notifications_granted=true"; then
+    add_result 12 fresh_install_asks_to_notify false \
+      "the OS granted POST_NOTIFICATIONS and the app did not notice: OS ${after_os}, app '${after_app:-<nothing>}'. A person who allows the permission would go on seeing the degraded-mode warning, with reminders that in fact work."
+    return
+  fi
+
+  # ── 4. And a notification actually posts. ────────────────────────────────
+  harness cleanup-seeded x 0 "$HARNESS_SLOW_BUDGET_S" >/dev/null
+  local label seeded fire_at armed posted post_deadline
+  label="fresh-$(date +%s)"
+  # `harness_once`, not `harness`: a retry on a write seeds a second reminder
+  # under the same name. Case 8 documents this at length.
+  seeded="$(harness_once seed-due-reminder "$label" "$TAP_LEAD_MS" "$HARNESS_SLOW_BUDGET_S")"
+  fire_at="$(printf '%s' "$seeded" | grep -oE 'fire_at=[0-9]+' | head -1 | cut -d= -f2)"
+  armed="$(printf '%s' "$seeded" | grep -oE 'armed=[0-9]+' | head -1 | cut -d= -f2)"
+
+  if [[ -z "$fire_at" || "$fire_at" == "none" ]]; then
+    add_unevaluated 12 fresh_install_asks_to_notify setup_failed \
+      "SETUP FAILED (not a product failure): the permission half passed, but no reminder could be seeded, so delivery was never exercised. The app answered: ${seeded:-<nothing>}"
+    return
+  fi
+
+  adb_shell input keyevent KEYCODE_HOME >/dev/null 2>&1
+  posted=0
+  post_deadline=$(( fire_at / 1000 + TAP_POST_GRACE_S ))
+  while (( $(date +%s) < post_deadline )); do
+    posted="$(notification_has "$label")"
+    (( posted >= 1 )) && break
+    sleep 5
+  done
+
+  harness cleanup-seeded x 0 "$HARNESS_SLOW_BUDGET_S" >/dev/null
+
+  if (( posted >= 1 )); then
+    add_result 12 fresh_install_asks_to_notify true \
+      "asked, was allowed, and DELIVERED. From POST_NOTIFICATIONS revoked (${before_os}), its user-set/user-fixed flags cleared and notify-kit's permission_requested flag cleared — a never-asked state established entirely from outside the app — a cold launch through the dev-client entry URL with no deep link and no debug screen put the system prompt on screen within ${PERMISSION_PROMPT_TIMEOUT_S}s. After Allow the OS reads ${after_os} and the app reads '${after_app}'. A reminder seeded through the production scheduler (armed=${armed} for ${fire_at}) then POSTED — not merely armed."
+  else
+    add_result 12 fresh_install_asks_to_notify false \
+      "the permission was asked for and granted, and the notification still did not post: armed=${armed} for ${fire_at}, waited ${TAP_POST_GRACE_S}s past it. OS ${after_os}, app '${after_app}'. The permission is not the cause here — look at delivery."
+  fi
+}
+
 run_case() {
   case "$1" in
     1) case1_killed_app ;;
@@ -1768,6 +2047,7 @@ run_case() {
     9) case9_offline_queue_drain ;;
     10) case10_task_tier_delivery ;;
     11) case11_task_flood_preserves_doses ;;
+    12) case12_fresh_install_asks_to_notify ;;
     *) echo "unknown case: $1" >&2; return 2 ;;
   esac
 }
@@ -1778,7 +2058,7 @@ notification-harness.sh — adb-driven notification test harness
 
   --list          List cases
   --purge         Hard-delete every row cases 8 and 9 seeded (Convex, then device)
-  --case N        Run case N (1..11)
+  --case N        Run case N (1..12)
   --all           Run cases 1-7, 10-11: the local-only delivery baseline
   --auth          Run cases 8-9: need a signed-in app and a reachable Convex.
                   Prefer `--case 8` then `--case 9` as separate invocations —
@@ -1787,11 +2067,13 @@ notification-harness.sh — adb-driven notification test harness
                   itself up. See constraint 6a.
   --output PATH   JSON report destination
 
-`--all` deliberately skips 8 and 9 rather than stopping at a number. Cases 1-7
-and 10-11 assert delivery against a fresh, signed-out install, which is what
-lets any device produce a baseline; cases 8 and 9 assert the signed-in tree and
+`--all` deliberately skips 8, 9 and 12 rather than stopping at a number. Cases
+1-7 and 10-11 assert delivery against a fresh, signed-out install, which is what
+lets any device produce a baseline; 8, 9 and 12 assert the signed-in tree and
 report themselves unevaluated without a session, so including them would make
-every baseline run incomplete.
+every baseline run incomplete. Case 12 additionally REVOKES POST_NOTIFICATIONS,
+which every other delivery case depends on the rig having granted — running it
+inside the baseline would break the cases that follow it.
 
 Env: TASKRX_PKG ANDROID_SERIAL METRO_URL VERBOSE=1 SKIP_DOZE=1 SKIP_REBOOT=1
 
@@ -1886,6 +2168,7 @@ list_cases() {
 9  offline_queue_drain      [signed in] Airplane mode: doses queue, then reach Convex on reconnect
 10 task_tier_delivery       A task notifies at its time and never registers as the next alarm clock
 11 task_flood_preserves_doses  A full task budget still leaves the dose armed and holding the alarm clock
+12 fresh_install_asks_to_notify [signed in] POST_NOTIFICATIONS revoked and never asked: the app asks, and then DELIVERS
 EOF
 }
 

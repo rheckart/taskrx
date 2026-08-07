@@ -172,6 +172,39 @@ This document tracks the 13 success criteria from the POC plan §3. Each row sho
 > records the state in every case detail, so no delivery case can quietly fail
 > for this reason again (constraint 12).
 >
+> **FIXED 2026-08-07 (issue #20).** The app requests POST_NOTIFICATIONS on the
+> signed-in path and renders a visible banner when the answer leaves reminders
+> undeliverable. Case 12 is the regression guard, and it is deliberately not
+> shaped like criterion #5: it revokes the grant, clears the `user-set`/
+> `user-fixed` flags so the prompt is reachable again, launches through the
+> dev-client entry URL with no deep link and no debug screen, and asserts that a
+> notification **posts** — because criterion #5 was a genuine PASS on an armed
+> alarm for the whole time this app was delivering nothing.
+>
+> **Case 12 PASSES on the Pixel 8 Pro / Android 17 (2026-08-07).** Evidence:
+> `.omo/evidence/issue-20-case-12-permission.json`. From a never-asked state
+> established entirely from outside the app, a cold launch put the system prompt
+> on screen within 180s with no deep link and no debug screen; after Allow the OS
+> reads `granted=true`, the app reads `authorized`, and a reminder seeded through
+> the production scheduler POSTED.
+>
+> **And it was proven able to fail before its pass was believed.** Against a
+> build with `shouldRequestNotificationPermission` forced to `false` — the
+> pre-#20 app — the same case FAILS with "THE APP NEVER ASKED", and reports that
+> the app answered `pending_count=59` throughout, so the failure cannot be
+> confused with a device that never came up. Nine green cases hid this defect
+> once; a case that could not fail would have been worth nothing.
+>
+> **Constraint 14 — `pm` cannot restore the never-asked state.** notify-kit
+> records that it has asked in `shared_prefs/app.notifee.core.xml`
+> (`permission_requested`) and derives NOT_DETERMINED from it. No `pm` command
+> reaches that file, so `pm revoke` plus `pm clear-permission-flags` leaves the
+> app reading `denied` on a permission nobody was ever asked about — where it
+> correctly declines to prompt, because Android shows no dialog for a spent
+> permission. `pm clear` clears it, and so does `run-as rm`, which is what the
+> case uses so the Clerk session and SQLite survive. The first run of case 12
+> failed for exactly this reason and blamed the app.
+>
 > **Answering a dose leaves a duplicate pending instance.** `/dose/log` re-runs
 > its load after the write, `findPendingForOccurrence` filters to `pending` and
 > so does not see the row it just completed, and it mints a fresh one — every
