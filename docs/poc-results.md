@@ -229,6 +229,32 @@ This document tracks the 13 success criteria from the POC plan §3. Each row sho
 > separately, and it deserves its own investigation: if it can happen in
 > production, a fired reminder would break dose logging until the app restarts.
 >
+> **Reproduced, and largely corrected, 2026-08-07 (issue #23, harness case 13).**
+> The lock is real — captured verbatim from `seed-due-reminder` — and three
+> specifics of the paragraph above did not survive contact with it:
+>
+> - **A firing notification is not the trigger.** Case 13 does exactly what this
+>   paragraph describes — seed, kill, wait for the notification to actually post,
+>   then probe — and it PASSES. Writable before, writable after. The single
+>   occurrence happened during a write, *before* any notification in that run.
+> - **It is not sticky.** It cleared with no reinstall. "Survives `am kill` and a
+>   verified-fresh process" did not hold.
+> - **There is no hot journal.** `files/SQLite/` held `taskrx.db` alone
+>   throughout, ruling out the one mechanism that could explain a lock outliving
+>   the process that created it.
+>
+> Confirmed instead, read from the live connection: `journal_mode=delete` and
+> `busy_timeout=0`, so any contention fails INSTANTLY rather than waiting. And a
+> fingerprint worth carrying: `BEGIN IMMEDIATE` succeeded in the same second a
+> committed write failed, which points at a lingering READER rather than the
+> second writer this paragraph assumes.
+>
+> Evidence: `.omo/evidence/issue-23-case-13-db-lock.json`. The two-pass
+> requirement for cases 8 and 9 stays until the trigger is known — it is a
+> reliable symptom whatever turns out to cause it. The sentence above calling
+> this "a suspicion, not a diagnosis" is left standing, because it is the part
+> that was right.
+>
 > **`pm grant` restarts the app.** Granting POST_NOTIFICATIONS from inside a
 > case killed the process mid-write and produced the lock above, which surfaced
 > as "no reminder was seeded" with no cause. The grant now happens once at
