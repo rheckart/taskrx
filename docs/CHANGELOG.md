@@ -168,7 +168,10 @@ medication baseline from #5 is unchanged.
   the weekly schedule. Every verdict matches the #5 baseline.
 
 Evidence: `.omo/evidence/issue-14-task-tier-all-cases.json` (cases 1, 2, 4, 6,
-7, 10, 11), `issue-14-case-3-doze.json`, `issue-14-case-5-boot.json`. Cases 3
+7, 10, 11), `issue-14-case-3-doze.json`, `issue-14-case-5-boot.json` — all at
+`b695d4f`, clean. `issue-14-task-tier-final.json` re-runs the two new cases at
+`b0002d2` after the case-10 fix below, so the tip commit has its own artifact
+rather than inheriting one. Cases 3
 and 5 are separate invocations because each ends with the device asleep or
 rebooted, and the keyguard that comes up then blocks every case after it — the
 first `--all` attempt lost six cases that way, and reported them **unevaluated
