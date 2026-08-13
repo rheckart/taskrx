@@ -83,13 +83,17 @@ fact. #11 closed, so the number is now worth showing.
   this screen on their first day has not failed at anything.
 
 - `feat(mobile): two formatting rules that could each tell a lie` —
-  `format/percent.ts` reserves both endpoints: `Math.round` turns 99.6% into
+  `format/percent.ts` reserves the top end: `Math.round` turns 99.6% into
   "100%", so a person who missed a dose is told they missed none, on the one
-  surface built so the number could be trusted. 0.4% shown as "0%" is the same
-  lie pointed the other way. `format/datetime.ts` gains `dayKeyToLocalMs`,
-  because reading a `"YYYY-MM-DD"` bucket key back with `new Date(key)` parses it
-  as **UTC** midnight and renders every day as the day before it for every zone
-  behind Greenwich. Both are covered, and every mutant of both was killed.
+  surface built so the number could be trusted. Only the top end, deliberately —
+  the mirror case looks symmetrical and is not, because nudging 0.4% up to "1%"
+  reports adherence nobody achieved, which is this sequence's own failure mode
+  in miniature. Understating gives a person something to act on; overstating is
+  the thing being fixed. The count beside the figure ("1 of 250") is what says a
+  dose was taken. `format/datetime.ts` gains `dayKeyToLocalMs`, because reading a
+  `"YYYY-MM-DD"` bucket key back with `new Date(key)` parses it as **UTC**
+  midnight and renders every day as the day before it for every zone behind
+  Greenwich. Both are covered, and every mutant of both was killed.
 
 ### 2026-08-07 — Type a phrase, get the right Reminder
 

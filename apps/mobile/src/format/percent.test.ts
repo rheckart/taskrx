@@ -7,13 +7,16 @@ import { formatPercent } from "./percent";
  *
  * The adherence figure is a whole number on screen because "77.7777%" reads as
  * false precision about a week of doses. But `Math.round` alone converts 99.6%
- * into "100%", and a person who missed a dose this week is then told they missed
- * nothing — on the surface built specifically so the number can be trusted. The
- * mirror case is as bad in the other direction: 0.4% shown as "0%" tells someone
- * who did take a dose that they took none.
+ * into "100%", and a person who missed a dose is then told they missed nothing —
+ * on the surface built specifically so the number can be trusted.
  *
- * So the two endpoints are reserved. "100%" means every dose, and "0%" means no
- * dose, and every other figure rounds normally.
+ * The rounding is deliberately asymmetric, because the two directions are not
+ * equally safe here. Understating adherence is a figure someone can act on;
+ * overstating it is the flattering number this whole sequence exists to remove.
+ * So "100%" is reserved for a genuinely perfect period, and nothing else is
+ * special-cased — a figure below half a percent reads as "0%" and is left to the
+ * count printed beside it ("1 of 250") to qualify. Nudging that one UP to "1%"
+ * would be inventing adherence that was not there.
  */
 describe("formatPercent", () => {
   it("rounds an ordinary figure to a whole number", () => {
@@ -26,17 +29,22 @@ describe("formatPercent", () => {
     expect(formatPercent(100)).toBe("100%");
   });
 
-  it("does not round a missed dose away into a perfect score", () => {
+  it("does not round a missed dose away into a perfect figure", () => {
     expect(formatPercent(99.6)).toBe("99%");
     expect(formatPercent(99.9999)).toBe("99%");
   });
 
-  it("says 0% only when nothing at all was taken", () => {
+  it("says 0% when nothing at all was taken", () => {
     expect(formatPercent(0)).toBe("0%");
   });
 
-  it("does not round a taken dose away into nothing", () => {
-    expect(formatPercent(0.4)).toBe("1%");
-    expect(formatPercent(0.0001)).toBe("1%");
+  /**
+   * The direction that matters. Rounding 0.4% up to "1%" would report adherence
+   * nobody achieved, on the screen whose entire purpose is that the figure can
+   * be trusted — the same failure as the pre-#11 100%, just smaller.
+   */
+  it("never rounds a near-zero figure up into adherence that was not there", () => {
+    expect(formatPercent(0.4)).toBe("0%");
+    expect(formatPercent(0.0001)).toBe("0%");
   });
 });

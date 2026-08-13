@@ -138,9 +138,15 @@ function DayRow({ day }: { readonly day: DayAdherence }): ReactElement {
   return (
     <View
       style={styles.dayRow}
+      // `accessible` as well as the label, and the label is inert without it:
+      // a plain View is not an accessibility element, so a screen reader would
+      // walk the four children and read "Tue, Aug 4", "67%", "2/3" as three
+      // unrelated fragments with the bar in between. Grouped, the row is one
+      // sentence — which is how the row is read by eye too.
+      accessible
       accessibilityLabel={`${formatDayKey(day.date)}: ${formatPercent(
         day.percent
-      )}, ${String(day.completed)} of ${String(day.total)}`}
+      )}, ${String(day.completed)} of ${String(day.total)} taken`}
     >
       <Text style={styles.dayName}>{formatDayKey(day.date)}</Text>
       {/*
