@@ -58,7 +58,16 @@
 
 import type { ReminderInstance } from "../domain/reminder";
 
-/** `TaskRx.Core.DayAdherence`. `date` is a `DateOnly` day key, `"YYYY-MM-DD"`. */
+/**
+ * `TaskRx.Core.DayAdherence`. `date` is a `DateOnly` day key, `"YYYY-MM-DD"`.
+ *
+ * Every local calendar day in the window gets one of these, including days on
+ * which nothing was recorded — see `computeAdherence`. Such a day carries
+ * `total: 0`, and **`total` is the field that identifies it**. Its `percent` is
+ * `0` only because `0/0` has to be some number; read as a percentage it would
+ * say every dose that day was missed, which is the opposite of what an empty day
+ * means. Test `total`, never `percent`.
+ */
 export interface DayAdherence {
   readonly date: string;
   readonly completed: number;
@@ -119,6 +128,40 @@ function percentOf(completed: number, total: number): number {
   return total > 0 ? (completed / total) * 100 : 0;
 }
 
+/**
+ * Every local calendar day the window touches, from the day holding `fromMs`
+ * through the day holding `toMs`, ascending. Empty when the window is inverted.
+ *
+ * Stepped with `setDate(getDate() + 1)` rather than by adding 86_400_000, for
+ * the reason `../schedule/occurrences.ts` gives: a fixed 24-hour step walks off
+ * midnight at a daylight-saving transition and then emits either a duplicate day
+ * key or a missing one for the rest of the period. The calendar increment lands
+ * on the next local midnight whatever the offset did.
+ *
+ * The result is already ascending, which is why nothing below sorts: the days
+ * are enumerated in order rather than discovered from the data and put back in
+ * order afterwards.
+ */
+function eachLocalDayKey(fromMs: number, toMs: number): readonly string[] {
+  const start = new Date(fromMs);
+  const cursor = new Date(
+    start.getFullYear(),
+    start.getMonth(),
+    start.getDate(),
+    0,
+    0,
+    0,
+    0
+  );
+
+  const keys: string[] = [];
+  while (cursor.getTime() <= toMs) {
+    keys.push(localDateKey(cursor.getTime()));
+    cursor.setDate(cursor.getDate() + 1);
+  }
+  return keys;
+}
+
 interface DayBucket {
   completed: number;
   total: number;
@@ -165,18 +208,19 @@ export function computeAdherence(
     buckets.set(key, bucket);
   }
 
-  // Map keys are distinct "YYYY-MM-DD" strings, so `a === b` never happens —
-  // a two-way comparison, not three, keeps every branch reachable.
-  const daily = [...buckets.entries()]
-    .sort(([a], [b]) => (a < b ? -1 : 1))
-    .map(
-      ([date, bucket]): DayAdherence => ({
-        date,
-        completed: bucket.completed,
-        total: bucket.total,
-        percent: percentOf(bucket.completed, bucket.total),
-      })
-    );
+  // Driven by the window's days rather than by the days the data happens to
+  // mention, so a day nobody recorded anything on is a row with `total: 0`
+  // instead of a hole the reader cannot see. Every counted instance falls inside
+  // the window, so its day key is always one of these — no bucket is orphaned.
+  const daily = eachLocalDayKey(fromMs, toMs).map((date): DayAdherence => {
+    const bucket = buckets.get(date) ?? { completed: 0, total: 0 };
+    return {
+      date,
+      completed: bucket.completed,
+      total: bucket.total,
+      percent: percentOf(bucket.completed, bucket.total),
+    };
+  });
 
   return { percent, completed, missed, skipped, snoozed, total, daily };
 }

@@ -133,7 +133,9 @@ describe("computeAdherence", () => {
     expect(stats.skipped).toBe(0);
     expect(stats.snoozed).toBe(0);
     expect(stats.total).toBe(0);
-    expect(stats.daily).toEqual([]);
+    // The days are still listed — they are days of the period. What a pending
+    // instance must not do is put anything in one.
+    expect(stats.daily.every((day) => day.total === 0)).toBe(true);
   });
 
   // Compute_InstancesOutsideWindow_AreExcluded
@@ -160,7 +162,7 @@ describe("computeAdherence", () => {
   // order is real rather than a trivial reflection of already-sorted input.
   it("groups into local calendar days, ordered chronologically ascending", () => {
     const from = local(2026, 7, 1);
-    const to = from + 2 * MS_PER_DAY;
+    const to = local(2026, 7, 2, 23, 59);
     const instances = [
       instance(from + MS_PER_DAY + 9 * MS_PER_HOUR, "completed"),
       instance(from + MS_PER_DAY + 21 * MS_PER_HOUR, "skipped"),
@@ -185,7 +187,7 @@ describe("computeAdherence", () => {
   // other branch, where a day bucket is already ahead of the one before it.
   it("keeps already-ascending day buckets in order", () => {
     const from = local(2026, 7, 1);
-    const to = from + 2 * MS_PER_DAY;
+    const to = local(2026, 7, 2, 23, 59);
     const instances = [
       instance(from + 8 * MS_PER_HOUR, "completed"),
       instance(from + MS_PER_DAY + 9 * MS_PER_HOUR, "completed"),
@@ -213,7 +215,7 @@ describe("computeAdherence", () => {
     expect(stats.skipped).toBe(0);
     expect(stats.snoozed).toBe(0);
     expect(stats.total).toBe(0);
-    expect(stats.daily).toEqual([]);
+    expect(stats.daily.every((day) => day.total === 0)).toBe(true);
   });
 
   describe("the Snoozed fix (divergence from the C#)", () => {
@@ -261,7 +263,7 @@ describe("computeAdherence", () => {
 
     it("gives a mixed day's bucket the same denominator as the overall total", () => {
       const from = local(2026, 7, 1);
-      const to = from + MS_PER_DAY;
+      const to = local(2026, 7, 1, 23, 59);
       const instances = [
         instance(from + 6 * MS_PER_HOUR, "completed"),
         instance(from + 8 * MS_PER_HOUR, "snoozed"), // medication: counts in the denominator
@@ -348,9 +350,9 @@ describe("computeAdherence", () => {
       expect(stats.percent).toBe(100);
     });
 
-    it("leaves a day with only tasks out of the daily breakdown", () => {
+    it("gives a day of nothing but tasks no medication commitments at all", () => {
       const from = local(2026, 7, 1);
-      const to = from + 2 * MS_PER_DAY;
+      const to = local(2026, 7, 2, 23, 59);
       const instances = [
         instance(from + 8 * MS_PER_HOUR, "completed"),
         instance(from + MS_PER_DAY + 9 * MS_PER_HOUR, "completed", "task"),
@@ -358,8 +360,12 @@ describe("computeAdherence", () => {
 
       const stats = computeAdherence(instances, from, to);
 
-      expect(stats.daily).toHaveLength(1);
-      expect(dayDate(stats, 0)).toBe("2026-07-01");
+      // The 2nd is listed, because it is a day of the period — but a completed
+      // task put nothing in it, so it reads as a day with no doses rather than
+      // as a day that went well.
+      expect(dayDate(stats, 1)).toBe("2026-07-02");
+      expect(dayTotal(stats, 1)).toBe(0);
+      expect(dayTaken(stats, 1)).toBe(0);
     });
   });
 
@@ -408,7 +414,7 @@ describe("computeAdherence", () => {
 
     it("leaves no day out, so a day of pure failure still lands in the list", () => {
       const from = local(2026, 7, 1);
-      const to = from + 2 * MS_PER_DAY;
+      const to = local(2026, 7, 2, 23, 59);
       const instances = [
         instance(from + 8 * MS_PER_HOUR, "completed"),
         instance(from + MS_PER_DAY + 9 * MS_PER_HOUR, "missed"),
@@ -422,6 +428,129 @@ describe("computeAdherence", () => {
       ]);
       expect(dayPercent(stats, 1)).toBe(0);
     });
+  });
+});
+
+/**
+ * The daily breakdown covers the PERIOD, not just the parts of it that have
+ * data.
+ *
+ * A day on which nothing was recorded used to be absent from `daily` entirely,
+ * which left the surface rendering it no differently from a day the reader had
+ * scrolled past — the list simply skipped from Monday to Wednesday. ADR 0005
+ * endorses the underlying reading ("a gap reads as no data rather than as a wall
+ * of Missed"), but a gap nobody can see is not a reading, it is an omission.
+ *
+ * The empty day carries `total: 0`, which is what distinguishes it. `percent` is
+ * `0` there only because `0/0` has to be something — a consumer must test
+ * `total` and not `percent`, or it will render a day with nothing due as a day on
+ * which every dose was missed. Those are opposite facts.
+ *
+ * This is deliberately NOT "every day a dose was due": the calculator sees
+ * Instances and never Reminders, so it cannot tell a day with nothing scheduled
+ * from a day whose history the sweep could not reach. Both are honestly "no
+ * doses recorded", and neither is invented as a miss.
+ */
+describe("computeAdherence — the breakdown spans the whole period", () => {
+  it("includes a day in the middle of the period on which nothing was recorded", () => {
+    const from = local(2026, 7, 1);
+    const to = local(2026, 7, 3, 23, 59);
+    const instances = [
+      instance(local(2026, 7, 1, 8), "completed"),
+      // Nothing at all on the 2nd.
+      instance(local(2026, 7, 3, 8), "completed"),
+    ];
+
+    const stats = computeAdherence(instances, from, to);
+
+    expect(stats.daily.map((day) => day.date)).toEqual([
+      "2026-07-01",
+      "2026-07-02",
+      "2026-07-03",
+    ]);
+    expect(dayTotal(stats, 1)).toBe(0);
+    expect(dayTaken(stats, 1)).toBe(0);
+  });
+
+  it("gives a period with no history at all one row per day, not none", () => {
+    const stats = computeAdherence(
+      [],
+      local(2026, 7, 1),
+      local(2026, 7, 7, 23, 59)
+    );
+
+    expect(stats.daily).toHaveLength(7);
+    expect(stats.daily.every((day) => day.total === 0)).toBe(true);
+    // The overall figure is still the "no data" one, not a failing one.
+    expect(stats.total).toBe(0);
+    expect(stats.percent).toBe(0);
+  });
+
+  it("counts an empty day as no commitments rather than as missed ones", () => {
+    const from = local(2026, 7, 1);
+    const to = local(2026, 7, 2, 23, 59);
+    const instances = [instance(local(2026, 7, 1, 8), "completed")];
+
+    const stats = computeAdherence(instances, from, to);
+
+    // The empty day must not drag the overall figure down: nothing was due, so
+    // nothing was missed, and the week was in fact perfect.
+    expect(stats.percent).toBe(100);
+    expect(stats.total).toBe(1);
+    expect(dayTotal(stats, 1)).toBe(0);
+  });
+
+  it("still sums the daily buckets back to the overall totals", () => {
+    const from = local(2026, 7, 1);
+    const to = local(2026, 7, 5, 23, 59);
+    const instances = [
+      instance(local(2026, 7, 1, 8), "completed"),
+      instance(local(2026, 7, 4, 8), "missed"),
+    ];
+
+    const stats = computeAdherence(instances, from, to);
+
+    const summedTotal = stats.daily.reduce((run, day) => run + day.total, 0);
+    expect(stats.daily).toHaveLength(5);
+    expect(summedTotal).toBe(stats.total);
+  });
+
+  it("orders the days chronologically whatever order the instances arrive in", () => {
+    const from = local(2026, 7, 1);
+    const to = local(2026, 7, 3, 23, 59);
+    const instances = [
+      instance(local(2026, 7, 3, 8), "completed"),
+      instance(local(2026, 7, 1, 8), "completed"),
+    ];
+
+    const stats = computeAdherence(instances, from, to);
+
+    expect(stats.daily.map((day) => day.date)).toEqual([
+      "2026-07-01",
+      "2026-07-02",
+      "2026-07-03",
+    ]);
+  });
+
+  it("walks across a month boundary", () => {
+    const stats = computeAdherence(
+      [],
+      local(2026, 1, 30),
+      local(2026, 2, 2, 23, 59)
+    );
+
+    expect(stats.daily.map((day) => day.date)).toEqual([
+      "2026-01-30",
+      "2026-01-31",
+      "2026-02-01",
+      "2026-02-02",
+    ]);
+  });
+
+  it("emits nothing for a window that ends before it starts", () => {
+    const stats = computeAdherence([], local(2026, 7, 3), local(2026, 7, 1));
+
+    expect(stats.daily).toEqual([]);
   });
 });
 
@@ -458,9 +587,12 @@ describe("computeAdherence — daylight saving", () => {
 
     const stats = computeAdherence(instances, from, to);
 
-    expect(stats.daily).toHaveLength(1);
-    expect(dayDate(stats, 0)).toBe("2027-03-14");
-    expect(dayTotal(stats, 0)).toBe(2);
+    // Three rows for three calendar days: the 23-hour day is one day, not two
+    // and not a fraction of one, which is also what pins the day-walk itself as
+    // DST-safe — a fixed 24-hour step would slip and emit a duplicate key.
+    expect(stats.daily).toHaveLength(3);
+    expect(dayDate(stats, 1)).toBe("2027-03-14");
+    expect(dayTotal(stats, 1)).toBe(2);
   });
 
   it("keeps a fall-back day's doses on that one day", () => {
@@ -475,9 +607,10 @@ describe("computeAdherence — daylight saving", () => {
 
     const stats = computeAdherence(instances, from, to);
 
-    expect(stats.daily).toHaveLength(1);
-    expect(dayDate(stats, 0)).toBe("2027-11-07");
-    expect(dayTotal(stats, 0)).toBe(2);
+    // And three for the 25-hour day, where a fixed step slips the other way.
+    expect(stats.daily).toHaveLength(3);
+    expect(dayDate(stats, 1)).toBe("2027-11-07");
+    expect(dayTotal(stats, 1)).toBe(2);
   });
 
   it("separates a late dose from the next morning's across a transition", () => {
@@ -493,6 +626,9 @@ describe("computeAdherence — daylight saving", () => {
     expect(stats.daily.map((day) => day.date)).toEqual([
       "2027-03-13",
       "2027-03-14",
+      "2027-03-15",
     ]);
+    expect(dayTotal(stats, 0)).toBe(1);
+    expect(dayTotal(stats, 1)).toBe(1);
   });
 });

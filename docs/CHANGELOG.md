@@ -8,6 +8,48 @@ for commit discipline (POC tags use `0.x.x`).
 
 ## [Unreleased]
 
+### 2026-08-13 — The breakdown covers the period, not just the days with data
+
+Follows #16. `computeAdherence`'s `daily` listed only the days that had counted
+instances, so a day nobody recorded anything on was absent from the array
+entirely — and on screen the list simply stepped from the 10th to the 12th, which
+is indistinguishable from a day the reader scrolled past. ADR 0005 endorses the
+underlying reading, that a gap in history "reads as no data rather than as a wall
+of Missed"; it does not endorse a gap nobody can see, which is an omission rather
+than a reading.
+
+`daily` now carries one row per local calendar day of the window. The widening is
+in the pure function rather than in the screen, because "which days does a period
+contain" is a rule and `docs/specs/fused-timeline.md` puts rules in the shared
+package — filling the gaps in `adherence.tsx` would have been the extraction
+being incomplete.
+
+- An empty day carries `total: 0`, and **`total` is what identifies it**. Its
+  `percent` is `0` only because `0/0` has to be some number; rendered as a
+  percentage it would report a day with nothing due as a day on which every dose
+  was missed, which is the opposite fact and, on this surface, an accusation.
+  `DayAdherence` now says to read `total` and never `percent`, and
+  `adherence.tsx` renders those rows as "No doses".
+
+- Deliberately **not** "every day a dose was due". The calculator sees Instances
+  and never Reminders, so it cannot tell a day with nothing scheduled from a day
+  whose history the sweep could not reach. Both are honestly "no doses recorded",
+  and neither is invented as a miss.
+
+- The day walk steps with `setDate(getDate() + 1)`, not by adding 86_400_000. The
+  fixed step walks off midnight at a transition: across the US fall-back it emits
+  `2027-11-07` twice and loses a day off the end. Pinned by the fall-back case.
+
+- Enumerating the window in order removed the sort entirely — the days arrive
+  ascending rather than being discovered from the data and reordered afterwards.
+
+Nine existing cases encoded the narrow contract and were rewritten to state the
+same rules against the wider one. Two were improved by it rather than merely
+adapted: "a day of nothing but tasks" now asserts that day has *zero medication
+commitments* instead of asserting it is absent, which is the rule it always meant;
+and the two daylight-saving cases now assert three rows across a transition, which
+pins the day walk as well as the grouping.
+
 ### 2026-08-13 — An honest picture of how treatment is going
 
 Closes #16. The adherence calculator was ported from `AdherenceCalculator.cs`

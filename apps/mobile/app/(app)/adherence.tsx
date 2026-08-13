@@ -134,7 +134,40 @@ function SnoozeNote({
   );
 }
 
+/**
+ * A day of the period on which nothing was recorded.
+ *
+ * It has to be told apart from a 0% day, and `percent` cannot do it — an empty
+ * day's percent is `0` because `0/0` has to be some number, and rendering that
+ * as "0%" would report a day with nothing due as a day on which every dose was
+ * missed. Those are opposite facts, and on this surface the wrong one is an
+ * accusation. `total` is the field that distinguishes them, which is what
+ * `DayAdherence` says to read.
+ *
+ * The row still appears, rather than the day being skipped: ADR 0005 records
+ * that a gap in history "reads as no data rather than as a wall of Missed", and
+ * a gap the list silently steps over is not a reading anybody can have — it looks
+ * identical to a day scrolled past.
+ */
+function EmptyDayRow({ day }: { readonly day: DayAdherence }): ReactElement {
+  return (
+    <View
+      style={styles.dayRow}
+      accessible
+      accessibilityLabel={`${formatDayKey(day.date)}: no doses recorded`}
+    >
+      <Text style={[styles.dayName, styles.dayNameEmpty]}>
+        {formatDayKey(day.date)}
+      </Text>
+      <View style={styles.dayBarTrack} />
+      <Text style={styles.dayEmpty}>No doses</Text>
+    </View>
+  );
+}
+
 function DayRow({ day }: { readonly day: DayAdherence }): ReactElement {
+  if (day.total === 0) return <EmptyDayRow day={day} />;
+
   return (
     <View
       style={styles.dayRow}
@@ -330,10 +363,23 @@ const styles = StyleSheet.create({
     textAlign: "right",
     width: 44,
   },
+  dayEmpty: {
+    color: "#999",
+    fontSize: 13,
+    fontStyle: "italic",
+    textAlign: "right",
+    width: 92,
+  },
   dayName: {
     fontSize: 14,
     fontWeight: "600",
     width: 92,
+  },
+  // Muted, so a week's worth of them recedes and the days that carry a figure
+  // are what the eye lands on.
+  dayNameEmpty: {
+    color: "#999",
+    fontWeight: "500",
   },
   dayPercent: {
     fontSize: 14,

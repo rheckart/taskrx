@@ -183,11 +183,39 @@ describe("readAdherence", () => {
 
     const { stats } = await readAdherence("user-1", NOW);
 
+    // Every day of the period, in order — not only the three that have data.
     expect(stats.daily.map((day) => day.date)).toEqual([
+      "2026-08-07",
+      "2026-08-08",
+      "2026-08-09",
       "2026-08-10",
       "2026-08-11",
       "2026-08-12",
+      "2026-08-13",
     ]);
+  });
+
+  /**
+   * The gap is the point. A day nobody recorded anything on used to be absent
+   * from the list, which on screen was indistinguishable from a day scrolled
+   * past — the breakdown simply stepped from the 10th to the 12th. ADR 0005
+   * endorses "a gap reads as no data"; a gap nobody can see is not a reading.
+   */
+  it("shows a day with nothing recorded rather than stepping over it", async () => {
+    stored = [
+      instance("i1", NOW - 3 * DAY, "completed"), // the 10th
+      instance("i2", NOW - DAY, "completed"), // the 12th
+    ];
+
+    const { stats } = await readAdherence("user-1", NOW);
+
+    const eleventh = stats.daily.find((day) => day.date === "2026-08-11");
+
+    expect(eleventh).toBeDefined();
+    expect(eleventh?.total).toBe(0);
+    // And it is a day with nothing due, not a day of total failure: the two
+    // doses that were due were both taken, so the period is perfect.
+    expect(stats.percent).toBe(100);
   });
 
   it("surfaces snoozed doses in their own right", async () => {
@@ -230,6 +258,10 @@ describe("readAdherence", () => {
 
     expect(stats.total).toBe(0);
     expect(stats.percent).toBe(0);
-    expect(stats.daily).toEqual([]);
+    // Seven days, all empty — the period is still the period. The surface shows
+    // its own "nothing to report yet" message for this case rather than seven
+    // blank rows, which is a rendering decision and not this function's.
+    expect(stats.daily).toHaveLength(7);
+    expect(stats.daily.every((day) => day.total === 0)).toBe(true);
   });
 });
