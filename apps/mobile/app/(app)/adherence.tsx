@@ -84,15 +84,23 @@ function Headline({ stats }: { readonly stats: AdherenceStats }): ReactElement {
       <Text style={styles.period}>{periodLabel()}</Text>
       <Text
         style={styles.percent}
-        accessibilityLabel={`${formatPercent(stats.percent)} of doses taken over the last ${String(
+        accessibilityLabel={`${formatPercent(stats.percent)} — ${String(
+          stats.completed
+        )} of ${String(stats.total)} taken over the last ${String(
           ADHERENCE_PERIOD_DAYS
         )} days`}
       >
         {formatPercent(stats.percent)}
       </Text>
+      {/*
+        "14 of 18 taken" rather than "…18 doses". CONTEXT.md defines a Dose as
+        the quantity of a drug taken at one time and says outright to avoid
+        "using 'dose' to mean a scheduled or recorded taking" — which is exactly
+        what a count of Instances is. The verb carries it without the noun, and
+        ADR 0001 keeps "taken" as the medication word in the UI.
+      */}
       <Text style={styles.fraction}>
-        {String(stats.completed)} of {String(stats.total)}{" "}
-        {stats.total === 1 ? "dose" : "doses"}
+        {String(stats.completed)} of {String(stats.total)} taken
       </Text>
     </View>
   );
@@ -128,8 +136,8 @@ function SnoozeNote({
   return (
     <Text style={styles.note}>
       {stats.snoozed === 1
-        ? "1 snoozed dose counts against the figure — a dose put off is a dose not yet taken."
-        : `${String(stats.snoozed)} snoozed doses count against the figure — a dose put off is a dose not yet taken.`}
+        ? "1 snooze counts against the figure — a medication put off is one not yet taken."
+        : `${String(stats.snoozed)} snoozes count against the figure — a medication put off is one not yet taken.`}
     </Text>
   );
 }
@@ -154,13 +162,13 @@ function EmptyDayRow({ day }: { readonly day: DayAdherence }): ReactElement {
     <View
       style={styles.dayRow}
       accessible
-      accessibilityLabel={`${formatDayKey(day.date)}: no doses recorded`}
+      accessibilityLabel={`${formatDayKey(day.date)}: nothing recorded`}
     >
       <Text style={[styles.dayName, styles.dayNameEmpty]}>
         {formatDayKey(day.date)}
       </Text>
       <View style={styles.dayBarTrack} />
-      <Text style={styles.dayEmpty}>No doses</Text>
+      <Text style={styles.dayEmpty}>None recorded</Text>
     </View>
   );
 }
@@ -300,7 +308,7 @@ export default function AdherenceScreen(): ReactElement {
               screen on their first day has not failed at anything.
             */}
             <Text style={styles.emptyBody}>
-              Once you have doses due, the proportion you took over the last{" "}
+              Once medications are due, the proportion you took over the last{" "}
               {String(ADHERENCE_PERIOD_DAYS)} days appears here.
             </Text>
           </View>
@@ -368,7 +376,7 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontStyle: "italic",
     textAlign: "right",
-    width: 92,
+    width: 100,
   },
   dayName: {
     fontSize: 14,
