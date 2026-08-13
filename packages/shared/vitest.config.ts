@@ -29,6 +29,11 @@ export default defineConfig({
         "src/refill/planner.ts",
         "src/schedule/horizon.ts",
         "src/schedule/occurrences.ts",
+        // Which span a local calendar day occupies, for the timeline and the
+        // adherence period both. It is 23 or 25 hours twice a year and the
+        // suite runs at `TZ=UTC`, so a branch added here without a case is a
+        // bug that only appears on other people's phones.
+        "src/time/local-day.ts",
         "src/domain/enums.ts",
         "src/domain/reminder.ts",
         "src/domain/schedule-times.ts",

@@ -31,12 +31,17 @@
  * day of the window or doubling it. The daily buckets are grouped by local
  * calendar date, so a window that starts at 01:00 puts part of a day in the
  * figure and leaves the rest out, and that day's bucket disagrees with every
- * other one. Built from `Date`'s local calendar fields instead — the pattern
- * `../schedule/occurrences.ts` established — the boundary is midnight because it
- * was asked for midnight, whatever the offset did in between.
+ * other one.
+ *
+ * That is `../time/local-day.ts`'s problem rather than this file's: the timeline
+ * picks a day the same way, and the two were computing the same span from the
+ * same calendar fields — one of them inside a screen. A period is now just its
+ * two ends, each asked for by offset.
  *
  * Pure function: no clock, no globals. The caller supplies `now`.
  */
+
+import { localDayBounds } from "../time/local-day";
 
 /**
  * How many local calendar days Adherence covers, the day holding `now`
@@ -61,15 +66,10 @@ export interface AdherencePeriod {
  * a dose scheduled at exactly 00:00 tomorrow.
  */
 export function adherencePeriod(now: number, days: number): AdherencePeriod {
-  const base = new Date(now);
-  const year = base.getFullYear();
-  const month = base.getMonth();
-  const day = base.getDate();
-
+  // `days - 1` because the day holding `now` is one of them: a seven-day period
+  // reaches back six days, not seven.
   return {
-    // `Date` normalizes an out-of-range day, so the month and the year roll
-    // back on their own and no calendar arithmetic is needed here.
-    fromMs: new Date(year, month, day - (days - 1), 0, 0, 0, 0).getTime(),
-    toMs: new Date(year, month, day, 23, 59, 59, 999).getTime(),
+    fromMs: localDayBounds(now, -(days - 1)).start,
+    toMs: localDayBounds(now, 0).end,
   };
 }

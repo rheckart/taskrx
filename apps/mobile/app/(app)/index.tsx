@@ -1,6 +1,11 @@
 import { useClerk, useUser } from "@clerk/clerk-expo";
-import type { Reminder, TimelineRow, TimelineWindow } from "@taskrx/shared";
-import { isAnswerable, projectTimeline, timelineRowKey } from "@taskrx/shared";
+import type { Reminder, TimelineRow } from "@taskrx/shared";
+import {
+  isAnswerable,
+  localDayBounds,
+  projectTimeline,
+  timelineRowKey,
+} from "@taskrx/shared";
 import { Link, useFocusEffect, useRouter } from "expo-router";
 import { useCallback, useState } from "react";
 import type { ReactElement } from "react";
@@ -44,21 +49,6 @@ import { useUnifiedSync } from "../../src/sync/pull";
  * rendered first and re-projected after, so a long absence never leaves someone
  * looking at a skeleton while hundreds of rows are written.
  */
-
-/** Local midnight to local end-of-day, `offset` days from the day holding `now`. */
-function dayWindow(offset: number, now: number): TimelineWindow {
-  const base = new Date(now);
-  const year = base.getFullYear();
-  const month = base.getMonth();
-  // `Date` normalizes an out-of-range day, so month and year roll over on their
-  // own and no calendar arithmetic is needed here.
-  const day = base.getDate() + offset;
-
-  return {
-    start: new Date(year, month, day, 0, 0, 0, 0).getTime(),
-    end: new Date(year, month, day, 23, 59, 59, 999).getTime(),
-  };
-}
 
 function dayLabel(offset: number, windowStart: number): string {
   if (offset === 0) return "Today";
@@ -227,7 +217,7 @@ export default function HomeScreen(): ReactElement {
   const [dayOffset, setDayOffset] = useState<number>(0);
   const [rows, setRows] = useState<readonly TimelineRow[]>([]);
   const [windowStart, setWindowStart] = useState<number>(
-    () => dayWindow(0, Date.now()).start
+    () => localDayBounds(Date.now(), 0).start
   );
   const [loading, setLoading] = useState<boolean>(true);
   const [refreshing, setRefreshing] = useState<boolean>(false);
@@ -243,7 +233,11 @@ export default function HomeScreen(): ReactElement {
     }
 
     const now = Date.now();
-    const window = dayWindow(dayOffset, now);
+    // Was a `dayWindow` helper here, which computed the same local-day span as
+    // the adherence period did and sat in a screen where no test could reach it.
+    // A `TimelineWindow` is structurally these bounds, so the projection takes
+    // them unchanged.
+    const window = localDayBounds(now, dayOffset);
     setWindowStart(window.start);
 
     const project = async (): Promise<void> => {

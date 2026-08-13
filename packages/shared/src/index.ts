@@ -76,6 +76,15 @@ export type {
   WeeklyTimesWire,
 } from "./domain/index";
 
+/**
+ * Local calendar day arithmetic. One definition for "which span is this day",
+ * because the timeline picks a day to render and the adherence period picks the
+ * day its window ends on — and a local day is 23 or 25 hours twice a year, which
+ * neither of them may get wrong.
+ */
+export { localDayBounds } from "./time/local-day";
+export type { LocalDayBounds } from "./time/local-day";
+
 export {
   nextOccurrences,
   selectMedicationHorizon,
