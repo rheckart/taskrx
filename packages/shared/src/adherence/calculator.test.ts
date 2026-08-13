@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
 import type { InstanceStatus, ReminderKind } from "../domain/enums";
 import type { ReminderInstance } from "../domain/reminder";
@@ -361,5 +361,138 @@ describe("computeAdherence", () => {
       expect(stats.daily).toHaveLength(1);
       expect(dayDate(stats, 0)).toBe("2026-07-01");
     });
+  });
+
+  /**
+   * The two figures on the Adherence surface are the headline percentage and the
+   * day-by-day list beneath it, and a person reading them can add the second up.
+   * The C# could not survive that: `AdherenceCalculator.cs:24`'s
+   * `dayTotal = g.Count()` counted Snoozed while the overall total did not, so
+   * the days summed to more than the whole.
+   *
+   * Stated as the invariant rather than as one arithmetic example, because it is
+   * the invariant a reader is checking — no combination of statuses and Kinds may
+   * make the parts disagree with the sum.
+   */
+  describe("the daily breakdown and the overall figure agree", () => {
+    it("sums the daily buckets back to the overall totals", () => {
+      const from = local(2026, 7, 1);
+      const to = from + 4 * MS_PER_DAY;
+      const instances = [
+        instance(from + 8 * MS_PER_HOUR, "completed"),
+        instance(from + 20 * MS_PER_HOUR, "snoozed"),
+        instance(from + MS_PER_DAY + 9 * MS_PER_HOUR, "missed"),
+        instance(from + MS_PER_DAY + 21 * MS_PER_HOUR, "skipped"),
+        instance(from + 2 * MS_PER_DAY + 9 * MS_PER_HOUR, "completed"),
+        instance(from + 2 * MS_PER_DAY + 10 * MS_PER_HOUR, "pending"),
+        instance(from + 2 * MS_PER_DAY + 11 * MS_PER_HOUR, "completed", "task"),
+        instance(from + 3 * MS_PER_DAY + 9 * MS_PER_HOUR, "snoozed", "task"),
+      ];
+
+      const stats = computeAdherence(instances, from, to);
+
+      const summed = stats.daily.reduce(
+        (running, day) => ({
+          completed: running.completed + day.completed,
+          total: running.total + day.total,
+        }),
+        { completed: 0, total: 0 }
+      );
+
+      expect(summed.total).toBe(stats.total);
+      expect(summed.completed).toBe(stats.completed);
+      // And the headline is that sum expressed as a percentage, so a person who
+      // averages the days they can see arrives where the app already is.
+      expect(stats.percent).toBe((summed.completed / summed.total) * 100);
+    });
+
+    it("leaves no day out, so a day of pure failure still lands in the list", () => {
+      const from = local(2026, 7, 1);
+      const to = from + 2 * MS_PER_DAY;
+      const instances = [
+        instance(from + 8 * MS_PER_HOUR, "completed"),
+        instance(from + MS_PER_DAY + 9 * MS_PER_HOUR, "missed"),
+      ];
+
+      const stats = computeAdherence(instances, from, to);
+
+      expect(stats.daily.map((day) => day.date)).toEqual([
+        "2026-07-01",
+        "2026-07-02",
+      ]);
+      expect(dayPercent(stats, 1)).toBe(0);
+    });
+  });
+});
+
+/**
+ * Days are local calendar days on both sides of a clock change.
+ *
+ * The two implementations that fail here are the ones a reader reaches for
+ * first: `toISOString().slice(0, 10)` groups by the UTC date, which puts a
+ * 21:00 dose on tomorrow for every North American offset; and
+ * `Math.floor(ms / 86_400_000)` groups by UTC day-number, which does the same
+ * and additionally shifts by an hour when the offset changes, so one calendar
+ * day's doses split across two buckets. Either one makes the day-by-day list
+ * disagree with the day the person remembers.
+ */
+describe("computeAdherence — daylight saving", () => {
+  const previousTz = process.env.TZ;
+
+  beforeAll(() => {
+    process.env.TZ = "America/New_York";
+  });
+
+  afterAll(() => {
+    process.env.TZ = previousTz;
+  });
+
+  it("keeps a spring-forward day's doses on that one day", () => {
+    // 2027-03-14 is the US spring-forward date: a 23-hour local day.
+    const from = local(2027, 3, 13);
+    const to = local(2027, 3, 15, 23, 59);
+    const instances = [
+      instance(local(2027, 3, 14, 9), "completed"),
+      instance(local(2027, 3, 14, 21), "missed"),
+    ];
+
+    const stats = computeAdherence(instances, from, to);
+
+    expect(stats.daily).toHaveLength(1);
+    expect(dayDate(stats, 0)).toBe("2027-03-14");
+    expect(dayTotal(stats, 0)).toBe(2);
+  });
+
+  it("keeps a fall-back day's doses on that one day", () => {
+    // 2027-11-07 is the US fall-back date: a 25-hour local day, and the one
+    // where 01:30 happens twice.
+    const from = local(2027, 11, 6);
+    const to = local(2027, 11, 8, 23, 59);
+    const instances = [
+      instance(local(2027, 11, 7, 9), "completed"),
+      instance(local(2027, 11, 7, 21), "completed"),
+    ];
+
+    const stats = computeAdherence(instances, from, to);
+
+    expect(stats.daily).toHaveLength(1);
+    expect(dayDate(stats, 0)).toBe("2027-11-07");
+    expect(dayTotal(stats, 0)).toBe(2);
+  });
+
+  it("separates a late dose from the next morning's across a transition", () => {
+    const from = local(2027, 3, 13);
+    const to = local(2027, 3, 15, 23, 59);
+    const instances = [
+      instance(local(2027, 3, 13, 23), "completed"), // late on the eve
+      instance(local(2027, 3, 14, 9), "missed"), // the morning after
+    ];
+
+    const stats = computeAdherence(instances, from, to);
+
+    expect(stats.daily.map((day) => day.date)).toEqual([
+      "2027-03-13",
+      "2027-03-14",
+    ]);
   });
 });

@@ -10,6 +10,11 @@ export default defineConfig({
       reporter: ["text", "html"],
       include: [
         "src/adherence/calculator.ts",
+        // The window the figure covers. Its whole job is local calendar
+        // arithmetic that goes wrong twice a year, and the period is tied to
+        // ADR 0005's lookback — a branch added here without a case is a figure
+        // covering days the sweep cannot account for.
+        "src/adherence/period.ts",
         // The draft is what stands between a typed phrase and a written
         // Reminder: whether the parser was understood, what a failed read falls
         // back to, and which fields a Kind correction may not carry across. A

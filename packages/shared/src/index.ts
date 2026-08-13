@@ -112,6 +112,14 @@ export type { Tier } from "./notifications/tier";
 export { computeAdherence } from "./adherence/calculator";
 export type { AdherenceStats, DayAdherence } from "./adherence/calculator";
 
+/**
+ * The window Adherence is reported over — seven local calendar days, the same
+ * span ADR 0005 gave the sweep, so every day the figure covers is one an
+ * unanswered dose could still be recorded against.
+ */
+export { ADHERENCE_PERIOD_DAYS, adherencePeriod } from "./adherence/period";
+export type { AdherencePeriod } from "./adherence/period";
+
 export { planRefill } from "./refill/planner";
 export type { PlanRefillOptions, RefillDecision } from "./refill/planner";
 

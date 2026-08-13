@@ -21,6 +21,12 @@ export default function AppLayout(): ReactElement {
           headerRight: () => <SyncStatusBadge />,
         }}
       />
+      {/*
+        Titled for the question it answers rather than for the domain word. The
+        glossary's term is Adherence and the screen is named for it in code, but
+        the heading a person reads is the thing they came to find out.
+      */}
+      <Stack.Screen name="adherence" options={{ title: "How it's going" }} />
     </Stack>
   );
 }

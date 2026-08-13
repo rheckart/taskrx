@@ -8,6 +8,89 @@ for commit discipline (POC tags use `0.x.x`).
 
 ## [Unreleased]
 
+### 2026-08-13 — An honest picture of how treatment is going
+
+Closes #16. The adherence calculator was ported from `AdherenceCalculator.cs`
+months ago, fully tested, under the 100% gate — and referenced only in a comment
+on `dose/history.tsx`. Nothing ever called it. That was correct until now: it was
+blocked on #11 for a reason, because before the missed sweep an unanswered dose
+left no row at all, so the calculator counted only the doses a person had
+answered and someone taking 1 of 30 read as 100%. Shipping the surface earlier
+would not have been imprecise, it would have presented a falsehood as a medical
+fact. #11 closed, so the number is now worth showing.
+
+- `feat(shared): the window the figure covers` — `adherence/period.ts`.
+  **Seven local calendar days**, and the same seven as `SWEEP_LOOKBACK_MS` on
+  purpose. ADR 0005 already tied them together — "Adherence is reported by day
+  and reviewed by week, so a sweep that reaches a week back can always account
+  for every day a person is looking at" — and its Consequences section says what
+  a wider period would cost: an unanswered Occurrence older than the lookback is
+  never minted as Missed and never will be, because the bound is measured from
+  the current instant each time. So a thirty-day figure counts the doses someone
+  answered and silently omits the ones they did not, across exactly the absences
+  where the difference matters. That is the flattering number the sweep removed,
+  reappearing past day seven. A 7/30/90 selector was considered and rejected on
+  that ground; a period the sweep can vouch for end to end has no such failure
+  mode, which is worth more than a longer chart.
+
+  Built from `Date`'s local calendar fields, not `now - days * 86_400_000`. The
+  epoch version lands an hour off midnight either side of a clock change, which
+  clips or doubles the first day of the window and leaves that day's bucket
+  disagreeing with every other one. Joins the 100% gate; both mutants killed.
+
+- `test(shared): the two calculator rules the ACs name and no case pinned` — no
+  production change, both were already true. The daily buckets now have to sum
+  back to the overall totals, stated as the invariant rather than one arithmetic
+  example, because that is precisely what the C# got wrong:
+  `AdherenceCalculator.cs:24`'s `dayTotal = g.Count()` counted Snoozed while the
+  overall total did not, so the days added up to more than the whole. And day
+  grouping is pinned across both US transitions — the suite runs at `TZ=UTC`,
+  where `toISOString().slice(0, 10)` passes happily and ships a breakdown that
+  blames Tuesday's misses on Monday for every western offset.
+
+- `feat(mobile): sweep, then read, then compute` — `src/adherence/read.ts`. The
+  order is the ticket. `app/(app)/index.tsx` renders the timeline first and
+  sweeps after, deliberately, because the rows a sweep settles were already on
+  screen as `pending`, which is what they were. Adherence has no such reading:
+  a figure computed before the sweep is wrong in the flattering direction, and
+  there is no intermediate state worth showing because the intermediate state is
+  the bug. Putting the sweep inside the read rather than in the screen is what
+  makes that structural — a second surface cannot forget it, because there is no
+  way to obtain the figure that skips it.
+
+  A failed sweep fails the whole read rather than being swallowed. Computing on
+  top of a sweep that did not finish produces the flattering number silently,
+  and the figure looks like an answer either way; "couldn't load" and a retry
+  beats a confident 100%. The read also does **not** narrow its query by
+  `reminderKind`, though the filter exists and would read fewer rows —
+  medication-only is a rule, it is stated once in the calculator, and stating it
+  again here would put a second copy somewhere no test covers.
+
+- `feat(mobile): the surface` — `app/(app)/adherence.tsx`, reached from the home
+  footer. The headline percentage, the four counts, and the day-by-day
+  breakdown, each day with a bar as well as its two figures so a bad day is
+  findable at a glance rather than by reading seven lines.
+
+  **Snoozed gets its own count and its own sentence.** It lowers the figure the
+  way a miss would, because a dose deferred is a dose not yet taken — but it is
+  not reported *as* a miss, because the person made a decision rather than
+  forgetting. Folding it into `missed` would have been one fewer row and a small
+  lie; leaving it out of the summary would leave the arithmetic not adding up,
+  which is worse here than anywhere else in the app.
+
+  The empty state says "nothing to report yet" rather than rendering 0%, which
+  has the same shape as a week in which every dose was missed. Somebody opening
+  this screen on their first day has not failed at anything.
+
+- `feat(mobile): two formatting rules that could each tell a lie` —
+  `format/percent.ts` reserves both endpoints: `Math.round` turns 99.6% into
+  "100%", so a person who missed a dose is told they missed none, on the one
+  surface built so the number could be trusted. 0.4% shown as "0%" is the same
+  lie pointed the other way. `format/datetime.ts` gains `dayKeyToLocalMs`,
+  because reading a `"YYYY-MM-DD"` bucket key back with `new Date(key)` parses it
+  as **UTC** midnight and renders every day as the day before it for every zone
+  behind Greenwich. Both are covered, and every mutant of both was killed.
+
 ### 2026-08-07 — Type a phrase, get the right Reminder
 
 Closes #15. The natural-language parser has been in this repository since the

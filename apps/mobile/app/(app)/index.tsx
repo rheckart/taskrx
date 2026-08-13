@@ -476,6 +476,9 @@ export default function HomeScreen(): ReactElement {
         <Link href="/backlog" style={styles.footerLink}>
           Backlog
         </Link>
+        <Link href="/adherence" style={styles.footerLink}>
+          How it&apos;s going
+        </Link>
         <Link href="/dose/history" style={styles.footerLink}>
           History
         </Link>
