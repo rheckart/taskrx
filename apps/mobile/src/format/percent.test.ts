@@ -29,9 +29,29 @@ describe("formatPercent", () => {
     expect(formatPercent(100)).toBe("100%");
   });
 
-  it("does not round a missed dose away into a perfect figure", () => {
-    expect(formatPercent(99.6)).toBe("99%");
-    expect(formatPercent(99.9999)).toBe("99%");
+  /**
+   * Stated as the property rather than as two convenient inputs, because the
+   * property is the rule: across the whole domain this function accepts, "100%"
+   * comes back for exactly one value. Two hand-picked numbers would pass just as
+   * well against a guard that clamped only the values somebody thought of.
+   */
+  it("reserves 100% for exactly one input, however close the others get", () => {
+    const nearMisses = [
+      99.5,
+      99.6,
+      99.9,
+      99.99,
+      99.999,
+      99.9999,
+      99.999999,
+      // The float that is as close to 100 as a double can get without being it.
+      100 - Number.EPSILON * 50,
+    ];
+
+    for (const percent of nearMisses) {
+      expect(formatPercent(percent)).not.toBe("100%");
+    }
+    expect(formatPercent(100)).toBe("100%");
   });
 
   it("says 0% when nothing at all was taken", () => {

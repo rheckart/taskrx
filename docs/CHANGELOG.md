@@ -132,7 +132,13 @@ fact. #11 closed, so the number is now worth showing.
   reports adherence nobody achieved, which is this sequence's own failure mode
   in miniature. Understating gives a person something to act on; overstating is
   the thing being fixed. The count beside the figure ("1 of 250") is what says a
-  dose was taken. `format/datetime.ts` gains `dayKeyToLocalMs`, because reading a
+  dose was taken. The guard is justified by this function's own input domain and
+  not by what its caller currently produces: today's only caller cannot reach it,
+  because an imperfect week needs 200 doses before it rounds to 100 — but a
+  formatter that is correct only because of what happens to be upstream is a bug
+  waiting for the upstream to change. Its case says so as a property rather than
+  as two convenient inputs: across the domain, "100%" comes back for exactly one
+  value. `format/datetime.ts` gains `dayKeyToLocalMs`, because reading a
   `"YYYY-MM-DD"` bucket key back with `new Date(key)` parses it as **UTC**
   midnight and renders every day as the day before it for every zone behind
   Greenwich. Both are covered, and every mutant of both was killed.

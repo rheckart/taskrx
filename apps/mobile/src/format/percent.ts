@@ -21,10 +21,21 @@
  * taken. The fraction is already on the row; the percentage does not need to
  * round upward to carry it.
  *
- * With the seven-day period the top-end guard is defensive rather than live:
- * missing one dose of n rounds to 100% only once n reaches about 200, which a
- * week does not reach. It is kept because it becomes reachable the moment the
- * period widens, and because that is the direction where being wrong matters.
+ * ## The guard is about this function's domain, not about its callers
+ *
+ * Worth stating, because the arithmetic invites the opposite conclusion: today's
+ * only caller cannot reach the guard. It fires for a percentage in [99.5, 100),
+ * and the largest fraction below 1 with denominator n is (n - 1)/n, so n must
+ * reach 200 before any imperfect week can round to 100 — about 29 doses a day
+ * across the seven-day period, which no schedule this app offers produces.
+ *
+ * That is not a reason to drop it. This takes a `number`, and its contract has
+ * to hold across the numbers it accepts rather than across the subset one
+ * caller currently produces; a formatter that is only correct because of what
+ * happens to be upstream of it is a bug waiting for the upstream to change.
+ * Nor is it speculative generality — there is no parameter, no hook and no
+ * abstraction here, only two lines that keep the function honest over its own
+ * input domain.
  */
 export function formatPercent(percent: number): string {
   const rounded = Math.round(percent);
