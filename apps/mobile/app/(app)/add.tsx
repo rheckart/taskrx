@@ -26,6 +26,7 @@ import {
 } from "react-native";
 
 import { DrugSearch } from "../../src/components/DrugSearch";
+import { NumberField } from "../../src/components/NumberField";
 import {
   SchedulePicker,
   ScheduleTypeChooser,
@@ -149,55 +150,6 @@ const EXAMPLES: readonly string[] = [
   "call pharmacy friday 2pm",
   "metformin 500mg twice daily 30 pills",
 ];
-
-/**
- * A count the person can clear.
- *
- * An empty box means "no value", which is a different thing from zero — a
- * supply of 0 pills is a claim, and a blank field is the absence of one. Parsing
- * to `undefined` rather than to 0 is what keeps `remindersRepo.create` from
- * writing a refill threshold nobody asked for.
- *
- * The box holds the text and the draft holds the number, which is not
- * redundancy: `pillsPerDose` is a `double`, and rendering `String(parsed)` back
- * into the box would erase the decimal point the moment it was typed — "1."
- * parses to 1, renders as "1", and the "5" of "1.5" has nowhere to land. So the
- * text is authoritative while the field has focus, and only what it parses to
- * reaches the draft. `initialValue`, not `value`: nothing outside re-drives this
- * box, because the fields it edits only exist once a parse has already put a
- * number in them.
- */
-function NumberField({
-  label,
-  initialValue,
-  onChange,
-}: {
-  readonly label: string;
-  readonly initialValue: number | undefined;
-  readonly onChange: (next: number | undefined) => void;
-}): ReactElement {
-  const [text, setText] = useState<string>(
-    initialValue === undefined ? "" : String(initialValue)
-  );
-
-  return (
-    <View>
-      <Text style={styles.label}>{label}</Text>
-      <TextInput
-        style={styles.input}
-        value={text}
-        onChangeText={(next) => {
-          setText(next);
-          const parsed = Number.parseFloat(next);
-          onChange(Number.isFinite(parsed) ? parsed : undefined);
-        }}
-        keyboardType="numeric"
-        placeholder="—"
-        placeholderTextColor="#999"
-      />
-    </View>
-  );
-}
 
 /**
  * A row of mutually exclusive buttons over a small closed set.

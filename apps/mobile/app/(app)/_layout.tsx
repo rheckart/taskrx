@@ -27,6 +27,14 @@ export default function AppLayout(): ReactElement {
         the heading a person reads is the thing they came to find out.
       */}
       <Stack.Screen name="adherence" options={{ title: "How it's going" }} />
+      {/*
+        Titled for the question rather than for the domain word, the same way
+        Adherence is. The glossary's term is Refill and the route is named for
+        it; "Supplies" is what someone is checking when they open it, and it
+        covers the medications that are not running out as well as the ones that
+        are.
+      */}
+      <Stack.Screen name="refill" options={{ title: "Supplies" }} />
     </Stack>
   );
 }

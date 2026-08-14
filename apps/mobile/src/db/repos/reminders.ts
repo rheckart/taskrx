@@ -67,6 +67,15 @@ interface ReminderRow {
 }
 
 export interface CreateReminderRowInput {
+  /**
+   * The row's id, when the caller already has one to honour.
+   *
+   * Omitted by every hand-entry surface — there the id is this repo's to mint.
+   * Supplied by the refill raise, where `planRefill` has already built the whole
+   * `Reminder` being written, id included: generating a second one here would
+   * store a row that is not the one the pure function decided on.
+   */
+  readonly id?: string;
   readonly userId: string;
   readonly kind: ReminderKind;
   readonly name: string;
@@ -229,7 +238,7 @@ function rowToReminder(row: ReminderRow): Reminder {
 export async function create(input: CreateReminderRowInput): Promise<Reminder> {
   const db = await getDb();
   const now = Date.now();
-  const id = generateId();
+  const id = input.id ?? generateId();
 
   await db.runAsync(
     `INSERT INTO reminders (
@@ -508,12 +517,21 @@ export async function softDelete(id: string): Promise<void> {
  * leaves the server's alone.
  *
  * The cost is real rather than theoretical, because `create` above has callers
- * now (`meds/new.tsx`, the stress-seed screen). If one of their enqueues failed
- * after the row write and `reconcilePending` recovered the row through here, a
- * user-chosen `priority` would be dropped from that recovery — the column
- * cannot distinguish a chosen `normal` from a defaulted one. It stays
- * unreachable in practice only because neither caller sets any of the three.
- * The moment one does, this needs provenance the schema does not carry, and a
+ * now (`meds/new.tsx`, `add.tsx`, the stress-seed screen, and the refill raise
+ * in `src/refill/read.ts`). If one of their enqueues failed after the row write
+ * and `reconcilePending` recovered the row through here, a chosen `priority`
+ * would be dropped from that recovery — the column cannot distinguish a chosen
+ * `normal` from a defaulted one.
+ *
+ * `add.tsx` was the first caller to accept that cost — its header argues the
+ * trade — and the refill raise is the second. It writes `priority: 'high'`
+ * because `planRefill` decided a prescription running out is not an ordinary
+ * errand, and the consequence is the same bounded one: a Refill Reminder
+ * recovered through this path reaches the server at the server's default
+ * priority while the device keeps `high`. Nothing about the warning is lost —
+ * the Reminder, its name and its Backlog membership all survive, and ADR 0003
+ * derives Tier from Kind, so no scheduling decision reads `priority` anyway.
+ * Closing the gap properly needs provenance the schema does not carry, and a
  * `sync_status`-style "authored locally" marker is the cheapest shape for it.
  *
  * A no-op for an absent row, matching `softDelete`: there is nothing to

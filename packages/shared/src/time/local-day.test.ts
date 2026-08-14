@@ -1,6 +1,6 @@
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
-import { localDayBounds } from "./local-day";
+import { localCalendarDaysBetween, localDayBounds } from "./local-day";
 
 const MS_PER_HOUR = 3_600_000;
 
@@ -61,6 +61,49 @@ describe("localDayBounds", () => {
   });
 });
 
+describe("localCalendarDaysBetween", () => {
+  it("is zero for two moments on the same day", () => {
+    expect(
+      localCalendarDaysBetween(local(2026, 8, 13, 0, 1), local(2026, 8, 13, 23))
+    ).toBe(0);
+  });
+
+  it("counts the days between, not the hours", () => {
+    // Twenty-five minutes apart, and still a day: the answer is which day the
+    // second moment lands on, not how much of the first one was left.
+    expect(
+      localCalendarDaysBetween(
+        local(2026, 8, 13, 23, 50),
+        local(2026, 8, 14, 0, 15)
+      )
+    ).toBe(1);
+  });
+
+  it("counts a whole week", () => {
+    expect(
+      localCalendarDaysBetween(local(2026, 8, 13, 9), local(2026, 8, 20, 18))
+    ).toBe(7);
+  });
+
+  it("goes negative when the second moment is on an earlier day", () => {
+    expect(
+      localCalendarDaysBetween(local(2026, 8, 13, 9), local(2026, 8, 11, 9))
+    ).toBe(-2);
+  });
+
+  it("counts across a month boundary", () => {
+    expect(
+      localCalendarDaysBetween(local(2026, 2, 26, 9), local(2026, 3, 3, 9))
+    ).toBe(5);
+  });
+
+  it("counts across a year boundary", () => {
+    expect(
+      localCalendarDaysBetween(local(2025, 12, 30, 9), local(2026, 1, 2, 9))
+    ).toBe(3);
+  });
+});
+
 /**
  * The reason this is one function rather than the same six lines in a screen
  * and in the adherence period.
@@ -105,5 +148,30 @@ describe("localDayBounds — daylight saving", () => {
 
     expect(new Date(bounds.start).getHours()).toBe(0);
     expect(new Date(bounds.start).getDate()).toBe(14);
+  });
+
+  /**
+   * The two cases a division by 86_400_000 gets wrong. Spring forward puts 23
+   * hours between the midnights, which truncates to nothing and reports the
+   * next day as today; fall back puts 25 between them, which a ceiling would
+   * report as two. Either way a refill warning keyed off the count arrives on
+   * the wrong day, once each spring and once each autumn.
+   */
+  it("counts one day across spring forward, though only 23 hours passed", () => {
+    expect(
+      localCalendarDaysBetween(local(2027, 3, 14, 9), local(2027, 3, 15, 9))
+    ).toBe(1);
+  });
+
+  it("counts one day across fall back, though 25 hours passed", () => {
+    expect(
+      localCalendarDaysBetween(local(2027, 11, 7, 9), local(2027, 11, 8, 9))
+    ).toBe(1);
+  });
+
+  it("counts a week spanning a transition as seven days", () => {
+    expect(
+      localCalendarDaysBetween(local(2027, 3, 11, 9), local(2027, 3, 18, 9))
+    ).toBe(7);
   });
 });

@@ -1,6 +1,6 @@
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
-import { dayKeyToLocalMs, formatDayKey } from "./datetime";
+import { dayKeyToLocalMs, formatDay, formatDayKey } from "./datetime";
 
 /**
  * The day key round-trip, and the one-line mistake that breaks it.
@@ -89,5 +89,22 @@ describe("formatDayKey", () => {
         day: "numeric",
       })
     );
+  });
+
+  /**
+   * The refill surface has an instant rather than a bucket key — the moment a
+   * supply first cannot cover a dose — and names its day the same way. Asserted
+   * as an agreement rather than as a string, for the locale reason above.
+   */
+  it("names an instant's day the same way it names a key's", () => {
+    expect(formatDay(new Date(2026, 7, 4, 21, 30).getTime())).toBe(
+      formatDayKey("2026-08-04")
+    );
+  });
+
+  it("names the day the instant falls on locally, not the one UTC would", () => {
+    // 2026-08-05 01:00 UTC is still the 4th in New York, and the day a person
+    // runs out is the day they experience.
+    expect(formatDay(Date.UTC(2026, 7, 5, 1))).toBe(formatDayKey("2026-08-04"));
   });
 });

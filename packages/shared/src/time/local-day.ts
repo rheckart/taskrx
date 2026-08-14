@@ -1,5 +1,5 @@
 /**
- * The bounds of a local calendar day.
+ * The bounds of a local calendar day, and the distance between two of them.
  *
  * One definition rather than two: the timeline picks a day to render and the
  * adherence period picks the day its window ends on, and both were computing
@@ -55,4 +55,29 @@ export function localDayBounds(
     start: new Date(year, month, day, 0, 0, 0, 0).getTime(),
     end: new Date(year, month, day, 23, 59, 59, 999).getTime(),
   };
+}
+
+/** The length of a local calendar day on the 363 days it is one. */
+const MS_PER_ORDINARY_DAY = 86_400_000;
+
+/**
+ * How many local calendar days separate the day holding `fromMs` from the day
+ * holding `toMs` — `0` when both fall on the same day, negative when `toMs` is
+ * on an earlier one.
+ *
+ * Counted between midnights rather than between the two instants, so "how many
+ * days until this runs out" answers with the day it lands on and not with how
+ * far into today the question was asked: a supply exhausted at 21:00 tomorrow is
+ * one day away whether it is now 08:00 or 20:00.
+ *
+ * The rounding is what makes the transition days behave. Two midnights 23 or 25
+ * hours apart divide to 0.958 or 1.042 days, and truncating either way loses or
+ * invents a day exactly once every spring and autumn — which on this surface is
+ * a refill warning arriving a day late.
+ */
+export function localCalendarDaysBetween(fromMs: number, toMs: number): number {
+  const from = localDayBounds(fromMs, 0).start;
+  const to = localDayBounds(toMs, 0).start;
+
+  return Math.round((to - from) / MS_PER_ORDINARY_DAY);
 }

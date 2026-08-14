@@ -27,6 +27,17 @@ export default defineConfig({
         "src/parser/reminder-parser.ts",
         "src/parser/schedule-grammar.ts",
         "src/refill/planner.ts",
+        // How long a finite supply lasts and when the warning is raised. It is
+        // the rule a person reorders a prescription on, and every branch in it
+        // is a way of being wrong about a medication running out — an
+        // unrecorded supply read as an empty one, a dose size ignored, a day
+        // miscounted across a clock change.
+        "src/refill/projection.ts",
+        // Which Refill Reminders the Backlog gains and loses. Every branch is a
+        // way of nagging wrongly — a duplicate warning, one withdrawn because
+        // the supply stopped being visible rather than because it was
+        // replenished, or one left standing for a treatment somebody came off.
+        "src/refill/reconcile.ts",
         "src/schedule/horizon.ts",
         "src/schedule/occurrences.ts",
         // Which span a local calendar day occupies, for the timeline and the

@@ -1,9 +1,9 @@
 /**
- * The medication refill planner, ported from `RefillPlanner.Plan` in
- * `TaskRx.Core/RefillPlanner.cs` on the `archive/dotnet-maui` branch (paired
- * with `RefillDecision.cs`).
+ * The Refill Reminder: what to raise, and when.
  *
- * Two differences from the C# source, both deliberate:
+ * Ported from `RefillPlanner.Plan` in `TaskRx.Core/RefillPlanner.cs` on the
+ * `archive/dotnet-maui` branch (paired with `RefillDecision.cs`). Three
+ * differences from the C# source, all deliberate.
  *
  * - **Result shape.** The C# returns a `RefillDecision(bool NeedsRefill,
  *   Reminder? RefillReminder)` record, where `RefillReminder` is `null`
@@ -18,24 +18,32 @@
  *   call `crypto.randomUUID()` or `Date.now()` itself — so the id and
  *   timestamp for a newly planned refill reminder are supplied by the caller
  *   via `PlanRefillOptions` rather than invented here.
- *
- * The threshold formula (`dosesInLookaheadWindow * 3`, RefillPlanner.cs:27) is
- * carried over unchanged — deliberate product behaviour, not a bug — and does
- * not depend on `pillsPerDose` at all; that field is only ever checked for
- * being a positive number.
+ * - **The threshold is gone**, and with it the `dosesInLookaheadWindow`
+ *   parameter. `RefillPlanner.cs:27` raised a refill when `pillsRemaining <=
+ *   dosesInLookaheadWindow * 3` — a comparison of pills against doses, which
+ *   ignores `pillsPerDose` entirely (the C# only ever checks that field for
+ *   being positive) and never has a date to show. Issue #17 rules both out.
+ *   `projectRefill` now decides, from the supply, the Schedule and the warning
+ *   window the Reminder itself carries; this function asks it and builds the
+ *   Reminder. Keeping the old threshold beside the new projection would have
+ *   left two rules that disagree, one of them on screen.
  */
 
 import type { Reminder } from "../domain/reminder";
 import { createReminder } from "../domain/reminder";
-import { dailyTimes } from "../domain/schedule-times";
+import { noneTimes } from "../domain/schedule-times";
 
-/** `dosesInLookaheadWindow * 3` (RefillPlanner.cs:27). */
-const THRESHOLD_DOSES_PER_WINDOW_DOSE = 3;
+import { projectRefill } from "./projection";
 
 export interface PlanRefillOptions {
   /** Id for the generated refill `Reminder`; C#'s `Guid.Empty` (RefillPlanner.cs:37). */
   readonly refillReminderId: string;
-  /** `createdAt`/`updatedAt` for the generated refill `Reminder`, unix ms. */
+  /**
+   * The instant the plan is made: both the `createdAt`/`updatedAt` of the
+   * generated refill `Reminder` and the point the supply is projected forward
+   * from, in unix ms. One value, so the Reminder cannot be stamped at a moment
+   * other than the one it was judged at.
+   */
   readonly now: number;
 }
 
@@ -44,41 +52,50 @@ export type RefillDecision =
   | { readonly needsRefill: true; readonly refillReminder: Reminder };
 
 /**
- * Decides whether `medication` needs a refill reminder within the next
- * `dosesInLookaheadWindow` doses, per `RefillPlanner.Plan` (RefillPlanner.cs:5-49).
+ * What a Refill Reminder for `medication` is called.
  *
- * No refill is planned when: `medication.kind` is not `"medication"`;
- * `pillsRemaining` is absent; `pillsPerDose` is absent or not positive; or
- * `dosesInLookaheadWindow` is not positive. Otherwise a refill is needed when
- * `pillsRemaining <= dosesInLookaheadWindow * 3`.
+ * Exported because it is also the only handle a caller has on one it raised
+ * earlier: the raise has to be idempotent — a screen that can be opened twice
+ * must not leave two — and this name is what identifies the Reminder already
+ * standing. Stated here so the raiser and the check cannot drift apart.
+ */
+export function refillReminderName(medication: Reminder): string {
+  return `Refill ${medication.name}`;
+}
+
+/**
+ * The Refill Reminder to raise for `medication`, if one is due.
+ *
+ * A `task`, not a `medication`: collecting a prescription is an errand, and
+ * ADR 0003 keeps tasks out of the medication notification Horizon so that
+ * raising one can never cost a dose its alarm.
  */
 export function planRefill(
   medication: Reminder,
-  dosesInLookaheadWindow: number,
   options: PlanRefillOptions
 ): RefillDecision {
-  if (medication.kind !== "medication") return { needsRefill: false };
-  if (medication.pillsRemaining === undefined) return { needsRefill: false };
-  if (medication.pillsPerDose === undefined || medication.pillsPerDose <= 0) {
+  const projection = projectRefill(medication, options.now);
+  if (!projection.projected || !projection.needsRefill) {
     return { needsRefill: false };
   }
-  if (dosesInLookaheadWindow <= 0) return { needsRefill: false };
-
-  const threshold = dosesInLookaheadWindow * THRESHOLD_DOSES_PER_WINDOW_DOSE;
-  const needsRefill = medication.pillsRemaining <= threshold;
-
-  if (!needsRefill) return { needsRefill: false };
 
   const refillReminder = createReminder({
     id: options.refillReminderId,
     userId: medication.userId,
     kind: "task",
-    name: `Refill ${medication.name}`,
+    name: refillReminderName(medication),
     createdAt: options.now,
     updatedAt: options.now,
     priority: "high",
     active: true,
-    schedule: dailyTimes([]),
+    // `noneTimes()`, where the C# had a daily schedule with no times. That
+    // variant did not exist when this was ported, and an empty daily schedule
+    // is precisely the misconfiguration `none` was added to replace: it
+    // produces no Occurrences while claiming to be a daily schedule, so the
+    // raised Reminder would reach neither the timeline nor the Backlog and
+    // nobody would ever see it. `none` is what the Backlog is keyed on, and the
+    // Backlog is where an errand with no fixed moment belongs.
+    schedule: noneTimes(),
     tags: [],
     caregiverIds: [],
   });

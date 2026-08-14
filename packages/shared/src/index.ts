@@ -129,8 +129,36 @@ export type { AdherenceStats, DayAdherence } from "./adherence/calculator";
 export { ADHERENCE_PERIOD_DAYS, adherencePeriod } from "./adherence/period";
 export type { AdherencePeriod } from "./adherence/period";
 
-export { planRefill } from "./refill/planner";
+/**
+ * Refill — when a finite supply runs out, and the Reminder raised to act before
+ * it does. `projectRefill` holds the rule; `planRefill` builds what gets raised
+ * and asks it for the verdict, so a surface showing "12 days left" and the
+ * Reminder standing beside it cannot be working from different arithmetic.
+ */
+export { planRefill, refillReminderName } from "./refill/planner";
 export type { PlanRefillOptions, RefillDecision } from "./refill/planner";
+
+export {
+  DEFAULT_REFILL_REMINDER_DAYS,
+  projectRefill,
+} from "./refill/projection";
+export type {
+  RefillOutlook,
+  RefillProjection,
+  UnprojectableReason,
+} from "./refill/projection";
+
+/**
+ * Which Refill Reminders the Backlog should gain and lose. Here rather than in
+ * the device read that performs the writes, because it is a rule and rules are
+ * gated: an earlier draft had raise-skip-retire inside `src/refill/read.ts`,
+ * where nothing covered it.
+ */
+export { reconcileRefills } from "./refill/reconcile";
+export type {
+  ReconcileRefillsInput,
+  RefillReconciliation,
+} from "./refill/reconcile";
 
 /**
  * The natural-language reminder parser, ported from `TaskRx.Core`. Both entry

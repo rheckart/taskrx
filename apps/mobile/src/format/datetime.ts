@@ -40,16 +40,27 @@ export function dayKeyToLocalMs(dayKey: string): number {
 }
 
 /**
- * How this app writes a day on its own — the adherence breakdown's row label.
+ * How this app writes a day on its own — the adherence breakdown's row label,
+ * and the day a supply runs out on.
  *
  * The weekday earns its place: the pattern a person is looking for in a week of
  * doses is usually "the weekend" or "the days I work late", and a bare date
- * makes them count it out.
+ * makes them count it out. On a refill it is doing the same work from the other
+ * end — "Sat" is the day the pharmacy is shut.
  */
-export function formatDayKey(dayKey: string): string {
-  return new Date(dayKeyToLocalMs(dayKey)).toLocaleDateString([], {
+export function formatDay(ms: number): string {
+  return new Date(ms).toLocaleDateString([], {
     weekday: "short",
     month: "short",
     day: "numeric",
   });
+}
+
+/**
+ * The same day, named from a `"YYYY-MM-DD"` adherence bucket key rather than
+ * from an instant. The reading of the key is `dayKeyToLocalMs`'s problem, and
+ * the shape of the label is `formatDay`'s; this is only the join between them.
+ */
+export function formatDayKey(dayKey: string): string {
+  return formatDay(dayKeyToLocalMs(dayKey));
 }

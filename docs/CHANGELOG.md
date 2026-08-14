@@ -8,6 +8,95 @@ for commit discipline (POC tags use `0.x.x`).
 
 ## [Unreleased]
 
+### 2026-08-14 — Know before you run out
+
+Closes #17. The refill planner was the third piece of tested, never-called code
+in the repository, and unlike the adherence calculator it could not simply be
+given a caller: its rule was the wrong rule. `RefillPlanner.cs:27` raised a
+refill when `pillsRemaining <= dosesInLookaheadWindow * 3` — a comparison of
+pills against doses, so `pillsPerDose` was checked for being positive and then
+never used, and a medication taken two at a time was projected to last exactly as
+long as one taken singly. It also had no notion of a date, so "how many days do I
+have left" was not a question it could answer at all. Both are acceptance
+criteria on the ticket.
+
+So the threshold is replaced rather than wrapped. `projectRefill` joins the
+shared package and the 100% gate: the supply is converted to doses, the doses are
+walked against the Reminder's real Schedule to find the moment the supply first
+cannot cover one, and the refill is raised when that moment falls inside the
+warning window the Reminder itself carries. `planRefill` keeps its job of
+building what gets raised and now reads its verdict from there, so the days
+showing on screen and the Reminder standing beside them cannot come from
+different arithmetic.
+
+- **Days remaining is counted between local midnights**, via a new
+  `localCalendarDaysBetween` beside `localDayBounds`. Dividing by 86_400_000
+  puts 23 hours between two midnights each spring and 25 each autumn, which
+  truncates or rounds up to a warning arriving on the wrong day. Pinned across
+  both US transitions.
+
+- **A medication with no recorded supply gets a reason, never a zero.** The
+  projection returns `no-supply`, `no-dose-size`, `stopped` or `not-a-medication`
+  rather than a count, because "nobody has said how many I have" and "the bottle
+  is empty" are opposite facts that a `0` cannot tell apart. The surface renders
+  each as a sentence and offers the box to put it right; the unprojectable rows
+  sort last, since a missing number is not urgent.
+
+- **A supply that outlasts the schedule horizon reports no date** rather than a
+  nearer wrong one. `interval` schedules have no horizon of their own, so the
+  walk stops itself at 512 doses; that cap can only ever answer "further off
+  than I can see".
+
+- **The raise is a Backlog task, and it is reversible.** `planRefill` now builds
+  it with `noneTimes()` where the C# used a daily schedule with no times — the
+  variant `none` was added to replace, which produces no Occurrences while
+  claiming a daily schedule, so the raised Reminder would have reached neither
+  the timeline nor the Backlog. `reconcileRefills` decides what the Backlog
+  should gain and lose: it raises when the projection asks, raises nothing when a
+  warning is already standing (including twice in one pass, for two medications
+  entered under one name), and withdraws one once the supply has been topped up
+  or the medication stopped. Withdrawing otherwise needs the supply to still be
+  visible — clearing the pill count leaves the projection blind rather than
+  reassured, and a warning retired on that basis is the app forgetting rather
+  than the person collecting.
+
+- **Which Refill Reminders to raise is a rule, so it is gated.** It lived in
+  `apps/mobile/src/refill/read.ts` for a first draft, where nothing covered it
+  and the only way to exercise it was a hand-rolled fake of expo-sqlite. The spec
+  is explicit — "if a rule ends up inside a repository, that is a signal the
+  extraction was incomplete" — so it moved to `refill/reconcile.ts`, and the
+  device read is now two queries, the writes, and a sort.
+
+- The surface's wording moved to `src/format/refill.ts` for the same reason
+  `formatPercent` is not inside `adherence.tsx`: on this screen the wrong
+  sentence over the right number is the whole failure mode. It carries
+  `CONTEXT.md`'s vocabulary, so a supply is "enough for 12 more" and never "12
+  more doses" — the glossary reserves Dose for the quantity taken at one time and
+  the adherence headline settled the same point when it became "14 of 18 taken".
+
+- The refill surface titles itself "Supplies", says outright that a task has
+  nothing to run out of, and discloses that a blank warning window means seven
+  days rather than leaving the box a lie about what is in force. `NumberField`
+  moved out of `add.tsx` into `src/components/`, since both surfaces now edit the
+  same three numbers and an empty box has to keep meaning the same thing in both.
+
+`RefillPlannerTests.cs`'s translated cases all pinned the old threshold. They are
+replaced by cases stating the rule that supersedes it — that thirty pills taken
+two at a time last fifteen days and not thirty, and that sixteen pills sit inside
+a seven-day window or outside it depending on how many are swallowed at once.
+
+**Known gap, recorded rather than hidden: nothing consumes the supply.** No path
+decrements `pillsRemaining` when a dose is recorded — the backend's
+`consumePills` has no callers — so a projection only moves when someone edits the
+count by hand. Thirty pills at one a day reads "30 days left" tomorrow as well as
+today, and the warning fires only if the number entered was already inside the
+window. Everything #17 asked for is honest about the numbers it was given, but
+"know before you run out" is only fully true once a taken dose spends a pill.
+That is its own change: it has to settle what a skipped or missed Occurrence
+costs, and it touches every path that answers one. It is also why this read has a
+single caller — until the supply moves on its own, the only thing that changes a
+projection is the edit made on the surface the read feeds.
+
 ### 2026-08-13 — The breakdown covers the period, not just the days with data
 
 Follows #16. `computeAdherence`'s `daily` listed only the days that had counted
