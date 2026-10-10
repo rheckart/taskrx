@@ -471,6 +471,23 @@ class PushWorkerTest {
         }
 
     @Test
+    fun `a server that has not re-authenticated yet spends no attempt, so the entry is never dead-lettered for it`() =
+        rig {
+            fx.reminder("m1")
+            fx.reminder("m2")
+            gateway.onMutation = { _, _ -> error("[CONVEX M(reminders:create)] Uncaught Error: Not authenticated") }
+            repeat(8) { worker.drain() }
+
+            assertEquals(listOf(0, 0), fx.entries().map { it.attempts })
+            assertTrue(fx.container.syncQueue.deadLettered().isEmpty())
+            assertEquals(SyncWorkerStatus.Error, worker.status.value)
+
+            gateway.onMutation = { _, _ -> JsonPrimitive("srv") }
+            worker.drain()
+            assertTrue(fx.entries().isEmpty())
+        }
+
+    @Test
     fun `an exception with no message is still recorded`() =
         rig {
             fx.reminder("m1")

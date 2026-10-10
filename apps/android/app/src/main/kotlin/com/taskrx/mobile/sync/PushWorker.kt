@@ -141,6 +141,16 @@ class PushWorker(
                 markSourceSynced(entry)
                 continue
             }
+            if (NOT_AUTHENTICATED in error) {
+                // The server refused the caller, not the entry: right after a reconnect the
+                // socket is back before the token is. Spending an attempt on that would let a
+                // slow re-authentication dead-letter a recorded dose. Nothing behind this entry
+                // would fare better, so the pass stops; the coordinator retries an Error drain.
+                failed = true
+                state.value = SyncWorkerStatus.Error
+                pause(backoffMillis(1))
+                break
+            }
             queue.markFailed(entry.id, error)
             if (isDeadLetterDue(entry.attempts)) {
                 markSourceError(entry, error)
@@ -260,6 +270,9 @@ class PushWorker(
 
     private companion object {
         const val TAG = "pushWorker"
+
+        /** What `getCurrentUserId` in packages/convex/convex/auth.ts throws with no valid token. */
+        const val NOT_AUTHENTICATED = "Not authenticated"
     }
 }
 
