@@ -39,6 +39,7 @@ class WorkRequestGateway(
                 .setInputData(Data.Builder().putString(TaskNotificationWorker.KEY_SPEC, SpecCodec.encode(spec)).build())
                 .addTag(TAG)
                 .addTag(ID_TAG_PREFIX + spec.id)
+                .addTag(DUE_TAG_PREFIX + spec.fireAt)
                 .build()
         workManager.enqueueUniqueWork(spec.id, ExistingWorkPolicy.REPLACE, request)
     }
@@ -47,9 +48,19 @@ class WorkRequestGateway(
         workManager.cancelUniqueWork(id)
     }
 
+    /**
+     * A request whose time has passed but which has not run yet (WorkManager defers in Doze
+     * until a maintenance window) is not reported: it is on its way to being posted, and a
+     * reschedule pass that saw it would find it in no desired set and cancel it, losing a
+     * reminder that was merely late.
+     */
     override suspend fun armed(): List<ArmedNotification> =
         workManager.getWorkInfosByTagFlow(TAG).first()
             .filter { !it.state.isFinished }
+            .filter { info ->
+                val due = info.tags.firstOrNull { it.startsWith(DUE_TAG_PREFIX) }?.removePrefix(DUE_TAG_PREFIX)?.toLongOrNull()
+                due == null || due > clock()
+            }
             .mapNotNull { info -> info.tags.firstOrNull { it.startsWith(ID_TAG_PREFIX) }?.removePrefix(ID_TAG_PREFIX) }
             .distinct()
             .map { ArmedNotification(it, Tier.Task) }
@@ -57,6 +68,7 @@ class WorkRequestGateway(
     companion object {
         const val TAG = "task-reminder"
         const val ID_TAG_PREFIX = "nid:"
+        const val DUE_TAG_PREFIX = "due:"
     }
 }
 

@@ -65,8 +65,10 @@ class NotificationScheduler(
         val rearm = if (cause == null) emptySet() else tiersToRearm(cause)
 
         // A snooze that has fired is just a leftover record; cancelling it also
-        // clears the ledger's claim on it.
-        snoozes.pruneExpired(now).forEach { gateway(it.tier).cancel(it.id) }
+        // clears the ledger's claim on it. Only a dose's: a task's work request that is due
+        // but not yet run is late (Doze), not stale, and cancelling it would lose the
+        // reminder. A task request that has run is finished and needs no cancel.
+        snoozes.pruneExpired(now).filter { it.tier == Tier.Medication }.forEach { gateway(it.tier).cancel(it.id) }
 
         val desired = desiredNotifications(list, now, zone())
         val armed = medication.armed() + tasks.armed()

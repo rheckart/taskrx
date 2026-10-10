@@ -294,7 +294,7 @@ class ReminderInstancesRepositoryTest {
             reminder("m1")
             val pulled = com.taskrx.core.domain.createReminderInstance(
                 id = "i1", reminderId = "m1", userId = USER, reminderKind = ReminderKind.Medication,
-                scheduledTime = T0, createdAt = 1, updatedAt = 2, status = InstanceStatus.Completed,
+                scheduledTime = T0, createdAt = 1, updatedAt = 2, status = InstanceStatus.Skipped,
                 completedAt = 3, snoozedUntil = 4, snoozeCount = 2, notes = "n",
             )
             val before = container.syncQueue.pending().size
@@ -306,9 +306,23 @@ class ReminderInstancesRepositoryTest {
             assertEquals("synced", database.reminderInstanceDao().get("i1")!!.syncStatus)
             assertEquals(before, container.syncQueue.pending().size)
 
-            container.instances.upsertMany(listOf(PulledReminderInstance(pulled.copy(notes = "edited"), "cvx-1")))
+            container.instances.upsertMany(listOf(PulledReminderInstance(pulled.copy(notes = "edited", updatedAt = 3), "cvx-1")))
             assertEquals("edited", container.instances.get("i1")!!.notes)
             assertEquals(1, container.instances.list(InstanceFilter(USER)).size)
+        }
+
+    @Test
+    fun `upsertMany does not overwrite a Completed row recorded after the pull judged it`() =
+        withFixture(T0) {
+            reminder("m1")
+            val row = container.instances.create(open())
+            val remote = container.instances.get(row.id)!!.copy(updatedAt = row.updatedAt + 1_000)
+            // The answer lands between the pull's read and its write.
+            container.instances.markCompleted(row.id, T0 + 5)
+
+            container.instances.upsertMany(listOf(PulledReminderInstance(remote, "cvx-1")))
+
+            assertEquals(InstanceStatus.Completed, container.instances.get(row.id)!!.status)
         }
 
     @Test

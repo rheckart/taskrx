@@ -84,7 +84,7 @@ class AppContainer(
     val sync: SyncCoordinator? =
         remote?.let { r ->
             val worker = PushWorker(syncQueue, reminders, instances, r.gateway, r.connectivity, userId = { session.signedInUserId })
-            SyncCoordinator(scope, auth, r.ready, worker, PullSync(r.gateway, PullApplier(reminders, instances)), r.connectivity)
+            SyncCoordinator(scope, auth, r.ready, worker, PullSync(r.gateway, PullApplier(reminders, instances) { notifications.rescheduleAfterWrite(session.userId) }), r.connectivity)
         }
 
     init {

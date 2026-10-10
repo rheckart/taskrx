@@ -5,6 +5,7 @@ import com.taskrx.core.domain.ANSWERABLE_STATUSES
 import com.taskrx.core.domain.InstanceStatus
 import com.taskrx.core.domain.ReminderInstance
 import com.taskrx.core.domain.ReminderKind
+import com.taskrx.core.sync.shouldApplyRemoteReminderInstance
 import com.taskrx.mobile.data.db.ReminderInstanceEntity
 import com.taskrx.mobile.data.db.SyncStatus
 import com.taskrx.mobile.data.db.TaskRxDatabase
@@ -165,8 +166,21 @@ class ReminderInstancesRepository(
     suspend fun markSkipped(id: String, notes: String? = null): ReminderInstance =
         updateStatus(id, InstanceStatus.Skipped, notes = notes)
 
-    /** The sweep's verdict, not a user action. */
-    suspend fun markMissed(id: String): ReminderInstance = updateStatus(id, InstanceStatus.Missed)
+    /**
+     * The sweep's verdict, not a user action. Only an unanswered (`pending`) row becomes
+     * Missed: the sweep plans from a snapshot, and the person may answer between that read
+     * and this write. The check is inside the transaction, so an answer that landed first
+     * is returned untouched rather than overwritten.
+     */
+    suspend fun markMissed(id: String): ReminderInstance =
+        database.withTransaction {
+            val existing = checkNotNull(dao.get(id)) { "Reminder instance $id not found" }
+            if (existing.status != InstanceStatus.Pending.wire) {
+                Codecs.toInstance(existing)
+            } else {
+                updateStatus(id, InstanceStatus.Missed)
+            }
+        }
 
     /**
      * The still-answerable Instance for an exact Reminder and moment, if one has already
@@ -230,6 +244,9 @@ class ReminderInstancesRepository(
     suspend fun upsertMany(rows: List<PulledReminderInstance>): Int =
         database.withTransaction {
             for ((instance, convexId) in rows) {
+                // Decided again, inside the transaction: the pull judged these rows against a
+                // read taken before it, and an answer recorded in between must still be safe.
+                if (!shouldApplyRemoteReminderInstance(dao.get(instance.id)?.let(Codecs::toInstance), instance)) continue
                 dao.upsert(
                     ReminderInstanceEntity(
                         id = instance.id,

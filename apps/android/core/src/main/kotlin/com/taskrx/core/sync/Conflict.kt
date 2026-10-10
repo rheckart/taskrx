@@ -66,5 +66,13 @@ fun shouldApplyRemoteReminderInstance(
     if (local.status == InstanceStatus.Completed) {
         return false
     }
+    // The server treats `completed` as terminal (`isCompleted` in reminderInstances.ts) and
+    // ignores any later write to it, so a remote completion is final whatever its timestamp.
+    // Last-write-wins here would leave this device on a `missed` or `snoozed` it stamped
+    // later than a taking recorded elsewhere; pushing that status is a server no-op, so the
+    // two would never converge and this device would score the dose as a miss.
+    if (remote.status == InstanceStatus.Completed) {
+        return true
+    }
     return remote.updatedAt > local.updatedAt
 }

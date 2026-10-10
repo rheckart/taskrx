@@ -60,6 +60,18 @@ class PlanRescheduleTest {
     }
 
     @Test
+    fun `arms again a dose recorded as exact once exact alarms are denied, since revoking cancelled it`() {
+        val plan = planReschedule(listOf(spec("a")), listOf(ArmedNotification("a", Tier.Medication)), exactAllowed = false)
+        assertEquals(listOf("a"), plan.create.map { it.id })
+    }
+
+    @Test
+    fun `denied exact alarms do not re-arm a task`() {
+        val plan = planReschedule(listOf(spec("task-a-1", Tier.Task)), listOf(ArmedNotification("task-a-1", Tier.Task)), exactAllowed = false)
+        assertTrue(plan.create.isEmpty())
+    }
+
+    @Test
     fun `leaves an exactly armed dose alone`() {
         assertTrue(planReschedule(listOf(spec("a")), listOf(ArmedNotification("a", Tier.Medication)), exactAllowed = true).create.isEmpty())
     }

@@ -173,6 +173,29 @@ class MissedSweepRunnerTest {
             assertEquals(1, flaky.run(USER, NOW))
         }
 
+    @Test
+    fun `an answer recorded between the sweep's read and its write is not overwritten`() =
+        withFixture(NOW) {
+            dueAt("r1", NOW - 3 * HOUR)
+            val pending = container.instances.create(CreateReminderInstanceInput(USER, "r1", ReminderKind.Medication, NOW - 3 * HOUR))
+            val inner = RoomSweepStore(container.reminders, container.instances)
+            val racing =
+                MissedSweepRunner(
+                    object : SweepStore by inner {
+                        override suspend fun instancesBetween(userId: String, since: Long, until: Long): List<ReminderInstance> =
+                            inner.instancesBetween(userId, since, until).also {
+                                container.instances.markCompleted(pending.id, NOW - 1)
+                            }
+                    },
+                )
+
+            racing.run(USER, NOW)
+
+            val row = stored().single()
+            assertEquals(InstanceStatus.Completed, row.status)
+            assertEquals(NOW - 1, row.completedAt)
+        }
+
     private class SlowRead(private val inner: SweepStore) : SweepStore by inner {
         override suspend fun instancesBetween(userId: String, since: Long, until: Long): List<ReminderInstance> =
             inner.instancesBetween(userId, since, until).also { delay(100) }

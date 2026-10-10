@@ -281,6 +281,52 @@ class SnoozeTest {
 @RunWith(RobolectricTestRunner::class)
 class ExactAlarmDegradationTest {
     @Test
+    fun `revoking the permission cancels the exact alarms, and the next pass arms them again inexactly`() =
+        withNotifs(NOW) {
+            fx.reminder("med", ReminderKind.Medication, onceTimes(NOW + HOUR))
+            scheduler.rescheduleAll(USER)
+            val id = alarmIds().single()
+            assertNotNull(alarm(id).alarmClockInfo)
+
+            // The system cancels every exact alarm on revoke; the PendingIntent and the ledger survive.
+            ShadowAlarmManager.setCanScheduleExactAlarms(false)
+            alarmManager.cancel(alarm(id).operation!!)
+            assertTrue(alarmIds().isEmpty())
+            scheduler.rescheduleAll(USER)
+
+            assertEquals(listOf(id), alarmIds())
+            assertNull(alarm(id).alarmClockInfo)
+            assertTrue(alarm(id).allowWhileIdle)
+        }
+
+    @Test
+    fun `a task late behind Doze is not cancelled by a foreground pass`() =
+        withNotifs(NOW) {
+            fx.reminder("chore", ReminderKind.Task, onceTimes(NOW + HOUR))
+            scheduler.rescheduleAll(USER)
+            val id = taskNotificationId("chore", NOW + HOUR)
+
+            fx.now = NOW + HOUR + 20 * 60_000L // due 20 minutes ago, work has not run
+            scheduler.rescheduleAll(USER)
+
+            assertEquals(listOf(id), workIds())
+            val work = workManager.getWorkInfosForUniqueWork(id).get().single()
+            androidx.work.testing.WorkManagerTestInitHelper.getTestDriver(context)!!.setInitialDelayMet(work.id)
+            val manager = context.getSystemService(android.app.NotificationManager::class.java)
+            assertNotNull(shadowOf(manager).getNotification(id, 0))
+        }
+
+    @Test
+    fun `a task snooze late behind Doze is not cancelled by the prune`() =
+        withNotifs(NOW) {
+            fx.reminder("chore", ReminderKind.Task, onceTimes(NOW + 10 * DAY))
+            scheduler.snooze("chore", NOW, NOW + HOUR)
+            fx.now = NOW + HOUR + 60_000L
+            scheduler.rescheduleAll(USER)
+            assertTrue(workIds().any { it.startsWith("snooze-") })
+        }
+
+    @Test
     fun `denied exact alarms degrade a dose to an inexact alarm instead of dropping it`() =
         withNotifs(NOW) {
             ShadowAlarmManager.setCanScheduleExactAlarms(false)

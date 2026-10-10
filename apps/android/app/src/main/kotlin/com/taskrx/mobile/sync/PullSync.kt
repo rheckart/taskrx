@@ -33,6 +33,12 @@ import kotlinx.serialization.json.JsonElement
 class PullApplier(
     private val reminders: RemindersRepository,
     private val instances: ReminderInstancesRepository,
+    /**
+     * Called after Reminders were written. A Reminder created or edited on another device (or
+     * restored on first sign-in) must be armed now, not at the next foreground: the foreground
+     * pass at sign-in runs before the first pull has landed.
+     */
+    private val onRemindersApplied: suspend () -> Unit = {},
 ) {
     internal suspend fun apply(remoteReminders: List<ServerReminder>, remoteInstances: List<ServerInstance>) {
         val applicable = ArrayList<PulledReminder>()
@@ -46,6 +52,15 @@ class PullApplier(
             if (shouldApplyRemoteReminder(local, candidate.reminder)) applicable += candidate
         }
         reminders.upsertMany(applicable)
+        if (applicable.isNotEmpty()) {
+            try {
+                onRemindersApplied()
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                Log.e(TAG, "rescheduling after pull failed", e)
+            }
+        }
 
         val resolved = ArrayList<PulledReminderInstance>()
         for (doc in remoteInstances) {

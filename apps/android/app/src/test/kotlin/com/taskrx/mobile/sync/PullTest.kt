@@ -97,6 +97,19 @@ class PullTest {
         }
 
     @Test
+    fun `re-arms notifications after reminders are pulled, and survives that failing`() =
+        withFixture(T0) {
+            var calls = 0
+            val applier = PullApplier(container.reminders, container.instances) { calls++; error("native failure") }
+            applier.run(listOf(reminderDoc()))
+            assertNotNull(container.reminders.get("r1"))
+            assertEquals(1, calls)
+
+            applier.run(emptyList()) // nothing written: nothing to re-arm
+            assertEquals(1, calls)
+        }
+
+    @Test
     fun `reads whole numbers however the library spells them`() =
         withFixture(T0) {
             // 1.78E12, 1780000000000 and 1780000000000.0 are one number to the server.

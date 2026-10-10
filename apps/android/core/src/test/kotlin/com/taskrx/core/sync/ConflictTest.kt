@@ -124,4 +124,14 @@ class ShouldApplyRemoteReminderInstanceTest {
             ),
         )
     }
+
+    @Test
+    fun `a remote completion replaces a local row stamped later, as the server will not take it back`() {
+        for (status in listOf(InstanceStatus.Missed, InstanceStatus.Snoozed, InstanceStatus.Skipped, InstanceStatus.Pending)) {
+            assertTrue(
+                shouldApplyRemoteReminderInstance(row(200, status), row(100, InstanceStatus.Completed)),
+                "$status",
+            )
+        }
+    }
 }

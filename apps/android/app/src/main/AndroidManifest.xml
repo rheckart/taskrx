@@ -18,6 +18,9 @@
     <application
         android:name=".TaskRxApplication"
         android:label="TaskRx"
+        android:allowBackup="false"
+        android:fullBackupContent="false"
+        android:dataExtractionRules="@xml/data_extraction_rules"
         android:supportsRtl="true"
         android:theme="@android:style/Theme.Material.Light.NoActionBar">
         <activity

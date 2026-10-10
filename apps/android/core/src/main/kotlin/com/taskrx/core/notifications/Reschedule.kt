@@ -37,6 +37,8 @@ data class ReschedulePlan(
  *  - A dose armed in a degraded (inexact) form is created again once [exactAllowed] is
  *    true, replacing it in place: "recheck, reschedule, degrade if denied" is a cycle,
  *    and the permission being granted later is the step that closes it.
+ *  - The converse: a dose recorded as exact while exact alarms are now denied was cancelled
+ *    by the system when the permission was revoked, so it is created again (degraded).
  */
 fun planReschedule(
     desired: List<NotificationSpec>,
@@ -53,7 +55,12 @@ fun planReschedule(
             val current = armedById[spec.id]
             current == null ||
                 current.tier in rearm ||
-                (current.degraded && exactAllowed && spec.tier == Tier.Medication)
+                (current.degraded && exactAllowed && spec.tier == Tier.Medication) ||
+                // Revoking SCHEDULE_EXACT_ALARM makes the system cancel every exact alarm the app
+                // holds, while the PendingIntents (and so the app's record) survive. An entry
+                // still marked exact when exact alarms are denied is a memory of an alarm that
+                // is gone: arm it again, which degrades it to an inexact one.
+                (!current.degraded && !exactAllowed && spec.tier == Tier.Medication)
         }
     return ReschedulePlan(cancel, create)
 }
