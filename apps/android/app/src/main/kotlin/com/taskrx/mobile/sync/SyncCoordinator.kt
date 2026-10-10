@@ -1,6 +1,7 @@
 package com.taskrx.mobile.sync
 
 import com.taskrx.core.sync.SyncBadge
+import com.taskrx.core.sync.SyncWorkerStatus
 import com.taskrx.core.sync.syncBadge
 import com.taskrx.mobile.auth.AuthGateway
 import com.taskrx.mobile.auth.AuthStatus
@@ -72,7 +73,15 @@ class SyncCoordinator(
                     // A write made while online goes up now, not at the next foreground. Only
                     // a rise drains: an entry that keeps failing does not grow the count, so
                     // this cannot cut short the worker's backoff.
-                    if (count > seen && connectivity.connected.value != false) launch { worker.drain() }
+                    //
+                    // A drain that ended in Error is run again as long as something waits: the
+                    // first push after a reconnect can reach the server before the Convex
+                    // client has re-authenticated ("Not authenticated"), fails once, and
+                    // nothing else would ever look at the queue again until a foreground. The
+                    // worker's own backoff (it holds the drain while it pauses) spaces the
+                    // retries, and the fifth failure dead-letters, so this does not spin.
+                    val retry = count > 0 && worker.status.value == SyncWorkerStatus.Error
+                    if ((count > seen || retry) && connectivity.connected.value != false) launch { worker.drain() }
                     seen = count
                     delay(pendingPollMs)
                 }

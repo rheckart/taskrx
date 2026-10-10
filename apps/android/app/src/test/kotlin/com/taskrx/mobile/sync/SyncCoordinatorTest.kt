@@ -145,6 +145,18 @@ class SyncCoordinatorTest {
         }
 
     @Test
+    fun `a push that fails once, as the first after a reconnect can, is retried with no foreground and no new write`() =
+        rig {
+            fx.reminder("m1")
+            var failures = 1
+            gateway.onMutation = { _, _ -> if (failures-- > 0) error("Not authenticated") else Json.parseToJsonElement("\"server-id\"") }
+            coordinator.start()
+
+            until("the retried push") { gateway.mutations.size >= 2 }
+            until("a synced badge") { coordinator.badge.value == SyncBadge.Synced }
+        }
+
+    @Test
     fun `a foreground drains while syncing, and signing out stops it`() =
         rig {
             coordinator.start()

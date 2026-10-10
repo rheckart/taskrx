@@ -340,8 +340,13 @@ device_attached() {
   [[ "$state" == "device" ]]
 }
 
+# The nonce must differ between calls, and most calls run inside `$(...)`: a
+# counter incremented in that subshell is lost, so every call sent `n1` and the
+# app (which ignores a link whose path equals the previous one) silently dropped
+# the second of two identical actions - case 9's post-reconnect `queue-count`
+# came back empty as "queue_pending=unknown". Time and pid survive a subshell.
 nonce_counter=0
-next_nonce() { nonce_counter=$((nonce_counter + 1)); printf 'n%s' "$nonce_counter"; }
+next_nonce() { nonce_counter=$((nonce_counter + 1)); printf 'n%s%s%s' "$(date +%s%N)" "$$" "$nonce_counter"; }
 
 # ── Harness invocation (constraints 1 and 3) ───────────────────────────────
 
