@@ -2,6 +2,10 @@ package com.taskrx.mobile
 
 import android.content.Context
 import com.taskrx.mobile.adherence.AdherenceReader
+import com.taskrx.mobile.auth.AuthGateway
+import com.taskrx.mobile.auth.ClerkAuthGateway
+import com.taskrx.mobile.auth.ConvexSession
+import com.taskrx.mobile.auth.LocalOnlyAuth
 import com.taskrx.mobile.data.Clock
 import com.taskrx.mobile.data.IdGenerator
 import com.taskrx.mobile.data.RandomUuid
@@ -12,11 +16,24 @@ import com.taskrx.mobile.data.SystemClock
 import com.taskrx.mobile.data.db.TaskRxDatabase
 import com.taskrx.mobile.notifications.NotificationsModule
 import com.taskrx.mobile.refill.RefillReader
+import com.taskrx.mobile.sync.AndroidConnectivity
+import com.taskrx.mobile.sync.Connectivity
+import com.taskrx.mobile.sync.ConvexDrugSearch
+import com.taskrx.mobile.sync.ConvexGateway
+import com.taskrx.mobile.sync.PullApplier
+import com.taskrx.mobile.sync.PullSync
+import com.taskrx.mobile.sync.PushWorker
+import com.taskrx.mobile.sync.RealConvexGateway
+import com.taskrx.mobile.sync.SyncCoordinator
 import com.taskrx.mobile.sweep.MissedSweepRunner
 import com.taskrx.mobile.sweep.RoomSweepStore
 import com.taskrx.mobile.ui.components.Toaster
 import com.taskrx.mobile.ui.search.DrugSearchService
 import com.taskrx.mobile.ui.search.OfflineDrugSearch
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.flow.StateFlow
 
 /**
  * Manual dependency injection: one object that builds the graph once.
@@ -32,9 +49,17 @@ class AppContainer(
     val database: TaskRxDatabase,
     val clock: Clock = SystemClock,
     newId: IdGenerator = RandomUuid,
-    /** The RxNorm lookup. Offline until the sync step supplies the Convex-backed one. */
-    val drugSearch: DrugSearchService = OfflineDrugSearch,
+    /** The RxNorm lookup. Null means "the Convex-backed one when there is a [remote], else offline". */
+    drugSearch: DrugSearchService? = null,
+    /** Sign-in. [LocalOnlyAuth] in a build with no Clerk key. */
+    val auth: AuthGateway = LocalOnlyAuth,
+    /** The server, when this build has one. Null runs local-only. */
+    remote: Remote? = null,
+    scope: CoroutineScope = CoroutineScope(SupervisorJob() + Dispatchers.Default),
 ) {
+    /** What talks to the server: the gateway, whether Convex holds a valid token, and the network. */
+    class Remote(val gateway: ConvexGateway, val ready: StateFlow<Boolean>, val connectivity: Connectivity)
+
     val syncQueue = SyncQueueRepository(database.syncQueueDao(), clock)
     val reminders = RemindersRepository(database, syncQueue, clock, newId)
     val instances = ReminderInstancesRepository(database, syncQueue, clock, newId)
@@ -45,13 +70,44 @@ class AppContainer(
 
     val notifications = NotificationsModule(context, reminders, clock)
 
-    /** Whose data this is; the sign-in step replaces it (see [Session]). */
-    val session = Session(notifications.currentUser)
+    /** Whose data this is: the Clerk user when signed in, else the local user (see [Session]). */
+    val session = Session(notifications.currentUser, auth)
+
+    val drugSearch: DrugSearchService =
+        drugSearch
+            ?: remote?.let { r ->
+                ConvexDrugSearch(r.gateway) { session.signedInUserId != null && r.ready.value && r.connectivity.isConnected() }
+            }
+            ?: OfflineDrugSearch
+
+    /** Push and pull, running while signed in. Null in a local-only build. */
+    val sync: SyncCoordinator? =
+        remote?.let { r ->
+            val worker = PushWorker(syncQueue, reminders, instances, r.gateway, r.connectivity, userId = { session.signedInUserId })
+            SyncCoordinator(scope, auth, r.ready, worker, PullSync(r.gateway, PullApplier(reminders, instances)), r.connectivity)
+        }
+
+    init {
+        session.follow(scope) { notifications.onForeground() }
+        sync?.start()
+    }
 
     /** The one toast, shown by whichever screen is up when a write confirms. */
     val toaster = Toaster()
 
     companion object {
-        fun create(context: Context): AppContainer = AppContainer(context, TaskRxDatabase.open(context))
+        fun create(context: Context): AppContainer {
+            val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
+            val clerkKey = BuildConfig.CLERK_PUBLISHABLE_KEY
+            val convexUrl = BuildConfig.CONVEX_URL
+            // Both or neither: sync needs a signed-in user AND a server, so a half-configured
+            // build is a local-only build rather than one that signs in and goes nowhere.
+            if (clerkKey.isEmpty() || convexUrl.isEmpty()) return AppContainer(context, TaskRxDatabase.open(context), scope = scope)
+
+            val auth = ClerkAuthGateway(context, clerkKey, scope)
+            val convex = ConvexSession(convexUrl, auth, context.applicationContext, scope)
+            val remote = Remote(RealConvexGateway(convex.client), convex.ready, AndroidConnectivity(context))
+            return AppContainer(context, TaskRxDatabase.open(context), auth = auth, remote = remote, scope = scope)
+        }
     }
 }

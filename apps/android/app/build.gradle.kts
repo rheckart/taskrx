@@ -1,3 +1,5 @@
+import java.util.Properties
+
 plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.compose)
@@ -5,20 +7,33 @@ plugins {
     alias(libs.plugins.ksp)
 }
 
+// CONVEX_URL and CLERK_PUBLISHABLE_KEY come from local.properties (gitignored), or the
+// environment for CI. Empty means "not configured": the app then runs local-only.
+val localProperties =
+    Properties().apply {
+        rootProject.file("local.properties").takeIf { it.exists() }?.inputStream()?.use(::load)
+    }
+
+fun setting(key: String): String = localProperties.getProperty(key) ?: System.getenv(key) ?: ""
+
 android {
     namespace = "com.taskrx.mobile"
     compileSdk = 36
 
     defaultConfig {
         applicationId = "com.taskrx.mobile"
-        minSdk = 24
+        minSdk = 26
         targetSdk = 34
         versionCode = 1
         versionName = "0.1.0"
+
+        buildConfigField("String", "CONVEX_URL", "\"${setting("CONVEX_URL")}\"")
+        buildConfigField("String", "CLERK_PUBLISHABLE_KEY", "\"${setting("CLERK_PUBLISHABLE_KEY")}\"")
     }
 
     buildFeatures {
         compose = true
+        buildConfig = true
     }
 
     testOptions {
@@ -54,6 +69,8 @@ dependencies {
     implementation(libs.room.ktx)
     implementation(libs.androidx.work.runtime)
     implementation(libs.androidx.core.ktx)
+    implementation(libs.convex.mobile)
+    implementation(libs.clerk.android.api)
     ksp(libs.room.compiler)
 
     testImplementation(libs.junit4)

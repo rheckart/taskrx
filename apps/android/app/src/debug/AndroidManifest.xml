@@ -9,7 +9,8 @@
         has neither this filter nor the code behind it (see DeviceHarness in src/release). The
         route is not linked from any UI; the actions behind it are local-only.
     -->
-    <application>
+    <!-- Dev servers (the emulator's http://10.0.2.2:3220) are cleartext; release builds stay HTTPS-only. -->
+    <application android:usesCleartextTraffic="true">
         <activity android:name=".MainActivity">
             <intent-filter>
                 <action android:name="android.intent.action.VIEW" />

@@ -1,6 +1,8 @@
 <?xml version="1.0" encoding="utf-8"?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
 
+    <uses-permission android:name="android.permission.INTERNET" />
+    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
     <!-- Android 13+ runtime permission; requested on the signed-in path, once per run. -->
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
     <!-- User-granted special access; lifecycle: declare, check, send to settings, recheck, reschedule, degrade if denied. -->

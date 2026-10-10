@@ -2,8 +2,11 @@ package com.taskrx.mobile
 
 import android.app.Application
 
-class TaskRxApplication : Application() {
-    val container: AppContainer by lazy { AppContainer.create(this) }
+open class TaskRxApplication : Application() {
+    val container: AppContainer by lazy { createContainer() }
+
+    /** Overridable so unit tests get a local-only graph and never load the Convex native library. */
+    protected open fun createContainer(): AppContainer = AppContainer.create(this)
 
     override fun onCreate() {
         super.onCreate()

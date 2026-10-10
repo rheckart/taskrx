@@ -3,6 +3,7 @@ package com.taskrx.mobile.ui
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
@@ -12,6 +13,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.semantics.contentDescription
@@ -32,6 +34,14 @@ import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
 import com.taskrx.core.domain.ReminderKind
 import com.taskrx.mobile.AppContainer
+import com.taskrx.mobile.auth.AuthGateway
+import com.taskrx.mobile.auth.AuthStatus
+import com.taskrx.mobile.ui.auth.AuthActions
+import com.taskrx.mobile.ui.auth.AuthContent
+import com.taskrx.mobile.ui.auth.AuthViewModel
+import com.taskrx.mobile.ui.components.Centered
+import com.taskrx.mobile.ui.components.SyncStatusBadge
+import kotlinx.coroutines.launch
 import com.taskrx.mobile.ui.adherence.AdherenceContent
 import com.taskrx.mobile.ui.adherence.AdherenceViewModel
 import com.taskrx.mobile.ui.backlog.BacklogActions
@@ -66,16 +76,46 @@ import com.taskrx.mobile.ui.today.TodayViewModel
  * The app shell: one activity, one NavHost, a top bar, and the toast. Mirrors the Expo
  * `(app)` stack.
  *
- * It is local-only until sync lands: there is no sign-in route, and whose data is shown is
- * `AppContainer.session` (see `Session`, the seam sign-in replaces).
+ * With a Clerk key configured, a signed-out person sees the sign-in / sign-up screens and
+ * nothing else; signed in, the day. Without one the app is local-only. Whose data is shown is
+ * `AppContainer.session` (see `Session`).
  *
  * A notification tap arrives as a route string on `TapHandler.route`, resolved by :core's
  * `resolveTap`. It is collected here, once the NavHost exists, so a tap that cold-starts
  * the app is held until there is somewhere to navigate it.
  */
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun TaskRxApp(container: AppContainer, modifier: Modifier = Modifier) {
+    val status by container.auth.status.collectAsState()
+    // A build with no Clerk key has no sign-in and runs local-only, as the Expo app did.
+    when {
+        !container.auth.configured || status is AuthStatus.SignedIn -> AppShell(container, status is AuthStatus.SignedIn, modifier)
+        status == AuthStatus.Loading -> TaskRxTheme { Centered { CircularProgressIndicator() } }
+        else -> TaskRxTheme { AuthScreen(container.auth, modifier) }
+    }
+}
+
+@Composable
+private fun AuthScreen(auth: AuthGateway, modifier: Modifier) {
+    val vm = screenViewModel { AuthViewModel(auth) }
+    val state by vm.state.collectAsState()
+    AuthContent(
+        state,
+        AuthActions(
+            onEmail = vm::setEmail,
+            onCode = vm::setCode,
+            onSend = vm::sendCode,
+            onVerify = vm::verify,
+            onChangeEmail = vm::changeEmail,
+            onMode = vm::switchMode,
+        ),
+        modifier,
+    )
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun AppShell(container: AppContainer, signedIn: Boolean, modifier: Modifier = Modifier) {
     val navController = rememberNavController()
     val backStack by navController.currentBackStackEntryAsState()
     val tapRoute by container.notifications.taps.route.collectAsState()
@@ -98,6 +138,18 @@ fun TaskRxApp(container: AppContainer, modifier: Modifier = Modifier) {
             topBar = {
                 TopAppBar(
                     title = { Text(Routes.titleOf(backStack?.destination?.route)) },
+                    actions = {
+                        if (signedIn) {
+                            container.sync?.let { sync ->
+                                val badge by sync.badge.collectAsState()
+                                SyncStatusBadge(badge)
+                            }
+                            if (backStack?.destination?.route == Routes.TODAY) {
+                                val scope = rememberCoroutineScope()
+                                TextButton(onClick = { scope.launch { container.auth.signOut() } }) { Text("Sign out") }
+                            }
+                        }
+                    },
                     navigationIcon = {
                         if (canGoBack) {
                             TextButton(

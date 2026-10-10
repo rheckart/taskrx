@@ -27,8 +27,8 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
-        // Local-only until sign-in lands: one fixed user, made durable so the boot receiver
-        // re-arms for them. The sign-in step replaces this call (see Session).
+        // Makes the local user durable so the boot receiver re-arms for them before anyone
+        // has signed in; signing in replaces it with the Clerk user (see Session).
         container.session.start()
         // A launch link only runs on a fresh start: a recreated activity (process death, rotation)
         // is handed the ORIGINAL intent again, and replaying a harness write would run it twice.
@@ -53,6 +53,7 @@ class MainActivity : ComponentActivity() {
         // and bring the armed notifications in line with the store.
         container.notifications.onForeground()
         sweepMissed()
+        container.sync?.onForeground()
     }
 
     /**

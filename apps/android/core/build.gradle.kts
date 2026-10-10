@@ -57,6 +57,15 @@ kover {
             "com.taskrx.core.time.LocalDayBounds",
             // sync/conflict.ts
             "com.taskrx.core.sync.ConflictKt*",
+            // sync/worker.ts retry policy, pull.ts badge, the Convex call shapes
+            "com.taskrx.core.sync.PolicyKt*",
+            "com.taskrx.core.sync.BadgeKt*",
+            "com.taskrx.core.sync.SyncWorkerStatus",
+            "com.taskrx.core.sync.SyncBadge",
+            "com.taskrx.core.sync.ServerScheduleKt*",
+            "com.taskrx.core.sync.PushKt*",
+            "com.taskrx.core.sync.PushCall",
+            "com.taskrx.core.sync.PushRejected",
             // backlog/completion.ts
             "com.taskrx.core.backlog.CompletionKt*",
             "com.taskrx.core.backlog.BacklogCompletion",
