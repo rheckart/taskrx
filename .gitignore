@@ -91,3 +91,15 @@ coverage/
 # Misc
 *.pem
 *.key
+
+# Android / Gradle
+.gradle/
+build/
+local.properties
+*.apk
+*.aab
+.kotlin/
+
+# Self-hosted Convex secrets and database dumps
+infra/convex/.env
+infra/convex/backups/
