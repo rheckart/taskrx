@@ -34,4 +34,17 @@ class NotificationsModuleTest {
 
             assertEquals(emptyList(), escaped)
         }
+
+    @Test
+    fun `a reschedule after a write that throws is logged and dropped, not thrown at the write that asked for it`() =
+        withFixture(1_000_000) {
+            val module =
+                NotificationsModule(
+                    ApplicationProvider.getApplicationContext(),
+                    container.reminders,
+                    { error("clock broke") },
+                )
+
+            module.rescheduleAfterWrite(USER)
+        }
 }

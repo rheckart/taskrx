@@ -5,10 +5,14 @@ import android.Manifest
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
+import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Text
+import androidx.lifecycle.lifecycleScope
 import com.taskrx.mobile.notifications.PromptHost
+import com.taskrx.mobile.ui.TaskRxApp
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.launch
+import android.util.Log
 
 class MainActivity : ComponentActivity() {
     private val container get() = (application as TaskRxApplication).container
@@ -21,12 +25,12 @@ class MainActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        enableEdgeToEdge()
+        // Local-only until sign-in lands: one fixed user, made durable so the boot receiver
+        // re-arms for them. The sign-in step replaces this call (see Session).
+        container.session.start()
         container.notifications.taps.handle(intent)
-        setContent {
-            MaterialTheme {
-                Text("TaskRx")
-            }
-        }
+        setContent { TaskRxApp(container) }
     }
 
     override fun onNewIntent(intent: Intent) {
@@ -45,6 +49,24 @@ class MainActivity : ComponentActivity() {
         // Every foreground: re-read the permissions (the prompt itself is once per run)
         // and bring the armed notifications in line with the store.
         container.notifications.onForeground()
+        sweepMissed()
+    }
+
+    /**
+     * On every foreground, so a moment that ran out of time reads as Missed whichever
+     * screen the person lands on (the Today screen also sweeps, after it has drawn the
+     * day). The runner serializes, so the second of the two finds nothing to do.
+     */
+    private fun sweepMissed() {
+        lifecycleScope.launch {
+            try {
+                container.sweep.run(container.session.userId, container.clock())
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                Log.e("sweep", "missed sweep failed", e)
+            }
+        }
     }
 
     override fun onStop() {

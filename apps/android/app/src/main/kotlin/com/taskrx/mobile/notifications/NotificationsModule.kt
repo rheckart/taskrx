@@ -73,6 +73,14 @@ class NotificationsModule(
         }
     }
 
+    /**
+     * The reschedule every write is followed by, so what is armed never lags what is
+     * stored. Logged and dropped for the reason [onForeground] documents: the write it
+     * follows has already happened, and failing it over a notification would lose nothing
+     * the next foreground does not repair.
+     */
+    suspend fun rescheduleAfterWrite(userId: String) = logged("reschedule after write") { scheduler.rescheduleAll(userId) }
+
     /** A system broadcast says the armed state may be stale. */
     fun rearm(cause: RearmCause): Job? {
         val userId = currentUser.get() ?: return null

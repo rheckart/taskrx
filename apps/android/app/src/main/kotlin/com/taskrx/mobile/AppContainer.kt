@@ -14,6 +14,7 @@ import com.taskrx.mobile.notifications.NotificationsModule
 import com.taskrx.mobile.refill.RefillReader
 import com.taskrx.mobile.sweep.MissedSweepRunner
 import com.taskrx.mobile.sweep.RoomSweepStore
+import com.taskrx.mobile.ui.components.Toaster
 
 /**
  * Manual dependency injection: one object that builds the graph once.
@@ -27,7 +28,7 @@ import com.taskrx.mobile.sweep.RoomSweepStore
 class AppContainer(
     context: Context,
     val database: TaskRxDatabase,
-    clock: Clock = SystemClock,
+    val clock: Clock = SystemClock,
     newId: IdGenerator = RandomUuid,
 ) {
     val syncQueue = SyncQueueRepository(database.syncQueueDao(), clock)
@@ -39,6 +40,12 @@ class AppContainer(
     val refills = RefillReader(reminders, newId)
 
     val notifications = NotificationsModule(context, reminders, clock)
+
+    /** Whose data this is; the sign-in step replaces it (see [Session]). */
+    val session = Session(notifications.currentUser)
+
+    /** The one toast, shown by whichever screen is up when a write confirms. */
+    val toaster = Toaster()
 
     companion object {
         fun create(context: Context): AppContainer = AppContainer(context, TaskRxDatabase.open(context))
