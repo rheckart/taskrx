@@ -71,7 +71,7 @@ class PushWorker(
     /** Entries waiting to be pushed for the current user. Dead-lettered ones are not "waiting". */
     suspend fun pendingCount(): Int {
         val user = userId() ?: return 0
-        return queue.pending().count { ownedBy(it, user) }
+        return queue.pending().count { it.isOwnedBy(user) }
     }
 
     suspend fun drain() {
@@ -134,7 +134,7 @@ class PushWorker(
 
         var failed = false
         for (entry in queue.pending()) {
-            if (!ownedBy(entry, user)) continue
+            if (!entry.isOwnedBy(user)) continue
             val error = attempt(entry)
             if (error == null) {
                 queue.remove(entry.id)
@@ -248,17 +248,6 @@ class PushWorker(
         }
     }
 
-    /** An entry is the user's when its payload names them; one that cannot be read is theirs to fail loudly. */
-    private fun ownedBy(entry: SyncQueueEntry, user: String): Boolean {
-        val owner =
-            try {
-                (Json.parseToJsonElement(entry.payload) as? JsonObject)?.get("userId") as? JsonPrimitive
-            } catch (_: IllegalArgumentException) {
-                null
-            }
-        return owner == null || owner.content == user
-    }
-
     private fun JsonObject.string(key: String): String =
         (this[key] as? JsonPrimitive)?.takeIf { it.isString }?.content ?: throw PushRejected("Payload is missing $key")
 
@@ -272,4 +261,15 @@ class PushWorker(
     private companion object {
         const val TAG = "pushWorker"
     }
+}
+
+/** An entry is the user's when its payload names them; one that cannot be read is theirs to fail loudly. */
+internal fun SyncQueueEntry.isOwnedBy(user: String): Boolean {
+    val owner =
+        try {
+            (Json.parseToJsonElement(payload) as? JsonObject)?.get("userId") as? JsonPrimitive
+        } catch (_: IllegalArgumentException) {
+            null
+        }
+    return owner == null || owner.content == user
 }

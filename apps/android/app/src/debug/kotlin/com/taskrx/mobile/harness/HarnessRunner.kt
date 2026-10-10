@@ -1,5 +1,6 @@
 package com.taskrx.mobile.harness
 
+import com.taskrx.mobile.sync.isOwnedBy
 import androidx.room.withTransaction
 import androidx.sqlite.db.SupportSQLiteDatabase
 import com.taskrx.core.domain.Priority
@@ -121,15 +122,25 @@ class HarnessRunner(private val deps: HarnessDeps) {
             HarnessAction.AuthStatus -> deps.signedInUserId()?.let { "signed_in=true user_id=$it" } ?: SIGNED_OUT_REPLY
             HarnessAction.SeedDueReminder -> signedIn { seedDueReminder(spec, it) }
             HarnessAction.InstanceAt -> signedIn { instanceAt(spec, it) }
-            // Answers signed out, unlike its siblings: the queue is not user-scoped and the
-            // depth is diagnostic. The two stay separate because they drain differently - a
-            // dead-lettered row will never leave on reconnect.
-            HarnessAction.QueueCount ->
-                "queue_pending=${deps.syncQueue.pending().size} queue_dead=${deps.syncQueue.deadLettered().size}"
+            // Answers signed out, unlike its siblings. Pending and dead are the current user's,
+            // because that is all their drain will ever send: rows another user queued (the
+            // signed-out runs' leftovers) would otherwise read as a queue that never empties.
+            // They are counted apart as queue_other. Pending and dead stay separate because
+            // they drain differently - a dead-lettered row will never leave on reconnect.
+            HarnessAction.QueueCount -> queueCount(deps.userId())
             HarnessAction.SyncStatus -> "sync_status=${deps.syncStatus()}"
             HarnessAction.CleanupSeeded -> signedIn { cleanupSeeded(it) }
             HarnessAction.PurgeSeeded -> signedIn { purgeSeeded(it) }
         }
+
+    private suspend fun queueCount(user: String): String {
+        val pending = deps.syncQueue.pending()
+        val dead = deps.syncQueue.deadLettered()
+        val mine = pending.count { it.isOwnedBy(user) }
+        val mineDead = dead.count { it.isOwnedBy(user) }
+        val other = pending.size + dead.size - mine - mineDead
+        return "queue_pending=$mine queue_dead=$mineDead queue_other=$other"
+    }
 
     private suspend fun signedIn(block: suspend (String) -> String): String = deps.signedInUserId()?.let { block(it) } ?: SIGNED_OUT_REPLY
 

@@ -308,8 +308,19 @@ class HarnessRunnerTest {
     fun `queue-count and sync-status answer with nobody signed in`() =
         withRig {
             fx.reminder("r") // enqueues a create
-            assertEquals("queue_pending=1 queue_dead=0", run("queue-count"))
+            assertEquals("queue_pending=1 queue_dead=0 queue_other=0", run("queue-count"))
             assertEquals("sync_status=idle", run("sync-status"))
+        }
+
+    @Test
+    fun `queue-count leaves out what another user queued, which this user's drain never sends`() =
+        withRig {
+            fx.reminder("mine")
+            fx.container.reminders.create(
+                CreateReminderInput(userId = "someone-else", kind = ReminderKind.Task, name = "theirs", schedule = dailyTimes(emptyList())),
+            )
+
+            assertEquals("queue_pending=1 queue_dead=0 queue_other=1", run("queue-count"))
         }
 
     // ---- signed-in ---------------------------------------------------------------------------

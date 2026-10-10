@@ -172,6 +172,7 @@
 #      PERMISSION_PROMPT_TIMEOUT_S (default 180 — case 12)
 #      BOOT_UNLOCK_TIMEOUT_S (default 300) BOOT_REGISTER_TIMEOUT_S (default 300)
 #      BOOT_ALARM_COUNT (default 3) CONVEX_DEVICE_PORT (default 3210)
+#      CONVEX_ENV_FILE (Convex CLI env file; unset = packages/convex/.env.local)
 #      SYNC_BUDGET_S (default 60 — criterion 9's own wording)
 #
 # Case 5 is INTERACTIVE on a device with a screen lock: it reboots, then waits
@@ -787,9 +788,14 @@ wait_for_network() {
 #
 # Run from `packages/convex` because the CLI resolves the deployment from the
 # `.env.local` in its own working directory — from the repo root it would
-# scaffold a stray project instead.
+# scaffold a stray project instead. That file names the local `convex dev`
+# backend; to audit the self-hosted one (infra/convex) instead, set
+# CONVEX_ENV_FILE to an env file naming it, which the CLI reads in its place.
+convex_cli() {
+  (cd "$repo_root/packages/convex" && npx convex "$@" ${CONVEX_ENV_FILE:+--env-file "$CONVEX_ENV_FILE"})
+}
 convex_rows() {
-  (cd "$repo_root/packages/convex" && npx convex data "$1" --limit "${2:-50}" 2>/dev/null)
+  convex_cli data "$1" --limit "${2:-50}" 2>/dev/null
 }
 convex_reachable() { convex_rows reminders 1 | grep -q "_id"; }
 convex_has_local_id() { convex_rows reminderInstances 50 | grep -qF "$1"; }
@@ -2281,7 +2287,7 @@ purge_seeded() {
   # the named fields is also order-independent, which the JSON's key order is
   # not.
   local purged_r purged_i
-  convex_out="$( (cd "$repo_root/packages/convex" && npx convex run harnessData:purgeSeeded '{}' 2>&1) | tr -d '\n ' )"
+  convex_out="$(convex_cli run harnessData:purgeSeeded '{}' 2>&1 | tr -d '\n ' )"
   purged_r="$(printf '%s' "$convex_out" | grep -oE '"reminders":[0-9]+' | tail -1 | cut -d: -f2)"
   purged_i="$(printf '%s' "$convex_out" | grep -oE '"instances":[0-9]+' | tail -1 | cut -d: -f2)"
   if [[ -n "$purged_r" && -n "$purged_i" ]]; then
