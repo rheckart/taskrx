@@ -49,11 +49,14 @@ dependencies {
     implementation(libs.kotlinx.coroutines.android)
     implementation(libs.room.runtime)
     implementation(libs.room.ktx)
+    implementation(libs.androidx.work.runtime)
+    implementation(libs.androidx.core.ktx)
     ksp(libs.room.compiler)
 
     testImplementation(libs.junit4)
     testImplementation(libs.robolectric)
     testImplementation(libs.androidx.test.core)
+    testImplementation(libs.androidx.work.testing)
     testImplementation(libs.kotlinx.coroutines.test)
     testImplementation(kotlin("test-junit"))
 }

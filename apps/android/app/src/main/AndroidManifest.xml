@@ -1,6 +1,18 @@
 <?xml version="1.0" encoding="utf-8"?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
 
+    <!-- Android 13+ runtime permission; requested on the signed-in path, once per run. -->
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+    <!-- User-granted special access; lifecycle: declare, check, send to settings, recheck, reschedule, degrade if denied. -->
+    <uses-permission android:name="android.permission.SCHEDULE_EXACT_ALARM" />
+    <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
+    <uses-permission android:name="android.permission.WAKE_LOCK" />
+    <!--
+        Deliberately NOT declared: USE_EXACT_ALARM. Google Play restricts it to apps whose
+        core function is an alarm clock or calendar; medication reminders are not a verifiably
+        approved category. setAlarmClock works with SCHEDULE_EXACT_ALARM alone.
+    -->
+
     <application
         android:name=".TaskRxApplication"
         android:label="TaskRx"
@@ -8,11 +20,30 @@
         android:theme="@android:style/Theme.Material.Light.NoActionBar">
         <activity
             android:name=".MainActivity"
-            android:exported="true">
+            android:exported="true"
+            android:launchMode="singleTop">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity>
+
+        <!-- A medication alarm firing (AlarmManager.setAlarmClock). Private to the app. -->
+        <receiver
+            android:name=".notifications.AlarmReceiver"
+            android:exported="false" />
+
+        <!-- Re-arms after reboot, app update, clock/zone change, or an exact-alarm permission change. -->
+        <receiver
+            android:name=".notifications.RearmReceiver"
+            android:exported="false">
+            <intent-filter>
+                <action android:name="android.intent.action.BOOT_COMPLETED" />
+                <action android:name="android.intent.action.MY_PACKAGE_REPLACED" />
+                <action android:name="android.intent.action.TIME_SET" />
+                <action android:name="android.intent.action.TIMEZONE_CHANGED" />
+                <action android:name="android.app.action.SCHEDULE_EXACT_ALARM_PERMISSION_STATE_CHANGED" />
+            </intent-filter>
+        </receiver>
     </application>
 </manifest>

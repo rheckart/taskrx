@@ -30,7 +30,7 @@ class Fixture(var now: Long) {
             .allowMainThreadQueries()
             .build()
 
-    val container = AppContainer(database, clock = { now }, newId = { "id-${++counter}" })
+    val container = AppContainer(ApplicationProvider.getApplicationContext(), database, clock = { now }, newId = { "id-${++counter}" })
 
     fun close() = database.close()
 

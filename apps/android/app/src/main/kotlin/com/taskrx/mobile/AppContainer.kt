@@ -10,6 +10,7 @@ import com.taskrx.mobile.data.RemindersRepository
 import com.taskrx.mobile.data.SyncQueueRepository
 import com.taskrx.mobile.data.SystemClock
 import com.taskrx.mobile.data.db.TaskRxDatabase
+import com.taskrx.mobile.notifications.NotificationsModule
 import com.taskrx.mobile.refill.RefillReader
 import com.taskrx.mobile.sweep.MissedSweepRunner
 import com.taskrx.mobile.sweep.RoomSweepStore
@@ -24,6 +25,7 @@ import com.taskrx.mobile.sweep.RoomSweepStore
  * The database is a parameter so tests build the same graph over an in-memory Room.
  */
 class AppContainer(
+    context: Context,
     val database: TaskRxDatabase,
     clock: Clock = SystemClock,
     newId: IdGenerator = RandomUuid,
@@ -36,7 +38,9 @@ class AppContainer(
     val adherence = AdherenceReader(sweep, instances)
     val refills = RefillReader(reminders, newId)
 
+    val notifications = NotificationsModule(context, reminders, clock)
+
     companion object {
-        fun create(context: Context): AppContainer = AppContainer(TaskRxDatabase.open(context))
+        fun create(context: Context): AppContainer = AppContainer(context, TaskRxDatabase.open(context))
     }
 }
