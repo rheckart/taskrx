@@ -39,38 +39,16 @@ fun NewReminderContent(
     val copy = copyFor(state.kind)
 
     Column(modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp)) {
-        FieldLabel(if (isTask) "What do you need to do?" else "Name", Modifier.padding(top = 0.dp))
-        OutlinedTextField(
-            value = state.name,
-            onValueChange = vm::setName,
-            modifier = Modifier.fillMaxWidth().padding(top = 4.dp),
-            singleLine = true,
-            placeholder = { Text(copy.namePlaceholder) },
+        ReminderFields(
+            kind = state.kind,
+            name = state.name,
+            onName = vm::setName,
+            detail = if (isTask) state.notes else state.dosage,
+            onDetail = if (isTask) vm::setNotes else vm::setDosage,
+            schedule = state.schedule,
+            onSchedule = vm::setSchedule,
+            now = now,
         )
-
-        if (isTask) {
-            FieldLabel("Notes (optional)")
-            OutlinedTextField(
-                value = state.notes,
-                onValueChange = vm::setNotes,
-                modifier = Modifier.fillMaxWidth().padding(top = 4.dp),
-                singleLine = true,
-                placeholder = { Text("e.g. ask about the repeat prescription") },
-            )
-        } else {
-            FieldLabel("Dosage (optional)")
-            OutlinedTextField(
-                value = state.dosage,
-                onValueChange = vm::setDosage,
-                modifier = Modifier.fillMaxWidth().padding(top = 4.dp),
-                singleLine = true,
-                placeholder = { Text("e.g. 500mg") },
-            )
-        }
-
-        FieldLabel("Schedule type")
-        ScheduleTypeChooser(scheduleTypeOf(state.schedule), vm::setSchedule, now)
-        SchedulePicker(state.schedule, vm::setSchedule, now = now)
 
         if (isTask) {
             HintText(TASK_DELIVERY_NOTE, Modifier.padding(top = 20.dp))

@@ -66,3 +66,7 @@ fun dayHeading(
         1 -> "Tomorrow"
         else -> formatDay(windowStart, zone, locale)
     }
+
+/** "Aug 4": a day with no time and no weekday, for a history heading further back than this week. */
+fun formatMonthDay(ms: Long, zone: ZoneId = ZoneId.systemDefault(), locale: Locale = Locale.getDefault()): String =
+    render(ms, "MMMd", zone, locale)

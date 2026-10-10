@@ -48,11 +48,16 @@ data class NewReminderState(
 class NewReminderViewModel(
     private val app: AppContainer,
     kind: ReminderKind,
+    /** A name already chosen, from a drug-search pick; empty for a blank form. */
+    initialName: String = "",
+    /** The RxNorm concept the name was picked from, stored with the Reminder. Medications only. */
+    private val rxcui: String? = null,
 ) : ViewModel() {
     private val mutable =
         MutableStateFlow(
             NewReminderState(
                 kind = kind,
+                name = initialName,
                 schedule = defaultSchedule(if (kind == ReminderKind.Task) ScheduleType.Once else ScheduleType.Daily, app.clock()),
             ),
         )
@@ -80,6 +85,7 @@ class NewReminderViewModel(
                         userId = userId,
                         kind = current.kind,
                         name = current.name.trim(),
+                        rxcui = if (current.kind == ReminderKind.Medication) rxcui else null,
                         schedule = current.schedule,
                         dosage = if (current.kind == ReminderKind.Medication) dosage else null,
                         instructions = if (current.kind == ReminderKind.Task) notes else null,

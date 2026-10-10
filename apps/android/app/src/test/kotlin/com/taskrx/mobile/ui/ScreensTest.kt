@@ -78,6 +78,11 @@ class ScreensTest {
                 onAdd = { log += "add" },
                 onNewTask = { log += "task" },
                 onNewMedication = { log += "med" },
+                onReminders = { log += "reminders" },
+                onBacklog = { log += "backlog" },
+                onAdherence = { log += "adherence" },
+                onSupplies = { log += "supplies" },
+                onHistory = { log += "history" },
             )
     }
 

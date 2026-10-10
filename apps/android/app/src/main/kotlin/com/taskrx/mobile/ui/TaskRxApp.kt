@@ -19,6 +19,7 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.LifecycleEventEffect
+import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.lifecycle.viewmodel.initializer
 import androidx.lifecycle.viewmodel.viewModelFactory
@@ -31,6 +32,24 @@ import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
 import com.taskrx.core.domain.ReminderKind
 import com.taskrx.mobile.AppContainer
+import com.taskrx.mobile.ui.adherence.AdherenceContent
+import com.taskrx.mobile.ui.adherence.AdherenceViewModel
+import com.taskrx.mobile.ui.backlog.BacklogActions
+import com.taskrx.mobile.ui.backlog.BacklogContent
+import com.taskrx.mobile.ui.backlog.BacklogViewModel
+import com.taskrx.mobile.ui.history.HistoryContent
+import com.taskrx.mobile.ui.history.HistoryViewModel
+import com.taskrx.mobile.ui.reminders.EditReminderContent
+import com.taskrx.mobile.ui.reminders.EditReminderViewModel
+import com.taskrx.mobile.ui.reminders.EditState
+import com.taskrx.mobile.ui.reminders.RemindersActions
+import com.taskrx.mobile.ui.reminders.RemindersContent
+import com.taskrx.mobile.ui.reminders.RemindersViewModel
+import com.taskrx.mobile.ui.search.DrugSearchContent
+import com.taskrx.mobile.ui.search.DrugSearchViewModel
+import com.taskrx.mobile.ui.supplies.SuppliesActions
+import com.taskrx.mobile.ui.supplies.SuppliesContent
+import com.taskrx.mobile.ui.supplies.SuppliesViewModel
 import com.taskrx.mobile.ui.add.AddContent
 import com.taskrx.mobile.ui.add.AddViewModel
 import com.taskrx.mobile.ui.answer.AnswerContent
@@ -130,6 +149,11 @@ private fun AppNavHost(container: AppContainer, navController: NavController) {
                         onAdd = { host.navigate(Routes.ADD) },
                         onNewTask = { host.navigate(Routes.NEW_TASK) },
                         onNewMedication = { host.navigate(Routes.NEW_MEDICATION) },
+                        onReminders = { host.navigate(Routes.REMINDERS) },
+                        onBacklog = { host.navigate(Routes.BACKLOG) },
+                        onAdherence = { host.navigate(Routes.ADHERENCE) },
+                        onSupplies = { host.navigate(Routes.SUPPLIES) },
+                        onHistory = { host.navigate(Routes.HISTORY) },
                     ),
                 banner = {
                     PermissionBanner(permission?.gap, onResolve = { container.notifications.permissions.resolve(it.remedy) })
@@ -171,15 +195,125 @@ private fun AppNavHost(container: AppContainer, navController: NavController) {
         }
 
         composable(Routes.NEW_TASK) { NewReminder(container, ReminderKind.Task, ::backToToday) }
-        composable(Routes.NEW_MEDICATION) { NewReminder(container, ReminderKind.Medication, ::backToToday) }
+        composable(
+            Routes.NEW_MEDICATION_PATTERN,
+            arguments =
+                listOf(
+                    navArgument(Routes.ARG_NAME) { type = NavType.StringType; nullable = true; defaultValue = null },
+                    navArgument(Routes.ARG_RXCUI) { type = NavType.StringType; nullable = true; defaultValue = null },
+                ),
+        ) { entry ->
+            NewReminder(
+                container,
+                ReminderKind.Medication,
+                ::backToToday,
+                initialName = entry.arguments?.getString(Routes.ARG_NAME).orEmpty(),
+                rxcui = entry.arguments?.getString(Routes.ARG_RXCUI),
+            )
+        }
+
+        composable(Routes.BACKLOG) {
+            val vm = screenViewModel { BacklogViewModel(container) }
+            val state by vm.state.collectAsState()
+            LifecycleEventEffect(Lifecycle.Event.ON_RESUME) { vm.refresh() }
+            BacklogContent(
+                state,
+                BacklogActions(
+                    onRefresh = { vm.refresh(pulled = true) },
+                    onComplete = { vm.complete(it) },
+                    onMoveToTimeline = { reminder, schedule -> vm.moveToTimeline(reminder, schedule) },
+                ),
+                now = container.clock::invoke,
+            )
+        }
+
+        composable(Routes.HISTORY) {
+            val vm = screenViewModel { HistoryViewModel(container) }
+            val state by vm.state.collectAsState()
+            LifecycleEventEffect(Lifecycle.Event.ON_RESUME) { vm.refresh() }
+            HistoryContent(state, onRefresh = { vm.refresh(pulled = true) }, now = container.clock())
+        }
+
+        composable(Routes.REMINDERS) {
+            val vm = screenViewModel { RemindersViewModel(container) }
+            val state by vm.state.collectAsState()
+            LifecycleEventEffect(Lifecycle.Event.ON_RESUME) { vm.refresh() }
+            RemindersContent(
+                state,
+                RemindersActions(
+                    onRefresh = { vm.refresh(pulled = true) },
+                    onEdit = { host.navigate(Routes.edit(it.id)) },
+                    onStop = { vm.stop(it) },
+                    onSearchDrug = { host.navigate(Routes.DRUG_SEARCH) },
+                ),
+            )
+        }
+
+        composable(
+            Routes.EDIT_PATTERN,
+            arguments = listOf(navArgument(Routes.ARG_EDIT_ID) { type = NavType.StringType }),
+        ) { entry ->
+            val vm = screenViewModel { EditReminderViewModel(container) }
+            val state by vm.state.collectAsState()
+            val id = entry.arguments?.getString(Routes.ARG_EDIT_ID)
+            LaunchedEffect(id) { vm.load(id) }
+            LaunchedEffect((state as? EditState.Editing)?.saved) {
+                if ((state as? EditState.Editing)?.saved == true) host.popBackStack()
+            }
+            EditReminderContent(state, vm, now = container.clock::invoke)
+        }
+
+        composable(Routes.ADHERENCE) {
+            val vm = screenViewModel { AdherenceViewModel(container) }
+            val state by vm.state.collectAsState()
+            LifecycleEventEffect(Lifecycle.Event.ON_RESUME) { vm.refresh() }
+            AdherenceContent(state, onRefresh = { vm.refresh(pulled = true) })
+        }
+
+        composable(Routes.SUPPLIES) {
+            val vm = screenViewModel { SuppliesViewModel(container) }
+            val state by vm.state.collectAsState()
+            LifecycleEventEffect(Lifecycle.Event.ON_RESUME) { vm.refresh() }
+            SuppliesContent(
+                state,
+                SuppliesActions(
+                    onRefresh = { vm.refresh(pulled = true) },
+                    onEdit = vm::edit,
+                    onCancelEdit = vm::cancelEdit,
+                    onSave = { id, draft -> vm.saveSupply(id, draft) },
+                    onOpenBacklog = { host.navigate(Routes.BACKLOG) },
+                ),
+            )
+        }
+
+        composable(Routes.DRUG_SEARCH) {
+            val vm = screenViewModel { DrugSearchViewModel(container.drugSearch) }
+            val state by vm.state.collectAsState()
+            DrugSearchContent(
+                state,
+                onQuery = { vm.setQuery(it) },
+                onPick = { host.navigate(Routes.newMedication(it.name, it.rxcui)) },
+            )
+        }
     }
 }
 
 @Composable
-private fun NewReminder(container: AppContainer, kind: ReminderKind, onSaved: () -> Unit) {
-    val vm = viewModel<NewReminderViewModel>(factory = viewModelFactory { initializer { NewReminderViewModel(container, kind) } })
+private fun NewReminder(
+    container: AppContainer,
+    kind: ReminderKind,
+    onSaved: () -> Unit,
+    initialName: String = "",
+    rxcui: String? = null,
+) {
+    val vm = screenViewModel { NewReminderViewModel(container, kind, initialName, rxcui) }
     val state by vm.state.collectAsState()
     LaunchedEffect(state.saved) { if (state.saved) onSaved() }
     NewReminderContent(state, vm, now = container.clock::invoke)
 }
 
+
+/** A ViewModel scoped to the destination it is created in, built by [create]. */
+@Composable
+private inline fun <reified T : ViewModel> screenViewModel(crossinline create: () -> T): T =
+    viewModel<T>(factory = viewModelFactory { initializer { create() } })

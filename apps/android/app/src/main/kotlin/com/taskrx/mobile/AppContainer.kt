@@ -15,6 +15,8 @@ import com.taskrx.mobile.refill.RefillReader
 import com.taskrx.mobile.sweep.MissedSweepRunner
 import com.taskrx.mobile.sweep.RoomSweepStore
 import com.taskrx.mobile.ui.components.Toaster
+import com.taskrx.mobile.ui.search.DrugSearchService
+import com.taskrx.mobile.ui.search.OfflineDrugSearch
 
 /**
  * Manual dependency injection: one object that builds the graph once.
@@ -30,6 +32,8 @@ class AppContainer(
     val database: TaskRxDatabase,
     val clock: Clock = SystemClock,
     newId: IdGenerator = RandomUuid,
+    /** The RxNorm lookup. Offline until the sync step supplies the Convex-backed one. */
+    val drugSearch: DrugSearchService = OfflineDrugSearch,
 ) {
     val syncQueue = SyncQueueRepository(database.syncQueueDao(), clock)
     val reminders = RemindersRepository(database, syncQueue, clock, newId)

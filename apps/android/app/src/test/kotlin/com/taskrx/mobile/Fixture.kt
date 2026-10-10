@@ -8,6 +8,8 @@ import com.taskrx.core.domain.Reminder
 import com.taskrx.core.domain.noneTimes
 import com.taskrx.mobile.data.CreateReminderInput
 import com.taskrx.mobile.data.db.TaskRxDatabase
+import com.taskrx.mobile.ui.search.DrugSearchService
+import com.taskrx.mobile.ui.search.OfflineDrugSearch
 import kotlinx.coroutines.runBlocking
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonObject
@@ -22,7 +24,7 @@ const val DAY = 24 * HOUR
  * moves by hand, and ids that count up. Real storage rather than fakes, so the
  * assertions read what was stored.
  */
-class Fixture(var now: Long) {
+class Fixture(var now: Long, drugSearch: DrugSearchService = OfflineDrugSearch) {
     private var counter = 0
 
     val database: TaskRxDatabase =
@@ -30,7 +32,7 @@ class Fixture(var now: Long) {
             .allowMainThreadQueries()
             .build()
 
-    val container = AppContainer(ApplicationProvider.getApplicationContext(), database, clock = { now }, newId = { "id-${++counter}" })
+    val container = AppContainer(ApplicationProvider.getApplicationContext(), database, clock = { now }, newId = { "id-${++counter}" }, drugSearch = drugSearch)
 
     fun close() = database.close()
 

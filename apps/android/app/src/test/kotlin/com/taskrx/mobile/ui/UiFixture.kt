@@ -48,3 +48,9 @@ class ToastLog {
         shown += request
     }
 }
+
+/** The alarms the real gateway has armed with Robolectric's AlarmManager. */
+fun Fixture.alarms() =
+    org.robolectric.Shadows.shadowOf(
+        ApplicationProvider.getApplicationContext<Application>().getSystemService(android.app.AlarmManager::class.java),
+    ).scheduledAlarms

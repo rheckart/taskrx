@@ -1,5 +1,6 @@
 package com.taskrx.mobile.ui
 
+import android.net.Uri
 import com.taskrx.core.notifications.ANSWER_ROUTE
 import com.taskrx.core.notifications.TapTarget
 import com.taskrx.core.notifications.answerRoute
@@ -14,6 +15,27 @@ object Routes {
     const val ADD = "add"
     const val NEW_TASK = "tasks/new"
     const val NEW_MEDICATION = "meds/new"
+    const val BACKLOG = "backlog"
+    const val HISTORY = "dose/history"
+    const val REMINDERS = "meds"
+    const val ADHERENCE = "adherence"
+    const val SUPPLIES = "refill"
+    const val DRUG_SEARCH = "meds/search"
+
+    const val ARG_NAME = "name"
+    const val ARG_RXCUI = "rxcui"
+    const val ARG_EDIT_ID = "id"
+
+    /** The medication form, optionally started from a drug-search pick. */
+    const val NEW_MEDICATION_PATTERN = "$NEW_MEDICATION?$ARG_NAME={$ARG_NAME}&$ARG_RXCUI={$ARG_RXCUI}"
+
+    const val EDIT_PATTERN = "reminders/{$ARG_EDIT_ID}/edit"
+
+    fun edit(reminderId: String): String = "reminders/${Uri.encode(reminderId)}/edit"
+
+    /** The medication form with a picked drug filled in. */
+    fun newMedication(name: String, rxcui: String): String =
+        "$NEW_MEDICATION?$ARG_NAME=${Uri.encode(name)}&$ARG_RXCUI=${Uri.encode(rxcui)}"
 
     const val ARG_REMINDER_ID = "reminderId"
     const val ARG_SCHEDULED_TIME = "scheduledTime"
@@ -33,7 +55,14 @@ object Routes {
         when (route) {
             ADD -> "Add a reminder"
             NEW_TASK -> "New Task"
-            NEW_MEDICATION -> "New Medication"
+            NEW_MEDICATION, NEW_MEDICATION_PATTERN -> "New Medication"
+            BACKLOG -> "Backlog"
+            HISTORY -> "History"
+            REMINDERS -> "My Reminders"
+            ADHERENCE -> "How it's going"
+            SUPPLIES -> "Supplies"
+            DRUG_SEARCH -> "Search RxNorm"
+            EDIT_PATTERN -> "Edit reminder"
             ANSWER_PATTERN -> "Answer a reminder"
             else -> "TaskRx"
         }

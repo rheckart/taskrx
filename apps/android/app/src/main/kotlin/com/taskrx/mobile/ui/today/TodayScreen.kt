@@ -50,8 +50,10 @@ import com.taskrx.mobile.format.kindLabel
 import com.taskrx.mobile.format.rowDescription
 import com.taskrx.mobile.format.statusLabel
 import com.taskrx.mobile.ui.TaskRxColors
+import com.taskrx.mobile.ui.components.Centered
+import com.taskrx.mobile.ui.components.SkeletonList
 
-/** Where each footer link goes. Only the screens that exist are linked; later steps add the rest. */
+/** Where each footer link goes. */
 data class TodayActions(
     val onPreviousDay: () -> Unit,
     val onNextDay: () -> Unit,
@@ -61,6 +63,11 @@ data class TodayActions(
     val onAdd: () -> Unit,
     val onNewTask: () -> Unit,
     val onNewMedication: () -> Unit,
+    val onReminders: () -> Unit,
+    val onBacklog: () -> Unit,
+    val onAdherence: () -> Unit,
+    val onSupplies: () -> Unit,
+    val onHistory: () -> Unit,
 )
 
 /**
@@ -117,7 +124,7 @@ private fun DayBar(state: TodayState, actions: TodayActions) {
 @Composable
 private fun Timeline(state: TodayState, actions: TodayActions) {
     when {
-        state.loading -> SkeletonList(rows = 5)
+        state.loading -> SkeletonList(rows = 5, description = "Loading your day")
         state.error != null ->
             Centered {
                 Text("Failed to load: ${state.error}", color = TaskRxColors.Error, textAlign = TextAlign.Center)
@@ -147,31 +154,6 @@ private fun Timeline(state: TodayState, actions: TodayActions) {
                     }
                 }
             }
-    }
-}
-
-@Composable
-private fun Centered(modifier: Modifier = Modifier, content: @Composable () -> Unit) {
-    Column(
-        modifier.fillMaxSize().padding(24.dp),
-        horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.Center,
-    ) { content() }
-}
-
-/** Placeholder rows while the day reads, so the screen has its shape before it has its content. */
-@Composable
-private fun SkeletonList(rows: Int) {
-    Column(
-        Modifier.fillMaxSize().padding(16.dp).semantics { contentDescription = "Loading your day" },
-        verticalArrangement = Arrangement.spacedBy(16.dp),
-    ) {
-        repeat(rows) {
-            Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                Box(Modifier.fillMaxWidth(0.6f).height(14.dp).clip(RoundedCornerShape(4.dp)).background(TaskRxColors.Divider))
-                Box(Modifier.fillMaxWidth(0.35f).height(12.dp).clip(RoundedCornerShape(4.dp)).background(TaskRxColors.Divider))
-            }
-        }
     }
 }
 
@@ -281,5 +263,10 @@ private fun Footer(actions: TodayActions) {
         Button(onClick = actions.onAdd, shape = RoundedCornerShape(6.dp)) { Text("+ Add", fontWeight = FontWeight.Bold) }
         TextButton(onClick = actions.onNewTask) { Text("+ Task") }
         TextButton(onClick = actions.onNewMedication) { Text("+ Medication") }
+        TextButton(onClick = actions.onReminders) { Text("Reminders") }
+        TextButton(onClick = actions.onBacklog) { Text("Backlog") }
+        TextButton(onClick = actions.onAdherence) { Text("How it's going") }
+        TextButton(onClick = actions.onSupplies) { Text("Supplies") }
+        TextButton(onClick = actions.onHistory) { Text("History") }
     }
 }

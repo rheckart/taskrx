@@ -3,6 +3,10 @@ package com.taskrx.mobile.ui
 import android.app.Application
 import android.content.Intent
 import androidx.compose.ui.test.assertCountEquals
+import androidx.compose.ui.test.hasAnyAncestor
+import androidx.compose.ui.test.hasText
+import androidx.compose.ui.test.performTextReplacement
+import androidx.compose.ui.test.isDialog
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithContentDescription
@@ -17,6 +21,7 @@ import androidx.work.testing.WorkManagerTestInitHelper
 import com.taskrx.core.domain.InstanceStatus
 import com.taskrx.core.domain.ReminderKind
 import com.taskrx.core.domain.dailyTimes
+import com.taskrx.core.domain.noneTimes
 import com.taskrx.core.domain.onceTimes
 import com.taskrx.mobile.DAY
 import com.taskrx.mobile.Fixture
@@ -24,6 +29,9 @@ import com.taskrx.mobile.HOUR
 import com.taskrx.mobile.USER
 import com.taskrx.mobile.data.InstanceFilter
 import com.taskrx.mobile.notifications.TapHandler
+import com.taskrx.mobile.ui.search.DrugMatch
+import com.taskrx.mobile.ui.search.DrugSearchService
+import com.taskrx.mobile.ui.search.OfflineDrugSearch
 import java.time.Instant
 import kotlin.test.AfterTest
 import kotlin.test.BeforeTest
@@ -50,9 +58,11 @@ class AppShellTest {
 
     private lateinit var fx: Fixture
 
+    private var drugSearch: DrugSearchService = OfflineDrugSearch
+
     @BeforeTest
     fun setUp() {
-        fx = Fixture(NOW)
+        fx = Fixture(NOW, drugSearch)
         WorkManagerTestInitHelper.initializeTestWorkManager(
             ApplicationProvider.getApplicationContext<Application>(),
             Configuration.Builder().setExecutor(SynchronousExecutor()).setTaskExecutor(SynchronousExecutor()).build(),
@@ -71,8 +81,8 @@ class AppShellTest {
 
     private fun show() = compose.setContent { TaskRxApp(fx.container) }
 
-    private fun awaitText(text: String) =
-        compose.waitUntil(10_000) { compose.onAllNodesWithText(text).fetchSemanticsNodes().isNotEmpty() }
+    private fun awaitText(text: String, substring: Boolean = false) =
+        compose.waitUntil(10_000) { compose.onAllNodesWithText(text, substring = substring).fetchSemanticsNodes().isNotEmpty() }
 
     private fun awaitGone(text: String) =
         compose.waitUntil(10_000) { compose.onAllNodesWithText(text).fetchSemanticsNodes().isEmpty() }
@@ -265,5 +275,128 @@ class AppShellTest {
         compose.onNodeWithText("Task added").performClick()
 
         compose.waitUntil(5_000) { compose.onAllNodesWithText("Task added").fetchSemanticsNodes().isEmpty() }
+    }
+
+    // ---- the rest of the screens ----
+
+    @Test
+    fun `the footer reaches each of the other screens`() {
+        seed()
+        show()
+        awaitText("Metformin")
+
+        val destinations =
+            listOf(
+                "Reminders" to "+ Find a medication",
+                "Backlog" to "Nothing in your backlog",
+                "How it's going" to "LAST 7 DAYS",
+                "Supplies" to "Supply not tracked",
+                // The sweep has already recorded yesterday's unanswered dose by the time it is opened.
+                "History" to "YESTERDAY",
+            )
+        for ((link, arrived) in destinations) {
+            compose.onNodeWithText(link).performClick()
+            awaitText(arrived)
+            compose.onNodeWithContentDescription("Back").performClick()
+            awaitText("Metformin")
+        }
+    }
+
+    @Test
+    fun `completing a Backlog item records it where it was`() {
+        runBlocking { fx.reminder("garage", ReminderKind.Task, noneTimes(), name = "Sort the garage") }
+        show()
+        awaitText("Nothing scheduled")
+
+        compose.onNodeWithText("Backlog").performClick()
+        awaitText("Sort the garage")
+        compose.onNodeWithContentDescription("Complete Sort the garage").performClick()
+        awaitText("Last done", substring = true)
+
+        compose.onNodeWithText("Sort the garage").assertExists()
+        runBlocking {
+            val recorded = fx.container.instances.list(InstanceFilter(USER)).single()
+            assertEquals(InstanceStatus.Completed, recorded.status)
+            assertEquals(NOW, recorded.scheduledTime)
+        }
+    }
+
+    @Test
+    fun `editing a reminder from the list saves and comes back to the list`() {
+        seed()
+        show()
+        awaitText("Metformin")
+        compose.onNodeWithText("Reminders").performClick()
+        awaitText("Call pharmacy")
+
+        compose.onNodeWithContentDescription("Edit Call pharmacy").performClick()
+        awaitText("Save changes")
+        compose.onNodeWithText("Edit reminder").assertExists()
+        compose.onNodeWithText("Call pharmacy").performTextReplacement("Call pharmacy today")
+        compose.onNodeWithText("Save changes").performScrollTo().performClick()
+
+        awaitText("Call pharmacy today")
+        awaitText("+ Find a medication")
+        runBlocking {
+            assertEquals(setOf("Metformin", "Call pharmacy today"), fx.container.reminders.list(USER).map { it.name }.toSet())
+        }
+    }
+
+    @Test
+    fun `stopping a reminder asks, then it leaves the list but not the history`() {
+        seed()
+        show()
+        awaitText("Metformin")
+        compose.onNodeWithText("Reminders").performClick()
+        awaitText("Call pharmacy")
+
+        compose.onNodeWithContentDescription("Stop Call pharmacy").performClick()
+        awaitText("Stop Call pharmacy?")
+        compose.onNode(hasText("Stop") and hasAnyAncestor(isDialog())).performClick()
+
+        awaitGone("Call pharmacy")
+        compose.onNodeWithText("Metformin").assertExists()
+        runBlocking { assertEquals(false, fx.container.reminders.get("chore")!!.active) }
+    }
+
+    @Test
+    fun `drug search offline says so`() {
+        show()
+        awaitText("Nothing scheduled")
+        compose.onNodeWithText("Reminders").performClick()
+        compose.onNodeWithText("+ Find a medication").performClick()
+        awaitText("Type a drug name to search RxNorm.")
+
+        compose.onNodeWithText("Drug name").performTextInput("met")
+
+        awaitText("Drug search is not available offline")
+    }
+
+    @Test
+    fun `a drug picked from search starts the medication form with its name and RxCUI`() {
+        drugSearch =
+            object : DrugSearchService {
+                override suspend fun search(query: String) = listOf(DrugMatch("6809", "metformin hydrochloride 500 MG"))
+            }
+        tearDown()
+        setUp()
+        show()
+        awaitText("Nothing scheduled")
+        compose.onNodeWithText("Reminders").performClick()
+        compose.onNodeWithText("+ Find a medication").performClick()
+        compose.onNodeWithText("Drug name").performTextInput("met")
+        awaitText("metformin hydrochloride 500 MG")
+
+        compose.onNodeWithText("metformin hydrochloride 500 MG").performClick()
+        awaitText("Save medication")
+        compose.onNodeWithText("metformin hydrochloride 500 MG").assertExists()
+        compose.onNodeWithText("Save medication").performScrollTo().performClick()
+
+        awaitGone("Save medication")
+        runBlocking {
+            val saved = fx.container.reminders.list(USER).single()
+            assertEquals("metformin hydrochloride 500 MG", saved.name)
+            assertEquals("6809", fx.container.reminders.getRxcui(saved.id))
+        }
     }
 }
