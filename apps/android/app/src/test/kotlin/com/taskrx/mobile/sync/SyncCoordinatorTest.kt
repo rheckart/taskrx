@@ -132,6 +132,19 @@ class SyncCoordinatorTest {
         }
 
     @Test
+    fun `a write made while online is pushed without waiting for a foreground`() =
+        rig {
+            coordinator.start()
+            until("synced") { coordinator.badge.value == SyncBadge.Synced }
+            // Let the drain that starting sync triggers finish, so the write below can only
+            // reach the server through a drain of its own.
+            delay(200)
+
+            fx.reminder("m1")
+            until("the push") { gateway.mutations.isNotEmpty() }
+        }
+
+    @Test
     fun `a foreground drains while syncing, and signing out stops it`() =
         rig {
             coordinator.start()

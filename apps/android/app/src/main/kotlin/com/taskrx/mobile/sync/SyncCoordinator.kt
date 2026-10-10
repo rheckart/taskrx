@@ -21,8 +21,9 @@ import kotlin.coroutines.coroutineContext
  * Starts and stops sync with the sign-in state, and publishes the badge.
  *
  * Sync runs only while signed in AND [ready] (the server holds a valid token): the pull is
- * subscribed and the push drained on connectivity regained. A foreground also drains
- * ([onForeground]). Signing out cancels it all; the local store is left as it is.
+ * subscribed and the push drained on connectivity regained and when new work is queued.
+ * A foreground also drains ([onForeground]). Signing out cancels it all; the local store
+ * is left as it is.
  */
 class SyncCoordinator(
     private val scope: CoroutineScope,
@@ -64,8 +65,15 @@ class SyncCoordinator(
                 }
             }
             launch {
+                var seen = 0
                 while (true) {
-                    hasPending.value = worker.pendingCount() > 0
+                    val count = worker.pendingCount()
+                    hasPending.value = count > 0
+                    // A write made while online goes up now, not at the next foreground. Only
+                    // a rise drains: an entry that keeps failing does not grow the count, so
+                    // this cannot cut short the worker's backoff.
+                    if (count > seen && connectivity.connected.value != false) launch { worker.drain() }
+                    seen = count
                     delay(pendingPollMs)
                 }
             }
