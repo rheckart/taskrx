@@ -8,6 +8,7 @@ import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.lifecycle.lifecycleScope
+import com.taskrx.mobile.harness.DeviceHarness
 import com.taskrx.mobile.notifications.PromptHost
 import com.taskrx.mobile.ui.TaskRxApp
 import kotlinx.coroutines.CancellationException
@@ -29,14 +30,16 @@ class MainActivity : ComponentActivity() {
         // Local-only until sign-in lands: one fixed user, made durable so the boot receiver
         // re-arms for them. The sign-in step replaces this call (see Session).
         container.session.start()
-        container.notifications.taps.handle(intent)
+        // A launch link only runs on a fresh start: a recreated activity (process death, rotation)
+        // is handed the ORIGINAL intent again, and replaying a harness write would run it twice.
+        if (savedInstanceState != null || !DeviceHarness.handle(this, container, intent)) container.notifications.taps.handle(intent)
         setContent { TaskRxApp(container) }
     }
 
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
         setIntent(intent)
-        container.notifications.taps.handle(intent)
+        if (!DeviceHarness.handle(this, container, intent)) container.notifications.taps.handle(intent)
     }
 
     override fun onStart() {

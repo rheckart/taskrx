@@ -34,11 +34,15 @@ class NotificationsModule(
     val platform = AndroidPermissionPlatform(context, alarmApi, PromptRecord(prefs))
     val permissions = PermissionGate(platform)
 
+    /** The two Tiers' subsystems. Public for the debug device harness, which reads what each holds. */
+    val medicationGateway: TierGateway = AlarmClockGateway(context, alarmApi, ArmedLedger(prefs))
+    val taskGateway: TierGateway = LazyTaskGateway { WorkRequestGateway(workManager(), clock) }
+
     val scheduler =
         NotificationScheduler(
             reminders = reminders,
-            medication = AlarmClockGateway(context, alarmApi, ArmedLedger(prefs)),
-            tasks = LazyTaskGateway { WorkRequestGateway(workManager(), clock) },
+            medication = medicationGateway,
+            tasks = taskGateway,
             snoozes = snoozes,
             exactAllowed = alarmApi::canScheduleExactAlarms,
             clock = clock,

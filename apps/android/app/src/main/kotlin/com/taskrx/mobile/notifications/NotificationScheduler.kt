@@ -51,34 +51,39 @@ class NotificationScheduler(
      * when the system has told us the armed state may be stale.
      */
     suspend fun rescheduleAll(userId: String, cause: RearmCause? = null): ReschedulePlan =
-        armReminders(reminders.list(userId), cause)
+        // The READ is inside the lock, not before it. A pass that read first and then
+        // waited its turn would diff against Reminders another pass had since changed,
+        // and cancel what that pass had just armed (a foreground racing a write).
+        lock.withLock { arm(reminders.list(userId), cause) }
 
     /** [rescheduleAll] without the read, for a caller that already holds the Reminders. */
     suspend fun armReminders(list: List<Reminder>, cause: RearmCause? = null): ReschedulePlan =
-        lock.withLock {
-            val now = clock()
-            val rearm = if (cause == null) emptySet() else tiersToRearm(cause)
+        lock.withLock { arm(list, cause) }
 
-            // A snooze that has fired is just a leftover record; cancelling it also
-            // clears the ledger's claim on it.
-            snoozes.pruneExpired(now).forEach { gateway(it.tier).cancel(it.id) }
+    private suspend fun arm(list: List<Reminder>, cause: RearmCause?): ReschedulePlan {
+        val now = clock()
+        val rearm = if (cause == null) emptySet() else tiersToRearm(cause)
 
-            val desired = desiredNotifications(list, now, zone())
-            val armed = medication.armed() + tasks.armed()
-            val plan = planReschedule(desired, armed, exactAllowed(), rearm)
+        // A snooze that has fired is just a leftover record; cancelling it also
+        // clears the ledger's claim on it.
+        snoozes.pruneExpired(now).forEach { gateway(it.tier).cancel(it.id) }
 
-            val tierOf = armed.associate { it.id to it.tier }
-            for (id in plan.cancel) gateway(tierOf.getValue(id)).cancel(id)
+        val desired = desiredNotifications(list, now, zone())
+        val armed = medication.armed() + tasks.armed()
+        val plan = planReschedule(desired, armed, exactAllowed(), rearm)
 
-            // `desired` is doses first, so if arming throws part-way, what is already
-            // armed is the medication set.
-            for (spec in plan.create) gateway(spec.tier).arm(spec)
+        val tierOf = armed.associate { it.id to it.tier }
+        for (id in plan.cancel) gateway(tierOf.getValue(id)).cancel(id)
 
-            if (cause != null) {
-                for (spec in snoozesToRearm(snoozes.all(), cause, now)) gateway(spec.tier).arm(spec)
-            }
-            plan
+        // `desired` is doses first, so if arming throws part-way, what is already
+        // armed is the medication set.
+        for (spec in plan.create) gateway(spec.tier).arm(spec)
+
+        if (cause != null) {
+            for (spec in snoozesToRearm(snoozes.all(), cause, now)) gateway(spec.tier).arm(spec)
         }
+        return plan
+    }
 
     /**
      * Defers one Occurrence. Returns false, arming nothing, for a Reminder this device

@@ -18,6 +18,14 @@ import com.taskrx.mobile.notifications.CurrentUser
 class Session(private val current: CurrentUser) {
     val userId: String get() = current.get() ?: LOCAL_USER_ID
 
+    /**
+     * The signed-in subject, or null when nobody is. Always null until phase 5: the fixed
+     * local user is not a subject, and the device harness reads this to report
+     * `signed_in=false` (so the signed-in cases come out unevaluated rather than run
+     * against an id nothing authenticated). Sign-in replaces this with the Clerk user id.
+     */
+    val signedInUserId: String? get() = null
+
     /** Makes the user durable, so a reboot before the first write still re-arms for them. */
     fun start() {
         if (current.get() == null) current.set(LOCAL_USER_ID)
