@@ -55,6 +55,27 @@ If either is empty the build is **local-only**: no sign-in screen, no sync, one 
 drug search says it needs a connection. Both must be set for sign-in and sync. Changing them needs a
 rebuild; a stale build is the usual cause of "it is still offline".
 
+## Release build
+
+    ./gradlew :app:assembleRelease      # app/build/outputs/apk/release/app-release.apk
+
+Release builds are shrunk with R8 (minify and resource shrinking) and signed with the upload key.
+The keep rules the libraries do not ship themselves are in `app/proguard-rules.pro`.
+
+- Signing is read from `local.properties` or, failing that, from environment variables of the same
+  name: `RELEASE_STORE_FILE` (path to the keystore), `RELEASE_STORE_PASSWORD`, `RELEASE_KEY_ALIAS`,
+  `RELEASE_KEY_PASSWORD`. If any of the four is missing the build still succeeds and produces
+  `app-release-unsigned.apk`, which is what CI and the gate get. Never commit these values.
+- The upload keystore is `~/.taskrx-keys/taskrx-upload.jks` (alias `taskrx-upload`), outside the repo.
+  **Back it up** (and its password) somewhere safe. If it is lost, Play will not accept updates to
+  the app. Check the signature with `apksigner verify --print-certs <apk>`.
+- Release builds refuse cleartext HTTP (only the debug manifest allows it), so `CONVEX_URL` must be
+  an `https://` URL for a release build to sync.
+- A passing `assembleRelease` does not prove R8 kept what the reflection-heavy libraries need
+  (convex-mobile over JNA, Clerk, Room, kotlinx.serialization). A missing keep rule shows up as a
+  crash at run time. Install the release APK and exercise sign-in, sync and a reminder before
+  trusting it.
+
 ## Sign-in and sync
 
 - Email passcode sign-in and sign-up (`ui/auth`), over the Clerk Android SDK (`auth/ClerkAuthGateway`).
