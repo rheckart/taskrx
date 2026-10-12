@@ -64,7 +64,7 @@ class AppContainer(
 
     val syncQueue = SyncQueueRepository(database.syncQueueDao(), clock)
     val reminders = RemindersRepository(database, syncQueue, clock, newId)
-    val instances = ReminderInstancesRepository(database, syncQueue, clock, newId)
+    val instances = ReminderInstancesRepository(database, syncQueue, reminders, clock, newId)
 
     val sweep = MissedSweepRunner(RoomSweepStore(reminders, instances))
     val adherence = AdherenceReader(sweep, instances)

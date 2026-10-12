@@ -5,6 +5,7 @@ import com.taskrx.core.domain.ANSWERABLE_STATUSES
 import com.taskrx.core.domain.InstanceStatus
 import com.taskrx.core.domain.ReminderInstance
 import com.taskrx.core.domain.ReminderKind
+import com.taskrx.core.refill.supplyAfterDose
 import com.taskrx.core.sync.shouldApplyRemoteReminderInstance
 import com.taskrx.mobile.data.db.ReminderInstanceEntity
 import com.taskrx.mobile.data.db.SyncStatus
@@ -51,6 +52,8 @@ data class PulledReminderInstance(
 class ReminderInstancesRepository(
     private val database: TaskRxDatabase,
     private val queue: SyncQueueRepository,
+    /** Where a taken dose spends its pills, through the Reminder's ordinary update (so it syncs). */
+    private val reminders: RemindersRepository,
     private val clock: Clock = SystemClock,
     private val newId: IdGenerator = RandomUuid,
 ) {
@@ -98,6 +101,7 @@ class ReminderInstancesRepository(
                     updatedAt = now,
                 ),
             )
+            spendSupply(input.reminderId, from = null, to = input.status)
             requireNotNull(get(id)) { "Failed to read inserted reminder instance" }
         }
 
@@ -149,8 +153,22 @@ class ReminderInstancesRepository(
                 SyncOperation.Update,
                 payloadOf(updated, updatedAt = now),
             )
+            spendSupply(existing.reminderId, from = InstanceStatus.fromWire(existing.status), to = status)
             Codecs.toInstance(updated)
         }
+
+    /**
+     * A taken dose draws the bottle down, in the same transaction as the answer: either both
+     * are written or neither, so a dose can never be recorded without its pills or the other
+     * way round. Which changes spend, and how much, is `supplyAfterDose` in :core. The new
+     * count is written as an ordinary Reminder update, so it queues and syncs like any edit;
+     * the server's `consumePills` is deliberately left uncalled, or the dose would count twice.
+     */
+    private suspend fun spendSupply(reminderId: String, from: InstanceStatus?, to: InstanceStatus) {
+        val reminder = reminders.get(reminderId) ?: return
+        val remaining = supplyAfterDose(reminder.kind, from, to, reminder.pillsRemaining, reminder.pillsPerDose) ?: return
+        reminders.update(reminderId, UpdateReminderPatch(pillsRemaining = Change.To(remaining)))
+    }
 
     /**
      * Completed - the one word for both Kinds. A medication is not "taken" here; the

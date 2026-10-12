@@ -8,6 +8,23 @@ for commit discipline (POC tags use `0.x.x`).
 
 ## [Unreleased]
 
+### 2026-10-12 — A taken dose spends its pills
+
+Settles the "known gap" left open on 2026-08-14. The rule is `supplyAfterDose` in `:core`, and
+the Android app applies it inside the same transaction as the answer.
+
+- Only a change into Completed spends: `pillsPerDose`, or one when none is set (the server's
+  `consumePills` default). The count stops at zero.
+- Skipped, Missed and Snoozed cost nothing. A dose backfilled as already taken (the Backlog)
+  spends once. Answering the same dose twice, or taking it after a snooze, spends once.
+- A task, or a medication with no count, spends nothing.
+- A Completed that arrives from the server spends nothing here; the other device spent the pills
+  and the new count comes with the Reminder document.
+- Nothing moves an Instance out of Completed, so there is no refund path.
+- The new count is written as an ordinary Reminder update, so it queues and syncs like any
+  edit. The server's `consumePills` is still not called: calling it as well would count the
+  dose twice.
+
 ### 2026-08-14 — Know before you run out
 
 Closes #17. The refill planner was the third piece of tested, never-called code

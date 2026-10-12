@@ -11,6 +11,7 @@ import kotlin.test.assertFailsWith
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
 import kotlinx.serialization.json.JsonNull
+import kotlinx.serialization.json.double
 import kotlinx.serialization.json.int
 import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.long
@@ -287,6 +288,111 @@ class ReminderInstancesRepositoryTest {
             container.instances.markCompleted(row.id, T0)
             assertEquals("pending", dao.get(row.id)!!.syncStatus)
         }
+
+
+    private suspend fun com.taskrx.mobile.Fixture.pills(id: String = "m1") = container.reminders.get(id)!!.pillsRemaining
+
+    private suspend fun com.taskrx.mobile.Fixture.bottle(remaining: Double = 30.0, perDose: Double? = null, id: String = "m1") =
+        reminder(id) { it.copy(pillsRemaining = remaining, pillsPerDose = perDose) }
+
+    @Test
+    fun `taking a dose spends its pills, and the new count goes up as a Reminder update`() =
+        withFixture(T0) {
+            bottle(30.0, perDose = 2.0)
+            val dose = container.instances.create(open())
+            container.syncQueue.pending().forEach { container.syncQueue.remove(it.id) }
+
+            container.instances.markCompleted(dose.id, T0)
+
+            assertEquals(28.0, pills())
+            val update = queuePayloads().single { it["localId"]!!.jsonPrimitive.content == "m1" }
+            assertEquals(28.0, update["pillsRemaining"]!!.jsonPrimitive.double)
+            assertEquals(SyncOperation.Update, container.syncQueue.pending().first { it.entityId == "m1" }.operation)
+        }
+
+    @Test
+    fun `answering the same dose twice spends once`() =
+        withFixture(T0) {
+            bottle(30.0)
+            val dose = container.instances.create(open())
+
+            container.instances.markCompleted(dose.id, T0)
+            container.instances.markCompleted(dose.id, T0 + 1)
+
+            assertEquals(29.0, pills())
+        }
+
+    @Test
+    fun `a skipped, snoozed or missed dose leaves the bottle alone`() =
+        withFixture(T0) {
+            bottle(30.0)
+            container.instances.markSkipped(container.instances.create(open(scheduledTime = T0)).id)
+            container.instances.markSnoozed(container.instances.create(open(scheduledTime = T0 + 1)).id, T0 + 900_000)
+            container.instances.markMissed(container.instances.create(open(scheduledTime = T0 + 2)).id)
+
+            assertEquals(30.0, pills())
+        }
+
+    @Test
+    fun `a dose backfilled as already taken spends its pills`() =
+        withFixture(T0) {
+            bottle(30.0)
+
+            container.instances.create(open().copy(status = InstanceStatus.Completed, completedAt = T0))
+
+            assertEquals(29.0, pills())
+        }
+
+    @Test
+    fun `a dose taken after a snooze spends once`() =
+        withFixture(T0) {
+            bottle(30.0)
+            val dose = container.instances.create(open())
+            container.instances.markSnoozed(dose.id, T0 + 900_000)
+
+            container.instances.markCompleted(dose.id, T0 + 900_000)
+
+            assertEquals(29.0, pills())
+        }
+
+    @Test
+    fun `the last pill reads zero, and a dose after it does not go below`() =
+        withFixture(T0) {
+            bottle(1.0)
+            container.instances.markCompleted(container.instances.create(open(scheduledTime = T0)).id, T0)
+            container.instances.markCompleted(container.instances.create(open(scheduledTime = T0 + 1)).id, T0 + 1)
+
+            assertEquals(0.0, pills())
+        }
+
+    @Test
+    fun `a medication with no count, and a task, spend nothing and queue no Reminder update`() =
+        withFixture(T0) {
+            reminder("m1")
+            reminder("t1", ReminderKind.Task)
+            container.syncQueue.pending().forEach { container.syncQueue.remove(it.id) }
+
+            container.instances.markCompleted(container.instances.create(open("m1")).id, T0)
+            container.instances.markCompleted(container.instances.create(open("t1", kind = ReminderKind.Task)).id, T0)
+
+            assertNull(pills("m1"))
+            assertTrue(container.syncQueue.pending().none { it.entityType == SyncEntityType.Reminder })
+        }
+
+    @Test
+    fun `a Completed dose pulled from the server spends nothing here`() =
+        withFixture(T0) {
+            bottle(30.0)
+            val pulled = com.taskrx.core.domain.createReminderInstance(
+                id = "i1", reminderId = "m1", userId = USER, reminderKind = ReminderKind.Medication,
+                scheduledTime = T0, createdAt = 1, updatedAt = 2, status = InstanceStatus.Completed, completedAt = 3,
+            )
+
+            container.instances.upsertMany(listOf(PulledReminderInstance(pulled, "cvx-1")))
+
+            assertEquals(30.0, pills())
+        }
+
 
     @Test
     fun `upsertMany writes pulled rows as synced with no enqueue, and updates in place`() =
