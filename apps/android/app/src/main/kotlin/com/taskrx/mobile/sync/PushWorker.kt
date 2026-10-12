@@ -136,6 +136,7 @@ class PushWorker(
         for (entry in queue.pending()) {
             if (!entry.isOwnedBy(user)) continue
             val error = attempt(entry)
+            if (error != null) Log.w(TAG, "push of ${entry.entityType} ${entry.operation} failed: $error")
             if (error == null) {
                 queue.remove(entry.id)
                 markSourceSynced(entry)

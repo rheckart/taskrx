@@ -688,7 +688,7 @@ dismiss_permission_dialog() {
 # are unaffected, which is why this went unnoticed until a route with a real
 # query string was driven. Wrap in single quotes so the device shell strips
 # them and `am` sees one argument.
-deep_link() { adb_shell am start -a android.intent.action.VIEW -d "'$1'" >/dev/null 2>&1; }
+deep_link() { wake_screen; adb_shell am start -a android.intent.action.VIEW -d "'$1'" >/dev/null 2>&1; }
 
 # ── UI reads (cases 8 and 9) ───────────────────────────────────────────────
 #
@@ -704,7 +704,15 @@ deep_link() { adb_shell am start -a android.intent.action.VIEW -d "'$1'" >/dev/n
 # messages, calendar invites and addresses. Nothing below ever echoes a dump,
 # and every value that reaches the JSON report is one this script matched or
 # derived. These reports get committed — keep it that way.
-ui_dump()  { adb_run exec-out uiautomator dump /dev/tty 2>/dev/null | tr '>' '\n'; }
+#
+# A SLEEPING SCREEN DUMPS NOTHING. With no screen lock the display still times
+# out (60s on the Pixel), and case 9 spends longer than that waiting for
+# airplane mode, so its dose screen "never rendered" and its tap landed on a
+# dozing display. Measured on a Pixel 8 Pro: mWakefulness=Dozing, an empty
+# dump, two UNREACHABLE and two FAILs that were all the instrument. Case 8's
+# shade read went the same way. Waking first costs nothing on a lit screen.
+ui_dump()  { wake_screen; adb_run exec-out uiautomator dump /dev/tty 2>/dev/null | tr '>' '\n'; }
+wake_screen() { adb_shell input keyevent KEYCODE_WAKEUP >/dev/null 2>&1; sleep 1; }
 
 # ── The screen does not use the space you think it does. ───────────────────
 # `toLocaleString` on a modern ICU separates the time from AM/PM with U+202F
@@ -737,8 +745,15 @@ ui_shows() { ui_text | grep -qF "$1"; }
 # there is no such node, which callers must treat as "could not be driven"
 # rather than as a failed assertion.
 tap_node() {
-  local needle="$1" line bounds x1 y1 x2 y2
-  line="$(ui_dump | grep -F "$needle" | head -1)"
+  local needle="$1" line bounds x1 y1 x2 y2 try
+  # Read more than once. On the Pixel a single dump missed a "Mark taken" that a
+  # screenshot taken in the same second shows on screen (case 9, offline), and a
+  # missed read is reported as the app's failure to render.
+  for try in 1 2 3 4 5; do
+    line="$(ui_dump | grep -F "$needle" | head -1)"
+    [[ -n "$line" ]] && break
+    sleep 2
+  done
   [[ -z "$line" ]] && return 1
   bounds="$(printf '%s' "$line" | grep -oE 'bounds="\[[0-9]+,[0-9]+\]\[[0-9]+,[0-9]+\]"' | head -1)"
   [[ -z "$bounds" ]] && return 1
@@ -1711,6 +1726,7 @@ case8_notification_tap() {
     return
   fi
 
+  wake_screen
   adb_shell cmd statusbar expand-notifications >/dev/null 2>&1
   sleep 3
   if ! tap_node "$label"; then
