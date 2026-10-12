@@ -1,0 +1,59 @@
+# Self-hosted Convex on its own Postgres. Postgres is NOT published on the host.
+name: taskrx-convex
+services:
+  postgres:
+    image: postgres:17
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: convex
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set in .env}
+      # Convex uses a database named after INSTANCE_NAME with '-' -> '_'.
+      POSTGRES_DB: ${INSTANCE_NAME_DB:-taskrx}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U convex -d ${INSTANCE_NAME_DB:-taskrx}"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+  backend:
+    image: ghcr.io/get-convex/convex-backend:latest
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    ports:
+      - "${PORT:-3210}:3210"
+      - "${SITE_PROXY_PORT:-3211}:3211"
+    volumes:
+      - data:/convex/data
+    environment:
+      INSTANCE_NAME: ${INSTANCE_NAME:-taskrx}
+      INSTANCE_SECRET: ${INSTANCE_SECRET:?set in .env}
+      # No database name and no query params in the URL.
+      POSTGRES_URL: postgresql://convex:${POSTGRES_PASSWORD}@postgres:5432
+      DO_NOT_REQUIRE_SSL: "1"
+      CONVEX_CLOUD_ORIGIN: ${CONVEX_CLOUD_ORIGIN:-http://127.0.0.1:3210}
+      CONVEX_SITE_ORIGIN: ${CONVEX_SITE_ORIGIN:-http://127.0.0.1:3211}
+      DOCUMENT_RETENTION_DELAY: "172800"
+      DISABLE_BEACON: "true"
+    healthcheck:
+      test: curl -f http://localhost:3210/version
+      interval: 5s
+      start_period: 10s
+
+  dashboard:
+    image: ghcr.io/get-convex/convex-dashboard:latest
+    restart: unless-stopped
+    depends_on:
+      backend:
+        condition: service_healthy
+    ports:
+      - "${DASHBOARD_PORT:-6791}:6791"
+    environment:
+      NEXT_PUBLIC_DEPLOYMENT_URL: ${CONVEX_CLOUD_ORIGIN:-http://127.0.0.1:3210}
+
+volumes:
+  pgdata:
+  data:

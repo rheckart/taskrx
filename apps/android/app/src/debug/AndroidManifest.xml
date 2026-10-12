@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <!--
+        The device harness's deep link (taskrx:///harness/<action>/<id>/<delay>/<nonce>), and the
+        answer-screen link the harness's signed-in cases open (taskrx:///dose/log?...).
+
+        DEBUG BUILDS ONLY. This file does not exist in the release source set, so a release APK
+        has neither this filter nor the code behind it (see DeviceHarness in src/release). The
+        route is not linked from any UI; the actions behind it are local-only.
+    -->
+    <!-- Dev servers (the emulator's http://10.0.2.2:3220) are cleartext; release builds stay HTTPS-only. -->
+    <application android:usesCleartextTraffic="true">
+        <activity android:name=".MainActivity">
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="taskrx" />
+            </intent-filter>
+        </activity>
+    </application>
+</manifest>
