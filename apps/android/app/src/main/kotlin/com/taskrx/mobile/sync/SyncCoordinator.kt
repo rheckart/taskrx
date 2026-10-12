@@ -47,7 +47,9 @@ class SyncCoordinator(
         scope.launch {
             combine(auth.status, ready) { status, isReady -> status is AuthStatus.SignedIn && isReady }
                 .collectLatest { active ->
-                    if (active) runSync() else hasPending.value = false
+                    // Signed in but between tokens is not "nothing waiting": the badge must not
+                    // read Synced over a dose that is still queued while the client logs in again.
+                    if (active) runSync() else if (auth.status.value !is AuthStatus.SignedIn) hasPending.value = false
                 }
         }
     }

@@ -5,12 +5,18 @@ import android.util.Log
 import com.clerk.api.Clerk
 import com.clerk.api.network.serialization.ClerkResult
 import com.clerk.api.session.GetTokenOptions
+import com.taskrx.core.sync.backoffMillis
 import dev.convex.android.AuthProvider
 import dev.convex.android.AuthState
 import dev.convex.android.ConvexClientWithAuth
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.collectLatest
+import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.filterNotNull
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.SharingStarted
@@ -46,14 +52,10 @@ class ClerkConvexAuthProvider : AuthProvider<String> {
             is ClerkResult.Failure -> {
                 val error = result.throwable ?: IllegalStateException("Clerk token request failed")
                 // Otherwise silent: the library swallows it and the server just says "Not authenticated".
-                Log.w(TAG, "Clerk token request failed", error)
+                Log.w(TAG, "Clerk token request failed: $error")
                 Result.failure(error)
             }
         }
-    }
-
-    private companion object {
-        const val TAG = "convexAuth"
     }
 }
 
@@ -96,10 +98,24 @@ class ConvexSession(
     }
 
     init {
+        scope.launch { client.authState.collect { Log.i(TAG, "convex auth state: ${it::class.simpleName}") } }
+        scope.launch {
+            keepLoggedIn(
+                combine(auth.status, client.authState) { status, state ->
+                    when {
+                        status !is AuthStatus.SignedIn -> false
+                        state is AuthState.Unauthenticated -> true
+                        state is AuthState.AuthLoading -> null
+                        else -> false
+                    }
+                },
+                ::reauthenticate,
+            )
+        }
         scope.launch {
             auth.status.collect { status ->
                 when (status) {
-                    is AuthStatus.SignedIn -> loginWithRetry()
+                    is AuthStatus.SignedIn -> reauthenticate()
                     AuthStatus.SignedOut -> client.logout(context)
                     AuthStatus.Loading -> Unit
                 }
@@ -108,5 +124,30 @@ class ConvexSession(
     }
 }
 
+/**
+ * Asks for a login again, with growing pauses, for as long as the user is signed in but the
+ * client is logged out of Convex ([stranded] true; null while a login is under way, which
+ * neither stops nor restarts the count).
+ *
+ * The client gives up for good when one login fails: it reads Unauthenticated, [ready] goes
+ * false, sync stops, so no call is refused and nothing would ever ask again. Right after a
+ * reconnect Clerk itself fails for a few seconds ("Failed to load client"), so a single
+ * re-login can land in exactly that window. Only signing out or a successful login ends this.
+ */
+internal suspend fun keepLoggedIn(
+    stranded: Flow<Boolean?>,
+    relogin: () -> Unit,
+    pause: suspend (Long) -> Unit = { delay(it) },
+) {
+    stranded.filterNotNull().distinctUntilChanged().collectLatest { isStranded ->
+        var attempt = 1
+        while (isStranded) {
+            pause(backoffMillis(attempt++))
+            relogin()
+        }
+    }
+}
+
+private const val TAG = "convexAuth"
 private const val LOGIN_ATTEMPTS = 3
 private const val LOGIN_RETRY_MS = 1_000L

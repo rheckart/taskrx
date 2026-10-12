@@ -1858,6 +1858,16 @@ case9_offline_queue_drain() {
   local inst inst_id
   inst="$(harness instance-at "$rid" "$fire_at")"
   inst_id="$(printf '%s' "$inst" | grep -oE 'completed=[^ ]+' | head -1 | cut -d= -f2)"
+  # One more tap when nothing was recorded AND the button is still up: on the
+  # Pixel about one tap in five never reached the app (screenshots before and
+  # after show the same untouched screen, and the app logged nothing). With no
+  # completed row there is nothing a second tap could answer twice.
+  if [[ -z "$inst_id" || "$inst_id" == none ]] && tap_node "Mark taken"; then
+    note "case 9: the first Mark taken tap recorded nothing; tapped again"
+    sleep 4
+    inst="$(harness instance-at "$rid" "$fire_at")"
+    inst_id="$(printf '%s' "$inst" | grep -oE 'completed=[^ ]+' | head -1 | cut -d= -f2)"
+  fi
   if [[ -z "$inst_id" || "$inst_id" == none ]]; then
     airplane_off
     harness cleanup-seeded x 0 "$HARNESS_SLOW_BUDGET_S" >/dev/null

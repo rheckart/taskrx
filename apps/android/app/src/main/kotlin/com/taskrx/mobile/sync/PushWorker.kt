@@ -78,6 +78,7 @@ class PushWorker(
         // Claimed before the first suspension: two callers (foreground and the connectivity
         // listener) must not both pass the guard and drain the same snapshot.
         if (!running.tryLock()) return
+        Log.i(TAG, "drain started")
         try {
             drainLocked()
         } catch (e: CancellationException) {
@@ -88,6 +89,7 @@ class PushWorker(
             Log.e(TAG, "drain failed", e)
             state.value = SyncWorkerStatus.Error
         } finally {
+            Log.i(TAG, "drain ended: ${state.value}")
             // Every path out releases it, offline and failed included. A flag left set would
             // make the NEXT drain silently do nothing.
             running.unlock()

@@ -105,6 +105,20 @@ class SyncCoordinatorTest {
         }
 
     @Test
+    fun `logging in again does not make waiting work read synced`() =
+        rig {
+            fx.reminder("m1")
+            gateway.onMutation = { _, _ -> error("down") }
+            coordinator.start()
+            until("a pending badge") { coordinator.badge.value == SyncBadge.Pending }
+
+            ready.value = false
+            delay(200)
+
+            assertEquals(SyncBadge.Pending, coordinator.badge.value)
+        }
+
+    @Test
     fun `it waits for the server to hold a token`() =
         rig {
             ready.value = false
