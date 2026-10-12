@@ -42,7 +42,7 @@ enum class Action { Idle, Completing, Skipping, Snoozing, Done }
 
 /**
  * The answer surface: what became of one Occurrence, of either Kind. Mirrors
- * apps/mobile/app/(app)/dose/log.tsx.
+ * archive/expo-rn:apps/mobile/app/(app)/dose/log.tsx.
  *
  * Reached from a tap on the timeline and from a notification tap; both carry the same
  * pairing of Reminder and scheduled time. Nothing about it is medication-specific except

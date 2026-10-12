@@ -61,7 +61,7 @@ class RoomSweepStore(
 }
 
 /**
- * The missed sweep's persistence pass: read, plan, write (apps/mobile/src/sweep/runner.ts).
+ * The missed sweep's persistence pass: read, plan, write (archive/expo-rn:apps/mobile/src/sweep/runner.ts).
  *
  * Every rule about what is Missed lives in [planMissedSweep] in :core, with the Grace
  * Period and lookback ADR 0005 settled. This class decides nothing: it reads the two

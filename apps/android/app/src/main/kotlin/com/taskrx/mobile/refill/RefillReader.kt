@@ -25,7 +25,7 @@ data class RefillReading(
 
 /**
  * The Refill read: project every medication, then make the Backlog agree
- * (apps/mobile/src/refill/read.ts).
+ * (archive/expo-rn:apps/mobile/src/refill/read.ts).
  *
  * Every rule lives in :core - [projectRefill] says how long a supply lasts,
  * `planRefill` what a Refill Reminder is, [reconcileRefills] which ones the Backlog

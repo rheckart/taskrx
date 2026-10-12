@@ -150,6 +150,8 @@ Expo app as the test client.
 
 ### Phase 6 — Retire the Expo app
 
+**Done 2026-10-11** on branch `kotlin-phase6-retire-expo`.
+
 - Delete `apps/mobile` and `packages/shared` from `main` (both preserved on
   `archive/expo-rn`). `packages/convex` stays.
 - Update `README.md`, `docs/architecture.md`, `AGENTS.md`, `CLAUDE.md`, and the

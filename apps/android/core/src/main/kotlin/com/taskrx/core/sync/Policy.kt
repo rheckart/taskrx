@@ -1,7 +1,7 @@
 package com.taskrx.core.sync
 
 /*
- * The push worker's retry policy, ported from `apps/mobile/src/sync/worker.ts`.
+ * The push worker's retry policy, ported from `archive/expo-rn:apps/mobile/src/sync/worker.ts`.
  *
  * Kept here, not in the worker, so the numbers and the arithmetic are one tested thing: a
  * failed write is retried with a growing pause and, after the fifth failure, parked in the

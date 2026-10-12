@@ -1,231 +1,115 @@
 # TaskRx
 
-> **Status: POC (Phase 1 code-complete)** — Offline-first medication reminders for Android. Expo + Convex + Clerk + react-native-notify-kit + expo-sqlite. Physical-device verification pending (`docs/poc-results.md`).
+Offline-first medication and task reminders for Android. A native Kotlin app
+(Jetpack Compose, Room, AlarmManager, WorkManager) syncs to a self-hosted
+Convex backend on Postgres, with Clerk for sign-in.
 
-The stack pivoted through .NET MAUI + ASP.NET Core + PostgreSQL earlier in July 2026 before returning to the original Convex + Expo target. That .NET line of work is preserved verbatim on the [`archive/dotnet-maui`](https://github.com/…/tree/archive/dotnet-maui) branch (tag `archive/dotnet-maui-v0`); this branch is the Convex + Expo continuation. Rationale for the pivot in [`.omo/plans/convex-expo-revisit.md`](./.omo/plans/convex-expo-revisit.md).
+[![Android](https://img.shields.io/badge/platform-Android-green)](./apps/android)
 
-[![POC](https://img.shields.io/badge/status-POC-orange)](./docs/poc-results.md)
-[![TypeScript](https://img.shields.io/badge/TypeScript-strict-blue)](./tsconfig.base.json)
-[![Android](https://img.shields.io/badge/platform-Android-green)](./apps/mobile)
-
-## Quick start
-
-### Prerequisites
-
-- Node.js — Node 22 LTS recommended; Node 26 verified to work with the current pinned Expo SDK 56 / RN 0.85.3.
-- npm (workspaces are used; do not use yarn/pnpm for this POC).
-- JDK 17 or 21 (react-native-notify-kit's validated Android baseline).
-- Android SDK with `platforms;android-36` and `build-tools;36.0.0` installed. compileSdk targets 36, targetSdk stays at 34.
-- Android emulator (`system-images;android-36;google_apis;x86_64` — NOT `google_apis_playstore`; the harness needs `adb shell cmd appops` which Play Store images restrict) OR a physical Android device with USB debugging enabled.
-- Clerk + Convex accounts (free tiers).
-
-### Install
-
-```bash
-npm install
-```
-
-Copy `.env.example` to `.env` and fill in real values:
-
-```bash
-cp .env.example .env
-```
-
-Required environment variables:
-
-| Variable                            | Source           |
-| ----------------------------------- | ---------------- |
-| `EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY` | Clerk dashboard  |
-| `EXPO_PUBLIC_CONVEX_URL`            | `npx convex dev` |
-
-### Development
-
-Start the Expo dev server:
-
-```bash
-npm run dev
-```
-
-Run TypeScript checks across all workspaces:
-
-```bash
-npm run typecheck
-```
-
-Run lint + format:
-
-```bash
-npm run lint
-npm run format
-```
-
-Run unit tests (schedule engine, conflict resolution, permission state machine, global-horizon selector — 54 vitest cases):
-
-```bash
-npm run -w packages/shared test
-```
-
-## Architecture
-
-```
-┌────────────────────────────────────┐         ┌──────────────────────────────┐
-│  Expo App (Android)                │         │ Convex Backend               │
-│                                    │         │                              │
-│  ┌──────────────────────────────┐  │         │ Schema:                      │
-│  │ expo-sqlite (source of       │  │         │  - medications               │
-│  │  truth on device)            │  │         │  - doseLogs                  │
-│  │  - medications               │  │         │                              │
-│  │  - dose_logs                 │  │         │ Functions:                   │
-│  │  - sync_queue + dead_letter  │  │         │  - medications.{query,...}   │
-│  └──────────────────────────────┘  │         │  - doseLogs.{query,...}      │
-│           │                        │         │  - rxnorm.search (Action)    │
-│           ▼                        │         │                              │
-│  ┌──────────────────────────────┐  │         │ Clerk JWT verifier:          │
-│  │ scheduleEngine + horizon     │  │         │  - enforces userId on all    │
-│  │  (@taskrx/shared, pure TS)   │  │         │    reads/writes              │
-│  │  - daily/interval schedules  │  │         └──────────────┬───────────────┘
-│  │  - global 64-dose selector   │  │                        │
-│  └──────────────────────────────┘  │                        │
-│           │                        │                        │
-│           ▼                        │                        │
-│  ┌──────────────────────────────┐  │                        │
-│  │ react-native-notify-kit      │  │                        │
-│  │  - AlarmType.SET_ALARM_CLOCK │  │                        │
-│  │  - diff-based reschedule     │  │                        │
-│  │  - fallback on denied perm   │  │                        │
-│  └──────────────────────────────┘  │                        │
-│           │                        │                        │
-│           ▼                        │  HTTPS (Convex client) │
-│  ┌──────────────────────────────┐  │                        │
-│  │ syncWorker.ts                │──┼───────────────────────▶│
-│  │  - drains sync_queue         │  │                        │
-│  │  - retries + dead-letter     │  │◀────── realtime ───────│
-│  │  - listens for connectivity  │  │                        │
-│  └──────────────────────────────┘  │                        │
-│                                    │                        │
-│  Clerk (auth) ─────────────────────┼───────────────────────▶│
-│  (JWT attached to Convex requests) │                        │
-└────────────────────────────────────┘
-```
-
-See [docs/architecture.md](./docs/architecture.md) for the full data-flow rules, data model, and the notification-primitive decision.
-
-## Tech stack
-
-| Layer         | Choice                                | Reason                                                                                               |
-| ------------- | ------------------------------------- | ---------------------------------------------------------------------------------------------------- |
-| Mobile        | React Native 0.85.3 + Expo SDK 56     | File-based routing, config-plugin ecosystem, built-in SQLite. New Architecture (TurboModules) on.    |
-| Navigation    | expo-router                           | De facto Expo standard.                                                                              |
-| Auth          | Clerk (`@clerk/clerk-expo`)           | Prebuilt UI, JWT for Convex.                                                                         |
-| Backend       | Convex 1.41+                          | Realtime native, Actions for RxNorm. Offline sync is hand-rolled (Convex's own is still unreleased). |
-| Local DB      | expo-sqlite                           | Offline source of truth. Migrations 001–003, dead-letter column on sync_queue.                       |
-| Notifications | react-native-notify-kit 10.5+         | Maintained fork of the archived Notifee (Invertase archived it 2026-04-07 and points here).          |
-| Alarm type    | `AlarmType.SET_ALARM_CLOCK`           | OEM-resilient. Same primitive the stock Clock app uses. Renders the status-bar alarm-clock icon.     |
-| Exact alarms  | `SCHEDULE_EXACT_ALARM` only           | `USE_EXACT_ALARM` deliberately NOT declared — not verifiably approved by Google Play for meds.       |
-| Drug data     | RxNorm REST                           | Free, no API key.                                                                                    |
-| Build         | Local Gradle (`assembleDebug`) or EAS | Debug build verified on emulator + Node 26 + JDK 17.                                                 |
-| Language      | TypeScript strict                     | No `any` in shared code. 54 vitest tests in `@taskrx/shared`.                                        |
-| Repo          | npm workspaces                        | `apps/mobile`, `packages/convex`, `packages/shared`                                                  |
+The stack has changed twice. A .NET MAUI + ASP.NET Core line is preserved on
+`archive/dotnet-maui`. The React Native + Expo app that followed it is preserved
+on `archive/expo-rn`, together with `packages/shared`, the TypeScript domain
+package the Kotlin `:core` module was ported from. The reasoning for the move to
+Kotlin and self-hosting is in
+[docs/specs/kotlin-and-self-hosted-convex.md](./docs/specs/kotlin-and-self-hosted-convex.md).
 
 ## Repo layout
 
 ```
 .
 ├── apps/
-│   └── mobile/                         # Expo React Native app
-│       ├── app/                        # expo-router screens
-│       │   ├── (auth)/                 # sign-in / sign-up
-│       │   ├── (app)/                  # authenticated app
-│       │   └── harness.tsx             # hidden adb harness route
-│       ├── plugins/
-│       │   └── withAndroidNotificationPermissions.js
-│       ├── scripts/
-│       │   ├── notification-harness.sh # adb-driven test harness
-│       │   └── build-*.sh              # EAS build helpers
-│       └── src/
-│           ├── components/             # Toast, Skeleton, SchedulePicker
-│           ├── db/                     # SQLite repos + migrations (001–003)
-│           ├── notifications/          # scheduler + permission lifecycle
-│           └── sync/                   # sync worker + realtime pull hooks
+│   └── android/          # Kotlin app (Gradle). See its README.
+│       ├── core/         #   :core, pure JVM: every domain rule, 100% covered by Kover
+│       ├── app/          #   :app, Android: Room, notifications, Compose, sign-in, sync
+│       └── scripts/      #   adb notification harness and its guard check
 ├── packages/
-│   ├── convex/                         # Convex schema, queries, mutations, RxNorm action
-│   └── shared/                         # Pure TS domain: schedule engine + horizon + conflict + permission-state
+│   └── convex/           # Convex functions (TypeScript): schema, reminders, instances, RxNorm
+├── infra/
+│   └── convex/           # Self-hosted Convex + Postgres (docker compose, backup, restore)
 ├── docs/
 │   ├── architecture.md
 │   ├── CHANGELOG.md
-│   ├── poc-results.md
-│   ├── post-poc-decisions.md
+│   ├── adr/              # Architecture decision records
+│   ├── specs/            # Design specs
+│   ├── poc-results.md    # Device evidence for the POC criteria
 │   ├── poc-notification-tests.md
 │   └── poc-stress-tests.md
-├── .omo/
-│   └── plans/convex-expo-revisit.md    # Phase 1 execution plan
+├── CONTEXT.md            # Domain language
 └── README.md
 ```
 
-## Testing
+## Prerequisites
 
-**Unit tests** live in `packages/shared` and run with `vitest`. Coverage thresholds pin `schedule/engine.ts` to 100%.
+- Node.js 18 or later (22 LTS recommended) and npm. Workspaces are used.
+- JDK 17 and the Android SDK (`compileSdk` 36) for the Kotlin app.
+- Docker, to run the self-hosted Convex backend.
+- A physical Android device or an emulator. For the device harness use an image
+  without Play Store (`google_apis`, not `google_apis_playstore`); the harness
+  needs `adb shell cmd appops`, which Play Store images restrict.
+- A Clerk application for sign-in. The app also works local-only without one.
 
-```bash
-npm run -w packages/shared test
-```
-
-**Notification harness** — an adb-driven bash script that verifies six device-behaviour cases (killed-app delivery, `SET_ALARM_CLOCK` primitive in use, Doze delivery, exact-alarm-denied fallback, boot reschedule, 30-med stress horizon). Requires the app installed on a device/emulator.
-
-```bash
-apps/mobile/scripts/notification-harness.sh --list
-apps/mobile/scripts/notification-harness.sh --all
-```
-
-The harness invokes a hidden `/harness` deep-link route in the app; see the security carve-out in `app/_layout.tsx` (auth gate bypass) and the route implementation in `app/harness.tsx`. Report is emitted as JSON to `.omo/evidence/`.
-
-## Build and deploy
-
-### Local debug build
+## Setup
 
 ```bash
-cd apps/mobile
-npx expo prebuild --platform android --no-install
-cd android
-./gradlew assembleDebug
-# APK at apps/mobile/android/app/build/outputs/apk/debug/app-debug.apk (~260MB)
+npm install
+cp .env.example .env     # Clerk issuer domain and Convex deploy key, for deploying functions
 ```
 
-Verified building cleanly on Node 26 + JDK 17 + Android compileSdk 36.
+Run the backend: see [infra/convex/README.md](./infra/convex/README.md). Build and run the
+app: see [apps/android/README.md](./apps/android/README.md). The app reads `CONVEX_URL` and
+`CLERK_PUBLISHABLE_KEY` from `apps/android/local.properties`; with either empty it builds
+local-only.
 
-### Install on a device
+## Verification gates
+
+From the repo root:
 
 ```bash
-adb install -r apps/mobile/android/app/build/outputs/apk/debug/app-debug.apk
-adb reverse tcp:8081 tcp:8081     # so the emulator can reach host Metro
-cd apps/mobile && npx expo start --dev-client
+npm run verify
 ```
 
-Then tap the discovered "TaskRx" server card in the DevLauncher once (per install) to hand control to the app.
+This runs typecheck, lint, the `packages/convex` tests, and the harness guard check
+(`apps/android/scripts/verify-harness-guards.sh`).
 
-### Preview APK via EAS (sideload)
+For the Android app:
 
 ```bash
-./apps/mobile/scripts/build-production-apk.sh
+cd apps/android && ./gradlew :core:test :core:koverVerify :app:testDebugUnitTest :app:assembleDebug
 ```
 
-### Production AAB (Play Store)
+`:core:koverVerify` enforces 100% line and branch coverage on `:core`. The `:app` tests are JVM
+unit tests (Robolectric, in-memory Room); no device is needed.
+
+## Device harness
+
+`apps/android/scripts/notification-harness.sh` drives a debug build over adb through a hidden
+`taskrx:///harness` deep link and checks the result against OS state (`dumpsys alarm`,
+`dumpsys notification`, logcat). It writes JSON evidence to `.omo/evidence/`.
 
 ```bash
-./apps/mobile/scripts/build-production-apk.sh --production
+apps/android/scripts/notification-harness.sh --list
+apps/android/scripts/notification-harness.sh --all
 ```
 
-Play Store upload is stubbed in [deploy-production.sh](./apps/mobile/scripts/deploy-production.sh) — not wired.
+`--all` runs the nine local-only cases. The rig rules (app signed out, cases 3 and 5 run
+separately) are in [docs/poc-results.md](./docs/poc-results.md).
+
+## Architecture
+
+See [docs/architecture.md](./docs/architecture.md) for the data flow, the local schema, sync,
+and the notification design. The domain language is in [CONTEXT.md](./CONTEXT.md).
 
 ## Contributing
 
 - Use conventional commits.
-- Keep TypeScript strict (`noImplicitAny`, `noUncheckedIndexedAccess`, `exactOptionalPropertyTypes`).
-- Do not commit `.env` files or secrets.
-- Do not add dependencies outside the POC stack without justification.
-- Do not add `USE_EXACT_ALARM` to the manifest — it is a Play-policy liability for medication apps.
-- Do not revert the notification `AlarmType` to `SET_EXACT_AND_ALLOW_WHILE_IDLE`; the `SET_ALARM_CLOCK` choice is deliberate and OEM-resilient.
+- Do not commit `.env` files, `local.properties`, or secrets.
+- Do not add `USE_EXACT_ALARM` to the manifest. It is a Play-policy liability for medication apps.
+- Keep the notification primitive `AlarmManager.setAlarmClock` for doses. The choice is deliberate
+  and OEM-resilient (see docs/architecture.md).
+- Keep the channel ids `medication_reminders` and `task_reminders`. Android keys the user's
+  overrides to them.
+- Do not put Android imports in `apps/android/core`.
 
 ## License
 
-UNLICENSED — proprietary proof-of-concept.
+UNLICENSED. Proprietary.

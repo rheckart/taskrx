@@ -34,7 +34,7 @@ data class NewReminderState(
 }
 
 /**
- * The hand-entry forms for a medication and for a task. Mirrors apps/mobile
+ * The hand-entry forms for a medication and for a task. Mirrors archive/expo-rn:apps/mobile
  * `meds/new.tsx` and `tasks/new.tsx`.
  *
  * One class for two screens, with the Kind as a parameter, because the forms differ in

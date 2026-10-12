@@ -67,7 +67,6 @@ class AndroidPermissionPlatform(
 
     override fun requestNotifications(): Boolean {
         val target = host ?: return false
-        if (sdk < Build.VERSION_CODES.TIRAMISU) return false
         record.markShown()
         target.launch()
         return true
@@ -75,17 +74,11 @@ class AndroidPermissionPlatform(
 
     /** The per-app notification settings: once a runtime permission is refused the prompt is spent. */
     override fun openNotificationSettings() {
-        val intent =
-            if (sdk >= Build.VERSION_CODES.O) {
-                Intent(Settings.ACTION_APP_NOTIFICATION_SETTINGS).putExtra(Settings.EXTRA_APP_PACKAGE, context.packageName)
-            } else {
-                Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.parse("package:${context.packageName}"))
-            }
+        val intent = Intent(Settings.ACTION_APP_NOTIFICATION_SETTINGS).putExtra(Settings.EXTRA_APP_PACKAGE, context.packageName)
         context.startActivity(intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
     }
 
     override fun openAlarmSettings() {
-        if (sdk < Build.VERSION_CODES.S) return
         val intent = Intent(Settings.ACTION_REQUEST_SCHEDULE_EXACT_ALARM, Uri.parse("package:${context.packageName}"))
         context.startActivity(intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
     }

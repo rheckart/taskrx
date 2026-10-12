@@ -36,7 +36,7 @@ const reminderInstanceDoc = v.object({
  * `completed` is terminal: no later write may move an instance out of it.
  *
  * This is the server half of the rule `shouldApplyRemoteReminderInstance`
- * enforces on the device (`packages/shared/src/sync/conflict.ts`), and what
+ * enforces on the device (`archive/expo-rn:packages/shared/src/sync/conflict.ts`), and what
  * story 44 of `docs/specs/fused-timeline.md` asks for — "a taken dose stays
  * taken". The device guard protects only the device that recorded the taking.
  * Without this one, a second device draining a queue it filled before it

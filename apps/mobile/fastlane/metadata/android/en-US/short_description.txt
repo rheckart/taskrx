@@ -1,1 +1,0 @@
-Offline-first medication reminders that work when your phone is in your pocket.

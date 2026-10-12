@@ -2,7 +2,7 @@
 
 Convex backend + dashboard + its own Postgres (not published on the host), via
 Docker. Host ports: backend `3220`, HTTP actions `3221`, dashboard `6791`
-(3210/3211 belong to the local `npx convex dev` backend that the Expo app uses).
+(3210/3211 belong to the local `npx convex dev` backend).
 
 ## Setup (once)
 
@@ -29,7 +29,7 @@ Docker. Host ports: backend `3220`, HTTP actions `3221`, dashboard `6791`
 
 Drilled: row written, backed up, deleted, restored, read back.
 
-## Point the Expo app at it
+## Point the app at it
 
 A phone cannot reach `localhost`. Use the machine's LAN IP and make the backend
 advertise it, then redeploy:
@@ -38,9 +38,8 @@ advertise it, then redeploy:
     CONVEX_CLOUD_ORIGIN=http://<lan-ip>:3220
     CONVEX_SITE_ORIGIN=http://<lan-ip>:3221
     docker compose up -d
-    # apps/mobile/.env
-    EXPO_PUBLIC_CONVEX_URL=http://<lan-ip>:3220
 
+Then set `CONVEX_URL=http://<lan-ip>:3220` in `apps/android/local.properties` and rebuild.
 Android blocks cleartext HTTP in release builds; fine for a dev build.
 Alternative over USB: `adb reverse tcp:3220 tcp:3220` and use `127.0.0.1:3220`.
 

@@ -8,7 +8,7 @@ import java.util.Locale
 
 /*
  * The words on the Today timeline. Mirrors statusLabel / kindLabel in
- * apps/mobile/app/(app)/index.tsx.
+ * archive/expo-rn:apps/mobile/app/(app)/index.tsx.
  */
 
 /**

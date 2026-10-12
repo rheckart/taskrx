@@ -1,5 +1,7 @@
 # Day 6 — POC Notification Tests (Pixel 8)
 
+> Historical. Written for the Expo app, whose paths below (`apps/mobile/...`) now live on the `archive/expo-rn` branch. The current harness is `apps/android/scripts/notification-harness.sh`.
+
 This document is the test script for the Day 6 gate: verifying that local medication reminders fire reliably on a physical Android device (Pixel 8) under a variety of power and lifecycle states.
 
 > **Next step:** After completing these 6 scenarios, proceed to [`docs/poc-stress-tests.md`](./poc-stress-tests.md) for the Day 8 exact-alarm and offline-first stress tests.

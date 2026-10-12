@@ -18,7 +18,7 @@ import kotlinx.serialization.json.JsonElement
 
 /**
  * Merges the server's copy into the local store. Mirrors `applyRemotePull` and
- * `useUnifiedSync` in apps/mobile/src/sync/pull.ts.
+ * `useUnifiedSync` in archive/expo-rn:apps/mobile/src/sync/pull.ts.
  *
  * The conflict decisions are :core's (`shouldApplyRemoteReminder`,
  * `shouldApplyRemoteReminderInstance`): local wins ties, and a locally Completed instance is

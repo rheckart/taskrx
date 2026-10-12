@@ -8,7 +8,7 @@ import java.time.format.DateTimeFormatter
 import java.util.Locale
 
 /*
- * How this app writes a moment. Mirrors apps/mobile/src/format/datetime.ts: one
+ * How this app writes a moment. Mirrors archive/expo-rn:apps/mobile/src/format/datetime.ts: one
  * definition rather than three, because the answer screen, the timeline and the
  * supplies list all show the same instant in the same shape.
  *

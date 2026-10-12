@@ -21,7 +21,7 @@ import {
  * idempotently — a create that already landed applies its payload to the
  * existing document and returns that `_id` instead of inserting a duplicate.
  *
- * `create` fills the same defaults as `createReminder` in `@taskrx/shared`: an
+ * `create` fills the same defaults as `createReminder` in `@taskrx/shared` (on archive/expo-rn): an
  * empty daily schedule, `normal` priority, no tags or caregivers, and active.
  * Both spellings of "a new reminder" therefore agree, whether the row is built
  * on the device or straight through the API.

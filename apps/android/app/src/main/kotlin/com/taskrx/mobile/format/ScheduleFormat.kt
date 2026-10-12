@@ -13,7 +13,7 @@ import java.util.Locale
 private val DAY_NAMES = listOf("Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat")
 
 /**
- * How this app says a Schedule out loud. Mirrors apps/mobile/src/format/schedule.ts.
+ * How this app says a Schedule out loud. Mirrors archive/expo-rn:apps/mobile/src/format/schedule.ts.
  *
  * It is the sentence natural-language entry shows back before saving, so "what the
  * parser understood" is only as reviewable as these strings are true. A schedule that

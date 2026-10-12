@@ -8,7 +8,7 @@ const val SNOOZE_MINUTES: Int = 15
 
 /**
  * Every Kind-specific word on the answer screen, decided once. Mirrors `wordsFor` in
- * apps/mobile/app/(app)/dose/log.tsx.
+ * archive/expo-rn:apps/mobile/app/(app)/dose/log.tsx.
  *
  * ADR 0001 made the stored vocabulary Kind-neutral so exactly one place per surface has
  * to know the difference, and this is that place for the answer screen. "Dose" appears

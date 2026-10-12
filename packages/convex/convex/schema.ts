@@ -9,7 +9,7 @@ import { v } from "convex/values";
  * its device-side tables (migration 009) and its query/mutation modules.
  *
  * `reminders` / `reminderInstances` match the domain types in
- * `packages/shared/src/domain/reminder.ts`. The difference that motivated
+ * `archive/expo-rn:packages/shared/src/domain/reminder.ts`. The difference that motivated
  * replacing the POC pair is `kind`: one reminder is either a medication or a
  * task, where `medications` could only express the former. Weekly schedules,
  * priority, tags, refill tracking, caregiver fan-out, and snoozing arrived with
@@ -76,7 +76,7 @@ const weekdayValidator = v.union(
  *
  * Times are `"HH:MM"` local wall-clock strings; `startAt` and `at` are unix ms.
  *
- * `once` and `none` widen the union with the domain one in `@taskrx/shared`
+ * `once` and `none` widen the union with the domain one in `@taskrx/shared` (on archive/expo-rn)
  * (issue #12); both are closed unions and the spec requires them to move
  * together, so a schedule this validator admits is one the device can express
  * and vice versa. `once` carries an instant rather than an optional date — see

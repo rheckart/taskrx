@@ -3,7 +3,6 @@ package com.taskrx.mobile.notifications
 import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.content.Context
-import android.os.Build
 import com.taskrx.core.notifications.ChannelImportance
 import com.taskrx.core.notifications.Tier
 import com.taskrx.core.notifications.deliveryFor
@@ -19,7 +18,6 @@ import com.taskrx.core.notifications.deliveryFor
  */
 object Channels {
     fun ensure(context: Context) {
-        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) return
         val manager = context.getSystemService(NotificationManager::class.java)
         for (tier in Tier.entries) {
             val delivery = deliveryFor(tier)

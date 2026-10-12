@@ -3,7 +3,7 @@ package com.taskrx.mobile.format
 import kotlin.math.floor
 
 /**
- * How this app writes an adherence percentage. Mirrors apps/mobile/src/format/percent.ts.
+ * How this app writes an adherence percentage. Mirrors archive/expo-rn:apps/mobile/src/format/percent.ts.
  *
  * A whole number, because "77.7777%" claims a precision a week of doses does not have.
  * But plain rounding is not safe at the top: 99.6% rounds to "100%", and a person who

@@ -1,9 +1,11 @@
 package com.taskrx.mobile
 
+import android.util.Log
 import com.taskrx.mobile.auth.AuthGateway
 import com.taskrx.mobile.auth.AuthStatus
 import com.taskrx.mobile.auth.LocalOnlyAuth
 import com.taskrx.mobile.notifications.CurrentUser
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.launch
@@ -24,6 +26,8 @@ import kotlinx.coroutines.launch
 class Session(
     private val current: CurrentUser,
     private val auth: AuthGateway = LocalOnlyAuth,
+    /** Moves what the local user wrote to the account signing in ([com.taskrx.mobile.data.LocalAdoption]). */
+    private val adoptLocal: suspend (from: String, to: String) -> Unit = { _, _ -> },
 ) {
     val userId: String get() = signedInUserId ?: current.get() ?: LOCAL_USER_ID
 
@@ -51,6 +55,16 @@ class Session(
                 when {
                     status is AuthStatus.SignedIn -> {
                         wasSignedIn = true
+                        // Before the re-arm below, so the moved Reminders are armed for the
+                        // account. A failure leaves the rows local, where the next sign-in
+                        // tries again; it must not keep the person from signing in.
+                        try {
+                            adoptLocal(LOCAL_USER_ID, status.userId)
+                        } catch (e: CancellationException) {
+                            throw e
+                        } catch (e: Exception) {
+                            Log.e(TAG, "moving signed-out reminders to the account failed", e)
+                        }
                         current.set(status.userId)
                         onChange()
                     }
@@ -65,6 +79,8 @@ class Session(
     }
 
     companion object {
+        private const val TAG = "session"
+
         /**
          * The only user while signed out or in a build with no sign-in; the fixed id local-only
          * rows are written under. Do not reference it anywhere but here.

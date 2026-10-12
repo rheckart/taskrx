@@ -47,7 +47,7 @@ data class SuppliesActions(
 
 /**
  * The Supplies screen, drawn from [state]. Mirrors the render half of
- * apps/mobile/app/(app)/refill.tsx. A medication whose supply nobody recorded shows no
+ * archive/expo-rn:apps/mobile/app/(app)/refill.tsx. A medication whose supply nobody recorded shows no
  * number: not a zero, not "0 days", which are the shape of an empty bottle. It gets a
  * sentence saying what is missing and the same box to put it right.
  */

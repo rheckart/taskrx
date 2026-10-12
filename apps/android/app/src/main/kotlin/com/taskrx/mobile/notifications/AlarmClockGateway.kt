@@ -5,7 +5,6 @@ import android.app.PendingIntent
 import android.content.Context
 import android.content.Intent
 import android.net.Uri
-import android.os.Build
 import android.util.Log
 import com.taskrx.core.notifications.ArmedNotification
 import com.taskrx.core.notifications.NotificationSpec
@@ -23,11 +22,8 @@ interface AlarmApi {
     fun cancel(operation: PendingIntent)
 }
 
-class SystemAlarmApi(
-    private val manager: AlarmManager,
-    private val sdk: Int = Build.VERSION.SDK_INT,
-) : AlarmApi {
-    override fun canScheduleExactAlarms(): Boolean = sdk < Build.VERSION_CODES.S || manager.canScheduleExactAlarms()
+class SystemAlarmApi(private val manager: AlarmManager) : AlarmApi {
+    override fun canScheduleExactAlarms(): Boolean = manager.canScheduleExactAlarms()
 
     override fun setAlarmClock(fireAt: Long, operation: PendingIntent, showIntent: PendingIntent) =
         manager.setAlarmClock(AlarmManager.AlarmClockInfo(fireAt, showIntent), operation)

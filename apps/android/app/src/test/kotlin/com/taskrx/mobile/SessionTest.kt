@@ -24,7 +24,13 @@ import org.robolectric.RobolectricTestRunner
 class SessionTest {
     private val current = CurrentUser(NotificationPrefs(ApplicationProvider.getApplicationContext()))
     private val auth = FakeAuth()
-    private val session = Session(current, auth)
+    private val adopted = mutableListOf<Pair<String, String>>()
+    private var adoptFails = false
+    private val session =
+        Session(current, auth) { from, to ->
+            if (adoptFails) error("disk full")
+            adopted += from to to
+        }
     private val job = Job()
     private val changes = mutableListOf<String>()
 
@@ -78,5 +84,21 @@ class SessionTest {
 
         assertEquals("harness-user", session.userId)
         assertEquals(emptyList(), changes)
+    }
+
+    @Test
+    fun `signing in hands what the local user wrote to the account`() {
+        auth.state.value = AuthStatus.SignedIn("user_42")
+
+        assertEquals(listOf(Session.LOCAL_USER_ID to "user_42"), adopted)
+    }
+
+    @Test
+    fun `a failed hand-over does not keep anyone from signing in`() {
+        adoptFails = true
+        auth.state.value = AuthStatus.SignedIn("user_42")
+
+        assertEquals("user_42", current.get())
+        assertEquals(listOf("user_42"), changes)
     }
 }
