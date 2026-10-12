@@ -35,7 +35,7 @@ import com.taskrx.mobile.ui.components.PrimaryButton
 
 /**
  * The answer surface, drawn from [state]. Mirrors the render half of
- * apps/mobile/app/(app)/dose/log.tsx. [now] is read for the urgency line only.
+ * archive/expo-rn:apps/mobile/app/(app)/dose/log.tsx. [now] is read for the urgency line only.
  *
  * Kind-neutral in structure, Kind-specific only in words: a medication reads "Mark taken",
  * a task "Mark done" (see `wordsFor`), and the stored answer is Completed either way.

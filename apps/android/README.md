@@ -1,6 +1,6 @@
 # TaskRx for Android (Kotlin)
 
-The Kotlin app that replaces `apps/mobile` (Expo). Plan: `docs/specs/kotlin-and-self-hosted-convex.md`.
+The Kotlin app. It replaced the Expo app, which is preserved on the `archive/expo-rn` branch. Plan: `docs/specs/kotlin-and-self-hosted-convex.md`.
 Two Gradle modules:
 
 - `:core` - pure JVM. Every domain rule (parser, schedule, adherence, refill, sweep, notification
@@ -21,7 +21,7 @@ Requirements: JDK 17, the Android SDK (`sdk.dir` in `local.properties`), `compil
     adb install -r app/build/outputs/apk/debug/app-debug.apk
     adb shell am start -n com.taskrx.mobile/.MainActivity
 
-`applicationId` is `com.taskrx.mobile`, the same as the Expo build, so the Android notification
+`applicationId` is `com.taskrx.mobile`, the same as the old Expo build, so the Android notification
 channels (`medication_reminders`, `task_reminders`) and their per-user overrides carry over.
 
 ## Test
@@ -42,11 +42,11 @@ from environment variables of the same name, into `BuildConfig`:
 
 - `CONVEX_URL` - the Convex deployment. `http://10.0.2.2:3220` is the host machine's self-hosted
   backend (`infra/convex`, port 3220) as seen from the Android emulator. For a physical phone use the
-  machine's LAN IP and see "Point the Expo app at it" in `infra/convex/README.md` (it applies here
+  machine's LAN IP and see "Point the app at it" in `infra/convex/README.md` (it applies here
   too), or `adb reverse tcp:3220 tcp:3220` and `http://127.0.0.1:3220`. Release builds refuse
   cleartext HTTP; only the debug manifest allows it, so a release build needs an `https://` URL.
-- `CLERK_PUBLISHABLE_KEY` - the same Clerk application the Expo app uses
-  (`EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY` in `apps/mobile/.env`). Its instance needs a JWT template
+- `CLERK_PUBLISHABLE_KEY` - the same Clerk application the Expo app used
+  (it was `EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY` in the old app). Its instance needs a JWT template
   named `convex` (the deployment's `auth.config.ts` expects `applicationID: "convex"`) and email
   code as a sign-in strategy.
 

@@ -44,11 +44,30 @@ rtk pip list            rtk pnpm install        rtk npm run <script>
 - `rtk proxy <cmd>` runs command without filtering but tracks usage
 <!-- /headroom:rtk-instructions -->
 
+## The project
+
+TaskRx is offline-first medication and task reminders for Android.
+
+- `apps/android` is the app: Kotlin, Jetpack Compose, Room, AlarmManager and WorkManager, built with Gradle. `:core` is pure JVM (no Android imports) and holds every domain rule, gated at 100% coverage by Kover; `:app` is the Android layer. See `apps/android/README.md`.
+- `packages/convex` holds the Convex functions (TypeScript), the only TypeScript product code.
+- `infra/convex` runs Convex self-hosted on Postgres in Docker. See its README.
+- `docs/architecture.md` describes the data flow, local schema, sync and notifications. `CONTEXT.md` is the domain language.
+- The old Expo app (`apps/mobile`) and the TypeScript domain package (`packages/shared`) live on the `archive/expo-rn` branch. Code comments that cite one of their files as the origin of a rule mean that branch.
+
+## Verification gates
+
+```bash
+npm run verify    # from the repo root: typecheck, lint, packages/convex tests, harness guard check
+cd apps/android && ./gradlew :core:test :core:koverVerify :app:testDebugUnitTest :app:assembleDebug
+```
+
+Use `npm run typecheck`, never bare `npx tsc`, when the shell is zsh.
+
 ## Agent skills
 
 ### Issue tracker
 
-Issues live on a self-hosted Forgejo instance at git.heckart.me, managed through the `forgejo-mcp` server (MCP tools wrapping the Forgejo API). See `docs/agents/issue-tracker.md`.
+Issues live on GitHub (`origin`, private `rheckart/taskrx`). `docs/agents/issue-tracker.md` still describes the retired Forgejo setup and is out of date.
 
 ### Triage labels
 

@@ -23,7 +23,7 @@ import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 
 /**
- * Executable coverage for the Refill read (apps/mobile/src/refill/read.test.ts).
+ * Executable coverage for the Refill read (archive/expo-rn:apps/mobile/src/refill/read.test.ts).
  *
  * :core runs every rule about how long a supply lasts and what gets raised. What it cannot
  * reach is what the ticket is about: that the Backlog ends up agreeing with the projection,

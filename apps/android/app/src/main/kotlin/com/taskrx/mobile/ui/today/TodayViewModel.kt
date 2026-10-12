@@ -32,7 +32,7 @@ data class TodayState(
 )
 
 /**
- * The Today timeline. Mirrors apps/mobile/app/(app)/index.tsx.
+ * The Today timeline. Mirrors archive/expo-rn:apps/mobile/app/(app)/index.tsx.
  *
  * Every rule about what the day contains lives in :core's `projectTimeline`. This class
  * does three things only: pick the window, read the two tables, and hand what comes back

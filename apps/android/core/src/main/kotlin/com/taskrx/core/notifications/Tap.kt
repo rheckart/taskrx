@@ -3,7 +3,7 @@ package com.taskrx.core.notifications
 import java.net.URLEncoder
 
 /*
- * Notification tap -> answer screen. Ported from apps/mobile/src/notifications/tap-handler.ts.
+ * Notification tap -> answer screen. Ported from archive/expo-rn:apps/mobile/src/notifications/tap-handler.ts.
  *
  * The route is Kind-neutral: a task tap lands on the same answer screen a dose does.
  */

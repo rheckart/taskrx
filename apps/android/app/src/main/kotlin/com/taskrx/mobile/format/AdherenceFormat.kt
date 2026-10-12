@@ -6,7 +6,7 @@ import java.time.ZoneId
 import java.util.Locale
 
 /*
- * The words on the Adherence screen. Mirrors apps/mobile/app/(app)/adherence.tsx.
+ * The words on the Adherence screen. Mirrors archive/expo-rn:apps/mobile/app/(app)/adherence.tsx.
  *
  * Every figure is :core's (`computeAdherence`); what is here is how a figure is said. The
  * sentences are the content: a day with nothing due must not read as a day of misses, and

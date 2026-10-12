@@ -26,7 +26,7 @@ function deployment() {
   return convexTest(schema, modules);
 }
 
-/** Mirrors `HARNESS_REMINDER_MARKER` in apps/mobile/src/notifications/harness.ts. */
+/** Mirrors `HARNESS_REMINDER_MARKER` in archive/expo-rn:apps/mobile/src/notifications/harness.ts. */
 const MARKER = "[harness]";
 
 async function seed(

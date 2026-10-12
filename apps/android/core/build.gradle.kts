@@ -18,7 +18,7 @@ dependencies {
 
 tasks.test {
     useJUnitPlatform()
-    // packages/shared runs vitest at TZ=UTC (vitest.config.ts); the ported
+    // archive/expo-rn:packages/shared runs vitest at TZ=UTC (vitest.config.ts); the ported
     // suite must see the same zone so the DST cases mean the same thing.
     systemProperty("user.timezone", "UTC")
     jvmArgs("-Duser.timezone=UTC")
@@ -26,7 +26,7 @@ tasks.test {
 
 kover {
     reports {
-        // The list below mirrors packages/shared/vitest.config.ts
+        // The list below mirrors archive/expo-rn:packages/shared/vitest.config.ts
         // `coverage.include`: add the ported class (e.g.
         // "com.taskrx.core.adherence.CalculatorKt") as each file is ported,
         // never the whole package. Kotlin has no per-file filter, so classes

@@ -28,7 +28,7 @@ import com.taskrx.mobile.ui.components.EmptyState
 import com.taskrx.mobile.ui.components.ListScaffold
 import com.taskrx.mobile.ui.components.SectionHeader
 
-/** The history list, drawn from [state]. Mirrors the render half of apps/mobile/app/(app)/dose/history.tsx. */
+/** The history list, drawn from [state]. Mirrors the render half of archive/expo-rn:apps/mobile/app/(app)/dose/history.tsx. */
 @Composable
 fun HistoryContent(state: HistoryState, onRefresh: () -> Unit, now: Long, modifier: Modifier = Modifier) {
     val groups = remember(state.items, now) { groupByDay(state.items, now) { it.instance.scheduledTime } }

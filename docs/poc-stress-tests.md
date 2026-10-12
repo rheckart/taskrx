@@ -1,5 +1,7 @@
 # Day 8 — POC Stress Tests (Pixel 8)
 
+> Historical. Written for the Expo app, whose paths below (`apps/mobile/...`) now live on the `archive/expo-rn` branch. The current harness is `apps/android/scripts/notification-harness.sh`.
+
 This document is the test script for the Day 8 gate: verifying that the TaskRx stack survives two high-load scenarios on a physical Android device (Pixel 8):
 
 1. **Exact-alarm stress test** — 30 medications with staggered daily schedules must all fire correctly under normal conditions, Doze mode, and force-stop.

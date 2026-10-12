@@ -30,7 +30,7 @@ enum class ToastKind { Success, Error, Info }
 data class ToastRequest(val message: String, val kind: ToastKind, val id: Long = 0)
 
 /**
- * The app's one toast. Mirrors the module-level store behind apps/mobile's `useToast`:
+ * The app's one toast. Mirrors the module-level store behind archive/expo-rn:apps/mobile's `useToast`:
  * a screen that saves and then navigates away still has its confirmation shown by the
  * screen it lands on, so the message cannot live in the screen that raised it.
  */

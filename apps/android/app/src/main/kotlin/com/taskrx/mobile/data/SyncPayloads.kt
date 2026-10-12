@@ -19,7 +19,7 @@ import kotlinx.serialization.json.put
 /**
  * The JSON a `sync_queue` row carries, shaped for what the sync worker pushes into
  * `api.reminders.create/update/delete` and `api.reminderInstances.create/update`
- * (apps/mobile/src/sync/worker.ts `ReminderPayload` / `ReminderInstancePayload`).
+ * (archive/expo-rn:apps/mobile/src/sync/worker.ts `ReminderPayload` / `ReminderInstancePayload`).
  *
  * Every field is always present; "no value to offer" is an explicit JSON `null`, because the worker
  * tests `!== null` before spreading a field into the mutation. For the three

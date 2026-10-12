@@ -30,7 +30,7 @@ sealed interface SearchStatus {
 data class DrugSearchState(val query: String = "", val status: SearchStatus = SearchStatus.Idle)
 
 /**
- * Drug search. Mirrors apps/mobile `DrugSearch.tsx`.
+ * Drug search. Mirrors archive/expo-rn:apps/mobile `DrugSearch.tsx`.
  *
  * Debounced, and guarded against a stale response: only the latest query may write its
  * result. Cancelling the previous job is that guard, so a slow answer for "met" cannot

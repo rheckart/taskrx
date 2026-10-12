@@ -13,7 +13,7 @@ import java.time.ZoneId
 data class AdherenceReading(val stats: AdherenceStats, val period: AdherencePeriod)
 
 /**
- * The Adherence read: sweep, then read, then compute (apps/mobile/src/adherence/read.ts).
+ * The Adherence read: sweep, then read, then compute (archive/expo-rn:apps/mobile/src/adherence/read.ts).
  *
  * Every rule about the figure is [computeAdherence] and every rule about the window is
  * [adherencePeriod], both in :core. What this owns is an ORDER: a dose nobody answered

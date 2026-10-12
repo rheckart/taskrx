@@ -26,7 +26,7 @@ data class RemindersState(
 )
 
 /**
- * Every live Reminder, of either Kind. Mirrors apps/mobile `meds/index.tsx`, widened: that
+ * Every live Reminder, of either Kind. Mirrors archive/expo-rn:apps/mobile `meds/index.tsx`, widened: that
  * list was the medications only, and it had no way to stop one. A Reminder is one aggregate
  * with a Kind axis, so this lists them together and the Kind is a word on the row.
  *

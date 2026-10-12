@@ -20,7 +20,7 @@ import java.time.format.DateTimeParseException
 
 /*
  * The editing helpers behind the schedule picker. Mirrors the non-visual half of
- * apps/mobile/src/components/SchedulePicker.tsx.
+ * archive/expo-rn:apps/mobile/src/components/SchedulePicker.tsx.
  *
  * What makes a schedule SAVABLE is :core's `isWellFormedSchedule`; nothing here decides
  * that. These are presentation: where a form starts someone off, how a typed instant is

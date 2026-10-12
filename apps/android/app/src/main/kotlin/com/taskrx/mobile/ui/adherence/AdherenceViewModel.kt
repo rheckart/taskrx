@@ -21,7 +21,7 @@ data class AdherenceUiState(
 )
 
 /**
- * "Am I actually taking my medication?" Mirrors apps/mobile/app/(app)/adherence.tsx.
+ * "Am I actually taking my medication?" Mirrors archive/expo-rn:apps/mobile/app/(app)/adherence.tsx.
  *
  * Every rule is elsewhere: `computeAdherence` decides the figure, `adherencePeriod` the
  * window, and [com.taskrx.mobile.adherence.AdherenceReader] that the missed sweep runs

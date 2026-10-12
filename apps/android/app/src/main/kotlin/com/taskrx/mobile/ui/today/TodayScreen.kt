@@ -72,7 +72,7 @@ data class TodayActions(
 
 /**
  * The Today timeline, drawn from [state]. Mirrors the render half of
- * apps/mobile/app/(app)/index.tsx; the banner above it is the caller's, passed as [banner]
+ * archive/expo-rn:apps/mobile/app/(app)/index.tsx; the banner above it is the caller's, passed as [banner]
  * because its subject is whether any row can reach the person, not the day itself.
  */
 @Composable

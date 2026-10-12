@@ -72,7 +72,7 @@ private fun <T> Change<T>.resolve(current: T): T =
 
 /**
  * Local repository for Reminders (data-flow rule 1: the device's store is the source
- * of truth). Mirrors apps/mobile/src/db/repos/reminders.ts.
+ * of truth). Mirrors archive/expo-rn:apps/mobile/src/db/repos/reminders.ts.
  *
  * Every write enqueues a `sync_queue` row, in the SAME transaction as the row
  * write. The Expo repo enqueued best-effort afterwards and needed a reconcile pass

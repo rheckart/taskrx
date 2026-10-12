@@ -20,7 +20,7 @@ import com.taskrx.mobile.ui.add.TASK_DELIVERY_NOTE
 import com.taskrx.mobile.ui.add.copyFor
 
 /**
- * The manual new-reminder form for either Kind. Mirrors apps/mobile `meds/new.tsx` and
+ * The manual new-reminder form for either Kind. Mirrors archive/expo-rn:apps/mobile `meds/new.tsx` and
  * `tasks/new.tsx`.
  *
  * All five Schedule variants are offered to both Kinds. `once` gives a medication a single

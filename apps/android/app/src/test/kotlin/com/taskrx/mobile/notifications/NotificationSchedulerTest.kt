@@ -22,7 +22,7 @@ import org.robolectric.Shadows.shadowOf
 import org.robolectric.shadows.ShadowAlarmManager
 
 /*
- * Mirrors apps/mobile/src/notifications/scheduler.test.ts. Everything below the
+ * Mirrors archive/expo-rn:apps/mobile/src/notifications/scheduler.test.ts. Everything below the
  * scheduler is real: Room, AlarmManager (Robolectric's), WorkManager (the test
  * initialisation). Only the recording wrappers observe.
  */

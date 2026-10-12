@@ -32,7 +32,7 @@ import org.robolectric.RobolectricTestRunner
 
 private const val T0 = 1_780_000_000_000L
 
-/** Mirrors apps/mobile/src/sync/worker.test.ts, against a scripted gateway and real storage. */
+/** Mirrors archive/expo-rn:apps/mobile/src/sync/worker.test.ts, against a scripted gateway and real storage. */
 @RunWith(RobolectricTestRunner::class)
 class PushWorkerTest {
     private class Rig(val fx: Fixture, val scope: CoroutineScope, user: String? = USER) {
