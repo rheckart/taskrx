@@ -8,6 +8,7 @@ import com.taskrx.mobile.auth.ConvexSession
 import com.taskrx.mobile.auth.LocalOnlyAuth
 import com.taskrx.mobile.data.Clock
 import com.taskrx.mobile.data.IdGenerator
+import com.taskrx.mobile.data.LocalAdoption
 import com.taskrx.mobile.data.RandomUuid
 import com.taskrx.mobile.data.ReminderInstancesRepository
 import com.taskrx.mobile.data.RemindersRepository
@@ -72,7 +73,7 @@ class AppContainer(
     val notifications = NotificationsModule(context, reminders, clock)
 
     /** Whose data this is: the Clerk user when signed in, else the local user (see [Session]). */
-    val session = Session(notifications.currentUser, auth)
+    val session = Session(notifications.currentUser, auth) { from, to -> LocalAdoption(database).adopt(from, to) }
 
     val drugSearch: DrugSearchService =
         drugSearch

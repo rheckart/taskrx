@@ -47,6 +47,9 @@ interface ReminderDao {
     @Query("UPDATE reminders SET convex_id = :convexId WHERE id = :id")
     suspend fun setConvexId(id: String, convexId: String)
 
+    @Query("UPDATE reminders SET user_id = :to WHERE user_id = :from")
+    suspend fun reassignUser(from: String, to: String): Int
+
     /** Pending rows with no live queue entry to make them un-pend. */
     @Query(
         """
@@ -63,6 +66,9 @@ interface ReminderDao {
 
 @Dao
 interface ReminderInstanceDao {
+    @Query("UPDATE reminder_instances SET user_id = :to WHERE user_id = :from")
+    suspend fun reassignUser(from: String, to: String): Int
+
     @Insert(onConflict = OnConflictStrategy.ABORT)
     suspend fun insert(row: ReminderInstanceEntity)
 
@@ -174,4 +180,10 @@ interface SyncQueueDao {
 
     @Query("UPDATE sync_queue SET dead_letter = 0, attempts = 0, last_error = NULL WHERE id = :id")
     suspend fun requeue(id: Long)
+
+    @Query("SELECT * FROM sync_queue ORDER BY id ASC")
+    suspend fun all(): List<SyncQueueEntity>
+
+    @Query("UPDATE sync_queue SET payload = :payload WHERE id = :id")
+    suspend fun setPayload(id: Long, payload: String)
 }
