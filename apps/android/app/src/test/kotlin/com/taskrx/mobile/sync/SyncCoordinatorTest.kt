@@ -157,6 +157,40 @@ class SyncCoordinatorTest {
         }
 
     @Test
+    fun `a server that keeps refusing the token gets a fresh login, and the write then arrives`() =
+        withFixture(T0) {
+            // As measured on a Pixel after airplane mode: every call refused until the app
+            // logged in again. Nothing but a login lifts the refusal here.
+            val job = Job()
+            val inner = FakeGateway()
+            var loggedIn = false
+            inner.onMutation = { _, args -> if (loggedIn) Json.parseToJsonElement("\"cid-${args["localId"]}\"") else error("Not authenticated") }
+            inner.feeds[ConvexFunctions.REMINDERS_LIST] = flowOf(Json.parseToJsonElement("[]"))
+            inner.feeds[ConvexFunctions.INSTANCES_LIST] = flowOf(Json.parseToJsonElement("[]"))
+            val gateway = ReauthenticatingGateway(inner, onRefused = { loggedIn = true })
+            val connectivity = FakeConnectivity()
+            val worker = PushWorker(container.syncQueue, container.reminders, container.instances, gateway, connectivity, { USER }, { })
+            val coordinator =
+                SyncCoordinator(
+                    CoroutineScope(job + Dispatchers.Default),
+                    FakeAuth(initial = AuthStatus.SignedIn(USER)),
+                    MutableStateFlow(true),
+                    worker,
+                    PullSync(gateway, PullApplier(container.reminders, container.instances)) { },
+                    connectivity,
+                    pendingPollMs = 20,
+                )
+            try {
+                reminder("m1")
+                coordinator.start()
+
+                until("the reminder pushed") { container.syncQueue.pending().isEmpty() }
+            } finally {
+                job.cancel()
+            }
+        }
+
+    @Test
     fun `a foreground drains while syncing, and signing out stops it`() =
         rig {
             coordinator.start()

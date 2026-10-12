@@ -1,6 +1,7 @@
 package com.taskrx.mobile.auth
 
 import android.content.Context
+import android.util.Log
 import com.clerk.api.Clerk
 import com.clerk.api.network.serialization.ClerkResult
 import com.clerk.api.session.GetTokenOptions
@@ -8,6 +9,7 @@ import dev.convex.android.AuthProvider
 import dev.convex.android.AuthState
 import dev.convex.android.ConvexClientWithAuth
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
@@ -41,8 +43,17 @@ class ClerkConvexAuthProvider : AuthProvider<String> {
         if (Clerk.session == null) return Result.failure(IllegalStateException("No active Clerk session"))
         return when (val result = Clerk.auth.getToken(GetTokenOptions(template = CONVEX_JWT_TEMPLATE, skipCache = true))) {
             is ClerkResult.Success -> Result.success(result.value)
-            is ClerkResult.Failure -> Result.failure(result.throwable ?: IllegalStateException("Clerk token request failed"))
+            is ClerkResult.Failure -> {
+                val error = result.throwable ?: IllegalStateException("Clerk token request failed")
+                // Otherwise silent: the library swallows it and the server just says "Not authenticated".
+                Log.w(TAG, "Clerk token request failed", error)
+                Result.failure(error)
+            }
         }
+    }
+
+    private companion object {
+        const val TAG = "convexAuth"
     }
 }
 
@@ -53,9 +64,9 @@ class ClerkConvexAuthProvider : AuthProvider<String> {
  */
 class ConvexSession(
     deploymentUrl: String,
-    auth: AuthGateway,
+    private val auth: AuthGateway,
     private val context: Context,
-    scope: CoroutineScope,
+    private val scope: CoroutineScope,
 ) {
     val client = ConvexClientWithAuth(deploymentUrl, ClerkConvexAuthProvider())
 
@@ -68,6 +79,20 @@ class ConvexSession(
             if (client.loginFromCache().isSuccess) return
             delay(LOGIN_RETRY_MS)
         }
+    }
+
+    private var relogin: Job? = null
+
+    /**
+     * Logs in again from the Clerk session, for a server that refused the token it holds (see
+     * [com.taskrx.mobile.sync.ReauthenticatingGateway]). Launched in the session's own scope,
+     * never the caller's: the login flips [ready], which cancels sync, which would cancel a
+     * login running inside a drain halfway through.
+     */
+    @Synchronized
+    fun reauthenticate() {
+        if (auth.status.value !is AuthStatus.SignedIn || relogin?.isActive == true) return
+        relogin = scope.launch { loginWithRetry() }
     }
 
     init {

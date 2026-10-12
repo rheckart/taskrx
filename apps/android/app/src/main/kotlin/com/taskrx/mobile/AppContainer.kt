@@ -24,6 +24,7 @@ import com.taskrx.mobile.sync.PullApplier
 import com.taskrx.mobile.sync.PullSync
 import com.taskrx.mobile.sync.PushWorker
 import com.taskrx.mobile.sync.RealConvexGateway
+import com.taskrx.mobile.sync.ReauthenticatingGateway
 import com.taskrx.mobile.sync.SyncCoordinator
 import com.taskrx.mobile.sweep.MissedSweepRunner
 import com.taskrx.mobile.sweep.RoomSweepStore
@@ -106,7 +107,7 @@ class AppContainer(
 
             val auth = ClerkAuthGateway(context, clerkKey, scope)
             val convex = ConvexSession(convexUrl, auth, context.applicationContext, scope)
-            val remote = Remote(RealConvexGateway(convex.client), convex.ready, AndroidConnectivity(context))
+            val remote = Remote(ReauthenticatingGateway(RealConvexGateway(convex.client), convex::reauthenticate), convex.ready, AndroidConnectivity(context))
             return AppContainer(context, TaskRxDatabase.open(context), auth = auth, remote = remote, scope = scope)
         }
     }
