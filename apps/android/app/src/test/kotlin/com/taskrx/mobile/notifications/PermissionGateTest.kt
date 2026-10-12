@@ -242,12 +242,6 @@ class AndroidPermissionPlatformTest {
         assertFalse(record.shown(), "a prompt that never went up is not a prompt shown")
     }
 
-    @Test
-    fun `before API 33 there is no prompt to raise`() {
-        val old = AndroidPermissionPlatform(app, alarmApi, record, sdk = 32)
-        old.host = PromptHost {}
-        assertFalse(old.requestNotifications())
-    }
 
     @Test
     fun `the exact alarm setting follows the system`() {
@@ -265,11 +259,6 @@ class AndroidPermissionPlatformTest {
         assertEquals(app.packageName, intent.getStringExtra(Settings.EXTRA_APP_PACKAGE))
     }
 
-    @Test
-    fun `opens the app details page before API 26`() {
-        AndroidPermissionPlatform(app, alarmApi, record, sdk = 24).openNotificationSettings()
-        assertEquals(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, shadowOf(app).nextStartedActivity.action)
-    }
 
     @Test
     fun `opens the exact alarm special-access screen`() {
@@ -279,11 +268,6 @@ class AndroidPermissionPlatformTest {
         assertEquals("package:${app.packageName}", intent.dataString)
     }
 
-    @Test
-    fun `has no alarm screen to open before API 31`() {
-        AndroidPermissionPlatform(app, alarmApi, record, sdk = 30).openAlarmSettings()
-        assertNull(shadowOf(app).nextStartedActivity)
-    }
 }
 
 @RunWith(RobolectricTestRunner::class)

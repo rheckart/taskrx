@@ -8,8 +8,9 @@ Two Gradle modules:
   coverage by Kover. A rule never lives in `:app`.
 - `:app` - the Android application: Room storage, notifications, Compose screens, sign-in and sync.
 
-Requirements: JDK 17, the Android SDK (`sdk.dir` in `local.properties`), `compileSdk` 36, `minSdk` 26
-(the Convex client library requires 26).
+Requirements: JDK 17, the Android SDK (`sdk.dir` in `local.properties`), `compileSdk` 36, `minSdk` 33
+(Android 13). The Convex client library needs 26; 33 was chosen so every device has the notification
+permission prompt and the exact-alarm permission, and the app carries no code for older releases.
 
 ## Build
 
