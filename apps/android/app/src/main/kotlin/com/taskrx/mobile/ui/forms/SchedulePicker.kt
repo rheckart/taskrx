@@ -43,7 +43,7 @@ import com.taskrx.mobile.ui.components.FieldLabel
 import com.taskrx.mobile.ui.components.HintText
 
 /**
- * Schedule picker for the reminder forms. Mirrors apps/mobile SchedulePicker.tsx.
+ * Schedule picker for the reminder forms. Mirrors archive/expo-rn:apps/mobile SchedulePicker.tsx.
  *
  * It speaks :core's `ScheduleTimes` directly, one value discriminated by its own type, and
  * all five variants are editable:

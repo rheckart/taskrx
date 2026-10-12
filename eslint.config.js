@@ -1,7 +1,5 @@
 import js from "@eslint/js";
 import tseslint from "typescript-eslint";
-import react from "eslint-plugin-react";
-import reactHooks from "eslint-plugin-react-hooks";
 import importPlugin from "eslint-plugin-import";
 import prettier from "eslint-config-prettier";
 
@@ -10,17 +8,13 @@ export default tseslint.config(
     ignores: [
       "**/node_modules/**",
       "**/dist/**",
-      "**/.expo/**",
       "**/.convex/**",
       "**/convex/_generated/**",
       "**/coverage/**",
       "**/*.config.js",
       "**/*.config.ts",
-      "**/plugins/**/*.js",
-      // Standalone operational scripts (shell, and plain Node run directly
-      // with `node`). They are outside every tsconfig `include`, so the
-      // type-aware rules have no project to resolve them against.
-      "apps/mobile/scripts/**",
+      // The Kotlin app is built by Gradle; nothing under it is TypeScript.
+      "apps/android/**",
     ],
   },
   js.configs.recommended,
@@ -41,15 +35,9 @@ export default tseslint.config(
     files: ["**/*.{ts,tsx}"],
     plugins: {
       "@typescript-eslint": tseslint.plugin,
-      react,
-      "react-hooks": reactHooks,
       import: importPlugin,
     },
     rules: {
-      ...react.configs.recommended.rules,
-      ...react.configs["jsx-runtime"].rules,
-      ...reactHooks.configs.recommended.rules,
-      "react/react-in-jsx-scope": "off",
       "@typescript-eslint/no-explicit-any": "error",
       "@typescript-eslint/ban-ts-comment": "error",
       "@typescript-eslint/no-unsafe-assignment": "error",
@@ -73,17 +61,6 @@ export default tseslint.config(
           "newlines-between": "always",
         },
       ],
-    },
-    settings: {
-      react: {
-        version: "detect",
-      },
-    },
-  },
-  {
-    files: ["apps/mobile/**/*.{ts,tsx}"],
-    rules: {
-      "react-hooks/exhaustive-deps": "error",
     },
   },
   {

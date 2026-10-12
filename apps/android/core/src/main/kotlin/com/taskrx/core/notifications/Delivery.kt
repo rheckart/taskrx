@@ -8,7 +8,7 @@ import java.time.ZoneId
 
 /*
  * How each Tier is delivered, and the identity of every notification the app arms.
- * Ported from apps/mobile/src/notifications/scheduler.ts and snooze.ts: everything
+ * Ported from archive/expo-rn:apps/mobile/src/notifications/scheduler.ts and snooze.ts: everything
  * there that was a decision rather than a call into the operating system.
  *
  * The :app module owns the calls (AlarmManager, WorkManager, NotificationManager);

@@ -46,7 +46,7 @@ import com.taskrx.mobile.ui.components.SectionHeader
 
 /**
  * The Adherence screen, drawn from [state]. Mirrors the render half of
- * apps/mobile/app/(app)/adherence.tsx. Tasks are absent by the calculator's rule, so a
+ * archive/expo-rn:apps/mobile/app/(app)/adherence.tsx. Tasks are absent by the calculator's rule, so a
  * productive week cannot disguise a bad medication one.
  */
 @Composable

@@ -101,7 +101,7 @@ data class AddState(
 }
 
 /**
- * Type a phrase, get the right Reminder. Mirrors apps/mobile/app/(app)/add.tsx.
+ * Type a phrase, get the right Reminder. Mirrors archive/expo-rn:apps/mobile/app/(app)/add.tsx.
  *
  * The engine is :core's `readPhrase`; this adds no grammar. It collects a phrase, hands
  * it over, holds what came back as an editable draft, and writes what the person agreed

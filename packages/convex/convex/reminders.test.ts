@@ -12,7 +12,7 @@ import schema from "./schema.js";
  * `priority`, `tags` and `caregiverIds` have no author on the device — the
  * columns hold migration 004's defaults, so
  * sending them could only ever transmit a default over whatever a client that
- * *can* author them had set. `apps/mobile/scripts/verify-reminder-migrations.mjs`
+ * *can* author them had set. `archive/expo-rn:apps/mobile/scripts/verify-reminder-migrations.mjs`
  * Part J pins the client half statically, because reproducing the failure needs
  * a second writer and one device cannot be two. This is the server half, and it
  * runs: a second writer is just a second call here.

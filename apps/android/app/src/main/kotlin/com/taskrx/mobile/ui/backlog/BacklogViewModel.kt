@@ -41,7 +41,7 @@ data class BacklogState(
 fun canMoveToTimeline(schedule: ScheduleTimes): Boolean = isWellFormedSchedule(schedule) && schedule !is NoneTimes
 
 /**
- * The Backlog: commitments with no moment attached. Mirrors apps/mobile/app/(app)/backlog.
+ * The Backlog: commitments with no moment attached. Mirrors archive/expo-rn:apps/mobile/app/(app)/backlog.
  *
  * It is rendered from the Reminder rows themselves, which is what ADR 0002 requires of it:
  * a Backlog Reminder produces no Occurrences, so it is invisible to any query over

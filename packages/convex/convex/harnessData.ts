@@ -6,7 +6,7 @@ import { internalMutation } from "./_generated/server";
  * Hard-deletes the rows the adb notification harness seeds.
  *
  * Every run of harness case 8 or 9 creates a real reminder and answers a real
- * dose against it (`apps/mobile/scripts/notification-harness.sh`), and both
+ * dose against it (`archive/expo-rn:apps/mobile/scripts/notification-harness.sh`), and both
  * push to Convex like any other write. The harness's own `cleanup-seeded`
  * action soft-deletes the reminder, which is the right thing on a user's
  * device — a deleted medication is history, not a mistake — but it leaves the
@@ -24,7 +24,7 @@ import { internalMutation } from "./_generated/server";
 
 /**
  * Must equal `HARNESS_REMINDER_MARKER` in
- * `apps/mobile/src/notifications/harness.ts`, which is what writes these names.
+ * `archive/expo-rn:apps/mobile/src/notifications/harness.ts`, which is what writes these names.
  * The two cannot share a constant — this package does not depend on the mobile
  * app — so the string is pinned by a test on each side instead.
  *

@@ -40,7 +40,7 @@ import com.taskrx.mobile.ui.forms.scheduleTypeOf
 private val KINDS = listOf(ReminderKind.Medication to "Medication", ReminderKind.Task to "Task")
 
 /**
- * Add by phrase. Mirrors apps/mobile/app/(app)/add.tsx.
+ * Add by phrase. Mirrors archive/expo-rn:apps/mobile/app/(app)/add.tsx.
  *
  * Nothing is saved until it has been seen: the parser is a small deterministic grammar,
  * so it is confidently wrong on phrases it does not cover, and a medication saved with a

@@ -41,7 +41,7 @@ data class BacklogActions(
     val onMoveToTimeline: (Reminder, ScheduleTimes) -> Unit,
 )
 
-/** The Backlog, drawn from [state]. Mirrors the render half of apps/mobile/app/(app)/backlog/index.tsx. */
+/** The Backlog, drawn from [state]. Mirrors the render half of archive/expo-rn:apps/mobile/app/(app)/backlog/index.tsx. */
 @Composable
 fun BacklogContent(state: BacklogState, actions: BacklogActions, modifier: Modifier = Modifier, now: () -> Long = System::currentTimeMillis) {
     ListScaffold(

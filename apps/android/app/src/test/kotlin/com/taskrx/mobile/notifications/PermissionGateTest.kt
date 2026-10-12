@@ -55,7 +55,7 @@ private class FakePlatform : PermissionPlatform {
 }
 
 /*
- * Mirrors apps/mobile/src/notifications/permission-gate.test.ts. On Android the prompt's
+ * Mirrors archive/expo-rn:apps/mobile/src/notifications/permission-gate.test.ts. On Android the prompt's
  * answer arrives later, through onPromptResult, instead of as the awaited result of the
  * request; the cases are the same.
  */

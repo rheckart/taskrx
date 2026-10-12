@@ -28,7 +28,7 @@ data class HistoryState(
 const val UNKNOWN_REMINDER: String = "Unknown reminder"
 
 /**
- * The history of what became of each Occurrence. Mirrors apps/mobile/app/(app)/dose/history.tsx.
+ * The history of what became of each Occurrence. Mirrors archive/expo-rn:apps/mobile/app/(app)/dose/history.tsx.
  *
  * Both Kinds are listed, each titled from its own Reminder. (The Expo screen read only
  * medications for the titles, so a task's row said "Unknown medication"; the Instances were

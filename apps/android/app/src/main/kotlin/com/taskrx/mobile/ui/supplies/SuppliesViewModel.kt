@@ -38,7 +38,7 @@ data class SupplyDraft(
 )
 
 /**
- * "Am I about to run out?" Mirrors apps/mobile/app/(app)/refill.tsx.
+ * "Am I about to run out?" Mirrors archive/expo-rn:apps/mobile/app/(app)/refill.tsx.
  *
  * Every rule is :core's: `projectRefill` says how long a supply lasts, `planRefill` what a
  * Refill Reminder is, `reconcileRefills` which ones the Backlog gains and loses.

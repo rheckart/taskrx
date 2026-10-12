@@ -8,7 +8,7 @@ import kotlinx.serialization.json.JsonPrimitive
 
 /*
  * What the push worker sends for a sync-queue entry, ported from `processReminderEntry` and
- * `processReminderInstanceEntry` in `apps/mobile/src/sync/worker.ts`. The Convex functions
+ * `processReminderInstanceEntry` in `archive/expo-rn:apps/mobile/src/sync/worker.ts`. The Convex functions
  * and their argument validators (packages/convex/convex) are the contract.
  *
  * Pure: a queue payload goes in, the call to make comes out. The worker does the I/O.

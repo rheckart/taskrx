@@ -20,7 +20,7 @@ import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 
 /**
- * Executable coverage for the Adherence read (apps/mobile/src/adherence/read.test.ts).
+ * Executable coverage for the Adherence read (archive/expo-rn:apps/mobile/src/adherence/read.test.ts).
  *
  * :core runs every rule about the figure and the window. What it cannot reach is what the
  * ticket is about: whether the doses nobody answered have been recorded by the time the

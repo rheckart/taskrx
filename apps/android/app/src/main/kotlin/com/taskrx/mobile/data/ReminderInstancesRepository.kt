@@ -42,7 +42,7 @@ data class PulledReminderInstance(
 
 /**
  * Local repository for Reminder Instances: the record of what became of one Occurrence.
- * Mirrors apps/mobile/src/db/repos/reminderInstances.ts.
+ * Mirrors archive/expo-rn:apps/mobile/src/db/repos/reminderInstances.ts.
  *
  * Append-only history: nothing here deletes a row. A "deletion" is a status change,
  * and the `update` entry it enqueues carries it. Writes and their enqueue share one

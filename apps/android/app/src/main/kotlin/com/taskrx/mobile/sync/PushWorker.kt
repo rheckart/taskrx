@@ -32,7 +32,7 @@ import kotlinx.serialization.json.JsonPrimitive
 
 /**
  * The push half of sync: drains the local `sync_queue` into the Convex mutations. Mirrors
- * apps/mobile/src/sync/worker.ts.
+ * archive/expo-rn:apps/mobile/src/sync/worker.ts.
  *
  * Which call an entry becomes, the retry limit and the backoff are :core's
  * (`com.taskrx.core.sync`); this class does the I/O around them. The local UUID <-> server

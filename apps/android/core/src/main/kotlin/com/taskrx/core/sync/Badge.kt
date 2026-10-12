@@ -2,7 +2,7 @@ package com.taskrx.core.sync
 
 /*
  * What the header's sync badge shows, ported from `useSyncStatus` in
- * `apps/mobile/src/sync/pull.ts`.
+ * `archive/expo-rn:apps/mobile/src/sync/pull.ts`.
  */
 
 /** What the push worker last did. */

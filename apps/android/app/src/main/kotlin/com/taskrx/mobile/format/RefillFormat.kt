@@ -9,7 +9,7 @@ import java.util.Locale
 
 /*
  * How the Supplies surface says what a projection means. Mirrors
- * apps/mobile/src/format/refill.ts. Every line is a judgement about what a number
+ * archive/expo-rn:apps/mobile/src/format/refill.ts. Every line is a judgement about what a number
  * means, and on this surface the wrong sentence over the right number is the whole
  * failure mode: "Plenty left" over an empty bottle, "0 days" over a supply nobody
  * recorded.

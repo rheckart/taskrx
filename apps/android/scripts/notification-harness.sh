@@ -3,7 +3,7 @@
 # notification-harness.sh — adb-driven notification test harness.
 #
 # ── THE KOTLIN PORT ────────────────────────────────────────────────────────
-# This is apps/mobile/scripts/notification-harness.sh, moved here with as few changes
+# This is archive/expo-rn:apps/mobile/scripts/notification-harness.sh, moved here with as few changes
 # as the new app allowed. It drives `com.taskrx.mobile` (same applicationId) over
 # the same hidden deep link, `taskrx:///harness/<action>/<id>/<delayMs>/<nonce>`,
 # and reads the same three logcat lines, `[harness] action=…`, `[harness] result:`

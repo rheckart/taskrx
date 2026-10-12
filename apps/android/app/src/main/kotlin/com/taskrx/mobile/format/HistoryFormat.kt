@@ -8,7 +8,7 @@ import java.time.ZoneId
 import java.util.Locale
 
 /*
- * The words on the history list. Mirrors apps/mobile/app/(app)/dose/history.tsx.
+ * The words on the history list. Mirrors archive/expo-rn:apps/mobile/app/(app)/dose/history.tsx.
  *
  * Presentation only: which Instances exist and what status each has is decided elsewhere.
  * This is the one place a Kind check on status is allowed on this surface (ADR 0001): a

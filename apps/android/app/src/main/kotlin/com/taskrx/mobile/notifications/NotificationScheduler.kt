@@ -17,7 +17,7 @@ import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 
 /**
- * Mirrors apps/mobile/src/notifications/scheduler.ts and snooze.ts. Which notifications
+ * Mirrors archive/expo-rn:apps/mobile/src/notifications/scheduler.ts and snooze.ts. Which notifications
  * should exist, what to cancel and what to create are all :core's (`desiredNotifications`,
  * `planReschedule`); this class reads the store, asks each Tier's gateway what it holds,
  * and makes the calls.

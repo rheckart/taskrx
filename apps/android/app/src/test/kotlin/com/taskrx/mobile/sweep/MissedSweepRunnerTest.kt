@@ -25,7 +25,7 @@ import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 
 /**
- * Executable coverage for the sweep's persistence pass (apps/mobile/src/sweep/runner.test.ts).
+ * Executable coverage for the sweep's persistence pass (archive/expo-rn:apps/mobile/src/sweep/runner.test.ts).
  *
  * The planner's rules are tested in :core; this covers what nothing there can reach: which
  * of the two writes a verdict becomes, and whether two foregrounds arriving together can
