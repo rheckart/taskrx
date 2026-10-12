@@ -8,6 +8,37 @@ for commit discipline (POC tags use `0.x.x`).
 
 ## [Unreleased]
 
+### 2026-10-12 — A dose that came due while the phone was off is posted at boot
+
+An alarm does not survive a reboot. The boot receiver re-armed what was still ahead, so a dose due
+while the phone was off was behind it: no alarm, no notification, nothing until the app was opened.
+
+- After a boot (and only a boot: not an app update, a clock change or a permission change, since
+  the phone was not off for those), each active medication dose inside the Grace Period is posted
+  at once. The rule is `dueWhileAway` in `:core`, with the same inclusive edge the missed sweep uses.
+- A dose with any Instance already (answered, skipped or snoozed) is left alone, and the
+  notification uses the dose's ordinary id, so one that had already fired is replaced, not doubled.
+- Older than the Grace Period stays the sweep's: Missed, in History and the Backlog.
+- Tasks need nothing: WorkManager keeps their work across a reboot and runs it when the phone is up.
+  Checked on the emulator, a task due while it was off arrived after boot.
+
+### 2026-10-12 — A dose that failed for good no longer reads Synced
+
+After five failed tries the push worker sets a change aside (dead letter). The worker's status went
+back to Idle on the next quiet pass, so the badge read Synced over a dose that never reached the server.
+
+- The badge rule (`:core`) stays Error while any change is set aside.
+- Tapping the error mark opens "Sync problems": each stuck change in words, the server's reason, and
+  a Try again button. It puts each change back to waiting with a clean count and its row back to
+  `pending`, in the order they were written, and the coordinator drains. Only the signed-in user's own
+  entries are listed or retried.
+
+### 2026-10-12 — Release builds shrink and sign
+
+R8 and resource shrinking are on, with the keep rules JNA and the Convex client need, and the upload
+key comes from `local.properties` or the environment (`apps/android/README.md`, "Release build").
+A release build that assembles proves nothing about R8 and reflection: it has to be installed and run.
+
 ### 2026-10-12 — A taken dose spends its pills
 
 Settles the "known gap" left open on 2026-08-14. The rule is `supplyAfterDose` in `:core`, and

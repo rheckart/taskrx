@@ -71,7 +71,7 @@ class AppContainer(
     val adherence = AdherenceReader(sweep, instances)
     val refills = RefillReader(reminders, newId)
 
-    val notifications = NotificationsModule(context, reminders, clock)
+    val notifications = NotificationsModule(context, reminders, instances, clock)
 
     /** Whose data this is: the Clerk user when signed in, else the local user (see [Session]). */
     val session = Session(notifications.currentUser, auth) { from, to -> LocalAdoption(database).adopt(from, to) }

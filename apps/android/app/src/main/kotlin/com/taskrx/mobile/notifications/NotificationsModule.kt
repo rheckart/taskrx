@@ -3,8 +3,13 @@ package com.taskrx.mobile.notifications
 import android.app.AlarmManager
 import android.content.Context
 import androidx.work.WorkManager
+import com.taskrx.core.notifications.NotificationSpec
 import com.taskrx.core.notifications.RearmCause
+import com.taskrx.core.notifications.dueWhileAway
+import com.taskrx.core.sweep.GRACE_PERIOD_MS
 import com.taskrx.mobile.data.Clock
+import com.taskrx.mobile.data.InstanceFilter
+import com.taskrx.mobile.data.ReminderInstancesRepository
 import com.taskrx.mobile.data.RemindersRepository
 import android.util.Log
 import kotlinx.coroutines.CancellationException
@@ -12,6 +17,7 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
+import java.time.ZoneId
 import kotlinx.coroutines.launch
 
 /**
@@ -20,11 +26,13 @@ import kotlinx.coroutines.launch
  */
 class NotificationsModule(
     private val context: Context,
-    reminders: RemindersRepository,
-    clock: Clock,
+    private val reminders: RemindersRepository,
+    private val instances: ReminderInstancesRepository,
+    private val clock: Clock,
     alarmApi: AlarmApi = SystemAlarmApi(context.getSystemService(AlarmManager::class.java)),
     workManager: () -> WorkManager = { WorkManager.getInstance(context) },
     private val scope: CoroutineScope = CoroutineScope(SupervisorJob() + Dispatchers.Default),
+    private val post: (NotificationSpec) -> Unit = { NotificationPoster.post(context, it) },
 ) {
     private val prefs = NotificationPrefs(context)
     val currentUser = CurrentUser(prefs)
@@ -85,10 +93,26 @@ class NotificationsModule(
      */
     suspend fun rescheduleAfterWrite(userId: String) = logged("reschedule after write") { scheduler.rescheduleAll(userId) }
 
-    /** A system broadcast says the armed state may be stale. */
+    /**
+     * A system broadcast says the armed state may be stale. After a boot, doses that came due
+     * while the phone was off are posted too: their alarms died with the reboot, and re-arming
+     * only looks ahead. Which doses is `dueWhileAway` in :core.
+     */
     fun rearm(cause: RearmCause): Job? {
         val userId = currentUser.get() ?: return null
-        return scope.launch { logged("rearm $cause") { scheduler.rescheduleAll(userId, cause) } }
+        return scope.launch {
+            logged("rearm $cause") { scheduler.rescheduleAll(userId, cause) }
+            if (cause == RearmCause.Boot) logged("posting doses due while the phone was off") { postDueWhileAway(userId) }
+        }
+    }
+
+    private suspend fun postDueWhileAway(userId: String) {
+        val now = clock()
+        val handled =
+            instances.list(InstanceFilter(userId = userId, since = now - GRACE_PERIOD_MS, until = now))
+                .map { it.reminderId to it.scheduledTime }
+                .toSet()
+        for (spec in dueWhileAway(reminders.list(userId), now, handled, ZoneId.systemDefault())) post(spec)
     }
 }
 

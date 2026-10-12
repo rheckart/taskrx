@@ -134,6 +134,7 @@ kover {
             "com.taskrx.core.refill.UnprojectableReason*",
             "com.taskrx.core.refill.RefillProjection*",
             "com.taskrx.core.refill.SupplyKt*",
+            "com.taskrx.core.notifications.DueWhileAwayKt*",
             "com.taskrx.core.refill.ReconcileKt*",
             "com.taskrx.core.refill.ReconcileRefillsInput",
             "com.taskrx.core.refill.RefillReconciliation",
