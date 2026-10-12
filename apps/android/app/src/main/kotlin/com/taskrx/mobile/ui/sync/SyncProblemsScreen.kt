@@ -23,7 +23,7 @@ import com.taskrx.mobile.ui.components.PrimaryButton
 @Composable
 fun SyncProblemsContent(state: SyncProblemsState, onRetry: () -> Unit, modifier: Modifier = Modifier) {
     if (!state.loading && state.items.isEmpty() && state.error == null) {
-        EmptyState("Nothing is stuck", "Every change on this phone has been sent.", modifier.fillMaxSize())
+        EmptyState("Nothing is stuck", "No change has been set aside. Anything still waiting is being sent.", modifier.fillMaxSize())
         return
     }
     Column(modifier.fillMaxSize().padding(16.dp)) {
