@@ -1,6 +1,7 @@
 package com.taskrx.mobile.ui.components
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -34,7 +35,7 @@ fun syncBadgeDescription(badge: SyncBadge): String =
  * `SyncStatusBadge`. Never the only signal - the description is spoken.
  */
 @Composable
-fun SyncStatusBadge(badge: SyncBadge, modifier: Modifier = Modifier) {
+fun SyncStatusBadge(badge: SyncBadge, modifier: Modifier = Modifier, onProblems: (() -> Unit)? = null) {
     val (tint, glyph, mark) =
         when (badge) {
             SyncBadge.Synced -> Triple(Color(0xFFE6F9EE), "✓", Color(0xFF34C759))
@@ -49,6 +50,8 @@ fun SyncStatusBadge(badge: SyncBadge, modifier: Modifier = Modifier) {
             .size(24.dp)
             .clip(CircleShape)
             .background(tint)
+            // Only the error mark is a button: it is the one that has somewhere to go.
+            .then(if (badge == SyncBadge.Error && onProblems != null) Modifier.clickable(onClick = onProblems) else Modifier)
             .semantics { contentDescription = syncBadgeDescription(badge) },
         contentAlignment = Alignment.Center,
     ) {

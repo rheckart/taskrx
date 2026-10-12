@@ -38,7 +38,8 @@ class SyncBadgeTest {
         connected: Boolean? = true,
         worker: SyncWorkerStatus = SyncWorkerStatus.Idle,
         pending: Boolean = false,
-    ) = syncBadge(signedIn, connected, worker, pending)
+        stuck: Boolean = false,
+    ) = syncBadge(signedIn, connected, worker, pending, stuck)
 
     @Test
     fun `is synced when signed in, connected, idle and nothing waits`() {
@@ -74,6 +75,20 @@ class SyncBadgeTest {
     fun `unpushed work is pending, even after a failed drain`() {
         assertEquals(SyncBadge.Pending, badge(pending = true))
         assertEquals(SyncBadge.Pending, badge(worker = SyncWorkerStatus.Error, pending = true))
+    }
+
+    @Test
+    fun `a change that failed for good stays an error after the worker goes quiet`() {
+        assertEquals(SyncBadge.Error, badge(stuck = true))
+        assertEquals(SyncBadge.Error, badge(stuck = true, pending = true))
+        assertEquals(SyncBadge.Error, badge(stuck = true, worker = SyncWorkerStatus.Idle))
+    }
+
+    @Test
+    fun `offline and syncing still outrank a stuck change`() {
+        assertEquals(SyncBadge.Offline, badge(stuck = true, connected = false))
+        assertEquals(SyncBadge.Offline, badge(stuck = true, signedIn = false))
+        assertEquals(SyncBadge.Syncing, badge(stuck = true, worker = SyncWorkerStatus.Syncing))
     }
 
     @Test

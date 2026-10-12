@@ -4,6 +4,7 @@ import com.taskrx.core.domain.ReminderKind
 import com.taskrx.core.domain.dailyTimes
 import com.taskrx.core.sync.ConvexFunctions
 import com.taskrx.core.sync.SyncBadge
+import com.taskrx.core.sync.SyncWorkerStatus
 import com.taskrx.mobile.Fixture
 import com.taskrx.mobile.USER
 import com.taskrx.mobile.auth.AuthStatus
@@ -40,6 +41,7 @@ class SyncCoordinatorTest {
                 auth,
                 ready,
                 worker,
+                StuckChanges(fx.container.syncQueue, fx.container.reminders, fx.container.instances) { USER },
                 PullSync(gateway, PullApplier(fx.container.reminders, fx.container.instances)) { },
                 connectivity,
                 pendingPollMs = 20,
@@ -102,6 +104,26 @@ class SyncCoordinatorTest {
             coordinator.start()
 
             until("a pending badge") { coordinator.badge.value == SyncBadge.Pending }
+        }
+
+    @Test
+    fun `a change that failed for good keeps the badge on error until it is tried again and goes up`() =
+        rig {
+            fx.reminder("m1")
+            gateway.onMutation = { _, _ -> error("rejected") }
+            coordinator.start()
+            // Five failures, then the worker goes quiet: the old badge read Synced here.
+            until("an error badge with nothing waiting") { fx.container.syncQueue.deadLettered().isNotEmpty() && coordinator.badge.value == SyncBadge.Error }
+            // The next drain finds nothing waiting and the worker goes Idle: the badge must not.
+            coordinator.onForeground()
+            until("the worker to go quiet") { worker.status.value == SyncWorkerStatus.Idle }
+            delay(100)
+            assertEquals(SyncBadge.Error, coordinator.badge.value)
+
+            gateway.onMutation = { _, args -> Json.parseToJsonElement("\"cid-${args["localId"]}\"") }
+            StuckChanges(fx.container.syncQueue, fx.container.reminders, fx.container.instances) { USER }.retryAll()
+
+            until("synced again") { coordinator.badge.value == SyncBadge.Synced }
         }
 
     @Test
@@ -190,6 +212,7 @@ class SyncCoordinatorTest {
                     FakeAuth(initial = AuthStatus.SignedIn(USER)),
                     MutableStateFlow(true),
                     worker,
+                    StuckChanges(container.syncQueue, container.reminders, container.instances) { USER },
                     PullSync(gateway, PullApplier(container.reminders, container.instances)) { },
                     connectivity,
                     pendingPollMs = 20,

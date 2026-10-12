@@ -242,6 +242,9 @@ class ReminderInstancesRepository(
 
     suspend fun markSynced(id: String) = dao.setSyncStatus(id, SyncStatus.SYNCED)
 
+    /** Puts a row that was marked `error` back to waiting, for a retry of its dead-lettered change. */
+    suspend fun markPending(id: String) = dao.setSyncStatus(id, SyncStatus.PENDING)
+
     /** Marks the row `error` and logs why, as the Expo repo does: a failed sync is never silent. */
     suspend fun markError(id: String, error: String) {
         dao.setSyncStatus(id, SyncStatus.ERROR)

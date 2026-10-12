@@ -57,6 +57,8 @@ import com.taskrx.mobile.ui.reminders.RemindersContent
 import com.taskrx.mobile.ui.reminders.RemindersViewModel
 import com.taskrx.mobile.ui.search.DrugSearchContent
 import com.taskrx.mobile.ui.search.DrugSearchViewModel
+import com.taskrx.mobile.ui.sync.SyncProblemsContent
+import com.taskrx.mobile.ui.sync.SyncProblemsViewModel
 import com.taskrx.mobile.ui.supplies.SuppliesActions
 import com.taskrx.mobile.ui.supplies.SuppliesContent
 import com.taskrx.mobile.ui.supplies.SuppliesViewModel
@@ -142,7 +144,7 @@ private fun AppShell(container: AppContainer, signedIn: Boolean, modifier: Modif
                         if (signedIn) {
                             container.sync?.let { sync ->
                                 val badge by sync.badge.collectAsState()
-                                SyncStatusBadge(badge)
+                                SyncStatusBadge(badge, onProblems = { navController.navigate(Routes.SYNC_PROBLEMS) })
                             }
                             if (backStack?.destination?.route == Routes.TODAY) {
                                 val scope = rememberCoroutineScope()
@@ -284,6 +286,13 @@ private fun AppNavHost(container: AppContainer, navController: NavController) {
             val state by vm.state.collectAsState()
             LifecycleEventEffect(Lifecycle.Event.ON_RESUME) { vm.refresh() }
             HistoryContent(state, onRefresh = { vm.refresh(pulled = true) }, now = container.clock())
+        }
+
+        composable(Routes.SYNC_PROBLEMS) {
+            val vm = screenViewModel { SyncProblemsViewModel(container) }
+            val state by vm.state.collectAsState()
+            LifecycleEventEffect(Lifecycle.Event.ON_RESUME) { vm.refresh() }
+            SyncProblemsContent(state, onRetry = vm::retry)
         }
 
         composable(Routes.REMINDERS) {

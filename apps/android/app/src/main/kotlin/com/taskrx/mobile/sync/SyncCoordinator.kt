@@ -31,16 +31,18 @@ class SyncCoordinator(
     private val auth: AuthGateway,
     private val ready: StateFlow<Boolean>,
     private val worker: PushWorker,
+    private val stuck: StuckChanges,
     private val pull: PullSync,
     private val connectivity: Connectivity,
     private val pendingPollMs: Long = PENDING_POLL_MS,
 ) {
     private val hasPending = MutableStateFlow(false)
+    private val hasStuck = MutableStateFlow(false)
     private var syncJob: Job? = null
 
     val badge: StateFlow<SyncBadge> =
-        combine(auth.status, connectivity.connected, worker.status, hasPending) { status, connected, workerStatus, pending ->
-            syncBadge(status is AuthStatus.SignedIn, connected, workerStatus, pending)
+        combine(auth.status, connectivity.connected, worker.status, hasPending, hasStuck) { status, connected, workerStatus, pending, isStuck ->
+            syncBadge(status is AuthStatus.SignedIn, connected, workerStatus, pending, isStuck)
         }.stateIn(scope, SharingStarted.Eagerly, SyncBadge.Offline)
 
     fun start() {
@@ -49,7 +51,12 @@ class SyncCoordinator(
                 .collectLatest { active ->
                     // Signed in but between tokens is not "nothing waiting": the badge must not
                     // read Synced over a dose that is still queued while the client logs in again.
-                    if (active) runSync() else if (auth.status.value !is AuthStatus.SignedIn) hasPending.value = false
+                    if (active) {
+                        runSync()
+                    } else if (auth.status.value !is AuthStatus.SignedIn) {
+                        hasPending.value = false
+                        hasStuck.value = false
+                    }
                 }
         }
     }
@@ -72,6 +79,7 @@ class SyncCoordinator(
                 while (true) {
                     val count = worker.pendingCount()
                     hasPending.value = count > 0
+                    hasStuck.value = stuck.count() > 0
                     // A write made while online goes up now, not at the next foreground. Only
                     // a rise drains: an entry that keeps failing does not grow the count, so
                     // this cannot cut short the worker's backoff.
