@@ -95,3 +95,5 @@ local.properties
 # Self-hosted Convex secrets and database dumps
 infra/convex/.env
 infra/convex/backups/
+infra/convex/.env.*
+!infra/convex/.env.example

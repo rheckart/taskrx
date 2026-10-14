@@ -8,6 +8,15 @@ for commit discipline (POC tags use `0.x.x`).
 
 ## [Unreleased]
 
+### 2026-10-14 — The Convex backend runs on the VPS
+
+`https://taskrx.caballus.tech`, behind the Traefik already on the box, using the caballus stack's Postgres
+(its own role and database). A signed release build signs in with Clerk and syncs over HTTPS; the row was read
+back from the VPS database. See `infra/convex/README.md`, "The VPS".
+
+- `CONVEX_TARGET=vps ./deploy.sh` deploys to it; the admin key lives in the gitignored `infra/convex/.env.vps`.
+- No backup for the `taskrx` database yet: the box's backups cover only `caballus`.
+
 ### 2026-10-12 — A dose that came due while the phone was off is posted at boot
 
 An alarm does not survive a reboot. The boot receiver re-armed what was still ahead, so a dose due
