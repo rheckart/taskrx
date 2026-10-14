@@ -24,6 +24,7 @@ class NotificationsModuleTest {
                 NotificationsModule(
                     ApplicationProvider.getApplicationContext(),
                     container.reminders,
+                    container.instances,
                     { error("clock broke") },
                     scope = scope,
                 )
@@ -42,6 +43,7 @@ class NotificationsModuleTest {
                 NotificationsModule(
                     ApplicationProvider.getApplicationContext(),
                     container.reminders,
+                    container.instances,
                     { error("clock broke") },
                 )
 

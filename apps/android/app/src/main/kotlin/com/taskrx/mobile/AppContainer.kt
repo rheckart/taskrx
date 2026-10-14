@@ -26,6 +26,7 @@ import com.taskrx.mobile.sync.PullSync
 import com.taskrx.mobile.sync.PushWorker
 import com.taskrx.mobile.sync.RealConvexGateway
 import com.taskrx.mobile.sync.ReauthenticatingGateway
+import com.taskrx.mobile.sync.StuckChanges
 import com.taskrx.mobile.sync.SyncCoordinator
 import com.taskrx.mobile.sweep.MissedSweepRunner
 import com.taskrx.mobile.sweep.RoomSweepStore
@@ -64,13 +65,13 @@ class AppContainer(
 
     val syncQueue = SyncQueueRepository(database.syncQueueDao(), clock)
     val reminders = RemindersRepository(database, syncQueue, clock, newId)
-    val instances = ReminderInstancesRepository(database, syncQueue, clock, newId)
+    val instances = ReminderInstancesRepository(database, syncQueue, reminders, clock, newId)
 
     val sweep = MissedSweepRunner(RoomSweepStore(reminders, instances))
     val adherence = AdherenceReader(sweep, instances)
     val refills = RefillReader(reminders, newId)
 
-    val notifications = NotificationsModule(context, reminders, clock)
+    val notifications = NotificationsModule(context, reminders, instances, clock)
 
     /** Whose data this is: the Clerk user when signed in, else the local user (see [Session]). */
     val session = Session(notifications.currentUser, auth) { from, to -> LocalAdoption(database).adopt(from, to) }
@@ -82,11 +83,14 @@ class AppContainer(
             }
             ?: OfflineDrugSearch
 
+    /** The changes the push worker gave up on, and the way to try them again. */
+    val stuckChanges = StuckChanges(syncQueue, reminders, instances) { session.signedInUserId }
+
     /** Push and pull, running while signed in. Null in a local-only build. */
     val sync: SyncCoordinator? =
         remote?.let { r ->
             val worker = PushWorker(syncQueue, reminders, instances, r.gateway, r.connectivity, userId = { session.signedInUserId })
-            SyncCoordinator(scope, auth, r.ready, worker, PullSync(r.gateway, PullApplier(reminders, instances) { notifications.rescheduleAfterWrite(session.userId) }), r.connectivity)
+            SyncCoordinator(scope, auth, r.ready, worker, stuckChanges, PullSync(r.gateway, PullApplier(reminders, instances) { notifications.rescheduleAfterWrite(session.userId) }), r.connectivity)
         }
 
     init {

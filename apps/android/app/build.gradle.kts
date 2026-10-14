@@ -31,6 +31,33 @@ android {
         buildConfigField("String", "CLERK_PUBLISHABLE_KEY", "\"${setting("CLERK_PUBLISHABLE_KEY")}\"")
     }
 
+    // Upload key for release builds. All four values come from local.properties or the environment;
+    // if any is missing the release build is left unsigned (CI and the gate still assemble it).
+    val releaseSigning =
+        listOf("RELEASE_STORE_FILE", "RELEASE_STORE_PASSWORD", "RELEASE_KEY_ALIAS", "RELEASE_KEY_PASSWORD")
+            .associateWith(::setting)
+    val releaseSigningConfigured = releaseSigning.values.all { it.isNotEmpty() }
+
+    signingConfigs {
+        if (releaseSigningConfigured) {
+            create("release") {
+                storeFile = file(releaseSigning.getValue("RELEASE_STORE_FILE"))
+                storePassword = releaseSigning.getValue("RELEASE_STORE_PASSWORD")
+                keyAlias = releaseSigning.getValue("RELEASE_KEY_ALIAS")
+                keyPassword = releaseSigning.getValue("RELEASE_KEY_PASSWORD")
+            }
+        }
+    }
+
+    buildTypes {
+        release {
+            isMinifyEnabled = true
+            isShrinkResources = true
+            proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
+            if (releaseSigningConfigured) signingConfig = signingConfigs.getByName("release")
+        }
+    }
+
     buildFeatures {
         compose = true
         buildConfig = true
