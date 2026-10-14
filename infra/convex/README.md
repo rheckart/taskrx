@@ -43,18 +43,34 @@ Then set `CONVEX_URL=http://<lan-ip>:3220` in `apps/android/local.properties` an
 Android blocks cleartext HTTP in release builds; fine for a dev build.
 Alternative over USB: `adb reverse tcp:3220 tcp:3220` and use `127.0.0.1:3220`.
 
-## Moving to the Hostinger VPS
+## The VPS
 
-Same compose file. Change only:
+Live at `https://taskrx.caballus.tech`. The stack is `vps/docker-compose.yml`, which sits at
+`/docker/taskrx` on the box, beside `/docker/caballus` and `/docker/traefik`. It runs only the Convex
+backend:
 
-- Domain + TLS: reverse proxy (Caddy/nginx) with certificates, e.g.
-  `convex.example.com` -> 3220, `convex-site.example.com` -> 3221, dashboard
-  restricted or not exposed. Bind published ports to `127.0.0.1`.
-- `CONVEX_CLOUD_ORIGIN=https://convex.example.com`,
-  `CONVEX_SITE_ORIGIN=https://convex-site.example.com`; the app's
-  `EXPO_PUBLIC_CONVEX_URL` is the former.
-- Secrets: new `POSTGRES_PASSWORD`, `INSTANCE_SECRET`, admin key generated on
-  the server; `.env` mode 600, never in the repo. Keep `CLERK_JWT_ISSUER_DOMAIN`.
-- Backups: cron `backup.sh` and copy the dumps off the box (rsync/rclone to
-  other storage). A dump on the same disk is not a backup.
-- Firewall: only 80/443 open; Postgres stays unpublished.
+- **Traefik** (already on the box) terminates TLS with Let's Encrypt. The backend publishes no port: ufw is
+  off on that box, so a published port would be on the internet. The one public route is `taskrx.caballus.tech`
+  to 3210. There is no dashboard and no route for 3211, because the app has no HTTP actions.
+- **Postgres** is the one in the caballus stack, reached as `postgres` on the `caballus_default` network.
+  TaskRx has its own role and database, `taskrx`, created once by hand (a plain role, owner of its database).
+- **The image is pinned by digest**, and labelled so Watchtower (which updates every container daily on that
+  box) leaves it alone. Bump it on purpose, after trying the new build locally.
+- **Secrets** are in `/docker/taskrx/.env` (mode 600): `TASKRX_DB_PASSWORD` and `INSTANCE_SECRET`. The admin key
+  was made on the box (`docker compose exec -T backend ./generate_admin_key.sh`) and is kept in the gitignored
+  `infra/convex/.env.vps`, beside `CONVEX_SELF_HOSTED_URL` and `CLERK_JWT_ISSUER_DOMAIN`.
+
+Deploy functions and run any CLI command against it by naming the target:
+
+    CONVEX_TARGET=vps ./deploy.sh
+    CONVEX_TARGET=vps ./deploy.sh data reminders
+
+Point the app at it with `CONVEX_URL=https://taskrx.caballus.tech` in `apps/android/local.properties`
+(release builds need `https`).
+
+**Backups are not set up for it.** The caballus backups dump only the `caballus` database. Until the `taskrx`
+database has its own offsite copy, treat what is on the VPS as test data.
+
+**Traefik and its Docker socket.** Docker recreates `/var/run/docker.sock` when the daemon restarts, and a
+Traefik container started before that keeps the old file: it logs "Cannot connect to the Docker daemon" and
+never sees a new container. If a new route will not appear, `docker restart traefik-traefik-1`.
