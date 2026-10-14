@@ -8,6 +8,18 @@ for commit discipline (POC tags use `0.x.x`).
 
 ## [Unreleased]
 
+### 2026-10-14 — Times and dates are picked, not typed
+
+The time boxes in the task and medication forms asked for `HH:MM`, but a phone's number pad has no colon,
+so a time could not be typed at all. The date-and-time boxes asked for `2026-08-04T09:30`.
+
+- A reminder time is now a button that shows the time the way the phone does (9:00 AM, or 09:00 on a
+  24-hour phone). It opens the system time picker: a dial, or "Type it" for two number boxes.
+- Once and Interval start now pick a date, then a time. The date picker answers in UTC, so the day is read in
+  UTC and given the local time, never read in the local zone, which names the day before anywhere west of UTC.
+- What is stored does not change (`"HH:MM"`, an epoch instant). A stored time that is not one opens the picker on
+  09:00 and keeps its warning.
+
 ### 2026-10-14 — The VPS database is backed up offsite
 
 `infra/convex/vps/backup.sh` and three systemd timers: an hourly dump, a nightly dump with a 28-day prune,

@@ -27,6 +27,10 @@ private fun render(ms: Long, skeleton: String, zone: ZoneId, locale: Locale): St
 fun formatDayTime(ms: Long, zone: ZoneId = ZoneId.systemDefault(), locale: Locale = Locale.getDefault()): String =
     render(ms, "MMMdjjmm", zone, locale)
 
+/** "Aug 4, 2026, 09:00": the day with its year, for a moment that can be far ahead and is read alone. */
+fun formatFullDayTime(ms: Long, zone: ZoneId = ZoneId.systemDefault(), locale: Locale = Locale.getDefault()): String =
+    render(ms, "yMMMdjjmm", zone, locale)
+
 /** "09:00": the time alone, for a row already under a day heading. */
 fun formatTime(ms: Long, zone: ZoneId = ZoneId.systemDefault(), locale: Locale = Locale.getDefault()): String =
     render(ms, "jjmm", zone, locale)

@@ -13,12 +13,14 @@ import androidx.compose.ui.test.assertIsSelected
 import androidx.compose.ui.test.assertTextContains
 import androidx.compose.ui.test.hasClickAction
 import androidx.compose.ui.test.hasContentDescription
+import androidx.compose.ui.test.hasSetTextAction
 import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performTextReplacement
 import com.taskrx.core.domain.InstanceStatus
 import com.taskrx.core.domain.ReminderKind
 import com.taskrx.core.domain.createReminder
@@ -387,7 +389,7 @@ class ScreensTest {
         var value by mutableStateOf<com.taskrx.core.domain.ScheduleTimes>(dailyTimes(listOf("09:00")))
         compose.setContent { TaskRxTheme { SchedulePicker(value, onChange = { value = it }, now = { NINE }) } }
 
-        compose.onNodeWithText("Reminder times (HH:MM, 24h)").assertExists()
+        compose.onNodeWithText("Reminder times").assertExists()
         compose.onNodeWithText("+ Add time").performClick()
         assertEquals(dailyTimes(listOf("09:00", "09:00")), value)
     }
@@ -408,7 +410,100 @@ class ScreensTest {
     fun `an invalid time is flagged beside the field`() {
         compose.setContent { TaskRxTheme { SchedulePicker(dailyTimes(listOf("25:99")), onChange = {}, now = { NINE }) } }
 
-        compose.onNodeWithText("Use HH:MM (00:00–23:59)").assertExists()
+        compose.onNodeWithText("That is not a time. Tap it to pick one.").assertExists()
+    }
+
+    @Test
+    fun `a time slot is picked, not typed, and on a 24-hour clock is stored as typed`() {
+        val resolver = androidx.test.core.app.ApplicationProvider.getApplicationContext<android.content.Context>().contentResolver
+        android.provider.Settings.System.putString(resolver, android.provider.Settings.System.TIME_12_24, "24")
+        var value by mutableStateOf<com.taskrx.core.domain.ScheduleTimes>(dailyTimes(listOf("08:05")))
+        compose.setContent { TaskRxTheme { SchedulePicker(value, onChange = { value = it }, now = { NINE }) } }
+
+        compose.onNodeWithContentDescription("Time 1", substring = true).performClick()
+        compose.onNodeWithText("Type it").performClick()
+        val fields = compose.onAllNodes(hasSetTextAction())
+        fields[0].performTextReplacement("14")
+        fields[1].performTextReplacement("7")
+        compose.onNodeWithText("OK").performClick()
+
+        assertEquals(dailyTimes(listOf("14:07")), value)
+        compose.onNodeWithText("OK").assertDoesNotExist()
+    }
+
+    @Test
+    fun `on a 12-hour clock an afternoon time stays in the afternoon and is stored as 24-hour`() {
+        var value by mutableStateOf<com.taskrx.core.domain.ScheduleTimes>(dailyTimes(listOf("14:05")))
+        compose.setContent { TaskRxTheme { SchedulePicker(value, onChange = { value = it }, now = { NINE }) } }
+
+        compose.onNodeWithContentDescription("Time 1", substring = true).performClick()
+        compose.onNodeWithText("Type it").performClick()
+        compose.onAllNodes(hasSetTextAction())[0].performTextReplacement("3")
+        compose.onNodeWithText("OK").performClick()
+
+        assertEquals(dailyTimes(listOf("15:05")), value)
+    }
+
+    @Test
+    fun `cancelling the time picker leaves the time as it was`() {
+        var value by mutableStateOf<com.taskrx.core.domain.ScheduleTimes>(dailyTimes(listOf("08:05")))
+        compose.setContent { TaskRxTheme { SchedulePicker(value, onChange = { value = it }, now = { NINE }) } }
+
+        compose.onNodeWithContentDescription("Time 1", substring = true).performClick()
+        compose.onNodeWithText("Type it").performClick()
+        compose.onAllNodes(hasSetTextAction())[0].performTextReplacement("20")
+        compose.onNodeWithText("Cancel").performClick()
+
+        assertEquals(dailyTimes(listOf("08:05")), value)
+        compose.onNodeWithText("OK").assertDoesNotExist()
+    }
+
+    @Test
+    fun `a stored time that is not one opens the picker on nine, and picking replaces it`() {
+        var value by mutableStateOf<com.taskrx.core.domain.ScheduleTimes>(dailyTimes(listOf("25:99")))
+        compose.setContent { TaskRxTheme { SchedulePicker(value, onChange = { value = it }, now = { NINE }) } }
+
+        compose.onNodeWithContentDescription("Time 1", substring = true).performClick()
+        compose.onNodeWithText("OK").performClick()
+
+        assertEquals(dailyTimes(listOf("09:00")), value)
+    }
+
+    @Test
+    fun `a once moment is picked by date then time and keeps the local day, west of UTC`() {
+        val before = java.util.TimeZone.getDefault()
+        java.util.TimeZone.setDefault(java.util.TimeZone.getTimeZone("America/New_York"))
+        try {
+            // 9:30 pm in New York is already tomorrow in UTC: where a wrongly-read day shows.
+            val moment = java.time.ZonedDateTime.of(2026, 8, 4, 21, 30, 0, 0, java.time.ZoneId.of("America/New_York")).toInstant().toEpochMilli()
+            var value by mutableStateOf<com.taskrx.core.domain.ScheduleTimes>(com.taskrx.core.domain.onceTimes(moment))
+            compose.setContent { TaskRxTheme { SchedulePicker(value, onChange = { value = it }, now = { moment - 1 }) } }
+
+            compose.onNodeWithContentDescription("Happens at", substring = true).performClick()
+            compose.onNodeWithText("Next").performClick()
+            compose.onNodeWithText("Type it").performClick()
+            compose.onAllNodes(hasSetTextAction())[0].performTextReplacement("8")
+            compose.onNodeWithText("OK").performClick()
+
+            // On a 12-hour clock the typed 8 keeps the moment's pm: 8:30 pm, the same local day.
+            val expected = java.time.ZonedDateTime.of(2026, 8, 4, 20, 30, 0, 0, java.time.ZoneId.of("America/New_York")).toInstant().toEpochMilli()
+            assertEquals(com.taskrx.core.domain.onceTimes(expected), value)
+        } finally {
+            java.util.TimeZone.setDefault(before)
+        }
+    }
+
+    @Test
+    fun `cancelling the date leaves a once moment as it was`() {
+        val moment = 10 * NINE
+        var value by mutableStateOf<com.taskrx.core.domain.ScheduleTimes>(com.taskrx.core.domain.onceTimes(moment))
+        compose.setContent { TaskRxTheme { SchedulePicker(value, onChange = { value = it }, now = { moment - 1 }) } }
+
+        compose.onNodeWithContentDescription("Happens at", substring = true).performClick()
+        compose.onNodeWithText("Cancel").performClick()
+
+        assertEquals(com.taskrx.core.domain.onceTimes(moment), value)
+        compose.onNodeWithText("Next").assertDoesNotExist()
     }
 
     @Test

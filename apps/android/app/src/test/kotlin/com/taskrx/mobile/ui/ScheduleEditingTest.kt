@@ -8,12 +8,15 @@ import com.taskrx.core.domain.WeeklyTimes
 import com.taskrx.core.domain.isWellFormedSchedule
 import com.taskrx.mobile.ui.forms.ScheduleType
 import com.taskrx.mobile.ui.forms.defaultSchedule
-import com.taskrx.mobile.ui.forms.inputToInstant
-import com.taskrx.mobile.ui.forms.instantToInput
+import com.taskrx.mobile.ui.forms.hourMinuteToTimeInput
+import com.taskrx.mobile.ui.forms.instantHourMinute
 import com.taskrx.mobile.ui.forms.isValidTimeInput
 import com.taskrx.mobile.ui.forms.parseCount
 import com.taskrx.mobile.ui.forms.parseIntervalHours
+import com.taskrx.mobile.ui.forms.pickedInstant
+import com.taskrx.mobile.ui.forms.pickerDateMillis
 import com.taskrx.mobile.ui.forms.scheduleTypeOf
+import com.taskrx.mobile.ui.forms.timeInputToHourMinute
 import com.taskrx.mobile.ui.forms.toggleDay
 import java.time.ZoneId
 import kotlin.test.Test
@@ -72,20 +75,64 @@ class ScheduleEditingTest {
     }
 
     @Test
-    fun `an instant is typed and read back in the local zone`() {
-        val zone = ZoneId.of("America/New_York")
-        val ms = inputToInstant("2026-08-04T09:30", zone)!!
-
-        assertEquals("2026-08-04T09:30", instantToInput(ms, zone))
-        assertEquals(java.time.ZonedDateTime.of(2026, 8, 4, 9, 30, 0, 0, zone).toInstant().toEpochMilli(), ms)
+    fun `a picked time is stored as 24-hour HH MM, padded`() {
+        assertEquals("08:05", hourMinuteToTimeInput(8, 5))
+        assertEquals("23:59", hourMinuteToTimeInput(23, 59))
+        assertEquals("00:00", hourMinuteToTimeInput(0, 0))
     }
 
     @Test
-    fun `a half-typed or impossible instant is not an instant yet`() {
-        assertNull(inputToInstant("2026-08-04T09:"))
-        assertNull(inputToInstant("2026-13-04T09:30"))
-        assertNull(inputToInstant("2026-02-30T09:30"))
-        assertNull(inputToInstant(""))
+    fun `a stored time is read back as an hour and a minute, or not at all`() {
+        assertEquals(8 to 5, timeInputToHourMinute("08:05"))
+        assertEquals(23 to 59, timeInputToHourMinute("23:59"))
+        assertNull(timeInputToHourMinute("25:99"))
+        assertNull(timeInputToHourMinute("9:00"))
+        assertNull(timeInputToHourMinute(""))
+    }
+
+    @Test
+    fun `the day the date picker returns is the day the person tapped, west of UTC`() {
+        val newYork = ZoneId.of("America/New_York")
+        // The picker answers midnight UTC of the tapped day. Read in New York that is 8 pm the day before.
+        val tapped = java.time.LocalDate.of(2026, 8, 4).atStartOfDay(java.time.ZoneOffset.UTC).toInstant().toEpochMilli()
+
+        val picked = pickedInstant(tapped, 9, 30, newYork)
+
+        assertEquals(java.time.ZonedDateTime.of(2026, 8, 4, 9, 30, 0, 0, newYork).toInstant().toEpochMilli(), picked)
+    }
+
+    @Test
+    fun `the day the date picker returns is the day the person tapped, east of UTC`() {
+        val auckland = ZoneId.of("Pacific/Auckland")
+        val tapped = java.time.LocalDate.of(2026, 8, 4).atStartOfDay(java.time.ZoneOffset.UTC).toInstant().toEpochMilli()
+
+        val picked = pickedInstant(tapped, 9, 30, auckland)
+
+        assertEquals(java.time.ZonedDateTime.of(2026, 8, 4, 9, 30, 0, 0, auckland).toInstant().toEpochMilli(), picked)
+    }
+
+    @Test
+    fun `a moment opens the pickers on its own local day and time, and comes back unchanged`() {
+        val newYork = ZoneId.of("America/New_York")
+        // 9:30 pm in New York on Aug 4 is already Aug 5 in UTC: the case a wrong zone gets wrong.
+        val ms = java.time.ZonedDateTime.of(2026, 8, 4, 21, 30, 0, 0, newYork).toInstant().toEpochMilli()
+        val (hour, minute) = instantHourMinute(ms, newYork)
+
+        assertEquals(21 to 30, hour to minute)
+        assertEquals(ms, pickedInstant(pickerDateMillis(ms, newYork), hour, minute, newYork))
+    }
+
+    @Test
+    fun `the date picker opens on midnight UTC of the person's local day, in any zone`() {
+        val aug4 = java.time.LocalDate.of(2026, 8, 4).atStartOfDay(java.time.ZoneOffset.UTC).toInstant().toEpochMilli()
+        for (name in listOf("America/New_York", "Pacific/Auckland", "UTC")) {
+            val zone = ZoneId.of(name)
+            val morning = java.time.ZonedDateTime.of(2026, 8, 4, 7, 15, 0, 0, zone).toInstant().toEpochMilli()
+            val night = java.time.ZonedDateTime.of(2026, 8, 4, 23, 45, 0, 0, zone).toInstant().toEpochMilli()
+
+            assertEquals(aug4, pickerDateMillis(morning, zone), "$name morning")
+            assertEquals(aug4, pickerDateMillis(night, zone), "$name night")
+        }
     }
 
     @Test
