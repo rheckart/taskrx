@@ -1,0 +1,10 @@
+[Unit]
+Description=TaskRx dump to S4 every hour
+
+[Timer]
+OnCalendar=*-*-* *:20:00
+Persistent=true
+Unit=taskrx-backup@frequent.service
+
+[Install]
+WantedBy=timers.target

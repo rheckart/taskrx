@@ -68,8 +68,19 @@ Deploy functions and run any CLI command against it by naming the target:
 Point the app at it with `CONVEX_URL=https://taskrx.caballus.tech` in `apps/android/local.properties`
 (release builds need `https`).
 
-**Backups are not set up for it.** The caballus backups dump only the `caballus` database. Until the `taskrx`
-database has its own offsite copy, treat what is on the VPS as test data.
+**Backups.** `vps/backup.sh` (at `/docker/taskrx/backup.sh`) dumps the `taskrx` database offsite, to the same
+S4 bucket as the caballus backups, under `taskrx/`. It reads that stack's `backup.env` for the bucket and keys
+and never edits its files. Three systemd timers (`vps/systemd/`, installed in `/etc/systemd/system`) run it, all
+in UTC:
+
+- `frequent`: every hour at :20.
+- `nightly`: 07:35, then prunes anything older than 28 days (caballus's own check fails on files over 31).
+- `restore-check`: 09:05, restores last night's dump into a scratch database and counts the documents.
+
+A good run writes a stamp in `/docker/taskrx/backup-state/`; nothing mails on failure, so look at
+`systemctl --failed` and the stamp dates. Run one by hand with `/docker/taskrx/backup.sh nightly`. To restore,
+copy a dump down with rclone, stop the backend, drop and recreate the `taskrx` database in the caballus
+Postgres, `pg_restore` into it, and start the backend. The dumps are not encrypted before upload.
 
 **Traefik and its Docker socket.** Docker recreates `/var/run/docker.sock` when the daemon restarts, and a
 Traefik container started before that keeps the old file: it logs "Cannot connect to the Docker daemon" and

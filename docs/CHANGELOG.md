@@ -8,6 +8,12 @@ for commit discipline (POC tags use `0.x.x`).
 
 ## [Unreleased]
 
+### 2026-10-14 — The VPS database is backed up offsite
+
+`infra/convex/vps/backup.sh` and three systemd timers: an hourly dump, a nightly dump with a 28-day prune,
+and a daily restore check. They use the caballus stack's S4 bucket under `taskrx/`. A dump was taken, uploaded,
+restored into a scratch database and counted (234 documents live, 234 restored).
+
 ### 2026-10-14 — The Convex backend runs on the VPS
 
 `https://taskrx.caballus.tech`, behind the Traefik already on the box, using the caballus stack's Postgres
@@ -15,7 +21,7 @@ for commit discipline (POC tags use `0.x.x`).
 back from the VPS database. See `infra/convex/README.md`, "The VPS".
 
 - `CONVEX_TARGET=vps ./deploy.sh` deploys to it; the admin key lives in the gitignored `infra/convex/.env.vps`.
-- No backup for the `taskrx` database yet: the box's backups cover only `caballus`.
+- No backup for the `taskrx` database yet: the box's backups cover only `caballus`. (Added the same day, below.)
 
 ### 2026-10-12 — A dose that came due while the phone was off is posted at boot
 
