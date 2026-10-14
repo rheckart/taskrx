@@ -1,0 +1,10 @@
+[Unit]
+Description=TaskRx restore of last night's dump into a scratch database
+
+[Timer]
+OnCalendar=*-*-* 09:05:00
+Persistent=true
+Unit=taskrx-backup@restore-check.service
+
+[Install]
+WantedBy=timers.target

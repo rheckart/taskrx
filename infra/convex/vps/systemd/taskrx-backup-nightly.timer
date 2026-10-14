@@ -1,0 +1,10 @@
+[Unit]
+Description=TaskRx nightly dump to S4, and the prune
+
+[Timer]
+OnCalendar=*-*-* 07:35:00
+Persistent=true
+Unit=taskrx-backup@nightly.service
+
+[Install]
+WantedBy=timers.target

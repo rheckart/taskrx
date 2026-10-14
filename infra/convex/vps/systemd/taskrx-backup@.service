@@ -1,0 +1,11 @@
+[Unit]
+Description=TaskRx backup (%i)
+Requires=docker.service
+After=docker.service
+
+[Service]
+Type=oneshot
+ExecStart=/docker/taskrx/backup.sh %i
+TimeoutStartSec=45min
+Nice=10
+IOSchedulingClass=idle
