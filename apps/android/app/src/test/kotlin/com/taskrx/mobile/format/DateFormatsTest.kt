@@ -84,6 +84,14 @@ class DateFormatsTest {
     }
 
     @Test
+    fun `a moment read alone carries its year`() {
+        val text = formatFullDayTime(local(2027, 8, 4, 9, 5), newYork, us)
+        assertContains(text, "2027")
+        assertContains(text, "Aug")
+        assertContains(text, "9:05")
+    }
+
+    @Test
     fun `a time is written in the zone it is asked for`() {
         val utcNine = ZonedDateTime.of(2026, 8, 4, 9, 5, 0, 0, ZoneId.of("UTC")).toInstant().toEpochMilli()
         assertContains(formatTime(utcNine, ZoneId.of("UTC"), us), "9:05")
