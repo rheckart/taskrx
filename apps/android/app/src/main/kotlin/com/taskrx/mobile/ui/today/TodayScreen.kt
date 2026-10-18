@@ -29,6 +29,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Button
+import androidx.compose.material3.FilterChip
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
@@ -68,6 +69,7 @@ data class TodayActions(
     val onPreviousDay: () -> Unit,
     val onNextDay: () -> Unit,
     val onToday: () -> Unit,
+    val onToggleHideCompleted: () -> Unit,
     val onRefresh: () -> Unit,
     val onOpenAnswer: (TimelineRow) -> Unit,
     /** Move the time a completed dose was taken to this hour and minute, on its own day. */
@@ -129,7 +131,14 @@ private fun DayBar(state: TodayState, actions: TodayActions) {
             Text("›", fontSize = 44.sp)
         }
     }
-    HorizontalDivider(color = TaskRxColors.Divider)
+    Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp), horizontalArrangement = Arrangement.End) {
+        FilterChip(
+            selected = state.hideCompleted,
+            onClick = actions.onToggleHideCompleted,
+            label = { Text("Hide done") },
+        )
+    }
+    HorizontalDivider(color = TaskRxColors.Divider, modifier = Modifier.padding(top = 4.dp))
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -157,14 +166,20 @@ private fun Timeline(state: TodayState, actions: TodayActions) {
             }
         else ->
             PullToRefreshBox(isRefreshing = state.refreshing, onRefresh = actions.onRefresh, modifier = Modifier.fillMaxSize()) {
-                if (state.rows.isEmpty()) {
+                val visible = state.visibleRows
+                if (visible.isEmpty()) {
                     // Inside the refresh box so an empty day can still be pulled.
+                    val allDone = state.rows.isNotEmpty()
                     LazyColumn(Modifier.fillMaxSize()) {
                         item {
                             Centered(Modifier.fillParentMaxSize()) {
-                                Text("Nothing scheduled", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
                                 Text(
-                                    emptyDayBody(state.dayOffset, dayHeading(state.dayOffset, state.windowStart)),
+                                    if (allDone) "All done" else "Nothing scheduled",
+                                    style = MaterialTheme.typography.titleMedium,
+                                    fontWeight = FontWeight.SemiBold,
+                                )
+                                Text(
+                                    if (allDone) "Everything on this day is completed." else emptyDayBody(state.dayOffset, dayHeading(state.dayOffset, state.windowStart)),
                                     Modifier.padding(top = 8.dp),
                                     color = TaskRxColors.Secondary,
                                     textAlign = TextAlign.Center,
@@ -174,7 +189,7 @@ private fun Timeline(state: TodayState, actions: TodayActions) {
                     }
                 } else {
                     LazyColumn(Modifier.fillMaxSize()) {
-                        items(state.rows, key = { timelineRowKey(it.reminderId, it.scheduledTime) }) { row ->
+                        items(visible, key = { timelineRowKey(it.reminderId, it.scheduledTime) }) { row ->
                             TimelineRowView(
                                 row,
                                 onPress = { actions.onOpenAnswer(row) },
