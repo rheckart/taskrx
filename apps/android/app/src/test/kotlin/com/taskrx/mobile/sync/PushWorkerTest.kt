@@ -19,6 +19,7 @@ import kotlin.test.assertNull
 import kotlin.test.assertTrue
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.awaitCancellation
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -485,6 +486,23 @@ class PushWorkerTest {
             gateway.onMutation = { _, _ -> JsonPrimitive("srv") }
             worker.drain()
             assertTrue(fx.entries().isEmpty())
+        }
+
+    @Test
+    fun `a push the server never answers times out, fails the attempt and frees the drain`() =
+        rig {
+            fx.reminder("m1")
+            gateway.onMutation = { _, _ -> awaitCancellation() }
+            val impatient =
+                PushWorker(fx.container.syncQueue, fx.container.reminders, fx.container.instances, gateway, connectivity, { user }, { pauses += it }, pushTimeoutMs = 50)
+            impatient.drain()
+            assertEquals(SyncWorkerStatus.Error, impatient.status.value)
+            val entry = fx.entries().single()
+            assertEquals(1, entry.attempts)
+            assertTrue(entry.lastError!!.contains("Timed out"))
+            // The guard is free: a second drain reaches the gateway again.
+            impatient.drain()
+            assertEquals(2, gateway.mutations.size)
         }
 
     @Test
