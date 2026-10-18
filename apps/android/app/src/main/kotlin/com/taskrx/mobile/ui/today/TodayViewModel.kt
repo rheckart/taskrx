@@ -3,6 +3,8 @@ package com.taskrx.mobile.ui.today
 import android.util.Log
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.taskrx.core.domain.InstanceStatus
+import com.taskrx.core.time.atClockTimeOnDayOf
 import com.taskrx.core.time.localDayBounds
 import com.taskrx.core.timeline.ProjectTimelineInput
 import com.taskrx.core.timeline.TimelineRow
@@ -10,6 +12,8 @@ import com.taskrx.core.timeline.TimelineWindow
 import com.taskrx.core.timeline.projectTimeline
 import com.taskrx.mobile.AppContainer
 import com.taskrx.mobile.data.InstanceFilter
+import com.taskrx.mobile.ui.components.ToastKind
+import com.taskrx.mobile.ui.components.ToastRequest
 import java.time.ZoneId
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Job
@@ -51,6 +55,7 @@ class TodayViewModel(
     /** The missed sweep: `(userId, now)` to how many it recorded. A parameter so a test can make it fail. */
     private val sweep: suspend (String, Long) -> Int = app.sweep::run,
     private val log: (String, Throwable) -> Unit = { what, e -> Log.e("today", what, e) },
+    private val toast: (ToastRequest) -> Unit = app.toaster::show,
 ) : ViewModel() {
     private val mutable =
         MutableStateFlow(TodayState(windowStart = localDayBounds(app.clock(), 0, zone()).start))
@@ -65,6 +70,32 @@ class TodayViewModel(
     fun nextDay(): Job = moveTo(minOf(0, mutable.value.dayOffset + 1))
 
     fun today(): Job = moveTo(0)
+
+    /**
+     * Moves the time a completed dose was taken to [hour]:[minute] on the day it was
+     * scheduled for. A time that has not happened yet is refused: a dose cannot have been
+     * taken in the future.
+     */
+    fun changeTakenTime(row: TimelineRow, hour: Int, minute: Int): Job =
+        viewModelScope.launch {
+            val instanceId = row.instanceId ?: return@launch
+            if (row.status != InstanceStatus.Completed) return@launch
+            val taken = atClockTimeOnDayOf(row.scheduledTime, hour, minute, zone())
+            if (taken > app.clock()) {
+                toast(ToastRequest("That time hasn't happened yet", ToastKind.Error))
+                return@launch
+            }
+            try {
+                app.instances.changeCompletedAt(instanceId, taken)
+                toast(ToastRequest("Time updated", ToastKind.Success))
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                log("changing the time taken failed", e)
+                toast(ToastRequest("Couldn't change the time", ToastKind.Error))
+            }
+            loads.withLock { load() }
+        }
 
     private fun moveTo(offset: Int): Job {
         if (offset == mutable.value.dayOffset) return Job().also { it.complete() }

@@ -86,7 +86,7 @@ fun SuppliesContent(state: SuppliesState, actions: SuppliesActions, modifier: Mo
 /** Both directions, not just the raise: a task disappearing on its own is the one a person would assume they had done. */
 @Composable
 private fun BacklogChanges(raised: List<String>, retired: List<String>, onOpenBacklog: () -> Unit) {
-    Column(Modifier.fillMaxWidth().background(Color(0xFFF2F8FF)).padding(16.dp)) {
+    Column(Modifier.fillMaxWidth().background(TaskRxColors.NextTint).padding(16.dp)) {
         when (raised.size) {
             0 -> Unit
             1 -> Text("Added \"${raised[0]}\" to your backlog.", fontWeight = FontWeight.SemiBold)
@@ -123,7 +123,7 @@ private fun MedicationRow(row: RefillRow, editing: Boolean, actions: SuppliesAct
                 fontWeight = FontWeight.SemiBold,
                 color = if (row.projection is RefillProjection.RefillOutlook) Color.Unspecified else TaskRxColors.Muted,
             )
-            Text(detail, Modifier.padding(top = 2.dp), color = Color(0xFF444444), style = MaterialTheme.typography.bodySmall)
+            Text(detail, Modifier.padding(top = 2.dp), color = TaskRxColors.BodyText, style = MaterialTheme.typography.bodySmall)
         }
         if (editing) {
             SupplyEditor(row, actions)
@@ -144,7 +144,7 @@ private fun RefillBadge(urgency: RefillUrgency) {
         if (out) "Out of stock" else "Reorder now",
         Modifier
             .clip(RoundedCornerShape(10.dp))
-            .background(if (out) TaskRxColors.ErrorTint else Color(0xFFFFF4E5))
+            .background(if (out) TaskRxColors.ErrorTint else TaskRxColors.WarnTint)
             .padding(horizontal = 8.dp, vertical = 2.dp),
         color = if (out) TaskRxColors.Error else TaskRxColors.Skipped,
         style = MaterialTheme.typography.labelSmall,

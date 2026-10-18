@@ -19,6 +19,8 @@ import com.taskrx.mobile.data.SyncOperation
 import com.taskrx.mobile.data.SyncQueueEntry
 import com.taskrx.mobile.data.SyncQueueRepository
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.TimeoutCancellationException
+import kotlinx.coroutines.withTimeout
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -57,6 +59,7 @@ class PushWorker(
     private val connectivity: Connectivity,
     private val userId: () -> String?,
     private val pause: suspend (Long) -> Unit = { delay(it) },
+    private val pushTimeoutMs: Long = PUSH_TIMEOUT_MS,
 ) {
     private val running = Mutex()
     private val state = MutableStateFlow(SyncWorkerStatus.Idle)
@@ -172,8 +175,13 @@ class PushWorker(
     /** The failure message, or null when the entry was pushed. */
     private suspend fun attempt(entry: SyncQueueEntry): String? =
         try {
-            push(entry)
+            // A call the server never answers (the socket closed under it) would otherwise hold
+            // the drain, and the badge on Syncing, forever. A timeout is a failed attempt like
+            // any other: backoff, then retry.
+            withTimeout(pushTimeoutMs) { push(entry) }
             null
+        } catch (e: TimeoutCancellationException) {
+            "Timed out waiting for the server"
         } catch (e: CancellationException) {
             throw e
         } catch (e: Exception) {
@@ -274,6 +282,7 @@ class PushWorker(
 
     private companion object {
         const val TAG = "pushWorker"
+        const val PUSH_TIMEOUT_MS = 30_000L
     }
 }
 

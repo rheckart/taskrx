@@ -108,7 +108,7 @@ private fun ReminderRow(entry: ReminderEntry, onEdit: () -> Unit, onStop: () -> 
             Text(
                 "${kindLabel(reminder.kind)} · ${describeSchedule(reminder.schedule)}",
                 Modifier.padding(top = 4.dp),
-                color = androidx.compose.ui.graphics.Color(0xFF444444),
+                color = TaskRxColors.BodyText,
             )
             Text(lastCompletedLine(entry), Modifier.padding(top = 4.dp), color = TaskRxColors.Accent, style = MaterialTheme.typography.bodySmall)
         }

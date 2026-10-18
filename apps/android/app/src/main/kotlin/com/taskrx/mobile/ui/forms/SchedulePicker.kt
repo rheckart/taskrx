@@ -168,7 +168,7 @@ private fun clockLabel(hour: Int, minute: Int): String = formatTime((hour * 60L 
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-private fun TimeDialog(hour: Int, minute: Int, onDismiss: () -> Unit, onConfirm: (hour: Int, minute: Int) -> Unit) {
+internal fun TimeDialog(hour: Int, minute: Int, onDismiss: () -> Unit, onConfirm: (hour: Int, minute: Int) -> Unit) {
     val state = rememberTimePickerState(hour, minute, android.text.format.DateFormat.is24HourFormat(LocalContext.current))
     var dial by rememberSaveable { mutableStateOf(true) }
     TimePickerDialog(
@@ -201,7 +201,7 @@ private fun WeeklyPicker(value: WeeklyTimes, onChange: (ScheduleTimes) -> Unit) 
                 border =
                     androidx.compose.foundation.BorderStroke(
                         1.dp,
-                        if (on) TaskRxColors.Accent else androidx.compose.ui.graphics.Color(0xFFCCCCCC),
+                        if (on) TaskRxColors.Accent else TaskRxColors.Outline,
                     ),
                 modifier =
                     Modifier.toggleable(

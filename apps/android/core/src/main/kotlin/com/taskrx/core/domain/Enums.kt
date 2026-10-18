@@ -74,11 +74,13 @@ enum class InstanceStatus(val wire: String) {
  * the one way to put a moment permanently out of reach, and would open a second
  * Instance beside it every time the person came back.
  *
- * `completed` and `skipped` are answers. `missed` is the sweep's verdict rather
- * than the person's, and is excluded for now with the rest — a moment that ran
- * out of time is reopened rather than reused, which is the behaviour it has
- * always had. Widening this to admit it belongs with the duplicate-instance
- * work in #21, where reopening an answered moment is the subject.
+ * `completed` and `skipped` are answers. [InstanceStatus.Missed] is the sweep's
+ * verdict, not the person's, and it is only ever a guess: the Grace Period ran
+ * out with no answer, which says nothing about a dose taken without opening the
+ * app. So a missed moment is reopened rather than closed, and answering it
+ * settles the same row; a dose taken late is recorded as taken instead of being
+ * stuck as missed. The server only refuses a write out of `completed`, so a
+ * missed row can move to `completed` or `skipped`.
  *
  * It lives here rather than in the two callers because they would otherwise
  * each carry a copy: the on-device repository builds its `WHERE status IN (…)`
@@ -86,7 +88,7 @@ enum class InstanceStatus(val wire: String) {
  * row the list offers and the lookup refuses is a button that does nothing.
  */
 val ANSWERABLE_STATUSES: Set<InstanceStatus> =
-    setOf(InstanceStatus.Pending, InstanceStatus.Snoozed)
+    setOf(InstanceStatus.Pending, InstanceStatus.Snoozed, InstanceStatus.Missed)
 
 fun isAnswerable(status: InstanceStatus): Boolean = status in ANSWERABLE_STATUSES
 

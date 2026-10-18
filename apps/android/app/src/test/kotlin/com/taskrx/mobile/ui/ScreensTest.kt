@@ -6,6 +6,8 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.test.assert
 import androidx.compose.ui.test.hasNoClickAction
 import androidx.compose.ui.test.assertCountEquals
+import androidx.compose.ui.test.longClick
+import androidx.compose.ui.test.performTouchInput
 import androidx.compose.ui.test.assertHasClickAction
 import androidx.compose.ui.test.assertIsEnabled
 import androidx.compose.ui.test.assertIsNotEnabled
@@ -65,7 +67,8 @@ class ScreensTest {
         status: InstanceStatus = InstanceStatus.Pending,
         isNext: Boolean = false,
         dosage: String? = null,
-    ) = TimelineRow("r-$name", null, name, dosage, kind, NINE, status, null, isNext)
+        completedAt: Long? = null,
+    ) = TimelineRow("r-$name", if (completedAt == null) null else "i-$name", name, dosage, kind, NINE, status, null, isNext, completedAt)
 
     private class Calls {
         val log = mutableListOf<String>()
@@ -77,6 +80,7 @@ class ScreensTest {
                 onToday = { log += "today" },
                 onRefresh = { log += "refresh" },
                 onOpenAnswer = { log += "answer:${it.name}" },
+                onChangeTime = { row, h, m -> log += "time:${row.name}:$h:$m" },
                 onAdd = { log += "add" },
                 onNewTask = { log += "task" },
                 onNewMedication = { log += "med" },
@@ -160,7 +164,7 @@ class ScreensTest {
     }
 
     @Test
-    fun `an answerable row opens the answer screen, and an answered one offers nothing to press`() {
+    fun `an answerable row, a missed one included, opens the answer screen, and an answered one offers nothing to press`() {
         val calls = Calls()
         val open = row("Open", status = InstanceStatus.Pending)
         val snoozed = row("Snoozed", status = InstanceStatus.Snoozed)
@@ -170,10 +174,37 @@ class ScreensTest {
 
         compose.onNodeWithContentDescription(rowDescription(open)).assertHasClickAction().performClick()
         compose.onNodeWithContentDescription(rowDescription(snoozed)).assertHasClickAction()
-        for (answered in listOf(taken, missed)) {
-            compose.onNodeWithContentDescription(rowDescription(answered)).assert(hasNoClickAction())
-        }
+        compose.onNodeWithContentDescription(rowDescription(missed)).assertHasClickAction()
+        compose.onNodeWithContentDescription(rowDescription(taken)).assert(hasNoClickAction())
         assertEquals(listOf("answer:Open"), calls.log)
+    }
+
+    @Test
+    fun `holding a taken row offers its time, and confirming reports the new one`() {
+        val calls = Calls()
+        val taken = row("Taken", status = InstanceStatus.Completed, completedAt = NINE + 5 * 60_000)
+        today(state(taken), calls)
+
+        compose.onNodeWithContentDescription(rowDescription(taken)).performTouchInput { longClick() }
+        compose.onNodeWithText("Pick a time").assertExists()
+        compose.onNodeWithText("OK").performClick()
+
+        // The picker opens on the time it was taken (09:05, in the zone the suite pins), so
+        // confirming untouched says so.
+        assertEquals(listOf("time:Taken:9:5"), calls.log)
+    }
+
+    @Test
+    fun `holding a row that is not taken offers nothing`() {
+        val calls = Calls()
+        val open = row("Open", status = InstanceStatus.Pending)
+        val missed = row("Missed", status = InstanceStatus.Missed)
+        today(state(open, missed), calls)
+
+        compose.onNodeWithContentDescription(rowDescription(open)).performTouchInput { longClick() }
+        compose.onNodeWithContentDescription(rowDescription(missed)).performTouchInput { longClick() }
+
+        compose.onAllNodesWithText("Pick a time").assertCountEquals(0)
     }
 
     @Test
@@ -279,6 +310,16 @@ class ScreensTest {
         compose.onNodeWithText("Mark taken").assertExists()
         compose.onNodeWithText("Skip").assertExists()
         compose.onNodeWithText("Snooze 15 min").assertExists()
+    }
+
+    @Test
+    fun `a missed moment can still be taken or skipped, but has nothing left to snooze`() {
+        val open = loaded(ReminderKind.Medication)
+        answer(open.copy(instance = open.instance.copy(status = InstanceStatus.Missed)))
+
+        compose.onNodeWithText("Mark taken").assertExists()
+        compose.onNodeWithText("Skip").assertExists()
+        compose.onAllNodesWithText("Snooze 15 min").assertCountEquals(0)
     }
 
     @Test

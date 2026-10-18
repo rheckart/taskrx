@@ -86,3 +86,11 @@ fun localCalendarDaysBetween(
     // Rounds half up, as `Math.round` does.
     return floor((to - from) / MS_PER_ORDINARY_DAY + 0.5).toInt()
 }
+
+/**
+ * The instant at [hour]:[minute] on the local calendar day holding [dayMs]. For moving
+ * the time a dose was taken within the day it belongs to: only the clock changes, never
+ * the date.
+ */
+fun atClockTimeOnDayOf(dayMs: Long, hour: Int, minute: Int, zone: ZoneId = ZoneId.systemDefault()): Long =
+    Instant.ofEpochMilli(dayMs).atZone(zone).toLocalDate().atTime(hour, minute).atZone(zone).toInstant().toEpochMilli()

@@ -36,7 +36,11 @@ fun statusLabel(
     locale: Locale = Locale.getDefault(),
 ): String =
     when (row.status) {
-        InstanceStatus.Completed -> if (row.kind == ReminderKind.Medication) "Taken" else "Done"
+        InstanceStatus.Completed -> {
+            val word = if (row.kind == ReminderKind.Medication) "Taken" else "Done"
+            // When it was recorded, if known: the time can be corrected, so it has to be visible.
+            row.completedAt?.let { "$word ${formatTime(it, zone, locale)}" } ?: word
+        }
         InstanceStatus.Skipped -> "Skipped"
         InstanceStatus.Missed -> "Missed"
         InstanceStatus.Snoozed ->

@@ -1,6 +1,16 @@
 package com.taskrx.mobile.ui.today
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.semantics.onLongClick
+import com.taskrx.mobile.ui.forms.TimeDialog
+import java.time.Instant
+import java.time.ZoneId
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -60,6 +70,8 @@ data class TodayActions(
     val onToday: () -> Unit,
     val onRefresh: () -> Unit,
     val onOpenAnswer: (TimelineRow) -> Unit,
+    /** Move the time a completed dose was taken to this hour and minute, on its own day. */
+    val onChangeTime: (TimelineRow, Int, Int) -> Unit,
     val onAdd: () -> Unit,
     val onNewTask: () -> Unit,
     val onNewMedication: () -> Unit,
@@ -101,7 +113,7 @@ private fun DayBar(state: TodayState, actions: TodayActions) {
         verticalAlignment = Alignment.CenterVertically,
     ) {
         TextButton(onClick = actions.onPreviousDay, modifier = Modifier.semantics { contentDescription = "Previous day" }) {
-            Text("‹", fontSize = 28.sp)
+            Text("‹", fontSize = 44.sp)
         }
         TextButton(onClick = actions.onToday, modifier = Modifier.semantics { contentDescription = "Back to today" }) {
             Text(heading, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
@@ -114,7 +126,7 @@ private fun DayBar(state: TodayState, actions: TodayActions) {
             enabled = state.dayOffset < 0,
             modifier = Modifier.semantics { contentDescription = "Next day" },
         ) {
-            Text("›", fontSize = 28.sp)
+            Text("›", fontSize = 44.sp)
         }
     }
     HorizontalDivider(color = TaskRxColors.Divider)
@@ -123,6 +135,20 @@ private fun DayBar(state: TodayState, actions: TodayActions) {
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun Timeline(state: TodayState, actions: TodayActions) {
+    // The dose whose time is being changed, if any.
+    var editing by remember { mutableStateOf<TimelineRow?>(null) }
+    editing?.let { row ->
+        val at = (row.completedAt ?: row.scheduledTime).let { Instant.ofEpochMilli(it).atZone(ZoneId.systemDefault()) }
+        TimeDialog(
+            hour = at.hour,
+            minute = at.minute,
+            onDismiss = { editing = null },
+            onConfirm = { hour, minute ->
+                editing = null
+                actions.onChangeTime(row, hour, minute)
+            },
+        )
+    }
     when {
         state.loading -> SkeletonList(rows = 5, description = "Loading your day")
         state.error != null ->
@@ -149,7 +175,11 @@ private fun Timeline(state: TodayState, actions: TodayActions) {
                 } else {
                     LazyColumn(Modifier.fillMaxSize()) {
                         items(state.rows, key = { timelineRowKey(it.reminderId, it.scheduledTime) }) { row ->
-                            TimelineRowView(row, onPress = { actions.onOpenAnswer(row) })
+                            TimelineRowView(
+                                row,
+                                onPress = { actions.onOpenAnswer(row) },
+                                onLongPress = if (row.status == InstanceStatus.Completed) ({ editing = row }) else null,
+                            )
                         }
                     }
                 }
@@ -171,7 +201,7 @@ private fun Timeline(state: TodayState, actions: TodayActions) {
  * snooze is a deferral, not an answer, so a snoozed moment stays open.
  */
 @Composable
-fun TimelineRowView(row: TimelineRow, onPress: () -> Unit, modifier: Modifier = Modifier) {
+fun TimelineRowView(row: TimelineRow, onPress: () -> Unit, modifier: Modifier = Modifier, onLongPress: (() -> Unit)? = null) {
     val answered = !isAnswerable(row.status)
     val label = statusLabel(row)
     val kindColor = if (row.kind == ReminderKind.Medication) TaskRxColors.Medication else TaskRxColors.Task
@@ -183,6 +213,17 @@ fun TimelineRowView(row: TimelineRow, onPress: () -> Unit, modifier: Modifier = 
         } else {
             Modifier.clickable(role = Role.Button, onClickLabel = "Answer", onClick = onPress)
         }
+    // Held, not tapped, and not a click: an answered row still offers nothing to press, but
+    // a held one can have the time it was taken changed. The same action is on the row's
+    // semantics so a screen reader can reach it.
+    val hold =
+        if (onLongPress == null) {
+            Modifier
+        } else {
+            Modifier
+                .pointerInput(row.instanceId) { detectTapGestures(onLongPress = { onLongPress() }) }
+                .semantics { onLongClick(label = "Change the time taken") { onLongPress(); true } }
+        }
 
     Column(modifier) {
         Row(
@@ -190,6 +231,7 @@ fun TimelineRowView(row: TimelineRow, onPress: () -> Unit, modifier: Modifier = 
                 .fillMaxWidth()
                 .height(IntrinsicSize.Min)
                 .then(press)
+                .then(hold)
                 .semantics(mergeDescendants = true) { contentDescription = description }
                 .background(if (row.isNext) TaskRxColors.NextTint else Color.Transparent),
         ) {
@@ -236,6 +278,7 @@ fun TimelineRowView(row: TimelineRow, onPress: () -> Unit, modifier: Modifier = 
     }
 }
 
+@Composable
 private fun statusColor(status: InstanceStatus): Color =
     when (status) {
         InstanceStatus.Completed -> TaskRxColors.Completed

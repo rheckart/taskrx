@@ -1,5 +1,6 @@
 package com.taskrx.mobile.ui.answer
 
+import com.taskrx.core.domain.InstanceStatus
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -100,14 +101,14 @@ private fun Loaded(
             Modifier
                 .fillMaxWidth()
                 .clip(RoundedCornerShape(12.dp))
-                .background(Color(0xFFF5F5F5))
+                .background(TaskRxColors.Panel)
                 .padding(20.dp)
                 .semantics(mergeDescendants = true) {},
         ) {
             Text(words.badge, color = TaskRxColors.Secondary, fontSize = 11.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.sp)
             Text(reminder.name, Modifier.padding(top = 6.dp), fontSize = 22.sp, fontWeight = FontWeight.Bold)
             reminder.dosage?.let { Text(it, Modifier.padding(top = 4.dp), color = TaskRxColors.Secondary, fontSize = 16.sp) }
-            Text("Scheduled: ${formatDayTime(state.scheduledTime)}", Modifier.padding(top = 12.dp), color = Color(0xFF444444))
+            Text("Scheduled: ${formatDayTime(state.scheduledTime)}", Modifier.padding(top = 12.dp), color = TaskRxColors.BodyText)
             Text(
                 urgencyLabel(state.scheduledTime, now, words),
                 Modifier.padding(top = 8.dp),
@@ -123,12 +124,12 @@ private fun Loaded(
                     .fillMaxWidth()
                     .padding(top = 24.dp)
                     .clip(RoundedCornerShape(12.dp))
-                    .background(Color(0xFFE8F5E9))
+                    .background(TaskRxColors.SuccessTint)
                     .padding(24.dp)
                     .semantics { liveRegion = LiveRegionMode.Polite },
                 horizontalAlignment = Alignment.CenterHorizontally,
             ) {
-                Text("Recorded", color = Color(0xFF2E7D32), fontSize = 18.sp, fontWeight = FontWeight.SemiBold)
+                Text("Recorded", color = TaskRxColors.SuccessText, fontSize = 18.sp, fontWeight = FontWeight.SemiBold)
                 Text(formatDayTime(state.recordedAt), Modifier.padding(top = 4.dp), color = TaskRxColors.Secondary)
                 PrimaryButton("Done", onDone, Modifier.padding(top = 16.dp))
             }
@@ -136,13 +137,16 @@ private fun Loaded(
             Column(Modifier.padding(top = 24.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
                 PrimaryButton(words.complete, onComplete, enabled = idle, busy = state.action == Action.Completing, color = TaskRxColors.CompleteButton)
                 PrimaryButton("Skip", onSkip, enabled = idle, busy = state.action == Action.Skipping, color = TaskRxColors.SkipButton)
-                PrimaryButton(
-                    "Snooze $SNOOZE_MINUTES min",
-                    onSnooze,
-                    enabled = idle,
-                    busy = state.action == Action.Snoozing,
-                    color = TaskRxColors.SnoozeButton,
-                )
+                // A missed moment is over: there is nothing left to put off.
+                if (state.instance.status != InstanceStatus.Missed) {
+                    PrimaryButton(
+                        "Snooze $SNOOZE_MINUTES min",
+                        onSnooze,
+                        enabled = idle,
+                        busy = state.action == Action.Snoozing,
+                        color = TaskRxColors.SnoozeButton,
+                    )
+                }
             }
         }
 

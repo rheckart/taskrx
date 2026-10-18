@@ -78,7 +78,8 @@ The user deliberately chose not to do it. An answer, not an absence.
 
 **Missed**:
 The Grace Period elapsed with no answer. The only status the user does not
-choose.
+choose. It is the app's guess, not a fact: a Missed Occurrence can still be
+answered, so a dose taken without opening the app is recorded as Taken.
 _Avoid_: Overdue, Late, Lapsed
 
 **Snoozed**:

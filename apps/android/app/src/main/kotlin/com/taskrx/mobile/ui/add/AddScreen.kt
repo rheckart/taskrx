@@ -96,7 +96,7 @@ private fun DraftStep(state: AddState, draft: ReminderDraft, vm: AddViewModel, n
     val isMedication = draft.kind == ReminderKind.Medication
     val copy = copyFor(draft.kind)
 
-    Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(8.dp)).background(androidx.compose.ui.graphics.Color(0xFFF5F7FA)).padding(12.dp)) {
+    Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(8.dp)).background(TaskRxColors.PanelBlue).padding(12.dp)) {
         Text("YOU TYPED", color = TaskRxColors.Secondary, fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
         Text(state.phrase.trim(), Modifier.padding(top = 4.dp, bottom = 8.dp), style = MaterialTheme.typography.bodyLarge)
         TextButton(onClick = vm::editPhrase) { Text("Edit phrase") }
@@ -199,6 +199,6 @@ private fun Notice(title: String, body: String, modifier: Modifier = Modifier) {
             .semantics(mergeDescendants = true) {},
     ) {
         Text(title, color = TaskRxColors.Task, fontWeight = FontWeight.Bold)
-        Text(body, Modifier.padding(top = 4.dp), color = androidx.compose.ui.graphics.Color(0xFF5C4400), fontSize = 13.sp)
+        Text(body, Modifier.padding(top = 4.dp), color = TaskRxColors.WarnText, fontSize = 13.sp)
     }
 }

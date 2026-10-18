@@ -96,6 +96,7 @@ private fun answered(
     status: InstanceStatus = Completed,
     snoozedUntil: Long? = null,
     updatedAt: Long = 0,
+    completedAt: Long? = null,
 ): ReminderInstance =
     createReminderInstance(
         id = id,
@@ -105,6 +106,7 @@ private fun answered(
         scheduledTime = scheduledTime,
         status = status,
         snoozedUntil = snoozedUntil,
+        completedAt = completedAt,
         createdAt = 0,
         updatedAt = updatedAt,
     )
@@ -170,6 +172,20 @@ class ProjectTimelineUnionTest {
 
         assertEquals(listOf(at(9) to Completed), shape(rows))
         assertEquals("inst-1", rows[0].instanceId)
+    }
+
+    @Test
+    fun `carries when a completed dose was taken, and nothing for any other row`() {
+        val rows =
+            project(
+                listOf(medication()),
+                listOf(
+                    answered(id = "taken", status = Completed, completedAt = at(9, 12)),
+                    answered(id = "skipped", scheduledTime = at(11), status = Skipped, completedAt = at(11, 3)),
+                ),
+            )
+
+        assertEquals(listOf(at(9, 12), null), rows.map { it.completedAt })
     }
 
     @Test

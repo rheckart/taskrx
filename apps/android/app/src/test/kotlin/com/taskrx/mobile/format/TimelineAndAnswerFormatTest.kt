@@ -22,12 +22,20 @@ class TimelineAndAnswerFormatTest {
         kind: ReminderKind = ReminderKind.Medication,
         status: InstanceStatus = InstanceStatus.Pending,
         snoozedUntil: Long? = null,
-    ) = TimelineRow("r", null, "Metformin", null, kind, nine, status, snoozedUntil, false)
+        completedAt: Long? = null,
+    ) = TimelineRow("r", null, "Metformin", null, kind, nine, status, snoozedUntil, false, completedAt)
 
     @Test
     fun `a Completed medication is shown as Taken and a Completed task as Done`() {
         assertEquals("Taken", statusLabel(row(ReminderKind.Medication, InstanceStatus.Completed), utc, us))
         assertEquals("Done", statusLabel(row(ReminderKind.Task, InstanceStatus.Completed), utc, us))
+    }
+
+    @Test
+    fun `a Completed row says when, once that is known`() {
+        val at = nine + 12 * 60_000
+        assertEquals("Taken 9:12 AM", statusLabel(row(ReminderKind.Medication, InstanceStatus.Completed, completedAt = at), utc, us))
+        assertEquals("Done 9:12 AM", statusLabel(row(ReminderKind.Task, InstanceStatus.Completed, completedAt = at), utc, us))
     }
 
     @Test
