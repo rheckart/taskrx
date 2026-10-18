@@ -33,7 +33,13 @@ data class TodayState(
     val loading: Boolean = true,
     val refreshing: Boolean = false,
     val error: String? = null,
-)
+    /** Show only what is still to do. The rows are all kept, so turning it off needs no re-read. */
+    val hideCompleted: Boolean = false,
+) {
+    /** What the list draws: every row, or all but the completed ones. */
+    val visibleRows: List<TimelineRow>
+        get() = if (hideCompleted) rows.filter { it.status != InstanceStatus.Completed } else rows
+}
 
 /**
  * The Today timeline. Mirrors archive/expo-rn:apps/mobile/app/(app)/index.tsx.
@@ -70,6 +76,8 @@ class TodayViewModel(
     fun nextDay(): Job = moveTo(minOf(0, mutable.value.dayOffset + 1))
 
     fun today(): Job = moveTo(0)
+
+    fun toggleHideCompleted() = mutable.update { it.copy(hideCompleted = !it.hideCompleted) }
 
     /**
      * Moves the time a completed dose was taken to [hour]:[minute] on the day it was

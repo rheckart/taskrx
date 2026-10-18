@@ -21,7 +21,9 @@ import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
+import androidx.compose.ui.test.hasScrollAction
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performScrollToIndex
 import androidx.compose.ui.test.performTextReplacement
 import com.taskrx.core.domain.InstanceStatus
 import com.taskrx.core.domain.ReminderKind
@@ -78,6 +80,7 @@ class ScreensTest {
                 onPreviousDay = { log += "prev" },
                 onNextDay = { log += "next" },
                 onToday = { log += "today" },
+                onToggleHideCompleted = { log += "hide" },
                 onRefresh = { log += "refresh" },
                 onOpenAnswer = { log += "answer:${it.name}" },
                 onChangeTime = { row, h, m -> log += "time:${row.name}:$h:$m" },
@@ -105,6 +108,47 @@ class ScreensTest {
 
         compose.onNodeWithText("Nothing scheduled").assertExists()
         compose.onNodeWithText("No medications or tasks due today.").assertExists()
+    }
+
+    @Test
+    fun `hide done drops completed rows and keeps the rest`() {
+        today(
+            TodayState(
+                windowStart = 0,
+                loading = false,
+                hideCompleted = true,
+                rows = listOf(row("Done", status = InstanceStatus.Completed, completedAt = NINE), row("Todo"), row("Late", status = InstanceStatus.Missed)),
+            ),
+        )
+
+        compose.onAllNodesWithText("Done").assertCountEquals(0)
+        compose.onNodeWithText("Todo").assertExists()
+        compose.onNodeWithText("Late").assertExists()
+    }
+
+    @Test
+    fun `hide done off shows completed rows`() {
+        today(state(row("Done", status = InstanceStatus.Completed, completedAt = NINE), row("Todo")))
+
+        compose.onNodeWithText("Done").assertExists()
+    }
+
+    @Test
+    fun `a day of only completed rows says all done when they are hidden`() {
+        today(TodayState(windowStart = 0, loading = false, hideCompleted = true, rows = listOf(row("Done", status = InstanceStatus.Completed, completedAt = NINE))))
+
+        compose.onNodeWithText("All done").assertExists()
+        compose.onAllNodesWithText("Nothing scheduled").assertCountEquals(0)
+    }
+
+    @Test
+    fun `the Hide done chip asks to toggle`() {
+        val calls = Calls()
+        today(state(row()), calls)
+
+        compose.onNodeWithText("Hide done").performClick()
+
+        assertEquals(listOf("hide"), calls.log)
     }
 
     @Test
@@ -174,6 +218,8 @@ class ScreensTest {
 
         compose.onNodeWithContentDescription(rowDescription(open)).assertHasClickAction().performClick()
         compose.onNodeWithContentDescription(rowDescription(snoozed)).assertHasClickAction()
+        // The test screen is small: the last rows may be below the fold.
+        compose.onNode(hasScrollAction()).performScrollToIndex(3)
         compose.onNodeWithContentDescription(rowDescription(missed)).assertHasClickAction()
         compose.onNodeWithContentDescription(rowDescription(taken)).assert(hasNoClickAction())
         assertEquals(listOf("answer:Open"), calls.log)

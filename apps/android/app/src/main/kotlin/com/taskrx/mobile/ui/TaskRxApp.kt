@@ -199,6 +199,7 @@ private fun AppNavHost(container: AppContainer, navController: NavController) {
                         onPreviousDay = { vm.previousDay() },
                         onNextDay = { vm.nextDay() },
                         onToday = { vm.today() },
+                        onToggleHideCompleted = { vm.toggleHideCompleted() },
                         onRefresh = { vm.refresh(pulled = true) },
                         onOpenAnswer = { host.navigate(Routes.answer(it.reminderId, it.scheduledTime)) },
                         onChangeTime = { row, hour, minute -> vm.changeTakenTime(row, hour, minute) },

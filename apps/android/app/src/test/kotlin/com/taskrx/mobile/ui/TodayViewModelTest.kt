@@ -125,6 +125,24 @@ class TodayViewModelTest {
         }
 
     @Test
+    fun `hiding completed drops them from the visible rows and toggling back returns them`() =
+        withUi(MIDNIGHT + 9 * HOUR + 30 * 60_000) {
+            val r = reminder("a", schedule = dailyTimes(listOf("09:00", "18:00")), createdAt = MIDNIGHT - 10 * DAY)
+            val instance =
+                container.instances.create(CreateReminderInstanceInput(USER, r.id, r.kind, MIDNIGHT + 9 * HOUR))
+            container.instances.markCompleted(instance.id, now)
+            val vm = vm()
+            vm.refresh().join()
+
+            assertEquals(2, vm.state.value.visibleRows.size)
+            vm.toggleHideCompleted()
+            assertEquals(listOf(InstanceStatus.Pending), vm.state.value.visibleRows.map { it.status })
+            assertEquals(2, vm.state.value.rows.size)
+            vm.toggleHideCompleted()
+            assertEquals(2, vm.state.value.visibleRows.size)
+        }
+
+    @Test
     fun `a moment past its Grace Period reads Missed after the sweep, and stays on the day`() =
         withUi(MIDNIGHT + 12 * HOUR + 30 * 60_000) {
             reminder("a", schedule = dailyTimes(listOf("09:00")), createdAt = MIDNIGHT - 10 * DAY)
