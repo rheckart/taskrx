@@ -90,6 +90,12 @@ data class TimelineRow(
      * whose remaining moments are all answered.
      */
     val isNext: Boolean,
+    /**
+     * When a `completed` Instance was recorded as done; `null` for every other status and
+     * for an Occurrence with no Instance. Carried so a row can say when the dose was
+     * taken, and so a surface can offer to change it.
+     */
+    val completedAt: Long? = null,
 )
 
 data class ProjectTimelineInput(
@@ -195,6 +201,7 @@ fun projectTimeline(input: ProjectTimelineInput): List<TimelineRow> {
                 status = instance.status,
                 snoozedUntil = instance.snoozedUntil,
                 isNext = false,
+                completedAt = instance.completedAt.takeIf { instance.status == InstanceStatus.Completed },
             ),
         )
     }

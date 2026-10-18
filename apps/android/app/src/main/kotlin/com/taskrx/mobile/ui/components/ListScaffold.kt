@@ -68,11 +68,11 @@ fun EmptyState(title: String, body: String, modifier: Modifier = Modifier) {
 /** The grey band that heads a group of rows. */
 @Composable
 fun SectionHeader(title: String, modifier: Modifier = Modifier) {
-    Surface(color = Color(0xFFF5F5F5), modifier = modifier.fillMaxWidth()) {
+    Surface(color = TaskRxColors.Panel, modifier = modifier.fillMaxWidth()) {
         Text(
             title.uppercase(),
             Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
-            color = Color(0xFF444444),
+            color = TaskRxColors.BodyText,
             style = MaterialTheme.typography.labelLarge,
             fontWeight = FontWeight.Bold,
         )

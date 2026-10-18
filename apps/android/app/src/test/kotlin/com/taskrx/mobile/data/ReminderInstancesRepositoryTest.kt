@@ -225,6 +225,16 @@ class ReminderInstancesRepositoryTest {
         }
 
     @Test
+    fun `findAnswerableForOccurrence also finds a missed row, so a late dose settles it and does not open a second`() =
+        withFixture(T0) {
+            reminder("m1")
+            val row = container.instances.create(open())
+            container.instances.markMissed(row.id)
+
+            assertEquals(row.id, container.instances.findAnswerableForOccurrence(USER, "m1", T0)?.id)
+        }
+
+    @Test
     fun `lastCompletedFor is the most recently completed row, or null`() =
         withFixture(T0) {
             reminder("m1")
@@ -308,6 +318,36 @@ class ReminderInstancesRepositoryTest {
             val update = queuePayloads().single { it["localId"]!!.jsonPrimitive.content == "m1" }
             assertEquals(28.0, update["pillsRemaining"]!!.jsonPrimitive.double)
             assertEquals(SyncOperation.Update, container.syncQueue.pending().first { it.entityId == "m1" }.operation)
+        }
+
+    @Test
+    fun `changing when a dose was taken keeps it completed, spends nothing more and syncs as an update`() =
+        withFixture(T0) {
+            bottle(30.0)
+            val dose = container.instances.create(open())
+            container.instances.markCompleted(dose.id, T0)
+            container.syncQueue.pending().forEach { container.syncQueue.remove(it.id) }
+
+            val changed = container.instances.changeCompletedAt(dose.id, T0 - 60_000)
+
+            assertEquals(InstanceStatus.Completed, changed.status)
+            assertEquals(T0 - 60_000, changed.completedAt)
+            assertEquals(29.0, pills())
+            val queued = container.syncQueue.pending().single()
+            assertEquals(SyncOperation.Update, queued.operation)
+            val payload = queuePayloads().single()
+            assertEquals("completed", payload["status"]!!.jsonPrimitive.content)
+            assertEquals(T0 - 60_000, payload["completedAt"]!!.jsonPrimitive.long)
+        }
+
+    @Test
+    fun `a time taken can only be changed on a completed dose`() =
+        withFixture(T0) {
+            reminder("m1")
+            val dose = container.instances.create(open())
+
+            assertFailsWith<IllegalStateException> { container.instances.changeCompletedAt(dose.id, T0) }
+            assertEquals(InstanceStatus.Pending, container.instances.list(InstanceFilter(USER)).single().status)
         }
 
     @Test

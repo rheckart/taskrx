@@ -76,8 +76,8 @@ class IsAnswerableTest {
     }
 
     @Test
-    fun `closes a moment that ran out of time`() {
-        assertFalse(isAnswerable(InstanceStatus.Missed))
+    fun `reopens a moment that ran out of time, because missed is only the sweep's guess`() {
+        assertTrue(isAnswerable(InstanceStatus.Missed))
     }
 
     @Test

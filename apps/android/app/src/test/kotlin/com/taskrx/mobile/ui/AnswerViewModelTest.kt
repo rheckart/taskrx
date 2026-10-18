@@ -7,6 +7,7 @@ import com.taskrx.core.domain.ReminderKind
 import com.taskrx.core.domain.dailyTimes
 import com.taskrx.core.domain.onceTimes
 import com.taskrx.mobile.DAY
+import com.taskrx.mobile.data.CreateReminderInstanceInput
 import com.taskrx.mobile.Fixture
 import com.taskrx.mobile.HOUR
 import com.taskrx.mobile.USER
@@ -84,6 +85,25 @@ class AnswerViewModelTest {
             assertEquals(1, stored().size)
             val loaded = assertIs<AnswerState.Loaded>(again.state.value)
             assertEquals(InstanceStatus.Snoozed, loaded.instance.status)
+        }
+
+    @Test
+    fun `a dose the sweep marked missed can still be recorded as taken, on the same row`() =
+        withUi(NOW) {
+            reminder("med", ReminderKind.Medication, dailyTimes(listOf("09:00")), createdAt = NOW - 10 * DAY)
+            val missed = container.instances.create(
+                CreateReminderInstanceInput(USER, "med", ReminderKind.Medication, NINE, status = InstanceStatus.Missed),
+            )
+            val vm = vm()
+            vm.load("med", NINE).join()
+
+            assertEquals(missed.id, assertIs<AnswerState.Loaded>(vm.state.value).instance.id)
+            vm.complete().join()
+
+            val row = stored().single()
+            assertEquals(missed.id, row.id)
+            assertEquals(InstanceStatus.Completed, row.status)
+            assertEquals(NOW, row.completedAt)
         }
 
     @Test

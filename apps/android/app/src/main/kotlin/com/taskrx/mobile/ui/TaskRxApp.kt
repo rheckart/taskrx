@@ -14,6 +14,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.ui.unit.sp
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.semantics.contentDescription
@@ -157,7 +158,7 @@ private fun AppShell(container: AppContainer, signedIn: Boolean, modifier: Modif
                             TextButton(
                                 onClick = { navController.popBackStack() },
                                 modifier = Modifier.semantics { contentDescription = "Back" },
-                            ) { Text("←") }
+                            ) { Text("←", fontSize = 32.sp) }
                         }
                     },
                 )
@@ -200,6 +201,7 @@ private fun AppNavHost(container: AppContainer, navController: NavController) {
                         onToday = { vm.today() },
                         onRefresh = { vm.refresh(pulled = true) },
                         onOpenAnswer = { host.navigate(Routes.answer(it.reminderId, it.scheduledTime)) },
+                        onChangeTime = { row, hour, minute -> vm.changeTakenTime(row, hour, minute) },
                         onAdd = { host.navigate(Routes.ADD) },
                         onNewTask = { host.navigate(Routes.NEW_TASK) },
                         onNewMedication = { host.navigate(Routes.NEW_MEDICATION) },

@@ -1,5 +1,6 @@
 package com.taskrx.mobile.ui.components
 
+import com.taskrx.mobile.ui.TaskRxColors
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Row
@@ -12,6 +13,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.collectAsState
+import androidx.compose.ui.unit.sp
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -66,9 +68,9 @@ fun ToastHost(toaster: Toaster, modifier: Modifier = Modifier) {
 
     val (background, glyph) =
         when (shown.kind) {
-            ToastKind.Success -> Color(0xFF2E7D32) to "✓"
-            ToastKind.Error -> Color(0xFFC62828) to "✕"
-            ToastKind.Info -> Color(0xFF1565C0) to "ℹ"
+            ToastKind.Success -> TaskRxColors.ToastSuccess to "✓"
+            ToastKind.Error -> TaskRxColors.ToastError to "✕"
+            ToastKind.Info -> TaskRxColors.ToastInfo to "ℹ"
         }
 
     Box(modifier.fillMaxWidth().padding(horizontal = 16.dp)) {
@@ -85,7 +87,7 @@ fun ToastHost(toaster: Toaster, modifier: Modifier = Modifier) {
         ) {
             Row(Modifier.padding(horizontal = 16.dp, vertical = 14.dp), verticalAlignment = Alignment.CenterVertically) {
                 // The glyph is decoration; the message says it all.
-                Text("$glyph  ", modifier = Modifier.clearAndSetSemantics { }, color = Color.White)
+                Text("$glyph  ", modifier = Modifier.clearAndSetSemantics { }, color = Color.White, fontSize = 22.sp)
                 Text(shown.message, color = Color.White)
             }
         }

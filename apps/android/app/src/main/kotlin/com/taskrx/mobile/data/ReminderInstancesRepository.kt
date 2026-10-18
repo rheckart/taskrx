@@ -177,6 +177,18 @@ class ReminderInstancesRepository(
     suspend fun markCompleted(id: String, completedAt: Long, notes: String? = null): ReminderInstance =
         updateStatus(id, InstanceStatus.Completed, completedAt = completedAt, notes = notes)
 
+    /**
+     * Corrects when a completed dose was taken. Only a row that is already completed: this
+     * is an edit, not an answer, so it must never turn another status into one. The
+     * supply is not touched (`supplyAfterDose` spends only on the way INTO completed), and
+     * it syncs as an ordinary update that the server's `markCompleted` applies.
+     */
+    suspend fun changeCompletedAt(id: String, completedAt: Long): ReminderInstance {
+        val existing = checkNotNull(dao.get(id)) { "Reminder instance $id not found" }
+        check(existing.status == InstanceStatus.Completed.wire) { "Only a completed instance has a time taken to change" }
+        return updateStatus(id, InstanceStatus.Completed, completedAt = completedAt)
+    }
+
     /** Snoozed until [snoozedUntil]; counts one more snooze. Neither a skip nor a miss. */
     suspend fun markSnoozed(id: String, snoozedUntil: Long): ReminderInstance =
         updateStatus(id, InstanceStatus.Snoozed, snoozedUntil = snoozedUntil, incrementSnooze = true)

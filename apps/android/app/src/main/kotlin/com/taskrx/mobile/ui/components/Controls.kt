@@ -115,7 +115,7 @@ fun <T> ChoiceRow(
                 shape = RoundedCornerShape(6.dp),
                 color = if (selected) TaskRxColors.Accent else Color.Transparent,
                 contentColor = if (selected) Color.White else MaterialTheme.colorScheme.onSurface,
-                border = BorderStroke(1.dp, if (selected) TaskRxColors.Accent else Color(0xFFCCCCCC)),
+                border = BorderStroke(1.dp, if (selected) TaskRxColors.Accent else TaskRxColors.Outline),
                 modifier = Modifier.selectable(selected = selected, role = Role.RadioButton, onClick = { onChange(key) }),
             ) {
                 Text(

@@ -80,8 +80,8 @@ private fun HistoryRow(item: HistoryItem) {
             Text(status, color = statusColor(instance.status), fontWeight = FontWeight.SemiBold)
         }
         item.dosage?.let { Text(it, Modifier.padding(top = 2.dp), color = TaskRxColors.Secondary) }
-        Text("Scheduled: $scheduled", Modifier.padding(top = 4.dp), color = Color(0xFF444444))
-        completed?.let { Text(it, Modifier.padding(top = 4.dp), color = Color(0xFF444444)) }
+        Text("Scheduled: $scheduled", Modifier.padding(top = 4.dp), color = TaskRxColors.BodyText)
+        completed?.let { Text(it, Modifier.padding(top = 4.dp), color = TaskRxColors.BodyText) }
         instance.notes?.takeIf { it.isNotEmpty() }?.let {
             Text(it, Modifier.padding(top = 4.dp), color = TaskRxColors.Secondary, fontStyle = FontStyle.Italic, style = MaterialTheme.typography.bodySmall)
         }
@@ -89,10 +89,11 @@ private fun HistoryRow(item: HistoryItem) {
     HorizontalDivider(color = TaskRxColors.Divider)
 }
 
+@Composable
 private fun statusColor(status: InstanceStatus): Color =
     when (status) {
         InstanceStatus.Completed -> TaskRxColors.CompleteButton
-        InstanceStatus.Snoozed -> Color(0xFF8E8E93)
+        InstanceStatus.Snoozed -> TaskRxColors.SnoozedStatus
         InstanceStatus.Skipped -> TaskRxColors.SkipButton
         InstanceStatus.Missed -> TaskRxColors.Error
         InstanceStatus.Pending -> TaskRxColors.Accent

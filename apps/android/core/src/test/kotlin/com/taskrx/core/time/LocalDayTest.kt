@@ -196,3 +196,24 @@ class LocalDayBoundsDaylightSavingTest {
         )
     }
 }
+
+class AtClockTimeOnDayOfTest {
+    private val newYork = ZoneId.of("America/New_York")
+
+    @Test
+    fun `moves the clock and keeps the day`() {
+        val taken = local(2026, 8, 13, 7, 42)
+
+        assertEquals(local(2026, 8, 13, 9, 5), atClockTimeOnDayOf(taken, 9, 5))
+        assertEquals(local(2026, 8, 13, 0, 0), atClockTimeOnDayOf(taken, 0, 0))
+        assertEquals(local(2026, 8, 13, 23, 59), atClockTimeOnDayOf(taken, 23, 59))
+    }
+
+    @Test
+    fun `reads the day in the zone it is asked in, not in UTC`() {
+        // 02:30 UTC on the 14th is still the evening of the 13th in New York.
+        val taken = local(2026, 8, 14, 2, 30)
+
+        assertEquals(local(2026, 8, 13, 20, 0, newYork), atClockTimeOnDayOf(taken, 20, 0, newYork))
+    }
+}

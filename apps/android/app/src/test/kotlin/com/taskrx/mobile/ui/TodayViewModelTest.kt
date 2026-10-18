@@ -62,6 +62,53 @@ class TodayViewModelTest {
         }
 
     @Test
+    fun `the time a dose was taken can be moved within its day, and the row shows it`() =
+        withUi(MIDNIGHT + 9 * HOUR + 30 * 60_000) {
+            val r = reminder("a", schedule = dailyTimes(listOf("09:00")), createdAt = MIDNIGHT - 10 * DAY)
+            val instance = container.instances.create(CreateReminderInstanceInput(USER, r.id, r.kind, MIDNIGHT + 9 * HOUR))
+            container.instances.markCompleted(instance.id, now)
+            val vm = vm()
+            vm.refresh().join()
+
+            vm.changeTakenTime(vm.state.value.rows.single(), 9, 10).join()
+
+            assertEquals(MIDNIGHT + 9 * HOUR + 10 * 60_000, vm.state.value.rows.single().completedAt)
+            assertEquals(MIDNIGHT + 9 * HOUR + 10 * 60_000, container.instances.list(com.taskrx.mobile.data.InstanceFilter(USER)).single { it.id == instance.id }.completedAt)
+            assertEquals("Time updated", container.toaster.current.value?.message)
+        }
+
+    @Test
+    fun `a time that has not happened yet is refused and nothing changes`() =
+        withUi(MIDNIGHT + 9 * HOUR + 30 * 60_000) {
+            val r = reminder("a", schedule = dailyTimes(listOf("09:00")), createdAt = MIDNIGHT - 10 * DAY)
+            val instance = container.instances.create(CreateReminderInstanceInput(USER, r.id, r.kind, MIDNIGHT + 9 * HOUR))
+            container.instances.markCompleted(instance.id, now)
+            val vm = vm()
+            vm.refresh().join()
+
+            vm.changeTakenTime(vm.state.value.rows.single(), 23, 0).join()
+
+            assertEquals(now, vm.state.value.rows.single().completedAt)
+            assertEquals("That time hasn't happened yet", container.toaster.current.value?.message)
+        }
+
+    @Test
+    fun `only a completed row has a time to change`() =
+        withUi(MIDNIGHT + 9 * HOUR + 30 * 60_000) {
+            val r = reminder("a", schedule = dailyTimes(listOf("09:00")), createdAt = MIDNIGHT - 10 * DAY)
+            val instance = container.instances.create(CreateReminderInstanceInput(USER, r.id, r.kind, MIDNIGHT + 9 * HOUR))
+            container.instances.markMissed(instance.id)
+            val vm = vm()
+            vm.refresh().join()
+            val missed = vm.state.value.rows.single { it.instanceId == instance.id }
+
+            vm.changeTakenTime(missed, 9, 10).join()
+
+            assertEquals(InstanceStatus.Missed, vm.state.value.rows.single { it.instanceId == instance.id }.status)
+            assertNull(container.toaster.current.value)
+        }
+
+    @Test
     fun `a handled row stays visible in its handled state`() =
         withUi(MIDNIGHT + 9 * HOUR + 30 * 60_000) {
             val r = reminder("a", schedule = dailyTimes(listOf("09:00")), createdAt = MIDNIGHT - 10 * DAY)
