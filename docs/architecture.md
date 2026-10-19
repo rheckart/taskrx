@@ -185,6 +185,16 @@ The truth table, including the safety-critical completed-instance preservation, 
 6. When a notification fires and the user taps it, `TapHandler` opens the answer screen with the reminder id and `scheduledTime` (`core/notifications/Tap.kt`). It is Kind-neutral: a task tap lands on the same answer screen, which already speaks both Kinds.
 7. Answering writes a Reminder Instance to SQLite and enqueues sync.
 
+### Answering doses together
+
+Doses due at the same moment can be answered in one tap, from the Today screen or from the shade. `batchSlots` in `:core` (`core/batch/Batch.kt`) is the one rule: answerable medication rows that share a `scheduledTime`, two or more. Tasks never join; a task is not a dose.
+
+- **Today:** a slot bar above the first row of each such moment, with Take all, Snooze all and Skip all.
+- **Shade:** each dose still posts its own notification. When a post leaves two or more doses for one moment in the shade, `NotificationPoster` adds a `batch-<scheduledTime>` notification with the same three buttons. It is rebuilt from the notifications showing (their extras carry the reminder id and moment), not from the database, so alarms that fire in the same second converge on the full list. It never alerts.
+- **One dose:** each medication notification carries Take, Snooze and Skip of its own, through the same receiver and `BatchAnswers` (a batch of one). Answering one rebuilds the batch notification from the doses left, or removes it when fewer than two remain. A task notification has no buttons.
+- **Buttons:** each is a `PendingIntent` with its own data URI (`taskrx://batch/<time>/<action>`, or `taskrx://dose/<id>/<time>/<action>` for one dose), because a PendingIntent's identity ignores extras. `BatchActionReceiver` runs `BatchAnswers` with the app closed.
+- **`BatchAnswers`** differs from the answer screen on purpose: a dose that already has an answer is left alone (the answer screen would mint a second pending Instance, double-counting it and its supply); one clock reading serves the batch so every snooze comes back together as a batch; the reschedule runs once at the end.
+
 ### The two channels
 
 `medication_reminders` is HIGH importance so a dose bypasses Do Not Disturb and alerts audibly. `task_reminders` is DEFAULT: it sounds and appears in the shade, and does not push past DND or take over the screen. Separate channels also let a person silence their task reminders without touching their doses, which one shared channel would not allow. Both id strings are frozen — Android keys the user's per-channel overrides to them.
@@ -235,3 +245,7 @@ The gate commands are in the README.
 - A web client.
 - Drug interaction checking.
 - Push notifications (currently local-only; caregiver alerts via FCM deferred).
+
+### Recording a dose nobody scheduled
+
+"+ Dose" on Today opens a list of every medication (stopped ones last). Picking one records a Completed Reminder Instance at a time today, defaulting to now; a time that has not happened yet is refused. The timeline already shows an Instance the Schedule did not predict. There is no "unscheduled" flag, so such a dose counts as Completed toward Adherence like any other.

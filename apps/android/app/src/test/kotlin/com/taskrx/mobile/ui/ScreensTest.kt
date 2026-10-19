@@ -43,6 +43,8 @@ import com.taskrx.mobile.ui.components.PermissionBanner
 import com.taskrx.mobile.ui.forms.SchedulePicker
 import com.taskrx.mobile.ui.forms.ScheduleTypeChooser
 import com.taskrx.mobile.ui.forms.ScheduleType
+import com.taskrx.mobile.ui.dose.AddDoseContent
+import com.taskrx.mobile.ui.dose.AddDoseState
 import com.taskrx.mobile.ui.today.TodayActions
 import com.taskrx.mobile.ui.today.TodayContent
 import com.taskrx.mobile.ui.today.TodayState
@@ -81,12 +83,14 @@ class ScreensTest {
                 onNextDay = { log += "next" },
                 onToday = { log += "today" },
                 onToggleHideCompleted = { log += "hide" },
+                onAnswerSlot = { rows, action -> log += "slot:${action.wire}:${rows.joinToString(",") { it.name }}" },
                 onRefresh = { log += "refresh" },
                 onOpenAnswer = { log += "answer:${it.name}" },
                 onChangeTime = { row, h, m -> log += "time:${row.name}:$h:$m" },
                 onAdd = { log += "add" },
                 onNewTask = { log += "task" },
                 onNewMedication = { log += "med" },
+                onAddDose = { log += "dose" },
                 onReminders = { log += "reminders" },
                 onBacklog = { log += "backlog" },
                 onAdherence = { log += "adherence" },
@@ -108,6 +112,105 @@ class ScreensTest {
 
         compose.onNodeWithText("Nothing scheduled").assertExists()
         compose.onNodeWithText("No medications or tasks due today.").assertExists()
+    }
+
+    @Test
+    fun `doses due together get a slot bar whose buttons answer them all`() {
+        val calls = Calls()
+        today(state(row("A"), row("B")), calls)
+
+        compose.onNodeWithText("9:00 AM · 2 doses").assertExists()
+        compose.onNodeWithText("Take all").performClick()
+        compose.onNodeWithText("Snooze all").performClick()
+        compose.onNodeWithText("Skip all").performClick()
+
+        assertEquals(listOf("slot:take:A,B", "slot:snooze:A,B", "slot:skip:A,B"), calls.log)
+    }
+
+    @Test
+    fun `a lone dose has no slot bar`() {
+        today(state(row("A")))
+
+        compose.onAllNodesWithText("Take all").assertCountEquals(0)
+    }
+
+    @Test
+    fun `tasks due together have no slot bar`() {
+        today(state(row("A", kind = ReminderKind.Task), row("B", kind = ReminderKind.Task)))
+
+        compose.onAllNodesWithText("Take all").assertCountEquals(0)
+    }
+
+    @Test
+    fun `a slot bar counts only the doses still to answer`() {
+        today(state(row("A"), row("B"), row("C", status = InstanceStatus.Completed, completedAt = NINE)))
+
+        compose.onNodeWithText("9:00 AM · 2 doses").assertExists()
+    }
+
+    @Test
+    fun `the footer offers to add a dose`() {
+        val calls = Calls()
+        today(state(row()), calls)
+
+        compose.onNodeWithText("+ Dose").performClick()
+
+        assertEquals(listOf("dose"), calls.log)
+    }
+
+    private fun medication(id: String, name: String, dosage: String? = null, active: Boolean = true) =
+        createReminder(id, "u", ReminderKind.Medication, name, createdAt = 0, updatedAt = 0, dosage = dosage, active = active)
+
+    @Test
+    fun `picking a medication offers to record it at the time it opens on, and records`() {
+        val recorded = mutableListOf<String>()
+        compose.setContent {
+            TaskRxTheme {
+                AddDoseContent(
+                    AddDoseState(medications = listOf(medication("a", "Aspirin", "81 mg"), medication("b", "Zinc", active = false)), loading = false),
+                    onRefresh = {},
+                    onRecord = { m, h, min -> recorded += "${m.name}:$h:$min" },
+                    now = { 10 * 3_600_000L + 5 * 60_000L },
+                )
+            }
+        }
+
+        compose.onNodeWithText("Aspirin").performClick()
+        compose.onNodeWithText("Taken today at 10:05 AM").assertExists()
+        compose.onNodeWithText("Record").performClick()
+
+        assertEquals(listOf("Aspirin:10:5"), recorded)
+    }
+
+    @Test
+    fun `a stopped medication says so, and no medications says what to do`() {
+        compose.setContent {
+            TaskRxTheme {
+                AddDoseContent(AddDoseState(medications = listOf(medication("b", "Zinc", active = false)), loading = false), {}, { _, _, _ -> }, now = { 0 })
+            }
+        }
+        compose.onNodeWithText("Stopped").assertExists()
+    }
+
+    @Test
+    fun `with no medications the screen says to add one first`() {
+        compose.setContent { TaskRxTheme { AddDoseContent(AddDoseState(loading = false), {}, { _, _, _ -> }, now = { 0 }) } }
+
+        compose.onNodeWithText("No medications yet").assertExists()
+    }
+
+    @Test
+    fun `cancelling the dialog records nothing`() {
+        val recorded = mutableListOf<String>()
+        compose.setContent {
+            TaskRxTheme { AddDoseContent(AddDoseState(medications = listOf(medication("a", "Aspirin")), loading = false), {}, { m, _, _ -> recorded += m.name }, now = { 0 }) }
+        }
+
+        compose.onNodeWithText("Aspirin").performClick()
+        compose.onNodeWithText("Cancel").performClick()
+
+        assertEquals(emptyList(), recorded)
+        compose.onAllNodesWithText("Record Aspirin").assertCountEquals(0)
     }
 
     @Test
@@ -219,7 +322,7 @@ class ScreensTest {
         compose.onNodeWithContentDescription(rowDescription(open)).assertHasClickAction().performClick()
         compose.onNodeWithContentDescription(rowDescription(snoozed)).assertHasClickAction()
         // The test screen is small: the last rows may be below the fold.
-        compose.onNode(hasScrollAction()).performScrollToIndex(3)
+        compose.onNode(hasScrollAction()).performScrollToIndex(4)
         compose.onNodeWithContentDescription(rowDescription(missed)).assertHasClickAction()
         compose.onNodeWithContentDescription(rowDescription(taken)).assert(hasNoClickAction())
         assertEquals(listOf("answer:Open"), calls.log)

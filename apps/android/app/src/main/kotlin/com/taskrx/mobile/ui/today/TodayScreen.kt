@@ -49,6 +49,8 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.taskrx.core.batch.BatchAction
+import com.taskrx.core.batch.batchSlots
 import com.taskrx.core.domain.InstanceStatus
 import com.taskrx.core.domain.ReminderKind
 import com.taskrx.core.domain.isAnswerable
@@ -70,6 +72,8 @@ data class TodayActions(
     val onNextDay: () -> Unit,
     val onToday: () -> Unit,
     val onToggleHideCompleted: () -> Unit,
+    /** Take, snooze or skip every dose in a slot: the rows share one moment. */
+    val onAnswerSlot: (List<TimelineRow>, BatchAction) -> Unit,
     val onRefresh: () -> Unit,
     val onOpenAnswer: (TimelineRow) -> Unit,
     /** Move the time a completed dose was taken to this hour and minute, on its own day. */
@@ -77,6 +81,7 @@ data class TodayActions(
     val onAdd: () -> Unit,
     val onNewTask: () -> Unit,
     val onNewMedication: () -> Unit,
+    val onAddDose: () -> Unit,
     val onReminders: () -> Unit,
     val onBacklog: () -> Unit,
     val onAdherence: () -> Unit,
@@ -188,18 +193,62 @@ private fun Timeline(state: TodayState, actions: TodayActions) {
                         }
                     }
                 } else {
+                    // A slot's buttons sit above its first row, as a list entry of their own.
+                    val slots = batchSlots(visible)
+                    val entries = mutableListOf<Entry>()
+                    for (row in visible) {
+                        val slot = slots[row.scheduledTime]
+                        if (slot != null && entries.none { it is Entry.Slot && it.scheduledTime == row.scheduledTime }) {
+                            entries += Entry.Slot(row.scheduledTime, slot)
+                        }
+                        entries += Entry.Dose(row)
+                    }
                     LazyColumn(Modifier.fillMaxSize()) {
-                        items(visible, key = { timelineRowKey(it.reminderId, it.scheduledTime) }) { row ->
-                            TimelineRowView(
-                                row,
-                                onPress = { actions.onOpenAnswer(row) },
-                                onLongPress = if (row.status == InstanceStatus.Completed) ({ editing = row }) else null,
-                            )
+                        items(entries, key = { it.key }) { entry ->
+                            when (entry) {
+                                is Entry.Slot -> SlotBar(entry, onAnswer = { actions.onAnswerSlot(entry.rows, it) })
+                                is Entry.Dose ->
+                                    TimelineRowView(
+                                        entry.row,
+                                        onPress = { actions.onOpenAnswer(entry.row) },
+                                        onLongPress = if (entry.row.status == InstanceStatus.Completed) ({ editing = entry.row }) else null,
+                                    )
+                            }
                         }
                     }
                 }
             }
     }
+}
+
+private sealed interface Entry {
+    val key: String
+
+    class Slot(val scheduledTime: Long, val rows: List<TimelineRow>) : Entry {
+        override val key = "slot-$scheduledTime"
+    }
+
+    class Dose(val row: TimelineRow) : Entry {
+        override val key = timelineRowKey(row.reminderId, row.scheduledTime)
+    }
+}
+
+/** Three buttons that answer every dose due at one moment. */
+@Composable
+private fun SlotBar(slot: Entry.Slot, onAnswer: (BatchAction) -> Unit) {
+    val time = formatTime(slot.scheduledTime)
+    Column(Modifier.fillMaxWidth().background(TaskRxColors.NextTint).padding(horizontal = 16.dp, vertical = 4.dp)) {
+        Text("$time · ${slot.rows.size} doses", style = MaterialTheme.typography.labelLarge, color = TaskRxColors.Secondary)
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+            for ((action, label) in listOf(BatchAction.Take to "Take all", BatchAction.Snooze to "Snooze all", BatchAction.Skip to "Skip all")) {
+                TextButton(
+                    onClick = { onAnswer(action) },
+                    modifier = Modifier.semantics { contentDescription = "$label ${slot.rows.size} doses at $time" },
+                ) { Text(label, fontWeight = FontWeight.SemiBold) }
+            }
+        }
+    }
+    HorizontalDivider(color = TaskRxColors.Divider)
 }
 
 /**
@@ -321,6 +370,7 @@ private fun Footer(actions: TodayActions) {
         Button(onClick = actions.onAdd, shape = RoundedCornerShape(6.dp)) { Text("+ Add", fontWeight = FontWeight.Bold) }
         TextButton(onClick = actions.onNewTask) { Text("+ Task") }
         TextButton(onClick = actions.onNewMedication) { Text("+ Medication") }
+        TextButton(onClick = actions.onAddDose) { Text("+ Dose") }
         TextButton(onClick = actions.onReminders) { Text("Reminders") }
         TextButton(onClick = actions.onBacklog) { Text("Backlog") }
         TextButton(onClick = actions.onAdherence) { Text("How it's going") }

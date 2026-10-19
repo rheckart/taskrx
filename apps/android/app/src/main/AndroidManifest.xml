@@ -38,6 +38,11 @@
             android:name=".notifications.AlarmReceiver"
             android:exported="false" />
 
+        <!-- The Take all / Snooze all / Skip all buttons on a batch notification. Private to the app. -->
+        <receiver
+            android:name=".notifications.BatchActionReceiver"
+            android:exported="false" />
+
         <!-- Re-arms after reboot, app update, clock/zone change, or an exact-alarm permission change. -->
         <receiver
             android:name=".notifications.RearmReceiver"

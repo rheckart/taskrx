@@ -3,6 +3,7 @@ package com.taskrx.mobile.ui.today
 import android.util.Log
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.taskrx.core.batch.BatchAction
 import com.taskrx.core.domain.InstanceStatus
 import com.taskrx.core.time.atClockTimeOnDayOf
 import com.taskrx.core.time.localDayBounds
@@ -12,6 +13,7 @@ import com.taskrx.core.timeline.TimelineWindow
 import com.taskrx.core.timeline.projectTimeline
 import com.taskrx.mobile.AppContainer
 import com.taskrx.mobile.data.InstanceFilter
+import com.taskrx.mobile.format.SNOOZE_MINUTES
 import com.taskrx.mobile.ui.components.ToastKind
 import com.taskrx.mobile.ui.components.ToastRequest
 import java.time.ZoneId
@@ -101,6 +103,37 @@ class TodayViewModel(
             } catch (e: Exception) {
                 log("changing the time taken failed", e)
                 toast(ToastRequest("Couldn't change the time", ToastKind.Error))
+            }
+            loads.withLock { load() }
+        }
+
+    /**
+     * Takes, snoozes or skips every dose in [rows], which share one moment. Which rows form
+     * a batch is `batchSlots` in :core; this only reports how it went and re-reads the day.
+     */
+    fun answerSlot(rows: List<TimelineRow>, action: BatchAction): Job =
+        viewModelScope.launch {
+            val first = rows.firstOrNull() ?: return@launch
+            try {
+                val result = app.batch.answer(action, first.scheduledTime, rows.map { it.reminderId })
+                toast(
+                    if (result.failed > 0) {
+                        ToastRequest("Couldn't answer ${result.failed} of ${rows.size}", ToastKind.Error)
+                    } else {
+                        val words =
+                            when (action) {
+                                BatchAction.Take -> "taken"
+                                BatchAction.Skip -> "skipped"
+                                BatchAction.Snooze -> "snoozed $SNOOZE_MINUTES minutes"
+                            }
+                        ToastRequest("${result.changed} doses $words", if (action == BatchAction.Snooze) ToastKind.Info else ToastKind.Success)
+                    },
+                )
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                log("answering a slot failed", e)
+                toast(ToastRequest("Couldn't answer those doses", ToastKind.Error))
             }
             loads.withLock { load() }
         }

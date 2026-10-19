@@ -1,5 +1,6 @@
 package com.taskrx.mobile.ui
 
+import com.taskrx.core.batch.BatchAction
 import com.taskrx.core.domain.InstanceStatus
 import com.taskrx.core.domain.ReminderKind
 import com.taskrx.core.domain.dailyTimes
@@ -140,6 +141,73 @@ class TodayViewModelTest {
             assertEquals(2, vm.state.value.rows.size)
             vm.toggleHideCompleted()
             assertEquals(2, vm.state.value.visibleRows.size)
+        }
+
+    @Test
+    fun `answering a slot takes every dose in it, says so, and re-reads the day`() =
+        withUi(MIDNIGHT + 9 * HOUR + 30 * 60_000) {
+            for (id in listOf("a", "b")) reminder(id, schedule = dailyTimes(listOf("09:00")), createdAt = MIDNIGHT - 10 * DAY)
+            val toasts = ToastLog()
+            val vm = TodayViewModel(container, zone = { UTC }, log = { _, _ -> }, toast = toasts::add)
+            vm.refresh().join()
+
+            vm.answerSlot(vm.state.value.rows, BatchAction.Take).join()
+
+            assertEquals(listOf(InstanceStatus.Completed, InstanceStatus.Completed), vm.state.value.rows.map { it.status })
+            assertEquals("2 doses taken", toasts.shown.single().message)
+        }
+
+    @Test
+    fun `snoozing a slot says for how long`() =
+        withUi(MIDNIGHT + 9 * HOUR + 30 * 60_000) {
+            for (id in listOf("a", "b")) reminder(id, schedule = dailyTimes(listOf("09:00")), createdAt = MIDNIGHT - 10 * DAY)
+            val toasts = ToastLog()
+            val vm = TodayViewModel(container, zone = { UTC }, log = { _, _ -> }, toast = toasts::add)
+            vm.refresh().join()
+
+            vm.answerSlot(vm.state.value.rows, BatchAction.Snooze).join()
+
+            assertEquals("2 doses snoozed 15 minutes", toasts.shown.single().message)
+            assertEquals(listOf(InstanceStatus.Snoozed, InstanceStatus.Snoozed), vm.state.value.rows.map { it.status })
+        }
+
+    @Test
+    fun `skipping a slot says so`() =
+        withUi(MIDNIGHT + 9 * HOUR + 30 * 60_000) {
+            for (id in listOf("a", "b")) reminder(id, schedule = dailyTimes(listOf("09:00")), createdAt = MIDNIGHT - 10 * DAY)
+            val toasts = ToastLog()
+            val vm = TodayViewModel(container, zone = { UTC }, log = { _, _ -> }, toast = toasts::add)
+            vm.refresh().join()
+
+            vm.answerSlot(vm.state.value.rows, BatchAction.Skip).join()
+
+            assertEquals("2 doses skipped", toasts.shown.single().message)
+        }
+
+    @Test
+    fun `a slot that cannot be written says so`() =
+        withUi(MIDNIGHT + 9 * HOUR + 30 * 60_000) {
+            for (id in listOf("a", "b")) reminder(id, schedule = dailyTimes(listOf("09:00")), createdAt = MIDNIGHT - 10 * DAY)
+            val toasts = ToastLog()
+            val vm = TodayViewModel(container, zone = { UTC }, log = { _, _ -> }, toast = toasts::add)
+            vm.refresh().join()
+            val rows = vm.state.value.rows
+            database.openHelper.writableDatabase.execSQL("DROP TABLE reminder_instances")
+
+            vm.answerSlot(rows, BatchAction.Take).join()
+
+            assertEquals("Couldn't answer 2 of 2", toasts.shown.first().message)
+        }
+
+    @Test
+    fun `a slot with no rows does nothing`() =
+        withUi(MIDNIGHT + 9 * HOUR) {
+            val toasts = ToastLog()
+            val vm = TodayViewModel(container, zone = { UTC }, log = { _, _ -> }, toast = toasts::add)
+
+            vm.answerSlot(emptyList(), BatchAction.Take).join()
+
+            assertEquals(emptyList(), toasts.shown)
         }
 
     @Test
