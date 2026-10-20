@@ -40,7 +40,7 @@ class SchedulerReadLockTest {
                     }
                 }
             val scheduler =
-                NotificationScheduler(fx.container.reminders, gated, tasks, snoozes, api::canScheduleExactAlarms, { fx.now }, { java.time.ZoneOffset.UTC })
+                NotificationScheduler(fx.container.reminders, fx.container.instances, gated, tasks, snoozes, api::canScheduleExactAlarms, { fx.now }, { java.time.ZoneOffset.UTC })
 
             coroutineScope {
                 val first = async(Dispatchers.Default) { scheduler.rescheduleAll(USER) }

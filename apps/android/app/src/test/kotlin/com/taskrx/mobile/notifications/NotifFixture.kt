@@ -92,6 +92,7 @@ class NotifFixture(val fx: Fixture) {
     val scheduler =
         NotificationScheduler(
             reminders = fx.container.reminders,
+            instances = fx.container.instances,
             medication = medication,
             tasks = tasks,
             snoozes = snoozes,

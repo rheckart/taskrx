@@ -1,6 +1,7 @@
 package com.taskrx.mobile.notifications
 
 import com.taskrx.core.domain.Reminder
+import com.taskrx.core.domain.isAnswerable
 import com.taskrx.core.notifications.RearmCause
 import com.taskrx.core.notifications.ReschedulePlan
 import com.taskrx.core.notifications.Tier
@@ -11,6 +12,8 @@ import com.taskrx.core.notifications.snoozeSpec
 import com.taskrx.core.notifications.snoozesToRearm
 import com.taskrx.core.notifications.tiersToRearm
 import com.taskrx.mobile.data.Clock
+import com.taskrx.mobile.data.InstanceFilter
+import com.taskrx.mobile.data.ReminderInstancesRepository
 import com.taskrx.mobile.data.RemindersRepository
 import java.time.ZoneId
 import kotlinx.coroutines.sync.Mutex
@@ -30,6 +33,7 @@ import kotlinx.coroutines.sync.withLock
  */
 class NotificationScheduler(
     private val reminders: RemindersRepository,
+    private val instances: ReminderInstancesRepository,
     private val medication: TierGateway,
     private val tasks: TierGateway,
     private val snoozes: SnoozeStore,
@@ -54,13 +58,9 @@ class NotificationScheduler(
         // The READ is inside the lock, not before it. A pass that read first and then
         // waited its turn would diff against Reminders another pass had since changed,
         // and cancel what that pass had just armed (a foreground racing a write).
-        lock.withLock { arm(reminders.list(userId), cause) }
+        lock.withLock { arm(userId, reminders.list(userId), cause) }
 
-    /** [rescheduleAll] without the read, for a caller that already holds the Reminders. */
-    suspend fun armReminders(list: List<Reminder>, cause: RearmCause? = null): ReschedulePlan =
-        lock.withLock { arm(list, cause) }
-
-    private suspend fun arm(list: List<Reminder>, cause: RearmCause?): ReschedulePlan {
+    private suspend fun arm(userId: String, list: List<Reminder>, cause: RearmCause?): ReschedulePlan {
         val now = clock()
         val rearm = if (cause == null) emptySet() else tiersToRearm(cause)
 
@@ -70,7 +70,12 @@ class NotificationScheduler(
         // reminder. A task request that has run is finished and needs no cancel.
         snoozes.pruneExpired(now).filter { it.tier == Tier.Medication }.forEach { gateway(it.tier).cancel(it.id) }
 
-        val desired = desiredNotifications(list, now, zone())
+        // A moment the person already completed or skipped (taken early, say) must not ring.
+        val answered =
+            instances.list(InstanceFilter(userId = userId, since = now))
+                .filterNot { isAnswerable(it.status) }
+                .mapTo(HashSet()) { it.reminderId to it.scheduledTime }
+        val desired = desiredNotifications(list, now, zone(), answered)
         val armed = medication.armed() + tasks.armed()
         val plan = planReschedule(desired, armed, exactAllowed(), rearm)
 

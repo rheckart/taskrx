@@ -170,7 +170,24 @@ fun snoozeSpec(reminder: Reminder, scheduledTime: Long, snoozeUntil: Long, now: 
  *
  * Each Tier is selected from its own disjoint set of Reminders on its own budget, so
  * neither can shorten the other.
+ *
+ * [answered] is every (reminderId, scheduledTime) the person has already completed or
+ * skipped, taken early included. The Schedule cannot know that: it only predicts moments,
+ * so without this a dose taken at 8:00 for 9:00 would still ring at 9:00. Each Tier is
+ * asked for [answered]`.size` extra first, so removing them leaves the budget full rather
+ * than shortening the armed set.
  */
-fun desiredNotifications(reminders: List<Reminder>, now: Long, zone: ZoneId = ZoneId.systemDefault()): List<NotificationSpec> =
-    selectMedicationHorizon(reminders, now, MAX_MEDICATION_TRIGGERS, zone).map(::medicationSpec) +
-        selectTaskHorizon(reminders, now, MAX_TASK_TRIGGERS, zone).map(::taskSpec)
+fun desiredNotifications(
+    reminders: List<Reminder>,
+    now: Long,
+    zone: ZoneId = ZoneId.systemDefault(),
+    answered: Set<Pair<String, Long>> = emptySet(),
+): List<NotificationSpec> {
+    fun unanswered(picked: List<ScheduledOccurrence>, budget: Int) =
+        picked.filter { (it.reminderId to it.fireAt) !in answered }.take(budget)
+
+    val extra = answered.size
+    return unanswered(selectMedicationHorizon(reminders, now, MAX_MEDICATION_TRIGGERS + extra, zone), MAX_MEDICATION_TRIGGERS)
+        .map(::medicationSpec) +
+        unanswered(selectTaskHorizon(reminders, now, MAX_TASK_TRIGGERS + extra, zone), MAX_TASK_TRIGGERS).map(::taskSpec)
+}

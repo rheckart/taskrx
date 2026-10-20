@@ -49,6 +49,7 @@ class NotificationsModule(
     val scheduler =
         NotificationScheduler(
             reminders = reminders,
+            instances = instances,
             medication = medicationGateway,
             tasks = taskGateway,
             snoozes = snoozes,
