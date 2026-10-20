@@ -1,5 +1,6 @@
 package com.taskrx.mobile.notifications
 
+import com.taskrx.core.domain.InstanceStatus
 import com.taskrx.core.domain.ReminderKind
 import com.taskrx.core.domain.dailyTimes
 import com.taskrx.core.domain.onceTimes
@@ -9,6 +10,7 @@ import com.taskrx.core.notifications.taskNotificationId
 import com.taskrx.mobile.DAY
 import com.taskrx.mobile.HOUR
 import com.taskrx.mobile.USER
+import com.taskrx.mobile.data.CreateReminderInstanceInput
 import java.time.Instant
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -47,6 +49,68 @@ class NotificationSchedulerTest {
             assertNotNull(alarm(doseId).alarmClockInfo, "a dose takes setAlarmClock")
             assertEquals(NOW + HOUR, alarm(doseId).alarmClockInfo?.triggerTime)
             assertEquals(listOf(taskId), workIds())
+        }
+
+    private suspend fun NotifFixture.answerEarly(id: String, at: Long, status: InstanceStatus) {
+        val kind = if (id == "chore") ReminderKind.Task else ReminderKind.Medication
+        fx.container.instances.create(
+            CreateReminderInstanceInput(USER, id, kind, at, status, if (status == InstanceStatus.Completed) NOW else null),
+        )
+    }
+
+    @Test
+    fun `a dose already completed early is not armed and another still is`() =
+        withNotifs(NOW) {
+            fx.reminder("med", ReminderKind.Medication, onceTimes(NOW + HOUR))
+            fx.reminder("other", ReminderKind.Medication, onceTimes(NOW + HOUR))
+            answerEarly("med", NOW + HOUR, InstanceStatus.Completed)
+
+            scheduler.rescheduleAll(USER)
+
+            assertEquals(listOf(medicationNotificationId("other", NOW + HOUR)), alarmIds())
+        }
+
+    @Test
+    fun `a dose skipped early is not armed, a task completed early is not queued`() =
+        withNotifs(NOW) {
+            fx.reminder("med", ReminderKind.Medication, onceTimes(NOW + HOUR))
+            fx.reminder("chore", ReminderKind.Task, onceTimes(NOW + HOUR))
+            answerEarly("med", NOW + HOUR, InstanceStatus.Skipped)
+            answerEarly("chore", NOW + HOUR, InstanceStatus.Completed)
+
+            scheduler.rescheduleAll(USER)
+
+            assertTrue(alarmIds().isEmpty(), "armed: ${alarmIds()}")
+            assertTrue(workIds().isEmpty(), "queued: ${workIds()}")
+        }
+
+    @Test
+    fun `answering early cancels the alarm that was already armed`() =
+        withNotifs(NOW) {
+            fx.reminder("med", ReminderKind.Medication, onceTimes(NOW + HOUR))
+            scheduler.rescheduleAll(USER)
+            assertEquals(listOf(medicationNotificationId("med", NOW + HOUR)), alarmIds())
+
+            answerEarly("med", NOW + HOUR, InstanceStatus.Completed)
+            scheduler.rescheduleAll(USER)
+
+            assertTrue(alarmIds().isEmpty(), "armed: ${alarmIds()}")
+        }
+
+    @Test
+    fun `a pending or snoozed instance does not silence its dose`() =
+        withNotifs(NOW) {
+            fx.reminder("a", ReminderKind.Medication, onceTimes(NOW + HOUR))
+            fx.reminder("b", ReminderKind.Medication, onceTimes(NOW + HOUR))
+            answerEarly("a", NOW + HOUR, InstanceStatus.Pending)
+            answerEarly("b", NOW + HOUR, InstanceStatus.Snoozed)
+
+            scheduler.rescheduleAll(USER)
+
+            assertEquals(
+                listOf(medicationNotificationId("a", NOW + HOUR), medicationNotificationId("b", NOW + HOUR)),
+                alarmIds().sorted(),
+            )
         }
 
     @Test

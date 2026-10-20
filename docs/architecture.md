@@ -174,7 +174,7 @@ The truth table, including the safety-critical completed-instance preservation, 
 ### Scheduling
 
 1. User saves a medication → repo writes to SQLite and enqueues a sync entry.
-2. `NotificationScheduler` reads all active reminders from Room.
+2. `NotificationScheduler` reads all active reminders from Room, plus the Instances already Completed or Skipped for a moment still ahead (a dose taken early). Those moments are left out of both desired sets, because the Schedule only predicts moments and cannot know they were answered. Each selection asks for that many extra first, so the budget stays full.
 3. Each Tier's desired set is computed from its own budget: `selectMedicationHorizon(reminders, now, 64)` returns the 64 soonest occurrences **across all medication reminders**, and `selectTaskHorizon(reminders, now, 32)` the 32 soonest across all tasks. Both are global rather than per-reminder, so a reminder with a closer next occurrence always displaces one with a farther next occurrence regardless of how many triggers the farther reminder already has. Neither selection sees the other Kind's reminders at all.
 4. **Diff, don't rebuild — in one pass over both Tiers:** read the currently armed ids from both Tiers, compare against the union of the two desired sets:
    - Cancel only the notifications that are in neither desired set.

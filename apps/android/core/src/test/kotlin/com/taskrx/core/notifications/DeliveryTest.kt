@@ -156,6 +156,27 @@ class DesiredNotificationsTest {
     }
 
     @Test
+    fun `leaves out a moment already answered`() {
+        val med = rem("m", ReminderKind.Medication, times = listOf("08:00", "20:00"))
+        val task = rem("t", ReminderKind.Task, times = listOf("08:00", "20:00"))
+        val eight = 8 * 3_600_000L
+        val desired = desiredNotifications(listOf(med, task), 0, ZoneOffset.UTC, setOf("m" to eight, "t" to eight))
+        assertTrue(desired.none { it.reminderId == "m" && it.scheduledTime == eight })
+        assertTrue(desired.none { it.reminderId == "t" && it.scheduledTime == eight })
+        assertTrue(desired.any { it.reminderId == "m" && it.scheduledTime == 20 * 3_600_000L })
+    }
+
+    @Test
+    fun `answering moments does not shorten a full budget`() {
+        val med = rem("m", ReminderKind.Medication, times = listOf("08:00", "20:00"))
+        val task = rem("t", ReminderKind.Task, times = listOf("08:00", "20:00"))
+        val answered = setOf("m" to 8 * 3_600_000L, "t" to 8 * 3_600_000L)
+        val desired = desiredNotifications(listOf(med, task), 0, ZoneOffset.UTC, answered)
+        assertEquals(MAX_MEDICATION_TRIGGERS, desired.count { it.tier == Tier.Medication })
+        assertEquals(MAX_TASK_TRIGGERS, desired.count { it.tier == Tier.Task })
+    }
+
+    @Test
     fun `defaults to the system zone`() {
         assertTrue(desiredNotifications(listOf(rem("m", ReminderKind.Medication)), 0).isNotEmpty())
     }
