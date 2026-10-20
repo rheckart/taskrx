@@ -226,6 +226,15 @@ class ReminderInstancesRepository(
         dao.findForOccurrence(userId, reminderId, scheduledTime, ANSWERABLE_STATUSES.map { it.wire })
             ?.let(Codecs::toInstance)
 
+    /**
+     * Any Instance at this exact moment, answered or not. A batch uses it to tell "already
+     * answered" from "never opened": [findAnswerableForOccurrence] is null for both, and
+     * minting a second Instance for an answered moment would count the dose twice.
+     */
+    suspend fun findAnyForOccurrence(userId: String, reminderId: String, scheduledTime: Long): ReminderInstance? =
+        dao.findForOccurrence(userId, reminderId, scheduledTime, InstanceStatus.entries.map { it.wire })
+            ?.let(Codecs::toInstance)
+
     /** The most recent completed Instance for a Reminder, or null if never completed. */
     suspend fun lastCompletedFor(userId: String, reminderId: String): ReminderInstance? =
         dao.lastCompletedFor(userId, reminderId)?.let(Codecs::toInstance)

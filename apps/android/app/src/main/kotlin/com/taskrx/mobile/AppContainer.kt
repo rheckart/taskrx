@@ -3,6 +3,7 @@ package com.taskrx.mobile
 import android.content.Context
 import com.taskrx.mobile.adherence.AdherenceReader
 import com.taskrx.mobile.auth.AuthGateway
+import com.taskrx.mobile.batch.BatchAnswers
 import com.taskrx.mobile.auth.ClerkAuthGateway
 import com.taskrx.mobile.auth.ConvexSession
 import com.taskrx.mobile.auth.LocalOnlyAuth
@@ -75,6 +76,18 @@ class AppContainer(
 
     /** Whose data this is: the Clerk user when signed in, else the local user (see [Session]). */
     val session = Session(notifications.currentUser, auth) { from, to -> LocalAdoption(database).adopt(from, to) }
+
+    /** Take, snooze or skip every dose due at one moment: Today's slot buttons and the shade's batch notification. */
+    val batch =
+        BatchAnswers(
+            reminders,
+            instances,
+            clock,
+            userId = { session.userId },
+            armSnooze = notifications.scheduler::snooze,
+            rescheduleAfterWrite = notifications::rescheduleAfterWrite,
+            dismiss = notifications::dismissPosted,
+        )
 
     val drugSearch: DrugSearchService =
         drugSearch

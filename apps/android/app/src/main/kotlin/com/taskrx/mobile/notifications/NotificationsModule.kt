@@ -58,6 +58,10 @@ class NotificationsModule(
 
     fun createChannels() = Channels.ensure(context)
 
+    /** Takes these doses, and the batch notification for their moment, out of the shade. */
+    fun dismissPosted(scheduledTime: Long, reminderIds: List<String>) =
+        NotificationPoster.dismiss(context, scheduledTime, reminderIds)
+
     /**
      * The app came to the foreground. Permission first, and only on the signed-in path
      * (a fresh install's first screen is sign-in; a permission dialog there lands before

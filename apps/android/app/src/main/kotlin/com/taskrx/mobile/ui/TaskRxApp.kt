@@ -60,6 +60,8 @@ import com.taskrx.mobile.ui.search.DrugSearchContent
 import com.taskrx.mobile.ui.search.DrugSearchViewModel
 import com.taskrx.mobile.ui.sync.SyncProblemsContent
 import com.taskrx.mobile.ui.sync.SyncProblemsViewModel
+import com.taskrx.mobile.ui.dose.AddDoseContent
+import com.taskrx.mobile.ui.dose.AddDoseViewModel
 import com.taskrx.mobile.ui.supplies.SuppliesActions
 import com.taskrx.mobile.ui.supplies.SuppliesContent
 import com.taskrx.mobile.ui.supplies.SuppliesViewModel
@@ -200,12 +202,14 @@ private fun AppNavHost(container: AppContainer, navController: NavController) {
                         onNextDay = { vm.nextDay() },
                         onToday = { vm.today() },
                         onToggleHideCompleted = { vm.toggleHideCompleted() },
+                        onAnswerSlot = { rows, action -> vm.answerSlot(rows, action) },
                         onRefresh = { vm.refresh(pulled = true) },
                         onOpenAnswer = { host.navigate(Routes.answer(it.reminderId, it.scheduledTime)) },
                         onChangeTime = { row, hour, minute -> vm.changeTakenTime(row, hour, minute) },
                         onAdd = { host.navigate(Routes.ADD) },
                         onNewTask = { host.navigate(Routes.NEW_TASK) },
                         onNewMedication = { host.navigate(Routes.NEW_MEDICATION) },
+                        onAddDose = { host.navigate(Routes.ADD_DOSE) },
                         onReminders = { host.navigate(Routes.REMINDERS) },
                         onBacklog = { host.navigate(Routes.BACKLOG) },
                         onAdherence = { host.navigate(Routes.ADHERENCE) },
@@ -332,6 +336,19 @@ private fun AppNavHost(container: AppContainer, navController: NavController) {
             val state by vm.state.collectAsState()
             LifecycleEventEffect(Lifecycle.Event.ON_RESUME) { vm.refresh() }
             AdherenceContent(state, onRefresh = { vm.refresh(pulled = true) })
+        }
+
+        composable(Routes.ADD_DOSE) {
+            val vm = screenViewModel { AddDoseViewModel(container) }
+            val state by vm.state.collectAsState()
+            LifecycleEventEffect(Lifecycle.Event.ON_RESUME) { vm.refresh() }
+            LaunchedEffect(state.saved) { if (state.saved) host.popBackStack() }
+            AddDoseContent(
+                state,
+                onRefresh = { vm.refresh(pulled = true) },
+                onRecord = { medication, hour, minute -> vm.record(medication, hour, minute) },
+                now = container.clock::invoke,
+            )
         }
 
         composable(Routes.SUPPLIES) {

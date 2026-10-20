@@ -5,10 +5,17 @@ import android.app.PendingIntent
 import android.content.Context
 import android.content.Intent
 import android.net.Uri
+import android.os.Bundle
+import android.service.notification.StatusBarNotification
 import android.util.Log
 import androidx.core.app.NotificationCompat
+import com.taskrx.core.batch.BatchAction
+import com.taskrx.core.batch.MIN_BATCH_SIZE
+import com.taskrx.core.batch.batchNotificationId
+import com.taskrx.core.batch.batchText
 import com.taskrx.core.notifications.ChannelImportance
 import com.taskrx.core.notifications.NotificationSpec
+import com.taskrx.core.notifications.Tier
 import com.taskrx.core.notifications.deliveryFor
 import com.taskrx.mobile.MainActivity
 
@@ -29,7 +36,7 @@ object NotificationPoster {
         }
 
         val delivery = deliveryFor(spec.tier)
-        val notification =
+        val builder =
             NotificationCompat.Builder(context, delivery.channelId)
                 .setSmallIcon(android.R.drawable.ic_popup_reminder)
                 .setContentTitle(spec.title)
@@ -40,9 +47,106 @@ object NotificationPoster {
                 .setCategory(NotificationCompat.CATEGORY_REMINDER)
                 .setAutoCancel(true)
                 .setContentIntent(tapIntent(context, spec))
-                .build()
-        manager.notify(spec.id, 0, notification)
+                // Read back off the shade to find the other doses due at this moment: no database read.
+                .addExtras(
+                    Bundle().apply {
+                        if (spec.tier == Tier.Medication) putBoolean(EXTRA_DOSE, true)
+                        putString(EXTRA_REMINDER, spec.reminderId)
+                        putLong(EXTRA_TIME, spec.scheduledTime)
+                        putString(EXTRA_NAME, spec.title)
+                    },
+                )
+        // A dose can be answered from the shade; a task cannot (it is not a dose, and has no batch to join).
+        if (spec.tier == Tier.Medication) {
+            for ((action, label) in DOSE_ACTIONS) {
+                builder.addAction(0, label, actionIntent(context, action, spec.scheduledTime, arrayListOf(spec.reminderId), "dose/${Uri.encode(spec.id)}"))
+            }
+        }
+        manager.notify(spec.id, 0, builder.build())
+        if (spec.tier == Tier.Medication) showBatch(context, manager, spec.scheduledTime, doses(manager, spec.scheduledTime))
     }
+
+    private fun doses(manager: NotificationManager, scheduledTime: Long): List<StatusBarNotification> =
+        manager.activeNotifications.filter {
+            val extras = it.notification.extras
+            extras.getBoolean(EXTRA_DOSE) && extras.getLong(EXTRA_TIME) == scheduledTime
+        }
+
+    /**
+     * Two or more doses in the shade for one moment get a third notification that answers
+     * them all. Rebuilt from what is showing on every post, so alarms that fire in the
+     * same second converge: the last one to post sees every dose and writes the full list.
+     * It never alerts: each dose already did.
+     */
+    private fun showBatch(context: Context, manager: NotificationManager, scheduledTime: Long, showing: List<StatusBarNotification>) {
+        if (showing.size < MIN_BATCH_SIZE) {
+            manager.cancel(batchNotificationId(scheduledTime), 0)
+            return
+        }
+        val reminderIds = ArrayList(showing.mapNotNull { it.notification.extras.getString(EXTRA_REMINDER) }.distinct())
+        val names = showing.mapNotNull { it.notification.extras.getString(EXTRA_NAME) }
+        val text = batchText(names)
+        val builder =
+            NotificationCompat.Builder(context, deliveryFor(Tier.Medication).channelId)
+                .setSmallIcon(android.R.drawable.ic_popup_reminder)
+                .setContentTitle(text.title)
+                .setContentText(text.body)
+                .setStyle(NotificationCompat.BigTextStyle().bigText(text.body))
+                .setCategory(NotificationCompat.CATEGORY_REMINDER)
+                .setSilent(true)
+                .setOnlyAlertOnce(true)
+                .setContentIntent(
+                    PendingIntent.getActivity(
+                        context,
+                        0,
+                        Intent(context, MainActivity::class.java)
+                            .setData(Uri.parse("taskrx://batch-open/$scheduledTime"))
+                            .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP),
+                        PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
+                    ),
+                )
+        for ((action, label) in ACTION_LABELS) {
+            builder.addAction(0, label, actionIntent(context, action, scheduledTime, reminderIds, "batch"))
+        }
+        manager.notify(batchNotificationId(scheduledTime), 0, builder.build())
+    }
+
+    /**
+     * One PendingIntent per (scope, moment, action), where the scope is the batch or one
+     * dose. A PendingIntent is identified by its action and data, never its extras, so
+     * without a data URI of its own a second batch's (or dose's) buttons would overwrite
+     * the first's and answer the wrong doses.
+     */
+    private fun actionIntent(context: Context, action: BatchAction, scheduledTime: Long, reminderIds: ArrayList<String>, scope: String): PendingIntent {
+        val intent =
+            Intent(context, BatchActionReceiver::class.java)
+                .setAction(BatchActionReceiver.ACTION_BATCH)
+                .setData(Uri.parse("taskrx://$scope/$scheduledTime/${action.wire}"))
+                .putExtra(BatchActionReceiver.EXTRA_ACTION, action.wire)
+                .putExtra(BatchActionReceiver.EXTRA_TIME, scheduledTime)
+                .putStringArrayListExtra(BatchActionReceiver.EXTRA_REMINDER_IDS, reminderIds)
+        return PendingIntent.getBroadcast(context, 0, intent, PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
+    }
+
+    /**
+     * Removes the shade entries of [reminderIds] at [scheduledTime]. The moment's batch
+     * notification is rebuilt from the doses that remain, or removed when fewer than a
+     * batch are left: answering one dose of three leaves a batch of two, not of three.
+     */
+    fun dismiss(context: Context, scheduledTime: Long, reminderIds: List<String>) {
+        val manager = context.getSystemService(NotificationManager::class.java)
+        val (answered, remaining) = doses(manager, scheduledTime).partition { it.notification.extras.getString(EXTRA_REMINDER) in reminderIds }
+        for (sbn in answered) manager.cancel(sbn.tag, sbn.id)
+        showBatch(context, manager, scheduledTime, remaining)
+    }
+
+    private val DOSE_ACTIONS = listOf(BatchAction.Take to "Take", BatchAction.Snooze to "Snooze", BatchAction.Skip to "Skip")
+    private val ACTION_LABELS = listOf(BatchAction.Take to "Take all", BatchAction.Snooze to "Snooze all", BatchAction.Skip to "Skip all")
+
+    private const val EXTRA_DOSE = "taskrx.dose"
+    private const val EXTRA_REMINDER = "taskrx.reminderId"
+    private const val EXTRA_TIME = "taskrx.scheduledTime"
+    private const val EXTRA_NAME = "taskrx.name"
 
     /**
      * Opens the app on the answer screen, Kind-neutral: the same intent for a dose and a
