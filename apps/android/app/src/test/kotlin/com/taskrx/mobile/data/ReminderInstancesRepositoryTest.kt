@@ -167,6 +167,25 @@ class ReminderInstancesRepositoryTest {
         }
 
     @Test
+    fun `missing a snooze only takes a deferral that has run out, judged against the row as it is now`() =
+        withFixture(T0) {
+            reminder("m1")
+            val ranOut = container.instances.create(open(scheduledTime = T0 - 5 * 3_600_000L))
+            container.instances.markSnoozed(ranOut.id, snoozedUntil = T0 - 3 * 3_600_000L)
+            val stillRunning = container.instances.create(open(scheduledTime = T0 + 1))
+            container.instances.markSnoozed(stillRunning.id, snoozedUntil = T0 + 3_600_000L)
+
+            assertEquals(InstanceStatus.Missed, container.instances.markMissed(ranOut.id).status)
+            // A dose not yet due is not out of time, whatever its deferred moment says.
+            val notDueYet = container.instances.create(open(scheduledTime = T0 + 2 * 3_600_000L))
+            container.instances.markSnoozed(notDueYet.id, snoozedUntil = T0 - 3 * 3_600_000L)
+            assertEquals(InstanceStatus.Snoozed, container.instances.markMissed(notDueYet.id).status)
+            // A snooze made after the sweep read its snapshot is returned untouched.
+            assertEquals(InstanceStatus.Snoozed, container.instances.markMissed(stillRunning.id).status)
+            assertEquals(T0 + 3_600_000L, container.instances.get(stillRunning.id)!!.snoozedUntil)
+        }
+
+    @Test
     fun `answering an unknown Instance fails and enqueues nothing`() =
         withFixture(T0) {
             assertFailsWith<IllegalStateException> { container.instances.markMissed("nope") }

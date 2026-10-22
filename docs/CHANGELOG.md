@@ -8,6 +8,13 @@ for commit discipline (POC tags use `0.x.x`).
 
 ## [Unreleased]
 
+### 2026-10-22 — A snooze nobody came back to becomes Missed
+
+A snoozed dose used to stay snoozed forever if the reminder it came back as was ignored, and counted against
+Adherence as a deferral rather than a miss. Now it becomes Missed once the time it was put off to is more than the
+two hour Grace Period old (ADR 0005, amended). A snooze still running is left alone. The rule is `snoozeRanOut`
+in `core/sweep/Planner.kt`.
+
 ### 2026-10-22 — Snooze length is a setting, and a moment can be put off to a chosen time
 
 Read from Medisafe's skip, snooze and reschedule actions (`docs/medisafe-skip-snooze-findings.md`).

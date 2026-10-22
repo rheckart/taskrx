@@ -6,6 +6,8 @@ import com.taskrx.core.domain.InstanceStatus
 import com.taskrx.core.domain.ReminderInstance
 import com.taskrx.core.domain.ReminderKind
 import com.taskrx.core.refill.supplyAfterDose
+import com.taskrx.core.sweep.GRACE_PERIOD_MS
+import com.taskrx.core.sweep.snoozeRanOut
 import com.taskrx.core.sync.shouldApplyRemoteReminderInstance
 import com.taskrx.mobile.data.db.ReminderInstanceEntity
 import com.taskrx.mobile.data.db.SyncStatus
@@ -197,19 +199,20 @@ class ReminderInstancesRepository(
         updateStatus(id, InstanceStatus.Skipped, notes = notes)
 
     /**
-     * The sweep's verdict, not a user action. Only an unanswered (`pending`) row becomes
-     * Missed: the sweep plans from a snapshot, and the person may answer between that read
-     * and this write. The check is inside the transaction, so an answer that landed first
-     * is returned untouched rather than overwritten.
+     * The sweep's verdict, not a user action. Only an unanswered row becomes Missed: a
+     * `pending` one, or a `snoozed` one whose deferral has run out ([snoozeRanOut]). The
+     * sweep plans from a snapshot, and the person may answer, or snooze again, between that
+     * read and this write. Both checks are inside the transaction, against the row as it is
+     * now, so an answer that landed first is returned untouched rather than overwritten.
      */
     suspend fun markMissed(id: String): ReminderInstance =
         database.withTransaction {
             val existing = checkNotNull(dao.get(id)) { "Reminder instance $id not found" }
-            if (existing.status != InstanceStatus.Pending.wire) {
-                Codecs.toInstance(existing)
-            } else {
-                updateStatus(id, InstanceStatus.Missed)
-            }
+            val current = Codecs.toInstance(existing)
+            val unanswered =
+                current.status == InstanceStatus.Pending ||
+                    (current.status == InstanceStatus.Snoozed && snoozeRanOut(current, clock(), GRACE_PERIOD_MS))
+            if (!unanswered) current else updateStatus(id, InstanceStatus.Missed)
         }
 
     /**
