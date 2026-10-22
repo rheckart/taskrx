@@ -33,7 +33,8 @@ const reminderInstanceDoc = v.object({
 });
 
 /**
- * `completed` is terminal: no later write may move an instance out of it.
+ * `completed` is terminal: no later write may move an instance out of it, except
+ * [reopen], the person's own explicit undo (ADR 0008).
  *
  * This is the server half of the rule `shouldApplyRemoteReminderInstance`
  * enforces on the device (`archive/expo-rn:packages/shared/src/sync/conflict.ts`), and what
@@ -49,6 +50,11 @@ const reminderInstanceDoc = v.object({
  * draining its queue, where a stale entry is routine rather than exceptional;
  * throwing would retry it to the dead-letter threshold in `worker.ts` and raise
  * a data-loss warning for a write the server was right to ignore.
+ *
+ * [reopen] is the one way out, and it is a mutation of its own and not a status
+ * argument to a generic setter for the same reason `snooze` is: nothing else may
+ * be able to un-complete a row by accident. Every other write still refuses, so
+ * a stale queue draining from another device still cannot erase a taking.
  */
 function isCompleted(instance: { status: string }): boolean {
   return instance.status === "completed";
@@ -314,6 +320,41 @@ export const markSkipped = mutation({
       status: "skipped",
       updatedAt: Date.now(),
       ...(args.notes !== undefined ? { notes: args.notes } : {}),
+    });
+
+    return args.id;
+  },
+});
+
+/**
+ * Puts an answered instance back to `pending`: the person's own undo of a take, a skip or a
+ * snooze (ADR 0008). The one mutation that may move an instance out of `completed`.
+ *
+ * Clears what the answer set (`completedAt`, `snoozedUntil`) and keeps what is history:
+ * `snoozeCount`, because the deferrals happened, and `notes`. `updatedAt` is the server's
+ * clock, as for every other mutation here, so a device comparing it against its own row
+ * sees a reopen as newer than the answer it undoes.
+ *
+ * Idempotent: reopening a `pending` or `missed` row is allowed and just stamps it again.
+ * It is still refused for an instance the caller does not own.
+ */
+export const reopen = mutation({
+  args: {
+    id: v.id("reminderInstances"),
+  },
+  returns: v.id("reminderInstances"),
+  handler: async (ctx, args) => {
+    const userId = await getCurrentUserId(ctx);
+    const instance = await ctx.db.get(args.id);
+    if (instance?.userId !== userId) {
+      throw new Error("Reminder instance not found");
+    }
+
+    await ctx.db.patch(args.id, {
+      status: "pending",
+      completedAt: undefined,
+      snoozedUntil: undefined,
+      updatedAt: Date.now(),
     });
 
     return args.id;

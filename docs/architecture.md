@@ -60,7 +60,7 @@ The app is split into two Gradle modules. `:core` is pure Kotlin/JVM with no And
 4. **Schedule computation is pure and deterministic.** Given a reminder config and the current time, `:core` returns the next N occurrences. No storage calls inside it.
 5. **Notification horizon is global, not per-reminder, and there is one per Tier.** `selectMedicationHorizon` picks the 64 soonest occurrences across ALL active *medication* reminders; when both A@21:00 and B@10min-from-now exist, B always wins over A regardless of what A already had scheduled. `selectTaskHorizon` does the same for tasks on a separate budget of 32. The two read disjoint sets of Reminders, so neither can shorten the other (ADR 0003), and they are armed through different OS subsystems, so neither can exhaust the other's capacity (ADR 0007). A full task budget costs a dose nothing.
 6. **The sync queue drains until MAX_ATTEMPTS (5) failures; then dead-letters.** Dead-lettered entries are retained (never deleted) for inspection and manual requeue.
-7. **Conflict resolution rules live in one tested place.** `core/sync/Conflict.kt`: local wins ties, and a locally `completed` instance is never overwritten by a remote pull.
+7. **Conflict resolution rules live in one tested place.** `core/sync/Conflict.kt`: local wins ties, a row with a change not yet pushed is never overwritten by a pull, and a locally `completed` instance is replaced only by a newer remote `pending`, the person's own undo (ADR 0008).
 8. **An unanswered Occurrence becomes Missed by a sweep, not by a query.** Instances are minted lazily, so a moment nobody answers has no row at all. The sweep planner in `:core` (`core/sweep/Planner.kt`) decides which moments have run out of time; `MissedSweepRunner` in `:app` persists the verdicts, serialized so two foregrounds cannot mint one moment twice. The Grace Period (2h) and lookback (7 days) are ADR 0005.
 9. **A Reminder with no Schedule never reaches the timeline.** `none` produces no Occurrences, so the Backlog screen is rendered from `reminders` rows; completing one mints its Instance at the moment of the act, with `scheduledTime = completedAt` (ADR 0002).
 
@@ -165,7 +165,7 @@ Live subscriptions to `reminders.list` and `reminderInstances.list` mirror chang
 Two pure functions consumed by both repository upsert paths:
 
 - `shouldApplyRemoteReminder(local, remote)`: false when `local != null && local.updatedAt >= remote.updatedAt` (local wins ties). True otherwise.
-- `shouldApplyRemoteReminderInstance(local, remote)`: false when local is `completed` (never overwritten), or when the reminder rule above would return false. True otherwise.
+- `shouldApplyRemoteReminderInstance(local, remote, localHasUnpushedChange)`: false when the local row has a change not yet pushed; false when local is `completed` unless the remote is a newer `pending` (an undo, ADR 0008); true when remote is `completed`; otherwise last-write-wins with local winning ties.
 
 The truth table, including the safety-critical completed-instance preservation, is covered by `:core` tests and sits under the Kover gate.
 

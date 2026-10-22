@@ -9,6 +9,7 @@ import com.taskrx.core.refill.supplyAfterDose
 import com.taskrx.core.sweep.GRACE_PERIOD_MS
 import com.taskrx.core.sweep.snoozeRanOut
 import com.taskrx.core.sync.shouldApplyRemoteReminderInstance
+import com.taskrx.core.undo.UNDOABLE_STATUSES
 import com.taskrx.mobile.data.db.ReminderInstanceEntity
 import com.taskrx.mobile.data.db.SyncStatus
 import com.taskrx.mobile.data.db.TaskRxDatabase
@@ -191,6 +192,29 @@ class ReminderInstancesRepository(
         return updateStatus(id, InstanceStatus.Completed, completedAt = completedAt)
     }
 
+    /**
+     * Takes an answer back: a take, a skip or a snooze returns to `pending` (ADR 0008). The one
+     * write that moves a row out of Completed. It clears what the answer set (the time taken,
+     * the time deferred to), keeps the deferrals that happened (`snooze_count`) and any note, and
+     * gives a taken dose's pills back in the same transaction. Syncs as `reopen`.
+     *
+     * Not an answer to the sweep or to a pull: only the person's undo calls this, and only for a
+     * row that is an answer. Anything else is refused rather than quietly rewritten.
+     */
+    suspend fun reopen(id: String): ReminderInstance =
+        database.withTransaction {
+            val existing = checkNotNull(dao.get(id)) { "Reminder instance $id not found" }
+            check(InstanceStatus.fromWire(existing.status) in UNDOABLE_STATUSES) { "Only an answered instance can be reopened" }
+            updateStatus(id, InstanceStatus.Pending)
+        }
+
+    /** Every Instance at one exact moment of one Reminder, answered or not: what an undo checks before it reopens one. */
+    suspend fun allForOccurrence(userId: String, reminderId: String, scheduledTime: Long): List<ReminderInstance> =
+        dao.allForOccurrence(userId, reminderId, scheduledTime).map(Codecs::toInstance)
+
+    /** Whether a change to this Instance is waiting to be pushed, so a pull must leave it be. */
+    suspend fun hasUnpushedChange(id: String): Boolean = queue.hasEntriesFor(SyncEntityType.ReminderInstance, id)
+
     /** Snoozed until [snoozedUntil]; counts one more snooze. Neither a skip nor a miss. */
     suspend fun markSnoozed(id: String, snoozedUntil: Long): ReminderInstance =
         updateStatus(id, InstanceStatus.Snoozed, snoozedUntil = snoozedUntil, incrementSnooze = true)
@@ -291,7 +315,7 @@ class ReminderInstancesRepository(
             for ((instance, convexId) in rows) {
                 // Decided again, inside the transaction: the pull judged these rows against a
                 // read taken before it, and an answer recorded in between must still be safe.
-                if (!shouldApplyRemoteReminderInstance(dao.get(instance.id)?.let(Codecs::toInstance), instance)) continue
+                if (!shouldApplyRemoteReminderInstance(dao.get(instance.id)?.let(Codecs::toInstance), instance, hasUnpushedChange(instance.id))) continue
                 dao.upsert(
                     ReminderInstanceEntity(
                         id = instance.id,

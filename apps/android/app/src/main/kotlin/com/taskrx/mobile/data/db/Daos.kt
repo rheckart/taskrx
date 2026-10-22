@@ -129,6 +129,16 @@ interface ReminderInstanceDao {
         statuses: List<String>,
     ): ReminderInstanceEntity?
 
+    /** Every Instance at one exact moment of one Reminder, whatever its status. */
+    @Query(
+        """
+        SELECT * FROM reminder_instances
+        WHERE user_id = :userId AND reminder_id = :reminderId AND scheduled_time = :scheduledTime
+        ORDER BY created_at DESC, id ASC
+        """,
+    )
+    suspend fun allForOccurrence(userId: String, reminderId: String, scheduledTime: Long): List<ReminderInstanceEntity>
+
     @Query(
         """
         SELECT * FROM reminder_instances
@@ -183,6 +193,10 @@ interface SyncQueueDao {
 
     @Query("SELECT * FROM sync_queue ORDER BY id ASC")
     suspend fun all(): List<SyncQueueEntity>
+
+    /** Entries of one entity still in the queue, dead-lettered ones included. */
+    @Query("SELECT COUNT(*) FROM sync_queue WHERE entity_type = :entityType AND entity_id = :entityId")
+    suspend fun countFor(entityType: String, entityId: String): Int
 
     @Query("UPDATE sync_queue SET payload = :payload WHERE id = :id")
     suspend fun setPayload(id: Long, payload: String)

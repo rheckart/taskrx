@@ -89,13 +89,54 @@ class ShouldApplyRemoteReminderInstanceTest {
      * and fail the second.
      */
     @Test
-    fun `never lets a remote pull erase an Instance this device recorded as completed`() {
-        assertFalse(
-            shouldApplyRemoteReminderInstance(
-                row(100, InstanceStatus.Completed),
-                row(200, InstanceStatus.Pending),
-            ),
-        )
+    fun `never lets a stale remote answer erase an Instance this device recorded as completed`() {
+        for (status in listOf(InstanceStatus.Skipped, InstanceStatus.Snoozed, InstanceStatus.Missed)) {
+            assertFalse(
+                shouldApplyRemoteReminderInstance(row(100, InstanceStatus.Completed), row(200, status)),
+                "$status",
+            )
+        }
+    }
+
+    /**
+     * The one thing that may erase a taking is the person undoing it: `reopen` on the server,
+     * a `pending` here, stamped after the taking. An older `pending` is a stale copy of the
+     * row from before it was answered, and a tie is the local row's.
+     */
+    @Test
+    fun `lets an undo made elsewhere replace a taking, and only a newer one`() {
+        assertTrue(shouldApplyRemoteReminderInstance(row(100, InstanceStatus.Completed), row(200, InstanceStatus.Pending)))
+        assertFalse(shouldApplyRemoteReminderInstance(row(200, InstanceStatus.Completed), row(100, InstanceStatus.Pending)))
+        assertFalse(shouldApplyRemoteReminderInstance(row(100, InstanceStatus.Completed), row(100, InstanceStatus.Pending)))
+    }
+
+    /**
+     * Take, sync, undo offline, pull before the reopen is pushed: the pull still carries the
+     * take, stamped earlier, and a remote completion would otherwise beat any local row.
+     */
+    @Test
+    fun `never overwrites a row with a change this device has not pushed yet`() {
+        for (remote in InstanceStatus.entries) {
+            for (local in InstanceStatus.entries) {
+                assertFalse(
+                    shouldApplyRemoteReminderInstance(row(100, local), row(900, remote), localHasUnpushedChange = true),
+                    "$local over $remote",
+                )
+            }
+        }
+    }
+
+    @Test
+    fun `an unpushed change on a row this device has never seen does not matter`() {
+        assertTrue(shouldApplyRemoteReminderInstance(null, row(100, InstanceStatus.Completed), localHasUnpushedChange = true))
+    }
+
+    @Test
+    fun `converges once the undo has been pushed and the server says pending`() {
+        // Pushed: no unpushed change. The server's pending is newer than the local one the
+        // person made, or the same row echoed back; either way nothing is lost.
+        assertTrue(shouldApplyRemoteReminderInstance(row(100, InstanceStatus.Pending), row(200, InstanceStatus.Pending)))
+        assertFalse(shouldApplyRemoteReminderInstance(row(200, InstanceStatus.Pending), row(200, InstanceStatus.Pending)))
     }
 
     @Test

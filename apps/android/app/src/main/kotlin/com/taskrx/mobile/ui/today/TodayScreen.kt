@@ -78,6 +78,7 @@ data class TodayActions(
     val onOpenAnswer: (TimelineRow) -> Unit,
     /** Move the time a completed dose was taken to this hour and minute, on its own day. */
     val onChangeTime: (TimelineRow, Int, Int) -> Unit,
+    val onUndo: (TimelineRow) -> Unit,
     val onAdd: () -> Unit,
     val onNewTask: () -> Unit,
     val onNewMedication: () -> Unit,
@@ -213,6 +214,7 @@ private fun Timeline(state: TodayState, actions: TodayActions) {
                                         entry.row,
                                         onPress = { actions.onOpenAnswer(entry.row) },
                                         onLongPress = if (entry.row.status == InstanceStatus.Completed) ({ editing = entry.row }) else null,
+                                        onUndo = if (entry.row.instanceId in state.undoable) ({ actions.onUndo(entry.row) }) else null,
                                     )
                             }
                         }
@@ -266,7 +268,13 @@ private fun SlotBar(slot: Entry.Slot, onAnswer: (BatchAction) -> Unit) {
  * snooze is a deferral, not an answer, so a snoozed moment stays open.
  */
 @Composable
-fun TimelineRowView(row: TimelineRow, onPress: () -> Unit, modifier: Modifier = Modifier, onLongPress: (() -> Unit)? = null) {
+fun TimelineRowView(
+    row: TimelineRow,
+    onPress: () -> Unit,
+    modifier: Modifier = Modifier,
+    onLongPress: (() -> Unit)? = null,
+    onUndo: (() -> Unit)? = null,
+) {
     val answered = !isAnswerable(row.status)
     val label = statusLabel(row)
     val kindColor = if (row.kind == ReminderKind.Medication) TaskRxColors.Medication else TaskRxColors.Task
@@ -339,9 +347,23 @@ fun TimelineRowView(row: TimelineRow, onPress: () -> Unit, modifier: Modifier = 
                 }
             }
         }
+        // Outside the row's merged description: it is a control of its own, not part of what the row says.
+        if (onUndo != null) {
+            Row(Modifier.fillMaxWidth().padding(end = 8.dp), horizontalArrangement = Arrangement.End) {
+                TextButton(onClick = onUndo) { Text("Undo ${undoLabel(row.status)}") }
+            }
+        }
         HorizontalDivider(color = TaskRxColors.Divider)
     }
 }
+
+/** What Undo takes back, named on the button so the row reads "Undo skip", not an unexplained "Undo". */
+private fun undoLabel(status: InstanceStatus): String =
+    when (status) {
+        InstanceStatus.Completed -> "take"
+        InstanceStatus.Skipped -> "skip"
+        else -> "snooze"
+    }
 
 @Composable
 private fun statusColor(status: InstanceStatus): Color =

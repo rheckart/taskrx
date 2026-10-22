@@ -64,6 +64,14 @@ class SnoozeStore(private val store: NotificationPrefs) {
     @Synchronized
     fun removeForReminder(reminderId: String) = write(all().filter { it.reminderId != reminderId })
 
+    /** Forgets the snoozes of one Occurrence and returns them, so their alarms can be cancelled. */
+    @Synchronized
+    fun removeForOccurrence(reminderId: String, scheduledTime: Long): List<NotificationSpec> {
+        val (gone, kept) = all().partition { it.reminderId == reminderId && it.scheduledTime == scheduledTime }
+        if (gone.isNotEmpty()) write(kept)
+        return gone
+    }
+
     /** Drops the snoozes whose moment has passed and returns them. */
     @Synchronized
     fun pruneExpired(now: Long): List<NotificationSpec> {

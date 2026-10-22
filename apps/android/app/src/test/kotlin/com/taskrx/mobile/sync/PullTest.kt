@@ -69,6 +69,9 @@ private fun instanceDoc(
 class PullTest {
     private fun pull(fx: Fixture) = PullApplier(fx.container.reminders, fx.container.instances)
 
+    /** What a sync does to this device's rows: the queue is drained, so no change is waiting to be pushed. */
+    private suspend fun Fixture.pushed() = (container.syncQueue.pending() + container.syncQueue.deadLettered()).forEach { container.syncQueue.remove(it.id) }
+
     private suspend fun PullApplier.run(reminders: List<String>, instances: List<String> = emptyList()) =
         applyJson(json(reminders.joinToString(prefix = "[", postfix = "]")), json(instances.joinToString(prefix = "[", postfix = "]")))
 
@@ -242,6 +245,7 @@ class PullTest {
             val instance = container.instances.create(CreateReminderInstanceInput(USER, "r1", ReminderKind.Medication, T0 + 100_000))
             now = T0 + 10
             container.instances.markCompleted(instance.id, T0 + 10)
+            pushed()
             val local = container.instances.get(instance.id)!!
 
             // A NEWER remote copy that says skipped: still refused.
@@ -260,6 +264,7 @@ class PullTest {
             reminder("r1")
             val instance = container.instances.create(CreateReminderInstanceInput(USER, "r1", ReminderKind.Medication, T0 + 100_000))
             container.reminders.setConvexId("r1", "cr1")
+            pushed()
 
             pull(this).run(
                 emptyList(),
@@ -279,6 +284,7 @@ class PullTest {
             val instance = container.instances.create(CreateReminderInstanceInput(USER, "r1", ReminderKind.Medication, T0 + 100_000))
             now = T0 + 100
             container.instances.markSnoozed(instance.id, T0 + 600_000)
+            pushed()
 
             pull(this).run(emptyList(), listOf(instanceDoc(localId = instance.id, status = "skipped", updatedAt = "${T0 + 50}.0")))
             assertEquals(InstanceStatus.Snoozed, container.instances.get(instance.id)!!.status)
@@ -295,6 +301,7 @@ class PullTest {
             val instance = container.instances.create(CreateReminderInstanceInput(USER, "r1", ReminderKind.Medication, T0 + 100_000))
             now = T0 + 100
             container.instances.markSkipped(instance.id)
+            pushed()
 
             pull(this).run(emptyList(), listOf(instanceDoc(localId = instance.id, status = "missed", updatedAt = "${T0 + 100}.0")))
 
@@ -326,6 +333,7 @@ class PullTest {
             val open = container.instances.create(CreateReminderInstanceInput(USER, "r1", ReminderKind.Medication, T0 + 2))
             now = T0 + 10
             container.instances.markCompleted(done.id, T0 + 10)
+            pushed()
 
             pull(this).run(
                 emptyList(),
@@ -338,6 +346,80 @@ class PullTest {
             assertEquals(InstanceStatus.Completed, container.instances.get(done.id)!!.status)
             assertEquals(InstanceStatus.Completed, container.instances.get(open.id)!!.status)
             assertEquals(T0 + 10, container.instances.get(done.id)!!.completedAt)
+        }
+
+    // ---- an undo, through the pull -----------------------------------------------------------------
+
+    @Test
+    fun `an undo made before it was pushed survives a pull that still carries the take`() =
+        withFixture(T0) {
+            reminder("r1")
+            container.reminders.setConvexId("r1", "cr1")
+            val instance = container.instances.create(CreateReminderInstanceInput(USER, "r1", ReminderKind.Medication, T0 + 100_000))
+            now = T0 + 10
+            container.instances.markCompleted(instance.id, T0 + 10)
+            pushed() // the take reached the server
+            now = T0 + 20
+            container.instances.reopen(instance.id) // the undo is made offline: queued, not pushed
+
+            // A pull lands before the undo is pushed. The server still says completed.
+            pull(this).run(emptyList(), listOf(instanceDoc(localId = instance.id, status = "completed", updatedAt = "${T0 + 15}.0", extra = ""","completedAt":${T0 + 10}.0""")))
+
+            assertEquals(InstanceStatus.Pending, container.instances.get(instance.id)!!.status)
+        }
+
+    @Test
+    fun `once the undo is pushed the pull converges on pending, and a later stale take cannot undo it`() =
+        withFixture(T0) {
+            reminder("r1")
+            container.reminders.setConvexId("r1", "cr1")
+            val instance = container.instances.create(CreateReminderInstanceInput(USER, "r1", ReminderKind.Medication, T0 + 100_000))
+            now = T0 + 10
+            container.instances.markCompleted(instance.id, T0 + 10)
+            now = T0 + 20
+            container.instances.reopen(instance.id)
+            pushed() // both reached the server, in order
+
+            // The server now says pending, stamped by the server's clock after the undo.
+            pull(this).run(emptyList(), listOf(instanceDoc(localId = instance.id, status = "pending", updatedAt = "${T0 + 25}.0")))
+
+            assertEquals(InstanceStatus.Pending, container.instances.get(instance.id)!!.status)
+        }
+
+    @Test
+    fun `an undo made on another device replaces a taking here, and only a newer one`() =
+        withFixture(T0) {
+            reminder("r1")
+            container.reminders.setConvexId("r1", "cr1")
+            val instance = container.instances.create(CreateReminderInstanceInput(USER, "r1", ReminderKind.Medication, T0 + 100_000))
+            now = T0 + 100
+            container.instances.markCompleted(instance.id, T0 + 100)
+            pushed()
+
+            // Pending, but older than the taking: a stale copy of the row from before it was answered.
+            pull(this).run(emptyList(), listOf(instanceDoc(localId = instance.id, status = "pending", updatedAt = "${T0 + 50}.0")))
+            assertEquals(InstanceStatus.Completed, container.instances.get(instance.id)!!.status)
+
+            // Pending and newer: the other device's undo.
+            pull(this).run(emptyList(), listOf(instanceDoc(localId = instance.id, status = "pending", updatedAt = "${T0 + 500}.0")))
+            val after = container.instances.get(instance.id)!!
+            assertEquals(InstanceStatus.Pending, after.status)
+            assertNull(after.completedAt)
+        }
+
+    @Test
+    fun `a change the server refused and gave up on is still not replaced by a pull`() =
+        withFixture(T0) {
+            reminder("r1")
+            container.reminders.setConvexId("r1", "cr1")
+            val instance = container.instances.create(CreateReminderInstanceInput(USER, "r1", ReminderKind.Medication, T0 + 100_000))
+            now = T0 + 10
+            container.instances.markSkipped(instance.id)
+            container.syncQueue.pending().forEach { container.syncQueue.markDeadLettered(it.id) }
+
+            pull(this).run(emptyList(), listOf(instanceDoc(localId = instance.id, status = "completed", updatedAt = "${T0 + 900}.0")))
+
+            assertEquals(InstanceStatus.Skipped, container.instances.get(instance.id)!!.status)
         }
 
     // ---- the subscription ------------------------------------------------------------------------

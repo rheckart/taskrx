@@ -8,6 +8,7 @@ import com.taskrx.mobile.withFixture
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
+import kotlin.test.assertFalse
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
 import kotlinx.serialization.json.JsonNull
@@ -183,6 +184,135 @@ class ReminderInstancesRepositoryTest {
             // A snooze made after the sweep read its snapshot is returned untouched.
             assertEquals(InstanceStatus.Snoozed, container.instances.markMissed(stillRunning.id).status)
             assertEquals(T0 + 3_600_000L, container.instances.get(stillRunning.id)!!.snoozedUntil)
+        }
+
+    @Test
+    fun `undoing a skip, a snooze or a take puts the row back to pending and syncs it as pending`() =
+        withFixture(T0) {
+            reminder("m1")
+            for ((i, answer) in listOf("skip", "snooze", "take").withIndex()) {
+                val row = container.instances.create(open(scheduledTime = T0 + i))
+                when (answer) {
+                    "skip" -> container.instances.markSkipped(row.id, "felt sick")
+                    "snooze" -> container.instances.markSnoozed(row.id, T0 + 600_000)
+                    else -> container.instances.markCompleted(row.id, T0 + 5)
+                }
+
+                val reopened = container.instances.reopen(row.id)
+
+                assertEquals(InstanceStatus.Pending, reopened.status, answer)
+                assertNull(reopened.completedAt, answer)
+                assertNull(reopened.snoozedUntil, answer)
+                assertEquals("pending", queuePayloads().last()["status"]!!.jsonPrimitive.content, answer)
+            }
+        }
+
+    @Test
+    fun `an undo keeps the deferrals that happened and the note that was written`() =
+        withFixture(T0) {
+            reminder("m1")
+            val row = container.instances.create(open())
+            container.instances.markSnoozed(row.id, T0 + 600_000)
+            container.instances.markSkipped(row.id, "felt sick")
+
+            val reopened = container.instances.reopen(row.id)
+
+            assertEquals(1, reopened.snoozeCount)
+            assertEquals("felt sick", reopened.notes)
+        }
+
+    @Test
+    fun `undoing a take gives the pills back in the same write, and a take then an undo leaves the bottle as it was`() =
+        withFixture(T0) {
+            reminder("m1") { it.copy(pillsRemaining = 30.0, pillsPerDose = 2.0) }
+            val row = container.instances.create(open())
+
+            container.instances.markCompleted(row.id, T0)
+            assertEquals(28.0, container.reminders.get("m1")!!.pillsRemaining)
+            container.instances.reopen(row.id)
+
+            assertEquals(30.0, container.reminders.get("m1")!!.pillsRemaining)
+        }
+
+    @Test
+    fun `undoing a skip or a snooze touches no pills`() =
+        withFixture(T0) {
+            reminder("m1") { it.copy(pillsRemaining = 30.0) }
+            val skipped = container.instances.create(open())
+            val snoozed = container.instances.create(open(scheduledTime = T0 + 1))
+            container.instances.markSkipped(skipped.id)
+            container.instances.markSnoozed(snoozed.id, T0 + 600_000)
+
+            container.instances.reopen(skipped.id)
+            container.instances.reopen(snoozed.id)
+
+            assertEquals(30.0, container.reminders.get("m1")!!.pillsRemaining)
+        }
+
+    @Test
+    fun `a row that is not an answer cannot be reopened, and nothing is enqueued`() =
+        withFixture(T0) {
+            reminder("m1")
+            val pending = container.instances.create(open())
+            val missed = container.instances.create(open(scheduledTime = T0 + 1))
+            container.instances.markMissed(missed.id)
+            val queued = container.syncQueue.pending().size
+
+            assertFailsWith<IllegalStateException> { container.instances.reopen(pending.id) }
+            assertFailsWith<IllegalStateException> { container.instances.reopen(missed.id) }
+            assertFailsWith<IllegalStateException> { container.instances.reopen("nope") }
+            assertEquals(queued, container.syncQueue.pending().size)
+        }
+
+    @Test
+    fun `a change not pushed yet is known, and one that has been pushed is not`() =
+        withFixture(T0) {
+            reminder("m1")
+            val row = container.instances.create(open())
+            assertTrue(container.instances.hasUnpushedChange(row.id))
+
+            container.syncQueue.pending().forEach { container.syncQueue.remove(it.id) }
+
+            assertFalse(container.instances.hasUnpushedChange(row.id))
+        }
+
+    @Test
+    fun `a dead-lettered change still counts as unpushed, since the server has not taken it`() =
+        withFixture(T0) {
+            reminder("m1")
+            val row = container.instances.create(open())
+            container.syncQueue.pending().forEach { container.syncQueue.markDeadLettered(it.id) }
+
+            assertTrue(container.instances.hasUnpushedChange(row.id))
+        }
+
+    @Test
+    fun `a pull that lands after the planner looked but before the write cannot overwrite an unpushed change`() =
+        withFixture(T0) {
+            reminder("m1")
+            val row = container.instances.create(open())
+            now = T0 + 10
+            val skipped = container.instances.markSkipped(row.id)
+
+            // The pull judged this row before the skip was written, and wants to apply a completion.
+            val written = container.instances.upsertMany(listOf(PulledReminderInstance(skipped.copy(status = InstanceStatus.Completed, updatedAt = T0 + 900), "cid")))
+
+            assertEquals(1, written)
+            assertEquals(InstanceStatus.Skipped, container.instances.get(row.id)!!.status)
+        }
+
+    @Test
+    fun `every row at one moment is found, answered or not, and no other moment's`() =
+        withFixture(T0) {
+            reminder("m1")
+            val a = container.instances.create(open())
+            val b = container.instances.create(open())
+            container.instances.markSkipped(a.id)
+            container.instances.create(open(scheduledTime = T0 + 1))
+
+            val found = container.instances.allForOccurrence(USER, "m1", T0)
+
+            assertEquals(setOf(a.id, b.id), found.map { it.id }.toSet())
         }
 
     @Test

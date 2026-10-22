@@ -35,6 +35,7 @@ import com.taskrx.mobile.sweep.RoomSweepStore
 import com.taskrx.mobile.ui.components.Toaster
 import com.taskrx.mobile.ui.search.DrugSearchService
 import com.taskrx.mobile.ui.search.OfflineDrugSearch
+import com.taskrx.mobile.undo.UndoAnswers
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -92,6 +93,17 @@ class AppContainer(
             armSnooze = notifications.scheduler::snooze,
             rescheduleAfterWrite = notifications::rescheduleAfterWrite,
             dismiss = notifications::dismissPosted,
+        )
+
+    /** Takes a take, a skip or a snooze back: the confirmation card's and the timeline row's Undo. */
+    val undo =
+        UndoAnswers(
+            reminders,
+            instances,
+            clock,
+            userId = { session.userId },
+            cancelSnooze = notifications.scheduler::cancelSnooze,
+            rescheduleAfterWrite = notifications::rescheduleAfterWrite,
         )
 
     val drugSearch: DrugSearchService =

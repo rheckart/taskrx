@@ -75,8 +75,9 @@ class PullApplier(
                 continue
             }
             val local = instances.get(candidate.instance.id)
-            // The safety-critical skip: a dose recorded as taken here is never replaced.
-            if (shouldApplyRemoteReminderInstance(local, candidate.instance)) resolved += candidate
+            // The safety-critical skip: a dose recorded as taken here is replaced only by the person's
+            // own undo, and a change not pushed yet is never replaced at all.
+            if (shouldApplyRemoteReminderInstance(local, candidate.instance, instances.hasUnpushedChange(candidate.instance.id))) resolved += candidate
         }
         instances.upsertMany(resolved)
     }
