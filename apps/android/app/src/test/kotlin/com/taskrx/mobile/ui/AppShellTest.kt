@@ -166,7 +166,7 @@ class AppShellTest {
 
         compose.onNodeWithText("Mark taken").performClick()
         awaitText("Recorded")
-        compose.onNodeWithText("Done").performClick()
+        compose.onNodeWithText("Done").performScrollTo().performClick()
         awaitText("Taken", substring = true)
 
         compose.onNodeWithText("Metformin").assertExists()

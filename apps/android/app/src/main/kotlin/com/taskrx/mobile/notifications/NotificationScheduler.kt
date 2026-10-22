@@ -110,6 +110,17 @@ class NotificationScheduler(
         return true
     }
 
+    /**
+     * Cancels the deferred reminder of one Occurrence, for an undo. Only that moment's: a
+     * Reminder's other snoozes stay armed, which [cancelForReminder] would not allow. The
+     * Occurrence's own notification, if it is still ahead, is armed again by the reschedule
+     * that follows every write.
+     */
+    suspend fun cancelSnooze(reminderId: String, scheduledTime: Long) =
+        lock.withLock {
+            for (spec in snoozes.removeForOccurrence(reminderId, scheduledTime)) gateway(spec.tier).cancel(spec.id)
+        }
+
     /** Cancels everything armed for [reminderId] in all three id namespaces. */
     suspend fun cancelForReminder(reminderId: String) =
         lock.withLock {

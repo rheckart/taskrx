@@ -8,6 +8,28 @@ for commit discipline (POC tags use `0.x.x`).
 
 ## [Unreleased]
 
+### 2026-10-22 — A take, a skip or a snooze can be taken back
+
+A mis-tap on "Mark taken" used to be final. Now the confirmation card has an **Undo** button, and every answered
+row on the timeline has "Undo take", "Undo skip" or "Undo snooze". It puts the moment back to pending, cancels that
+moment's snooze, arms its own reminder again if it is still ahead, and gives a taken dose's pills back. Read from
+Medisafe's un-skip and un-take. ADR 0008 records the decision.
+
+- **Not offered** for an extra dose or a Backlog completion (nothing was due, so reopening would make a miss that
+  never was), for a moment that was opened again beside it, or for a moment that is not an answer yet. If the
+  moment is already past its two hour grace period the confirmation says it will count as missed.
+- **Sync.** A taking was final on the server and on the phone, on purpose. The server gains `reminderInstances:reopen`,
+  the one way out of `completed`; the other four writes still refuse it. On the phone a row with a change not yet
+  pushed is never overwritten by a pull, and a local take is replaced only by a newer remote `pending`.
+- **Deploy order:** the Convex backend must be deployed before an app that can send an undo is installed.
+
+### 2026-10-22 — A snooze nobody came back to becomes Missed
+
+A snoozed dose used to stay snoozed forever if the reminder it came back as was ignored, and counted against
+Adherence as a deferral rather than a miss. Now it becomes Missed once the time it was put off to is more than the
+two hour Grace Period old (ADR 0005, amended). A snooze still running is left alone. The rule is `snoozeRanOut`
+in `core/sweep/Planner.kt`.
+
 ### 2026-10-22 — Snooze length is a setting, and a moment can be put off to a chosen time
 
 Read from Medisafe's skip, snooze and reschedule actions (`docs/medisafe-skip-snooze-findings.md`).

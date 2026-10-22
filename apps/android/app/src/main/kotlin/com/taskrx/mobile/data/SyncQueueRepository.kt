@@ -68,6 +68,13 @@ class SyncQueueRepository(
 
     suspend fun remove(id: Long) = dao.remove(id)
 
+    /**
+     * Whether a change to one entity is still waiting to be pushed. Dead-lettered entries count:
+     * a change the server has refused is still the newest thing the person did, and a pull must
+     * not quietly replace it (it is listed in Sync problems until they decide).
+     */
+    suspend fun hasEntriesFor(entityType: SyncEntityType, entityId: String): Boolean = dao.countFor(entityType.wire, entityId) > 0
+
     /** Counts one more failed attempt. Does not dead-letter; the worker decides when. */
     suspend fun markFailed(id: Long, error: String) = dao.markFailed(id, error)
 

@@ -19,10 +19,15 @@ import com.taskrx.core.domain.ReminderKind
  *  - The count stops at zero. A bottle that was already empty on paper is not driven negative.
  *  - A Reminder that tracks no supply (a task, or a medication with no count) spends nothing.
  *  - Completed -> Completed spends nothing, so a second tap or a re-sent answer cannot spend
- *    twice. Nothing moves an Instance OUT of Completed (a local Completed is never overwritten,
- *    see `shouldApplyRemoteReminderInstance`), so there is no refund to make.
- *  - A Completed that arrives from the server spends nothing here: the other device spent
- *    the pills, and the new count comes with the Reminder document.
+ *    twice.
+ *  - Undoing a take (ADR 0008) is the one move OUT of Completed, and it gives the dose back:
+ *    Completed -> anything else adds `pillsPerDose` (or one) to the count. The bottle has no
+ *    ceiling to cap it at. The one inexactness is the zero clamp above: a take that found
+ *    half a pill left and drew it down to zero is refunded a whole dose, one pill more than
+ *    it spent. That over-count is smaller than the harm of leaving a refund out, and the
+ *    person can set the count by hand.
+ *  - A Completed or an undo that arrives from the server touches nothing here: the other
+ *    device spent or refunded the pills, and the new count comes with the Reminder document.
  */
 
 /** The doses a bottle is drawn down by when `pillsPerDose` is not set. */
@@ -30,7 +35,8 @@ const val DEFAULT_PILLS_PER_DOSE = 1.0
 
 /**
  * The new `pillsRemaining` after an Instance moves [from] a status (null for a row created
- * already settled) [to] another, or null when the supply is not touched.
+ * already settled) [to] another, or null when the supply is not touched. Into Completed it
+ * draws the bottle down; out of Completed (an undo) it puts the dose back.
  */
 fun supplyAfterDose(
     kind: ReminderKind,
@@ -40,8 +46,11 @@ fun supplyAfterDose(
     pillsPerDose: Double?,
 ): Double? {
     if (kind != ReminderKind.Medication) return null
-    if (to != InstanceStatus.Completed || from == InstanceStatus.Completed) return null
     if (pillsRemaining == null) return null
     val perDose = pillsPerDose?.takeIf { it > 0 } ?: DEFAULT_PILLS_PER_DOSE
-    return maxOf(0.0, pillsRemaining - perDose)
+    return when {
+        to == InstanceStatus.Completed && from != InstanceStatus.Completed -> maxOf(0.0, pillsRemaining - perDose)
+        from == InstanceStatus.Completed && to != InstanceStatus.Completed -> pillsRemaining + perDose
+        else -> null
+    }
 }

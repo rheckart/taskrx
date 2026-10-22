@@ -170,8 +170,12 @@ class InstancePushTest {
     }
 
     @Test
-    fun `pending, unknown and malformed statuses are refused`() {
-        assertEquals("Cannot sync pending reminder instance update", assertFailsWith<PushRejected> { instanceUpdateCall(instance("pending"), "c") }.message)
+    fun `pending reopens, which is how an undo reaches the server`() {
+        assertEquals(PushCall("reminderInstances:reopen", mapOf("id" to "c")), instanceUpdateCall(instance("pending"), "c"))
+    }
+
+    @Test
+    fun `unknown and malformed statuses are refused`() {
         assertEquals("Unknown instance status taken", assertFailsWith<PushRejected> { instanceUpdateCall(instance("taken"), "c") }.message)
         assertTrue(assertFailsWith<PushRejected> { instanceUpdateCall(obj("""{"status":{"a":1}}"""), "c") }.message!!.startsWith("Unknown"))
         assertFailsWith<PushRejected> { instanceUpdateCall(obj("{}"), "c") }

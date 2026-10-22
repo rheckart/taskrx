@@ -63,5 +63,43 @@ class SupplyTest {
     fun `a medication that tracks no supply spends nothing`() = assertNull(spend(remaining = null))
 
     @Test
+    fun `undoing a take gives the dose back, whatever the row becomes`() {
+        for (to in listOf(InstanceStatus.Pending, InstanceStatus.Skipped, InstanceStatus.Snoozed, InstanceStatus.Missed)) {
+            assertEquals(31.0, spend(from = InstanceStatus.Completed, to = to), "$to")
+        }
+    }
+
+    @Test
+    fun `an undo gives back the dose size, as the take spent it`() {
+        assertEquals(32.0, spend(from = InstanceStatus.Completed, to = InstanceStatus.Pending, perDose = 2.0))
+        assertEquals(30.5, spend(from = InstanceStatus.Completed, to = InstanceStatus.Pending, perDose = 0.5))
+        assertEquals(31.0, spend(from = InstanceStatus.Completed, to = InstanceStatus.Pending, perDose = 0.0))
+    }
+
+    @Test
+    fun `a take then an undo leaves the bottle as it was`() {
+        val taken = spend(remaining = 30.0, perDose = 2.0)!!
+        assertEquals(30.0, spend(from = InstanceStatus.Completed, to = InstanceStatus.Pending, remaining = taken, perDose = 2.0))
+    }
+
+    @Test
+    fun `an undo from an empty count gives a dose back, so the clamp can over-refund by up to one dose`() {
+        assertEquals(0.0, spend(remaining = 0.5))
+        assertEquals(1.0, spend(from = InstanceStatus.Completed, to = InstanceStatus.Pending, remaining = 0.0))
+    }
+
+    @Test
+    fun `an undo costs nothing for a task or a medication that tracks no supply`() {
+        assertNull(spend(kind = ReminderKind.Task, from = InstanceStatus.Completed, to = InstanceStatus.Pending))
+        assertNull(spend(remaining = null, from = InstanceStatus.Completed, to = InstanceStatus.Pending))
+    }
+
+    @Test
+    fun `moves between answers that are not a take touch nothing`() {
+        assertNull(spend(from = InstanceStatus.Skipped, to = InstanceStatus.Pending))
+        assertNull(spend(from = InstanceStatus.Snoozed, to = InstanceStatus.Pending))
+    }
+
+    @Test
     fun `a task spends nothing even if it carries a count`() = assertNull(spend(kind = ReminderKind.Task))
 }

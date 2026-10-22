@@ -331,6 +331,38 @@ class PushWorkerTest {
         }
 
     @Test
+    fun `a take then an undo made offline reach the server as markCompleted then reopen, in that order`() =
+        rig {
+            fx.reminder("m1")
+            val instance = fx.container.instances.create(CreateReminderInstanceInput(USER, "m1", ReminderKind.Medication, T0))
+            worker.drain()
+            gateway.calls.clear()
+
+            fx.container.instances.markCompleted(instance.id, T0 + 10)
+            fx.container.instances.reopen(instance.id)
+            worker.drain()
+
+            assertEquals(listOf("reminderInstances:markCompleted", "reminderInstances:reopen"), gateway.mutations.map { it.function })
+            assertEquals(mapOf("id" to "cid-${instance.id}"), gateway.mutations.last().args)
+            assertTrue(fx.entries().isEmpty())
+            assertEquals("synced", fx.instanceRow(instance.id).syncStatus)
+        }
+
+    @Test
+    fun `an answer and its undo made before the first create drained go up in order behind it`() =
+        rig {
+            fx.reminder("m1")
+            val instance = fx.container.instances.create(CreateReminderInstanceInput(USER, "m1", ReminderKind.Medication, T0))
+            fx.container.instances.markCompleted(instance.id, T0 + 10)
+            fx.container.instances.reopen(instance.id)
+
+            worker.drain()
+
+            val instanceCalls = gateway.mutations.map { it.function }.filter { it.startsWith("reminderInstances:") }
+            assertEquals(listOf("reminderInstances:create", "reminderInstances:markCompleted", "reminderInstances:reopen"), instanceCalls)
+        }
+
+    @Test
     fun `a snooze that carries no snoozedUntil is not sent`() =
         rig {
             fx.reminder("m1")

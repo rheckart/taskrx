@@ -95,3 +95,27 @@ settled.
 Both numbers live as named constants in the shared package next to the planner
 that reads them, so the boundary a test pins and the boundary the app applies are
 the same value.
+
+## Amendment: a snooze nobody came back to expires
+
+The first version of this decision left every `snoozed` Instance alone, on the reasoning
+that a deferral is a deliberate act and not an absence. That is true while the deferral
+is running. It stops being true once the moment the person put the dose off to has come
+and gone with no answer: the row then holds the dose open for good, and Adherence counts
+it as a deferral (in the denominator of a medication, with no verdict) instead of the
+miss it was. "Pick a time" made it worse, since a dose can now be put off for hours.
+
+So a `snoozed` Instance becomes `missed` when the *later* of its deferred moment
+(`snoozedUntil`) and its own scheduled moment is more than a Grace Period old. The
+deferred moment gets the same two hours any other moment does, and the same boundary:
+exactly one Grace Period old is still answerable. The scheduled moment is the floor
+because a snooze can end before the dose was due (answered early, put off a few minutes).
+A snoozed row with no `snoozedUntil` reads as its scheduled moment.
+
+The rule is `snoozeRanOut` in the sweep planner, and the repository applies it again
+inside the transaction that writes `missed`: the sweep plans from a snapshot, and a
+snooze made between that read and the write must not be overwritten.
+
+Nothing else changes. The Grace Period is still two hours and the lookback still seven
+days. A snooze still inside its deferral, or inside the Grace Period after it, is not
+touched.

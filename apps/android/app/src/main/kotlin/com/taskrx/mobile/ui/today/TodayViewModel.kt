@@ -6,6 +6,10 @@ import androidx.lifecycle.viewModelScope
 import com.taskrx.core.batch.BatchAction
 import com.taskrx.core.domain.InstanceStatus
 import com.taskrx.core.time.atClockTimeOnDayOf
+import com.taskrx.core.undo.UNDOABLE_STATUSES
+import com.taskrx.core.undo.isScheduledOccurrence
+import com.taskrx.mobile.format.undoToast
+import com.taskrx.mobile.undo.UndoResult
 import com.taskrx.core.time.localDayBounds
 import com.taskrx.core.timeline.ProjectTimelineInput
 import com.taskrx.core.timeline.TimelineRow
@@ -36,6 +40,8 @@ data class TodayState(
     val error: String? = null,
     /** Show only what is still to do. The rows are all kept, so turning it off needs no re-read. */
     val hideCompleted: Boolean = false,
+    /** The Instances whose answer can be taken back from the row (see [TodayViewModel.undo]). */
+    val undoable: Set<String> = emptySet(),
 ) {
     /** What the list draws: every row, or all but the completed ones. */
     val visibleRows: List<TimelineRow>
@@ -63,6 +69,8 @@ class TodayViewModel(
     private val sweep: suspend (String, Long) -> Int = app.sweep::run,
     private val log: (String, Throwable) -> Unit = { what, e -> Log.e("today", what, e) },
     private val toast: (ToastRequest) -> Unit = app.toaster::show,
+    /** Takes an answer back, by Instance id. A parameter so a test can make it fail. */
+    private val undoAnswer: suspend (String) -> UndoResult = app.undo::undo,
 ) : ViewModel() {
     private val mutable =
         MutableStateFlow(TodayState(windowStart = localDayBounds(app.clock(), 0, zone()).start))
@@ -102,6 +110,21 @@ class TodayViewModel(
             } catch (e: Exception) {
                 log("changing the time taken failed", e)
                 toast(ToastRequest("Couldn't change the time", ToastKind.Error))
+            }
+            loads.withLock { load() }
+        }
+
+    /** Takes a row's answer back: a take, a skip or a snooze. The day is re-read afterwards. */
+    fun undo(row: TimelineRow): Job =
+        viewModelScope.launch {
+            val instanceId = row.instanceId ?: return@launch
+            try {
+                toast(undoToast(undoAnswer(instanceId)))
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                log("undoing an answer failed", e)
+                toast(ToastRequest("Couldn't take that back", ToastKind.Error))
             }
             loads.withLock { load() }
         }
@@ -166,7 +189,16 @@ class TodayViewModel(
             val rows =
                 projectTimeline(ProjectTimelineInput(reminders, instances, TimelineWindow(window.start, window.end), now, zone()))
             // A different day was asked for while this one was reading; its load follows.
-            if (mutable.value.dayOffset == offset) mutable.update { it.copy(rows = rows, error = null) }
+            // Which answered rows offer Undo: an answer on a moment the Schedule predicts. An extra
+            // dose or a Backlog completion would reopen into a miss that never was (`undoVerdict`).
+            val byId = reminders.associateBy { it.id }
+            val undoable =
+                rows.mapNotNullTo(HashSet()) { row ->
+                    val id = row.instanceId ?: return@mapNotNullTo null
+                    val reminder = byId[row.reminderId] ?: return@mapNotNullTo null
+                    id.takeIf { row.status in UNDOABLE_STATUSES && isScheduledOccurrence(reminder, row.scheduledTime, zone()) }
+                }
+            if (mutable.value.dayOffset == offset) mutable.update { it.copy(rows = rows, undoable = undoable, error = null) }
         }
 
         try {

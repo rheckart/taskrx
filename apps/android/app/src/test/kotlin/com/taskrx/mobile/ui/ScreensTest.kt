@@ -73,7 +73,19 @@ class ScreensTest {
         isNext: Boolean = false,
         dosage: String? = null,
         completedAt: Long? = null,
-    ) = TimelineRow("r-$name", if (completedAt == null) null else "i-$name", name, dosage, kind, NINE, status, null, isNext, completedAt)
+        answeredAs: String? = null,
+    ) = TimelineRow(
+        "r-$name",
+        answeredAs ?: if (completedAt == null) null else "i-$name",
+        name,
+        dosage,
+        kind,
+        NINE,
+        status,
+        null,
+        isNext,
+        completedAt,
+    )
 
     private class Calls {
         val log = mutableListOf<String>()
@@ -88,6 +100,7 @@ class ScreensTest {
                 onRefresh = { log += "refresh" },
                 onOpenAnswer = { log += "answer:${it.name}" },
                 onChangeTime = { row, h, m -> log += "time:${row.name}:$h:$m" },
+                onUndo = { log += "undo:${it.name}" },
                 onAdd = { log += "add" },
                 onNewTask = { log += "task" },
                 onNewMedication = { log += "med" },
@@ -105,8 +118,65 @@ class ScreensTest {
         compose.setContent { TaskRxTheme { TodayContent(state, calls.actions(), banner = banner) } }
     }
 
-    private fun state(vararg rows: TimelineRow, offset: Int = 0, loading: Boolean = false, error: String? = null) =
-        TodayState(dayOffset = offset, windowStart = 0, rows = rows.toList(), loading = loading, error = error)
+    private fun state(
+        vararg rows: TimelineRow,
+        offset: Int = 0,
+        loading: Boolean = false,
+        error: String? = null,
+        undoable: Set<String> = emptySet(),
+    ) = TodayState(dayOffset = offset, windowStart = 0, rows = rows.toList(), loading = loading, error = error, undoable = undoable)
+
+    @Test
+    fun `a taken row offers Undo take`() {
+        val calls = Calls()
+        val taken = row("Taken", status = InstanceStatus.Completed, completedAt = NINE + 5 * 60_000)
+        today(state(taken, undoable = setOf("i-Taken")), calls)
+
+        compose.onNodeWithText("Undo take").performClick()
+
+        assertEquals(listOf("undo:Taken"), calls.log)
+    }
+
+    @Test
+    fun `a skipped row offers Undo skip`() {
+        val calls = Calls()
+        val skipped = row("Skipped", status = InstanceStatus.Skipped, answeredAs = "i-s")
+        today(state(skipped, undoable = setOf("i-s")), calls)
+
+        compose.onNodeWithText("Undo skip").performClick()
+
+        assertEquals(listOf("undo:Skipped"), calls.log)
+    }
+
+    @Test
+    fun `a snoozed row offers Undo snooze`() {
+        val calls = Calls()
+        val snoozed = row("Snoozed", status = InstanceStatus.Snoozed, answeredAs = "i-z")
+        today(state(snoozed, undoable = setOf("i-z")), calls)
+
+        compose.onNodeWithText("Undo snooze").performClick()
+
+        assertEquals(listOf("undo:Snoozed"), calls.log)
+    }
+
+    @Test
+    fun `a row whose answer cannot be taken back offers no Undo`() {
+        val extraDose = row("Extra", status = InstanceStatus.Completed, completedAt = NINE)
+        today(state(extraDose, row("Open"), undoable = emptySet()))
+
+        compose.onAllNodesWithText("Undo take").assertCountEquals(0)
+        compose.onAllNodesWithText("Undo skip").assertCountEquals(0)
+    }
+
+    @Test
+    fun `holding a taken row still changes its time, and Undo does not take its place`() {
+        val taken = row("Taken", status = InstanceStatus.Completed, completedAt = NINE + 5 * 60_000)
+        today(state(taken, undoable = setOf("i-Taken")))
+
+        compose.onNodeWithContentDescription(rowDescription(taken)).performTouchInput { longClick() }
+
+        compose.onNodeWithText("Pick a time").assertExists()
+    }
 
     @Test
     fun `an empty day says so in a sentence`() {
@@ -462,6 +532,7 @@ class ScreensTest {
                     onSkip = { calls += "skip" },
                     onSnooze = { calls += "snooze" },
                     onReschedule = { hour, minute -> calls += "reschedule:$hour:$minute" },
+                    onUndo = { calls += "undo" },
                     onDone = { calls += "done" },
                 )
             }
@@ -597,13 +668,37 @@ class ScreensTest {
     }
 
     @Test
-    fun `once recorded the buttons give way to a confirmation with one way out`() {
+    fun `once recorded the buttons give way to a confirmation that can be dismissed or taken back`() {
         val calls = answer(loaded(ReminderKind.Medication, action = Action.Done, recordedAt = NINE + 60_000))
 
         compose.onNodeWithText("Recorded").assertExists()
         compose.onAllNodesWithText("Mark taken").assertCountEquals(0)
+        compose.onNodeWithText("Undo").performClick()
         compose.onNodeWithText("Done").performClick()
-        assertEquals(listOf("done"), calls)
+        assertEquals(listOf("undo", "done"), calls)
+    }
+
+    @Test
+    fun `the confirmation says so when taking the answer back leaves the moment past its grace period`() {
+        // Scheduled at NINE, now three hours later: the two hour Grace Period is over.
+        answer(loaded(ReminderKind.Medication, action = Action.Done, recordedAt = NINE + 3 * 3_600_000L), now = NINE + 3 * 3_600_000L)
+
+        compose.onNodeWithText("This one is past its grace period and will count as missed.").assertExists()
+    }
+
+    @Test
+    fun `the confirmation stays quiet about the grace period while the moment is still inside it`() {
+        answer(loaded(ReminderKind.Medication, action = Action.Done, recordedAt = NINE + 60_000), now = NINE + 60_000)
+
+        compose.onAllNodesWithText("This one is past its grace period and will count as missed.").assertCountEquals(0)
+    }
+
+    @Test
+    fun `while an undo is in flight neither Undo nor Done can be pressed again`() {
+        answer(loaded(ReminderKind.Medication, action = Action.Undoing, recordedAt = NINE + 60_000))
+
+        compose.onNodeWithText("Undo").assertIsNotEnabled()
+        compose.onNodeWithText("Done").assertIsNotEnabled()
     }
 
     @Test
