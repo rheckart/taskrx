@@ -147,13 +147,31 @@ class AdherenceReaderTest {
         withFixture(NOW) {
             parents()
             record(NOW - DAY, InstanceStatus.Completed)
-            record(NOW - 2 * DAY, InstanceStatus.Snoozed)
+            // Put off to later today: still a deferral. (Snoozed rows are made by snoozing, since
+            // one with no deferred moment, or one long past, is a snooze nobody came back to.)
+            val instance = container.instances.create(CreateReminderInstanceInput(USER, "r1", ReminderKind.Medication, NOW - 2 * DAY))
+            container.instances.markSnoozed(instance.id, snoozedUntil = NOW + HOUR)
 
             val stats = read().stats
 
             assertEquals(1, stats.snoozed)
             assertEquals(0, stats.missed)
             assertEquals(2, stats.total)
+            assertEquals(50.0, stats.percent)
+        }
+
+    @Test
+    fun `scores a snooze nobody came back to as a miss, not as a deferral`() =
+        withFixture(NOW) {
+            parents()
+            record(NOW - DAY, InstanceStatus.Completed)
+            val instance = container.instances.create(CreateReminderInstanceInput(USER, "r1", ReminderKind.Medication, NOW - 2 * DAY))
+            container.instances.markSnoozed(instance.id, snoozedUntil = NOW - 2 * DAY + HOUR)
+
+            val stats = read().stats
+
+            assertEquals(0, stats.snoozed)
+            assertEquals(1, stats.missed)
             assertEquals(50.0, stats.percent)
         }
 

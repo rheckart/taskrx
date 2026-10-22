@@ -34,14 +34,17 @@ import java.time.ZoneId
  *   common case, because minting happens only on an answer.
  * - **A `pending` Instance exists.** Someone opened the answer screen and left
  *   without answering. The row is already there and moves to `missed`.
+ * - **A `snoozed` Instance exists whose deferral ran out unanswered.** See
+ *   [snoozeRanOut]. The row moves to `missed`.
  *
  * Both are reported as a [MissedVerdict]; `instanceId` is what separates them.
  *
  * ## What it will not touch
  *
  * Any Instance that is not `pending` is an answer, and an answer is never
- * overruled - including `snoozed`, which is a deliberate deferral rather than
- * an absence, and `missed`, which is already the verdict. A moment with an
+ * overruled - including `missed`, which is already the verdict, and a `snoozed`
+ * one still inside its deferral and Grace Period. A snooze nobody came back to
+ * is the one answer that expires (ADR 0005, amended). A moment with an
  * answer also blocks the Occurrence behind it from being minted a second time,
  * on the same Reminder-and-scheduled-time pairing the timeline deduplicates on.
  *
@@ -85,6 +88,24 @@ const val SWEEP_LOOKBACK_MS: Long = 7 * 86_400_000L
  * that is the order the engine generates in.
  */
 const val MAX_MISSED_PER_REMINDER: Int = 1000
+
+/**
+ * Whether a snoozed Instance was left unanswered: the moment it was put off to, or its own
+ * scheduled moment if that is later, is more than a Grace Period old.
+ *
+ * A snooze is a deferral, not an answer, so it must not hold a dose open forever. Left
+ * alone, a dose snoozed to 21:00 and then ignored would stay `snoozed` for good and count
+ * against Adherence as a deferral rather than the miss it was. The deferred moment gets the
+ * same Grace Period an ordinary one does (ADR 0005).
+ *
+ * The later of the two moments is used because a snooze can end before the dose was due
+ * (answered early, snoozed a few minutes): that dose is not out of time until its own
+ * moment is. A snoozed row with no `snoozedUntil` reads as the scheduled moment.
+ *
+ * Exactly one Grace Period old is still answerable, as for any moment.
+ */
+fun snoozeRanOut(instance: ReminderInstance, now: Long, gracePeriodMs: Long): Boolean =
+    (instance.snoozedUntil?.coerceAtLeast(instance.scheduledTime) ?: instance.scheduledTime) < now - gracePeriodMs
 
 /**
  * One moment the sweep judged Missed.
@@ -143,7 +164,8 @@ fun planMissedSweep(input: PlanMissedSweepInput): List<MissedVerdict> {
         if (!outOfTime(stored.scheduledTime)) continue
 
         claimed.add(timelineRowKey(stored.reminderId, stored.scheduledTime))
-        if (stored.status != InstanceStatus.Pending) continue
+        // A pending row is settled; so is a snooze nobody came back to (see [snoozeRanOut]).
+        if (stored.status != InstanceStatus.Pending && !(stored.status == InstanceStatus.Snoozed && snoozeRanOut(stored, now, gracePeriodMs))) continue
 
         verdicts.add(
             MissedVerdict(

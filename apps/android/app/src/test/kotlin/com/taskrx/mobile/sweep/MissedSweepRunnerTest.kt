@@ -58,6 +58,36 @@ class MissedSweepRunnerTest {
         }
 
     @Test
+    fun `a snooze nobody came back to is recorded as missed, once its deferred moment is out of time`() =
+        withFixture(NOW) {
+            dueAt("r1", NOW - 5 * HOUR)
+            val snoozed =
+                container.instances.markSnoozed(
+                    container.instances.create(CreateReminderInstanceInput(USER, "r1", ReminderKind.Medication, NOW - 5 * HOUR)).id,
+                    snoozedUntil = NOW - 3 * HOUR,
+                )
+
+            val swept = container.sweep.run(USER, NOW)
+
+            assertEquals(1, swept)
+            val row = stored().single()
+            assertEquals(snoozed.id, row.id)
+            assertEquals(InstanceStatus.Missed, row.status)
+            assertEquals(1, row.snoozeCount)
+        }
+
+    @Test
+    fun `a snooze still inside its deferral is left alone`() =
+        withFixture(NOW) {
+            dueAt("r1", NOW - 5 * HOUR)
+            val id = container.instances.create(CreateReminderInstanceInput(USER, "r1", ReminderKind.Medication, NOW - 5 * HOUR)).id
+            container.instances.markSnoozed(id, snoozedUntil = NOW + HOUR)
+
+            assertEquals(0, container.sweep.run(USER, NOW))
+            assertEquals(InstanceStatus.Snoozed, stored().single().status)
+        }
+
+    @Test
     fun `a minted row carries the Kind of its Reminder`() =
         withFixture(NOW) {
             dueAt("t1", NOW - 3 * HOUR, ReminderKind.Task)

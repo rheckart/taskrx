@@ -50,6 +50,7 @@ private fun instance(
     reminderId: String,
     scheduledTime: Long,
     status: InstanceStatus,
+    snoozedUntil: Long? = null,
 ): ReminderInstance =
     createReminderInstance(
         id = id,
@@ -58,6 +59,7 @@ private fun instance(
         reminderKind = ReminderKind.Medication,
         scheduledTime = scheduledTime,
         status = status,
+        snoozedUntil = snoozedUntil,
         createdAt = 0,
         updatedAt = 0,
     )
@@ -218,7 +220,6 @@ class PlannerTest {
             listOf(
                 InstanceStatus.Completed,
                 InstanceStatus.Skipped,
-                InstanceStatus.Snoozed,
                 InstanceStatus.Missed,
             )
 
@@ -228,6 +229,77 @@ class PlannerTest {
 
             assertEquals(emptyList(), sweep(listOf(r), listOf(stored)), "status $status")
         }
+    }
+
+    @Test
+    fun `planMissedSweep leaves a snooze alone while it, and its Grace Period, are still running`() {
+        val r = due("r1", 3 * HOUR)
+        // Put off to 40 minutes ago: the deferred moment is inside its Grace Period.
+        val stillRunning = instance("i1", "r1", NOW - 3 * HOUR, InstanceStatus.Snoozed, snoozedUntil = NOW - 40 * 60_000L)
+        // Put off to the future.
+        val ahead = instance("i2", "r1", NOW - 3 * HOUR, InstanceStatus.Snoozed, snoozedUntil = NOW + HOUR)
+
+        assertEquals(emptyList(), sweep(listOf(r), listOf(stillRunning)))
+        assertEquals(emptyList(), sweep(listOf(r), listOf(ahead)))
+    }
+
+    @Test
+    fun `planMissedSweep misses a snooze nobody came back to, once the deferred moment is out of time`() {
+        val r = due("r1", 5 * HOUR)
+        val ignored = instance("i1", "r1", NOW - 5 * HOUR, InstanceStatus.Snoozed, snoozedUntil = NOW - 3 * HOUR)
+
+        assertEquals(
+            listOf(MissedVerdict("r1", ReminderKind.Medication, NOW - 5 * HOUR, "i1")),
+            sweep(listOf(r), listOf(ignored)),
+        )
+    }
+
+    @Test
+    fun `planMissedSweep gives the deferred moment the same boundary as any other`() {
+        val r = due("r1", 5 * HOUR)
+        val exactlyOnTheLine = instance("i1", "r1", NOW - 5 * HOUR, InstanceStatus.Snoozed, snoozedUntil = NOW - GRACE_PERIOD_MS)
+        val aMillisecondPast = instance("i2", "r1", NOW - 5 * HOUR, InstanceStatus.Snoozed, snoozedUntil = NOW - GRACE_PERIOD_MS - 1)
+
+        assertEquals(emptyList(), sweep(listOf(r), listOf(exactlyOnTheLine)))
+        assertEquals(1, sweep(listOf(r), listOf(aMillisecondPast)).size)
+    }
+
+    @Test
+    fun `planMissedSweep judges a snooze that ended before the dose was due by the dose's own moment`() {
+        // Scheduled 3 hours ago, snoozed to 4 hours ago (answered early, put off a little): the
+        // dose's own moment is the later one, and it is past its Grace Period.
+        val r = due("r1", 3 * HOUR)
+        val early = instance("i1", "r1", NOW - 3 * HOUR, InstanceStatus.Snoozed, snoozedUntil = NOW - 4 * HOUR)
+
+        assertEquals(1, sweep(listOf(r), listOf(early)).size)
+    }
+
+    @Test
+    fun `planMissedSweep reads a snooze with no recorded time as the dose's own moment`() {
+        val r = due("r1", 3 * HOUR)
+        val bare = instance("i1", "r1", NOW - 3 * HOUR, InstanceStatus.Snoozed)
+
+        assertEquals(1, sweep(listOf(r), listOf(bare)).size)
+    }
+
+    @Test
+    fun `snoozeRanOut is judged by the later of the deferred moment and the dose's own`() {
+        // Scheduled an hour ahead, snoozed to a time long gone (a row pulled from elsewhere):
+        // the dose is not even due, so it cannot have run out.
+        val notDueYet = instance("i1", "r1", NOW + HOUR, InstanceStatus.Snoozed, snoozedUntil = NOW - 5 * HOUR)
+        val noDeferredMoment = instance("i2", "r1", NOW + HOUR, InstanceStatus.Snoozed)
+
+        assertEquals(false, snoozeRanOut(notDueYet, NOW, GRACE_PERIOD_MS))
+        assertEquals(false, snoozeRanOut(noDeferredMoment, NOW, GRACE_PERIOD_MS))
+        assertEquals(true, snoozeRanOut(instance("i3", "r1", NOW - 5 * HOUR, InstanceStatus.Snoozed), NOW, GRACE_PERIOD_MS))
+    }
+
+    @Test
+    fun `planMissedSweep does not mint a second Instance behind a snooze it has just missed`() {
+        val r = due("r1", 5 * HOUR)
+        val ignored = instance("i1", "r1", NOW - 5 * HOUR, InstanceStatus.Snoozed, snoozedUntil = NOW - 3 * HOUR)
+
+        assertEquals(1, sweep(listOf(r), listOf(ignored)).size)
     }
 
     @Test
