@@ -87,6 +87,7 @@ data class TodayActions(
     val onAdherence: () -> Unit,
     val onSupplies: () -> Unit,
     val onHistory: () -> Unit,
+    val onSettings: () -> Unit,
 )
 
 /**
@@ -376,5 +377,6 @@ private fun Footer(actions: TodayActions) {
         TextButton(onClick = actions.onAdherence) { Text("How it's going") }
         TextButton(onClick = actions.onSupplies) { Text("Supplies") }
         TextButton(onClick = actions.onHistory) { Text("History") }
+        TextButton(onClick = actions.onSettings) { Text("Settings") }
     }
 }

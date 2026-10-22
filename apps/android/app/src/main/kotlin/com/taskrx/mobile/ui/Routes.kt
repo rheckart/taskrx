@@ -23,6 +23,7 @@ object Routes {
     const val SUPPLIES = "refill"
     const val DRUG_SEARCH = "meds/search"
     const val SYNC_PROBLEMS = "sync/problems"
+    const val SETTINGS = "settings"
 
     const val ARG_NAME = "name"
     const val ARG_RXCUI = "rxcui"
@@ -66,6 +67,7 @@ object Routes {
             SUPPLIES -> "Supplies"
             DRUG_SEARCH -> "Search RxNorm"
             SYNC_PROBLEMS -> "Sync problems"
+            SETTINGS -> "Settings"
             EDIT_PATTERN -> "Edit reminder"
             ANSWER_PATTERN -> "Answer a reminder"
             else -> "TaskRx"

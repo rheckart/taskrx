@@ -57,6 +57,7 @@ import com.taskrx.mobile.ui.reminders.RemindersActions
 import com.taskrx.mobile.ui.reminders.RemindersContent
 import com.taskrx.mobile.ui.reminders.RemindersViewModel
 import com.taskrx.mobile.ui.search.DrugSearchContent
+import com.taskrx.mobile.ui.settings.SettingsContent
 import com.taskrx.mobile.ui.search.DrugSearchViewModel
 import com.taskrx.mobile.ui.sync.SyncProblemsContent
 import com.taskrx.mobile.ui.sync.SyncProblemsViewModel
@@ -215,6 +216,7 @@ private fun AppNavHost(container: AppContainer, navController: NavController) {
                         onAdherence = { host.navigate(Routes.ADHERENCE) },
                         onSupplies = { host.navigate(Routes.SUPPLIES) },
                         onHistory = { host.navigate(Routes.HISTORY) },
+                        onSettings = { host.navigate(Routes.SETTINGS) },
                     ),
                 banner = {
                     PermissionBanner(permission?.gap, onResolve = { container.notifications.permissions.resolve(it.remedy) })
@@ -242,9 +244,16 @@ private fun AppNavHost(container: AppContainer, navController: NavController) {
                 now = container.clock(),
                 onComplete = { vm.complete() },
                 onSkip = { vm.skip() },
+                snoozeMinutes = container.settings.snoozeMinutes.collectAsState().value,
                 onSnooze = { vm.snooze() },
+                onReschedule = { hour, minute -> vm.rescheduleTo(hour, minute) },
                 onDone = ::backToToday,
             )
+        }
+
+        composable(Routes.SETTINGS) {
+            val snoozeMinutes by container.settings.snoozeMinutes.collectAsState()
+            SettingsContent(snoozeMinutes, container.settings::setSnoozeMinutes)
         }
 
         composable(Routes.ADD) {

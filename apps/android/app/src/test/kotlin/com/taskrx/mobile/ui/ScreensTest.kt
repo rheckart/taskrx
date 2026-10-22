@@ -23,6 +23,7 @@ import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.hasScrollAction
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performScrollTo
 import androidx.compose.ui.test.performScrollToIndex
 import androidx.compose.ui.test.performTextReplacement
 import com.taskrx.core.domain.InstanceStatus
@@ -96,6 +97,7 @@ class ScreensTest {
                 onAdherence = { log += "adherence" },
                 onSupplies = { log += "supplies" },
                 onHistory = { log += "history" },
+                onSettings = { log += "settings" },
             )
     }
 
@@ -125,6 +127,16 @@ class ScreensTest {
         compose.onNodeWithText("Skip all").performClick()
 
         assertEquals(listOf("slot:take:A,B", "slot:snooze:A,B", "slot:skip:A,B"), calls.log)
+    }
+
+    @Test
+    fun `Today links to Settings`() {
+        val calls = Calls()
+        today(state(row("A")), calls)
+
+        compose.onNodeWithText("Settings").performClick()
+
+        assertEquals(listOf("settings"), calls.log)
     }
 
     @Test
@@ -434,15 +446,22 @@ class ScreensTest {
         return AnswerState.Loaded(reminder, NINE, instance, action, recordedAt, error)
     }
 
-    private fun answer(state: AnswerState, now: Long = NINE, calls: MutableList<String> = mutableListOf()): MutableList<String> {
+    private fun answer(
+        state: AnswerState,
+        now: Long = NINE,
+        calls: MutableList<String> = mutableListOf(),
+        snoozeMinutes: Int = 15,
+    ): MutableList<String> {
         compose.setContent {
             TaskRxTheme {
                 AnswerContent(
                     state,
                     now,
+                    snoozeMinutes,
                     onComplete = { calls += "complete" },
                     onSkip = { calls += "skip" },
                     onSnooze = { calls += "snooze" },
+                    onReschedule = { hour, minute -> calls += "reschedule:$hour:$minute" },
                     onDone = { calls += "done" },
                 )
             }
@@ -469,6 +488,63 @@ class ScreensTest {
         compose.onNodeWithText("Mark taken").assertExists()
         compose.onNodeWithText("Skip").assertExists()
         compose.onAllNodesWithText("Snooze 15 min").assertCountEquals(0)
+    }
+
+    @Test
+    fun `the snooze button names the length chosen in Settings`() {
+        answer(loaded(ReminderKind.Medication), snoozeMinutes = 30)
+
+        compose.onNodeWithText("Snooze 30 min").assertExists()
+        compose.onAllNodesWithText("Snooze 15 min").assertCountEquals(0)
+    }
+
+    @Test
+    fun `Pick a time opens the dialog, and its answer is handed back as a clock time`() {
+        val calls = answer(loaded(ReminderKind.Task))
+
+        // The test screen is small: the button is below the fold.
+        compose.onNodeWithText("Pick a time").performScrollTo().performClick()
+        compose.onNodeWithText("Type it").performClick()
+        compose.onNodeWithText("OK").performClick()
+
+        // Opens on the time a plain snooze would land on: NINE + 15 minutes, 09:15 UTC.
+        assertEquals(listOf("reschedule:9:15"), calls)
+        compose.onNodeWithText("OK").assertDoesNotExist()
+    }
+
+    @Test
+    fun `cancelling the dialog reschedules nothing`() {
+        val calls = answer(loaded(ReminderKind.Task))
+
+        // The test screen is small: the button is below the fold.
+        compose.onNodeWithText("Pick a time").performScrollTo().performClick()
+        compose.onNodeWithText("Cancel").performClick()
+
+        assertEquals(emptyList(), calls)
+        compose.onNodeWithText("OK").assertDoesNotExist()
+    }
+
+    @Test
+    fun `Pick a time is not offered for a missed moment, or in the last minute of the day`() {
+        val open = loaded(ReminderKind.Medication)
+        answer(open.copy(instance = open.instance.copy(status = InstanceStatus.Missed)))
+        compose.onAllNodesWithText("Pick a time").assertCountEquals(0)
+    }
+
+    @Test
+    fun `Pick a time is not offered once no clock time is left today`() {
+        // 23:59:30 UTC on NINE's day: even 23:59 is behind now.
+        answer(loaded(ReminderKind.Medication), now = NINE + 14 * 3_600_000L + 59 * 60_000L + 30_000L)
+
+        compose.onAllNodesWithText("Pick a time").assertCountEquals(0)
+        compose.onNodeWithText("Snooze 15 min").assertExists()
+    }
+
+    @Test
+    fun `while one answer is in flight Pick a time cannot be pressed`() {
+        answer(loaded(ReminderKind.Medication, action = Action.Completing))
+
+        compose.onNodeWithText("Pick a time").assertIsNotEnabled()
     }
 
     @Test

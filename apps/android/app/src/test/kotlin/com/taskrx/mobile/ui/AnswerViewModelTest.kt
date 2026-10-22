@@ -290,6 +290,81 @@ class AnswerViewModelTest {
         }
 
     @Test
+    fun `snoozing follows the length chosen in Settings`() =
+        withUi(NOW) {
+            reminder("med", ReminderKind.Medication, dailyTimes(listOf("09:00")), createdAt = NOW - 10 * DAY)
+            container.settings.setSnoozeMinutes(5)
+            val vm = vm()
+            vm.load("med", NINE).join()
+
+            vm.snooze().join()
+
+            assertEquals(NOW + 5 * 60_000, stored().single().snoozedUntil)
+            assertTrue(alarms().any { it.triggerAtTime == NOW + 5 * 60_000 }, "no alarm at the snoozed moment")
+            assertEquals("Reminder snoozed 5 minutes", toasts.shown.single().message)
+        }
+
+    @Test
+    fun `picking a time defers the moment to that clock time, as a snooze, for a medication`() =
+        withUi(NOW) {
+            reminder("med", ReminderKind.Medication, dailyTimes(listOf("09:00")), createdAt = NOW - 10 * DAY)
+            val vm = vm()
+            vm.load("med", NINE).join()
+            val at = Instant.parse("2026-08-06T15:30:00Z").toEpochMilli()
+
+            vm.rescheduleTo(15, 30).join()
+
+            val row = stored().single()
+            assertEquals(InstanceStatus.Snoozed, row.status)
+            assertEquals(at, row.snoozedUntil)
+            assertEquals(1, row.snoozeCount)
+            assertTrue(alarms().any { it.triggerAtTime == at }, "no alarm at the picked time")
+            assertEquals(Action.Done, assertIs<AnswerState.Loaded>(vm.state.value).action)
+            assertEquals("Reminder set for 3:30 PM" to ToastKind.Info, toasts.shown.single().let { it.message to it.kind })
+        }
+
+    @Test
+    fun `picking a time works for a task too`() =
+        withUi(NOW) {
+            reminder("chore", ReminderKind.Task, onceTimes(NINE), createdAt = NOW - 10 * DAY)
+            val vm = vm()
+            vm.load("chore", NINE).join()
+
+            vm.rescheduleTo(21, 0).join()
+
+            val row = stored().single()
+            assertEquals(InstanceStatus.Snoozed, row.status)
+            assertEquals(Instant.parse("2026-08-06T21:00:00Z").toEpochMilli(), row.snoozedUntil)
+        }
+
+    @Test
+    fun `a picked time that is not ahead writes nothing and says so`() =
+        withUi(NOW) {
+            reminder("med", ReminderKind.Medication, dailyTimes(listOf("09:00")), createdAt = NOW - 10 * DAY)
+            val vm = vm()
+            vm.load("med", NINE).join()
+
+            vm.rescheduleTo(8, 0).join()
+
+            assertEquals(InstanceStatus.Pending, stored().single().status)
+            assertEquals(Action.Idle, assertIs<AnswerState.Loaded>(vm.state.value).action)
+            assertEquals("Pick a time later today" to ToastKind.Error, toasts.shown.single().let { it.message to it.kind })
+        }
+
+    @Test
+    fun `a picked time that armed nothing is not promised`() =
+        withUi(NOW) {
+            reminder("med", schedule = dailyTimes(listOf("09:00")), createdAt = NOW - 10 * DAY)
+            val vm = AnswerViewModel(container, toasts::add, armSnooze = { _, _, _ -> false })
+            vm.load("med", NINE).join()
+
+            vm.rescheduleTo(15, 30).join()
+
+            assertEquals(InstanceStatus.Snoozed, stored().single().status)
+            assertEquals("Put off for now", toasts.shown.single().message)
+        }
+
+    @Test
     fun `a snooze that armed nothing is not promised`() =
         withUi(NOW) {
             reminder("med", schedule = dailyTimes(listOf("09:00")), createdAt = NOW - 10 * DAY)

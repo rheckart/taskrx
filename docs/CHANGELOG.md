@@ -8,6 +8,17 @@ for commit discipline (POC tags use `0.x.x`).
 
 ## [Unreleased]
 
+### 2026-10-22 — Snooze length is a setting, and a moment can be put off to a chosen time
+
+Read from Medisafe's skip, snooze and reschedule actions (`docs/medisafe-skip-snooze-findings.md`).
+
+- A new Settings screen (a button on Today) sets how long Snooze lasts: 5, 10, 15, 30 or 60 minutes. The default
+  is 15, what it always was. It drives the answer screen and the Snooze and Snooze all buttons in the shade, for
+  medications and tasks. It is kept on the phone and not synced. A snooze already set keeps its time.
+- The answer screen has a "Pick a time" button beside Snooze. It defers the moment to a clock time later today, as
+  a Snoozed answer, so it reuses the snooze path. Past midnight is not offered, and the button hides in the last
+  minute of the day. The rule is `core/snooze/Snooze.kt`.
+
 ### 2026-10-14 — Times and dates are picked, not typed
 
 The time boxes in the task and medication forms asked for `HH:MM`, but a phone's number pad has no colon,
