@@ -3,9 +3,6 @@ package com.taskrx.mobile.format
 import com.taskrx.core.domain.ReminderKind
 import kotlin.math.abs
 
-/** How far a snooze defers a moment. Named once; the button copy reads it too. */
-const val SNOOZE_MINUTES: Int = 15
-
 /**
  * Every Kind-specific word on the answer screen, decided once. Mirrors `wordsFor` in
  * archive/expo-rn:apps/mobile/app/(app)/dose/log.tsx.

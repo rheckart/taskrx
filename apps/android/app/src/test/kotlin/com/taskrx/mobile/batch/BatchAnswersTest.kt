@@ -67,6 +67,17 @@ class BatchAnswersTest {
         }
 
     @Test
+    fun `snooze all follows the length chosen in Settings, read when it is pressed`() =
+        withUi(NINE + 5 * 60_000) {
+            val ids = threeDoses()
+            container.settings.setSnoozeMinutes(30)
+
+            container.batch.answer(BatchAction.Snooze, NINE, ids)
+
+            assertEquals(setOf(now + 30 * 60_000), instances().map { it.snoozedUntil }.toSet())
+        }
+
+    @Test
     fun `a dose already answered is left alone, not answered twice`() =
         withUi(NINE + 5 * 60_000) {
             val ids = threeDoses()
@@ -191,5 +202,5 @@ class BatchAnswersTest {
         reschedule: suspend (String) -> Unit = {},
         dismiss: (Long, List<String>) -> Unit = { _, _ -> },
         log: (String, Throwable) -> Unit = { _, _ -> },
-    ) = BatchAnswers(container.reminders, container.instances, { now }, { USER }, arm, reschedule, dismiss, log)
+    ) = BatchAnswers(container.reminders, container.instances, { now }, { container.settings.snoozeMinutes.value }, { USER }, arm, reschedule, dismiss, log)
 }

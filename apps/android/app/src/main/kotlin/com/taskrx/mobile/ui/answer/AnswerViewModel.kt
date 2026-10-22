@@ -6,7 +6,8 @@ import com.taskrx.core.domain.Reminder
 import com.taskrx.core.domain.ReminderInstance
 import com.taskrx.mobile.AppContainer
 import com.taskrx.mobile.data.CreateReminderInstanceInput
-import com.taskrx.mobile.format.SNOOZE_MINUTES
+import com.taskrx.core.snooze.rescheduleInstant
+import com.taskrx.mobile.format.formatTime
 import com.taskrx.mobile.format.wordsFor
 import com.taskrx.mobile.ui.components.ToastKind
 import com.taskrx.mobile.ui.components.ToastRequest
@@ -132,17 +133,31 @@ class AnswerViewModel(
      * One instant is decided here and used for both: two readings of the clock would let
      * the stored deferral and the armed alarm name different moments.
      */
-    fun snooze(): Job =
-        answer(Action.Snoozing, failure = "Couldn't snooze reminder") { loaded ->
-            val snoozeUntil = app.clock() + SNOOZE_MINUTES * 60_000L
+    fun snooze(): Job {
+        val minutes = app.settings.snoozeMinutes.value
+        return putOff(Action.Snoozing, "Couldn't snooze reminder", { it + minutes * 60_000L }) { "Reminder snoozed $minutes minutes" }
+    }
+
+    /**
+     * "Pick a time": the same deferral as [snooze], to a clock time later today. The person
+     * chose a time, so the toast names it. A time that is not ahead of now writes nothing
+     * and says so; the picker cannot tell the person it is behind them.
+     */
+    fun rescheduleTo(hour: Int, minute: Int): Job {
+        val at = rescheduleInstant(app.clock(), hour, minute)
+        if (at == null) {
+            toast(ToastRequest("Pick a time later today", ToastKind.Error))
+            return Job().also { it.complete() }
+        }
+        return putOff(Action.Snoozing, "Couldn't reschedule reminder", { at }) { "Reminder set for ${formatTime(at)}" }
+    }
+
+    private fun putOff(action: Action, failure: String, until: (now: Long) -> Long, armedMessage: () -> String): Job =
+        answer(action, failure) { loaded ->
+            val snoozeUntil = until(app.clock())
             app.instances.markSnoozed(loaded.instance.id, snoozeUntil)
             val armed = armSnooze(loaded.reminder.id, loaded.scheduledTime, snoozeUntil)
-            toast(
-                ToastRequest(
-                    if (armed) "Reminder snoozed $SNOOZE_MINUTES minutes" else "Put off for now",
-                    ToastKind.Info,
-                ),
-            )
+            toast(ToastRequest(if (armed) armedMessage() else "Put off for now", ToastKind.Info))
             app.clock()
         }
 

@@ -136,9 +136,4 @@ class TimelineAndAnswerFormatTest {
         assertFalse(isOverdue(moment, moment + 5 * 60_000L))
         assertTrue(isOverdue(moment, moment + 5 * 60_000L + 1))
     }
-
-    @Test
-    fun `snooze is fifteen minutes`() {
-        assertEquals(15, SNOOZE_MINUTES)
-    }
 }

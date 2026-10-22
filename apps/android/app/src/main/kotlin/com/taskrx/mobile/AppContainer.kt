@@ -17,6 +17,7 @@ import com.taskrx.mobile.data.SyncQueueRepository
 import com.taskrx.mobile.data.SystemClock
 import com.taskrx.mobile.data.db.TaskRxDatabase
 import com.taskrx.mobile.notifications.NotificationsModule
+import com.taskrx.mobile.settings.AppSettings
 import com.taskrx.mobile.refill.RefillReader
 import com.taskrx.mobile.sync.AndroidConnectivity
 import com.taskrx.mobile.sync.Connectivity
@@ -74,6 +75,9 @@ class AppContainer(
 
     val notifications = NotificationsModule(context, reminders, instances, clock)
 
+    /** The person's choices from Settings, on this phone only. */
+    val settings = AppSettings(context)
+
     /** Whose data this is: the Clerk user when signed in, else the local user (see [Session]). */
     val session = Session(notifications.currentUser, auth) { from, to -> LocalAdoption(database).adopt(from, to) }
 
@@ -83,6 +87,7 @@ class AppContainer(
             reminders,
             instances,
             clock,
+            snoozeMinutes = { settings.snoozeMinutes.value },
             userId = { session.userId },
             armSnooze = notifications.scheduler::snooze,
             rescheduleAfterWrite = notifications::rescheduleAfterWrite,

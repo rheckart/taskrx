@@ -172,6 +172,20 @@ class TodayViewModelTest {
         }
 
     @Test
+    fun `snoozing a slot says the length chosen in Settings`() =
+        withUi(MIDNIGHT + 9 * HOUR + 30 * 60_000) {
+            for (id in listOf("a", "b")) reminder(id, schedule = dailyTimes(listOf("09:00")), createdAt = MIDNIGHT - 10 * DAY)
+            container.settings.setSnoozeMinutes(60)
+            val toasts = ToastLog()
+            val vm = TodayViewModel(container, zone = { UTC }, log = { _, _ -> }, toast = toasts::add)
+            vm.refresh().join()
+
+            vm.answerSlot(vm.state.value.rows, BatchAction.Snooze).join()
+
+            assertEquals("2 doses snoozed 60 minutes", toasts.shown.single().message)
+        }
+
+    @Test
     fun `skipping a slot says so`() =
         withUi(MIDNIGHT + 9 * HOUR + 30 * 60_000) {
             for (id in listOf("a", "b")) reminder(id, schedule = dailyTimes(listOf("09:00")), createdAt = MIDNIGHT - 10 * DAY)

@@ -13,7 +13,6 @@ import com.taskrx.core.timeline.TimelineWindow
 import com.taskrx.core.timeline.projectTimeline
 import com.taskrx.mobile.AppContainer
 import com.taskrx.mobile.data.InstanceFilter
-import com.taskrx.mobile.format.SNOOZE_MINUTES
 import com.taskrx.mobile.ui.components.ToastKind
 import com.taskrx.mobile.ui.components.ToastRequest
 import java.time.ZoneId
@@ -124,7 +123,7 @@ class TodayViewModel(
                             when (action) {
                                 BatchAction.Take -> "taken"
                                 BatchAction.Skip -> "skipped"
-                                BatchAction.Snooze -> "snoozed $SNOOZE_MINUTES minutes"
+                                BatchAction.Snooze -> "snoozed ${app.settings.snoozeMinutes.value} minutes"
                             }
                         ToastRequest("${result.changed} doses $words", if (action == BatchAction.Snooze) ToastKind.Info else ToastKind.Success)
                     },

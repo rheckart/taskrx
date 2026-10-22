@@ -6,7 +6,7 @@ import com.taskrx.mobile.data.Clock
 import com.taskrx.mobile.data.CreateReminderInstanceInput
 import com.taskrx.mobile.data.ReminderInstancesRepository
 import com.taskrx.mobile.data.RemindersRepository
-import com.taskrx.mobile.format.SNOOZE_MINUTES
+import com.taskrx.core.snooze.snoozeUntil
 import kotlinx.coroutines.CancellationException
 
 /** How a batch went: how many doses it changed, and how many it could not. Already-answered doses are neither. */
@@ -29,6 +29,8 @@ class BatchAnswers(
     private val reminders: RemindersRepository,
     private val instances: ReminderInstancesRepository,
     private val clock: Clock,
+    /** How long a snooze lasts, read once per batch at the moment it is pressed. */
+    private val snoozeMinutes: () -> Int,
     private val userId: () -> String,
     /** `(reminderId, scheduledTime, snoozeUntil)` to whether anything was armed. */
     private val armSnooze: suspend (String, Long, Long) -> Boolean,
@@ -40,7 +42,7 @@ class BatchAnswers(
     suspend fun answer(action: BatchAction, scheduledTime: Long, reminderIds: List<String>): BatchResult {
         val user = userId()
         val now = clock()
-        val snoozeUntil = now + SNOOZE_MINUTES * 60_000L
+        val snoozeUntil = snoozeUntil(now, snoozeMinutes())
         var changed = 0
         var failed = 0
         val snoozed = mutableListOf<String>()

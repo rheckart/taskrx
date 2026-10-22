@@ -14,6 +14,10 @@ import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -26,7 +30,8 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.taskrx.mobile.format.SNOOZE_MINUTES
+import com.taskrx.core.snooze.canPickATimeToday
+import com.taskrx.mobile.ui.forms.TimeDialog
 import com.taskrx.mobile.format.formatDayTime
 import com.taskrx.mobile.format.isOverdue
 import com.taskrx.mobile.format.urgencyLabel
@@ -45,9 +50,11 @@ import com.taskrx.mobile.ui.components.PrimaryButton
 fun AnswerContent(
     state: AnswerState,
     now: Long,
+    snoozeMinutes: Int,
     onComplete: () -> Unit,
     onSkip: () -> Unit,
     onSnooze: () -> Unit,
+    onReschedule: (hour: Int, minute: Int) -> Unit,
     onDone: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
@@ -64,7 +71,7 @@ fun AnswerContent(
                 modifier,
             )
         is AnswerState.Failed -> Problem("Could not load this reminder", state.message, onDone, modifier)
-        is AnswerState.Loaded -> Loaded(state, now, onComplete, onSkip, onSnooze, onDone, modifier)
+        is AnswerState.Loaded -> Loaded(state, now, snoozeMinutes, onComplete, onSkip, onSnooze, onReschedule, onDone, modifier)
     }
 }
 
@@ -85,12 +92,15 @@ private fun Problem(title: String, body: String, onDone: () -> Unit, modifier: M
 private fun Loaded(
     state: AnswerState.Loaded,
     now: Long,
+    snoozeMinutes: Int,
     onComplete: () -> Unit,
     onSkip: () -> Unit,
     onSnooze: () -> Unit,
+    onReschedule: (hour: Int, minute: Int) -> Unit,
     onDone: () -> Unit,
     modifier: Modifier,
 ) {
+    var picking by rememberSaveable { mutableStateOf(false) }
     val reminder = state.reminder
     val words = wordsFor(reminder.kind)
     val idle = state.action == Action.Idle
@@ -140,16 +150,39 @@ private fun Loaded(
                 // A missed moment is over: there is nothing left to put off.
                 if (state.instance.status != InstanceStatus.Missed) {
                     PrimaryButton(
-                        "Snooze $SNOOZE_MINUTES min",
+                        "Snooze $snoozeMinutes min",
                         onSnooze,
                         enabled = idle,
                         busy = state.action == Action.Snoozing,
                         color = TaskRxColors.SnoozeButton,
                     )
+                    // Later today only: a deferral past midnight belongs to the next day's timeline.
+                    if (canPickATimeToday(now)) {
+                        PrimaryButton(
+                            "Pick a time",
+                            { picking = true },
+                            enabled = idle,
+                            color = TaskRxColors.SnoozeButton,
+                        )
+                    }
                 }
             }
         }
 
         state.error?.let { Text(it, Modifier.fillMaxWidth().padding(top = 16.dp), color = TaskRxColors.Error, textAlign = TextAlign.Center) }
+    }
+
+    if (picking) {
+        // Opens on the time a plain snooze would land on, the likeliest thing someone wants to nudge.
+        val start = java.time.Instant.ofEpochMilli(now + snoozeMinutes * 60_000L).atZone(java.time.ZoneId.systemDefault())
+        TimeDialog(
+            hour = start.hour,
+            minute = start.minute,
+            onDismiss = { picking = false },
+            onConfirm = { hour, minute ->
+                picking = false
+                onReschedule(hour, minute)
+            },
+        )
     }
 }
