@@ -31,6 +31,7 @@ object ConvexFunctions {
     const val INSTANCES_SNOOZE = "reminderInstances:snooze"
     const val INSTANCES_MARK_SKIPPED = "reminderInstances:markSkipped"
     const val INSTANCES_MARK_MISSED = "reminderInstances:markMissed"
+    const val INSTANCES_REOPEN = "reminderInstances:reopen"
     const val INSTANCES_GET_BY_LOCAL_ID = "reminderInstances:getByLocalId"
     const val INSTANCES_LIST = "reminderInstances:list"
     const val RXNORM_SEARCH = "rxnorm:search"
@@ -116,10 +117,12 @@ fun instanceCreateCall(payload: JsonObject, parentConvexId: String): PushCall =
     )
 
 /**
- * An instance update is one of four mutations, chosen by the status the row now has.
+ * An instance update is one of five mutations, chosen by the status the row now has.
  * `snooze` increments the count server-side rather than taking the local one, so two
- * offline devices both land. There is no mutation for `pending`: nothing returns an
- * answered instance to pending.
+ * offline devices both land. `pending` is `reopen`: the person's own undo of an answer
+ * (ADR 0008), and the only mutation that can move a row out of `completed`. The queue is
+ * drained in order, so a take followed by an undo reaches the server as `markCompleted`
+ * then `reopen`.
  */
 fun instanceUpdateCall(payload: JsonObject, convexId: String): PushCall =
     when (val status = (payload.required("status") as? JsonPrimitive)?.content) {
@@ -148,6 +151,6 @@ fun instanceUpdateCall(payload: JsonObject, convexId: String): PushCall =
                 },
             )
         "missed" -> PushCall(ConvexFunctions.INSTANCES_MARK_MISSED, mapOf("id" to convexId))
-        "pending" -> throw PushRejected("Cannot sync pending reminder instance update")
+        "pending" -> PushCall(ConvexFunctions.INSTANCES_REOPEN, mapOf("id" to convexId))
         else -> throw PushRejected("Unknown instance status $status")
     }

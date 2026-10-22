@@ -207,6 +207,7 @@ private fun AppNavHost(container: AppContainer, navController: NavController) {
                         onRefresh = { vm.refresh(pulled = true) },
                         onOpenAnswer = { host.navigate(Routes.answer(it.reminderId, it.scheduledTime)) },
                         onChangeTime = { row, hour, minute -> vm.changeTakenTime(row, hour, minute) },
+                        onUndo = { vm.undo(it) },
                         onAdd = { host.navigate(Routes.ADD) },
                         onNewTask = { host.navigate(Routes.NEW_TASK) },
                         onNewMedication = { host.navigate(Routes.NEW_MEDICATION) },
@@ -247,6 +248,7 @@ private fun AppNavHost(container: AppContainer, navController: NavController) {
                 snoozeMinutes = container.settings.snoozeMinutes.collectAsState().value,
                 onSnooze = { vm.snooze() },
                 onReschedule = { hour, minute -> vm.rescheduleTo(hour, minute) },
+                onUndo = { vm.undo() },
                 onDone = ::backToToday,
             )
         }

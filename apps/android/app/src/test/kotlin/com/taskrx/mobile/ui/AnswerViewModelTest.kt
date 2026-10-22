@@ -365,6 +365,114 @@ class AnswerViewModelTest {
         }
 
     @Test
+    fun `taking a take back reopens the moment, gives the pills back, and the buttons are live again`() =
+        withUi(NOW) {
+            reminder("med", ReminderKind.Medication, dailyTimes(listOf("09:00")), createdAt = NOW - 10 * DAY) { it.copy(pillsRemaining = 30.0) }
+            val vm = vm()
+            vm.load("med", NINE).join()
+            vm.complete().join()
+            assertEquals(29.0, container.reminders.get("med")!!.pillsRemaining)
+
+            vm.undo().join()
+
+            val loaded = assertIs<AnswerState.Loaded>(vm.state.value)
+            assertEquals(Action.Idle, loaded.action)
+            assertNull(loaded.recordedAt)
+            assertEquals(InstanceStatus.Pending, loaded.instance.status)
+            assertEquals(InstanceStatus.Pending, stored().single().status)
+            assertEquals(30.0, container.reminders.get("med")!!.pillsRemaining)
+            assertEquals("Answer taken back" to ToastKind.Info, toasts.shown.last().let { it.message to it.kind })
+        }
+
+    @Test
+    fun `after an undo the moment can be answered again, differently`() =
+        withUi(NOW) {
+            reminder("med", ReminderKind.Medication, dailyTimes(listOf("09:00")), createdAt = NOW - 10 * DAY)
+            val vm = vm()
+            vm.load("med", NINE).join()
+            vm.skip().join()
+            vm.undo().join()
+
+            vm.complete().join()
+
+            assertEquals(InstanceStatus.Completed, stored().single().status)
+        }
+
+    @Test
+    fun `an undo of a snooze cancels the deferred alarm`() =
+        withUi(NOW) {
+            reminder("med", ReminderKind.Medication, dailyTimes(listOf("09:00")), createdAt = NOW - 10 * DAY)
+            val vm = vm()
+            vm.load("med", NINE).join()
+            vm.snooze().join()
+            assertTrue(alarms().any { it.triggerAtTime == NOW + 15 * 60_000 })
+
+            vm.undo().join()
+
+            assertTrue(alarms().none { it.triggerAtTime == NOW + 15 * 60_000 })
+        }
+
+    @Test
+    fun `undo says when the moment is past its grace period`() =
+        withUi(NINE + 3 * HOUR) {
+            reminder("med", ReminderKind.Medication, dailyTimes(listOf("09:00")), createdAt = NINE - 10 * DAY)
+            val vm = vm()
+            vm.load("med", NINE).join()
+            vm.skip().join()
+
+            vm.undo().join()
+
+            assertEquals("Answer taken back. This one is past its grace period and will count as missed.", toasts.shown.last().message)
+        }
+
+    @Test
+    fun `there is nothing to undo until an answer has been recorded`() =
+        withUi(NOW) {
+            reminder("med", ReminderKind.Medication, dailyTimes(listOf("09:00")), createdAt = NOW - 10 * DAY)
+            val vm = vm()
+            vm.load("med", NINE).join()
+
+            vm.undo().join()
+
+            assertEquals(Action.Idle, assertIs<AnswerState.Loaded>(vm.state.value).action)
+            assertTrue(toasts.shown.isEmpty())
+        }
+
+    @Test
+    fun `an undo that is refused leaves the answer standing and says why`() =
+        withUi(NOW) {
+            reminder("med", ReminderKind.Medication, dailyTimes(listOf("09:00")), createdAt = NOW - 10 * DAY)
+            val vm = vm()
+            vm.load("med", NINE).join()
+            vm.skip().join()
+            // The same moment is opened again elsewhere (issue #21).
+            container.instances.create(CreateReminderInstanceInput(USER, "med", ReminderKind.Medication, NINE))
+
+            vm.undo().join()
+
+            val loaded = assertIs<AnswerState.Loaded>(vm.state.value)
+            assertEquals(Action.Done, loaded.action)
+            assertEquals(InstanceStatus.Skipped, stored().single { it.status != InstanceStatus.Pending }.status)
+            assertEquals("This moment was opened again. Answer that one instead." to ToastKind.Error, toasts.shown.last().let { it.message to it.kind })
+        }
+
+    @Test
+    fun `an undo that fails keeps the answer, shows the error and can be tried again`() =
+        withUi(NOW) {
+            reminder("med", ReminderKind.Medication, dailyTimes(listOf("09:00")), createdAt = NOW - 10 * DAY)
+            val vm = AnswerViewModel(container, toasts::add, undoAnswer = { error("disk full") })
+            vm.load("med", NINE).join()
+            vm.skip().join()
+
+            vm.undo().join()
+
+            val loaded = assertIs<AnswerState.Loaded>(vm.state.value)
+            assertEquals(Action.Done, loaded.action)
+            assertEquals("disk full", loaded.error)
+            assertEquals("Couldn't take that back" to ToastKind.Error, toasts.shown.last().let { it.message to it.kind })
+        }
+
+    @Test
     fun `a snooze that armed nothing is not promised`() =
         withUi(NOW) {
             reminder("med", schedule = dailyTimes(listOf("09:00")), createdAt = NOW - 10 * DAY)

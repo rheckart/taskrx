@@ -31,6 +31,8 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.taskrx.core.snooze.canPickATimeToday
+import com.taskrx.core.undo.undoWillBeMissed
+import com.taskrx.mobile.format.UNDO_PAST_GRACE
 import com.taskrx.mobile.ui.forms.TimeDialog
 import com.taskrx.mobile.format.formatDayTime
 import com.taskrx.mobile.format.isOverdue
@@ -55,6 +57,7 @@ fun AnswerContent(
     onSkip: () -> Unit,
     onSnooze: () -> Unit,
     onReschedule: (hour: Int, minute: Int) -> Unit,
+    onUndo: () -> Unit,
     onDone: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
@@ -71,7 +74,7 @@ fun AnswerContent(
                 modifier,
             )
         is AnswerState.Failed -> Problem("Could not load this reminder", state.message, onDone, modifier)
-        is AnswerState.Loaded -> Loaded(state, now, snoozeMinutes, onComplete, onSkip, onSnooze, onReschedule, onDone, modifier)
+        is AnswerState.Loaded -> Loaded(state, now, snoozeMinutes, onComplete, onSkip, onSnooze, onReschedule, onUndo, onDone, modifier)
     }
 }
 
@@ -97,6 +100,7 @@ private fun Loaded(
     onSkip: () -> Unit,
     onSnooze: () -> Unit,
     onReschedule: (hour: Int, minute: Int) -> Unit,
+    onUndo: () -> Unit,
     onDone: () -> Unit,
     modifier: Modifier,
 ) {
@@ -128,7 +132,7 @@ private fun Loaded(
             )
         }
 
-        if (state.action == Action.Done && state.recordedAt != null) {
+        if ((state.action == Action.Done || state.action == Action.Undoing) && state.recordedAt != null) {
             Column(
                 Modifier
                     .fillMaxWidth()
@@ -141,7 +145,19 @@ private fun Loaded(
             ) {
                 Text("Recorded", color = TaskRxColors.SuccessText, fontSize = 18.sp, fontWeight = FontWeight.SemiBold)
                 Text(formatDayTime(state.recordedAt), Modifier.padding(top = 4.dp), color = TaskRxColors.Secondary)
-                PrimaryButton("Done", onDone, Modifier.padding(top = 16.dp))
+                // Once the answer is in, the moment can still be reopened: a mis-tap is not final.
+                if (undoWillBeMissed(state.scheduledTime, now)) {
+                    Text(UNDO_PAST_GRACE, Modifier.padding(top = 12.dp), color = TaskRxColors.Secondary, textAlign = TextAlign.Center)
+                }
+                PrimaryButton(
+                    "Undo",
+                    onUndo,
+                    Modifier.padding(top = 16.dp),
+                    enabled = state.action == Action.Done,
+                    busy = state.action == Action.Undoing,
+                    color = TaskRxColors.SkipButton,
+                )
+                PrimaryButton("Done", onDone, Modifier.padding(top = 12.dp), enabled = state.action == Action.Done)
             }
         } else {
             Column(Modifier.padding(top = 24.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {

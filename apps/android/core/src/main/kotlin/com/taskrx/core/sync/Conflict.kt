@@ -9,8 +9,8 @@ import com.taskrx.core.domain.Timestamped
  * SQLite store.
  *
  * Two rules, and only the second is interesting: last-write-wins with the LOCAL
- * row winning ties, and — for an Instance — a locally `completed` row is never
- * overwritten at all.
+ * row winning ties, and — for an Instance — a locally `completed` row is only ever
+ * replaced by the person's own undo (ADR 0008).
  *
  * A medication/dose-log pair used to sit alongside these, written first and
  * copied here deliberately rather than generalized, on the reasoning that the
@@ -43,11 +43,21 @@ fun shouldApplyRemoteReminder(
 /**
  * Decide whether an incoming remote instance should overwrite the local row.
  *
- * A locally `completed` instance is NEVER overwritten by a remote pull — the
- * safety-critical rule, and the whole reason this is a separate function from
- * [shouldApplyRemoteReminder]. A taking the person recorded on this device must
- * not be erased by a stale copy arriving from another one. Everything else is
+ * A locally `completed` instance is overwritten by a remote pull only by a newer
+ * `pending` — the safety-critical rule, and the whole reason this is a separate
+ * function from [shouldApplyRemoteReminder]. A taking the person recorded on this
+ * device must not be erased by a stale copy arriving from another one, and a stale
+ * copy is a skip, a snooze, a miss or an older completion. The one thing that may
+ * erase a taking is the person undoing it, which reaches the server as `reopen` and
+ * comes back as `pending` with a newer `updatedAt` (ADR 0008). Everything else is
  * last-write-wins with the local row winning ties.
+ *
+ * Above all of that: a row with a change this device has not pushed yet is never
+ * overwritten ([localHasUnpushedChange]). Without it, a take that had synced and was then
+ * undone offline would be put straight back to `completed` by the next pull, which still
+ * carries the take: the undo would be lost on this device, and the queued `reopen` would
+ * later leave it disagreeing with the server for good. The change is the newest thing the
+ * person did; the pull has nothing newer to say about it until it has been pushed.
  *
  * `snoozed` gets no such protection: a deferral is not an answer, so a later
  * remote answer legitimately replaces it.
@@ -59,15 +69,19 @@ fun shouldApplyRemoteReminder(
 fun shouldApplyRemoteReminderInstance(
     local: ReminderInstanceWithConflictFields?,
     remote: ReminderInstanceWithConflictFields,
+    localHasUnpushedChange: Boolean = false,
 ): Boolean {
     if (local == null) {
         return true
     }
-    if (local.status == InstanceStatus.Completed) {
+    if (localHasUnpushedChange) {
         return false
     }
-    // The server treats `completed` as terminal (`isCompleted` in reminderInstances.ts) and
-    // ignores any later write to it, so a remote completion is final whatever its timestamp.
+    if (local.status == InstanceStatus.Completed) {
+        return remote.status == InstanceStatus.Pending && remote.updatedAt > local.updatedAt
+    }
+    // The server ignores every write to a `completed` row but `reopen` (`isCompleted` in
+    // reminderInstances.ts), so a remote completion is final whatever its timestamp.
     // Last-write-wins here would leave this device on a `missed` or `snoozed` it stamped
     // later than a taking recorded elsewhere; pushing that status is a server no-op, so the
     // two would never converge and this device would score the dose as a miss.

@@ -783,6 +783,171 @@ describe("a completed instance is terminal", () => {
   });
 });
 
+describe("reminderInstances.reopen", () => {
+  async function answered(
+    as: ReturnType<typeof deployment>["owner"],
+    answer: "completed" | "skipped" | "snoozed" | "missed"
+  ) {
+    const { instance } = await seed(as, OWNER);
+    const id = await as.mutation(api.reminderInstances.create, instance);
+    if (answer === "completed") {
+      await as.mutation(api.reminderInstances.markCompleted, {
+        id,
+        completedAt: NOW + 60_000,
+      });
+    } else if (answer === "skipped") {
+      await as.mutation(api.reminderInstances.markSkipped, {
+        id,
+        notes: "felt sick",
+      });
+    } else if (answer === "snoozed") {
+      await as.mutation(api.reminderInstances.snooze, {
+        id,
+        snoozedUntil: NOW + HOUR,
+      });
+    } else {
+      await as.mutation(api.reminderInstances.markMissed, { id });
+    }
+    return { id, localId: instance.localId };
+  }
+
+  it.each(["completed", "skipped", "snoozed", "missed"] as const)(
+    "puts a %s instance back to pending",
+    async (answer) => {
+      const { owner } = deployment();
+      const { id, localId } = await answered(owner, answer);
+
+      await owner.mutation(api.reminderInstances.reopen, { id });
+
+      const row = await owner.query(api.reminderInstances.getByLocalId, {
+        localId,
+      });
+      expect(row).toMatchObject({ status: "pending" });
+      expect(row?.completedAt).toBeUndefined();
+      expect(row?.snoozedUntil).toBeUndefined();
+    }
+  );
+
+  it("is the one way out of completed", async () => {
+    const { owner } = deployment();
+    const { id, localId } = await answered(owner, "completed");
+
+    await owner.mutation(api.reminderInstances.reopen, { id });
+    await owner.mutation(api.reminderInstances.markSkipped, { id });
+
+    expect(
+      await owner.query(api.reminderInstances.getByLocalId, { localId })
+    ).toMatchObject({ status: "skipped" });
+  });
+
+  it("keeps the deferrals that happened and the note that was written", async () => {
+    const { owner } = deployment();
+    const { id, localId } = await answered(owner, "skipped");
+    await owner.mutation(api.reminderInstances.snooze, {
+      id,
+      snoozedUntil: NOW + HOUR,
+    });
+
+    await owner.mutation(api.reminderInstances.reopen, { id });
+
+    expect(
+      await owner.query(api.reminderInstances.getByLocalId, { localId })
+    ).toMatchObject({ status: "pending", snoozeCount: 1, notes: "felt sick" });
+  });
+
+  it("stamps updatedAt with the server clock, newer than the answer it undoes", async () => {
+    const { owner } = deployment();
+    const { id, localId } = await answered(owner, "completed");
+    const before = (
+      await owner.query(api.reminderInstances.getByLocalId, { localId })
+    )?.updatedAt;
+
+    await owner.mutation(api.reminderInstances.reopen, { id });
+
+    const after = (
+      await owner.query(api.reminderInstances.getByLocalId, { localId })
+    )?.updatedAt;
+    expect(after).toBeGreaterThanOrEqual(before ?? 0);
+    expect(after).toBeGreaterThan(NOW);
+  });
+
+  it("returns the id, and can be repeated", async () => {
+    const { owner } = deployment();
+    const { id } = await answered(owner, "completed");
+
+    await expect(
+      owner.mutation(api.reminderInstances.reopen, { id })
+    ).resolves.toBe(id);
+    await expect(
+      owner.mutation(api.reminderInstances.reopen, { id })
+    ).resolves.toBe(id);
+  });
+
+  it("refuses an instance belonging to someone else, and leaves a taking alone", async () => {
+    const { owner, other } = deployment();
+    const { id, localId } = await answered(owner, "completed");
+
+    await expect(
+      other.mutation(api.reminderInstances.reopen, { id })
+    ).rejects.toThrow(/Reminder instance not found/);
+
+    expect(
+      await owner.query(api.reminderInstances.getByLocalId, { localId })
+    ).toMatchObject({ status: "completed" });
+  });
+
+  it("rejects a caller with no identity", async () => {
+    const { owner, anonymous } = deployment();
+    const { id } = await answered(owner, "completed");
+
+    await expect(
+      anonymous.mutation(api.reminderInstances.reopen, { id })
+    ).rejects.toThrow();
+  });
+
+  it("is terminal again once the dose is retaken, as it always was", async () => {
+    const { owner } = deployment();
+    const { id, localId } = await answered(owner, "completed");
+    await owner.mutation(api.reminderInstances.reopen, { id });
+    await owner.mutation(api.reminderInstances.markCompleted, {
+      id,
+      completedAt: NOW + 2 * HOUR,
+    });
+
+    await owner.mutation(api.reminderInstances.markSkipped, { id });
+    await owner.mutation(api.reminderInstances.markMissed, { id });
+
+    expect(
+      await owner.query(api.reminderInstances.getByLocalId, { localId })
+    ).toMatchObject({ status: "completed", completedAt: NOW + 2 * HOUR });
+  });
+});
+
+describe("a reopened instance and a replayed create", () => {
+  it("stays pending when the create is replayed with the status the row was reopened to", async () => {
+    const { owner } = deployment();
+    const { instance } = await seed(owner, OWNER);
+    const id = await owner.mutation(api.reminderInstances.create, instance);
+    await owner.mutation(api.reminderInstances.markCompleted, {
+      id,
+      completedAt: NOW + 60_000,
+    });
+    await owner.mutation(api.reminderInstances.reopen, { id });
+
+    await owner.mutation(api.reminderInstances.create, {
+      ...instance,
+      status: "pending",
+      updatedAt: NOW + HOUR,
+    });
+
+    const row = await owner.query(api.reminderInstances.getByLocalId, {
+      localId: instance.localId,
+    });
+    expect(row).toMatchObject({ status: "pending" });
+    expect(row?.completedAt).toBeUndefined();
+  });
+});
+
 describe("reminderInstances.snooze", () => {
   it("refuses an instance belonging to someone else", async () => {
     const { owner, other } = deployment();

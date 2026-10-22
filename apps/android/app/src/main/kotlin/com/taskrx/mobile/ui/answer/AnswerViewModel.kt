@@ -8,6 +8,8 @@ import com.taskrx.mobile.AppContainer
 import com.taskrx.mobile.data.CreateReminderInstanceInput
 import com.taskrx.core.snooze.rescheduleInstant
 import com.taskrx.mobile.format.formatTime
+import com.taskrx.mobile.format.undoToast
+import com.taskrx.mobile.undo.UndoResult
 import com.taskrx.mobile.format.wordsFor
 import com.taskrx.mobile.ui.components.ToastKind
 import com.taskrx.mobile.ui.components.ToastRequest
@@ -39,7 +41,7 @@ sealed interface AnswerState {
     ) : AnswerState
 }
 
-enum class Action { Idle, Completing, Skipping, Snoozing, Done }
+enum class Action { Idle, Completing, Skipping, Snoozing, Undoing, Done }
 
 /**
  * The answer surface: what became of one Occurrence, of either Kind. Mirrors
@@ -63,6 +65,8 @@ class AnswerViewModel(
      * that was never armed.
      */
     private val armSnooze: suspend (String, Long, Long) -> Boolean = app.notifications.scheduler::snooze,
+    /** Takes an answer back, by Instance id. A parameter so a test can make it fail. */
+    private val undoAnswer: suspend (String) -> UndoResult = app.undo::undo,
 ) : ViewModel() {
     private val mutable = MutableStateFlow<AnswerState>(AnswerState.Loading)
     val state: StateFlow<AnswerState> = mutable
@@ -151,6 +155,35 @@ class AnswerViewModel(
         }
         return putOff(Action.Snoozing, "Couldn't reschedule reminder", { at }) { "Reminder set for ${formatTime(at)}" }
     }
+
+    /**
+     * Takes the answer just recorded back (ADR 0008), so the moment can be answered again.
+     * Acts on the Instance this screen opened, which is the row just answered. A refusal
+     * (the moment was opened again somewhere else, say) leaves the answer as it was and says why.
+     */
+    fun undo(): Job =
+        viewModelScope.launch {
+            val loaded = mutable.value as? AnswerState.Loaded ?: return@launch
+            if (loaded.action != Action.Done) return@launch
+            mutable.value = loaded.copy(action = Action.Undoing, error = null)
+            try {
+                val result = undoAnswer(loaded.instance.id)
+                toast(undoToast(result))
+                mutable.update {
+                    val current = it as AnswerState.Loaded
+                    if (result is UndoResult.Reopened) {
+                        current.copy(instance = result.instance, action = Action.Idle, recordedAt = null)
+                    } else {
+                        current.copy(action = Action.Done)
+                    }
+                }
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                mutable.update { (it as AnswerState.Loaded).copy(action = Action.Done, error = e.message ?: "Failed to take it back") }
+                toast(ToastRequest("Couldn't take that back", ToastKind.Error))
+            }
+        }
 
     private fun putOff(action: Action, failure: String, until: (now: Long) -> Long, armedMessage: () -> String): Job =
         answer(action, failure) { loaded ->

@@ -9,6 +9,7 @@ import com.taskrx.mobile.DAY
 import com.taskrx.mobile.HOUR
 import com.taskrx.mobile.USER
 import com.taskrx.mobile.data.CreateReminderInstanceInput
+import com.taskrx.mobile.ui.components.ToastKind
 import com.taskrx.mobile.ui.today.TodayViewModel
 import java.time.Instant
 import java.time.ZoneId
@@ -183,6 +184,80 @@ class TodayViewModelTest {
             vm.answerSlot(vm.state.value.rows, BatchAction.Snooze).join()
 
             assertEquals("2 doses snoozed 60 minutes", toasts.shown.single().message)
+        }
+
+    @Test
+    fun `an answer on a scheduled moment can be undone from the row, an extra dose cannot`() =
+        withUi(MIDNIGHT + 9 * HOUR + 30 * 60_000) {
+            reminder("med", schedule = dailyTimes(listOf("09:00")), createdAt = MIDNIGHT - 10 * DAY)
+            val scheduled = container.instances.create(CreateReminderInstanceInput(USER, "med", ReminderKind.Medication, MIDNIGHT + 9 * HOUR))
+            val extra = container.instances.create(CreateReminderInstanceInput(USER, "med", ReminderKind.Medication, MIDNIGHT + 14 * HOUR))
+            container.instances.markSkipped(scheduled.id)
+            container.instances.markCompleted(extra.id, MIDNIGHT + 14 * HOUR)
+            val vm = TodayViewModel(container, zone = { UTC }, log = { _, _ -> }, toast = ToastLog()::add)
+
+            vm.refresh().join()
+
+            assertEquals(setOf(scheduled.id), vm.state.value.undoable)
+        }
+
+    @Test
+    fun `a pending or missed row is never undoable`() =
+        withUi(MIDNIGHT + 9 * HOUR + 30 * 60_000) {
+            reminder("med", schedule = dailyTimes(listOf("09:00")), createdAt = MIDNIGHT - 10 * DAY)
+            val vm = TodayViewModel(container, zone = { UTC }, log = { _, _ -> }, toast = ToastLog()::add)
+
+            vm.refresh().join()
+
+            assertEquals(emptySet(), vm.state.value.undoable)
+        }
+
+    @Test
+    fun `undoing a row's answer reopens it, says so, and the day shows it open again`() =
+        withUi(MIDNIGHT + 9 * HOUR + 30 * 60_000) {
+            reminder("med", schedule = dailyTimes(listOf("09:00")), createdAt = MIDNIGHT - 10 * DAY)
+            val row = container.instances.create(CreateReminderInstanceInput(USER, "med", ReminderKind.Medication, MIDNIGHT + 9 * HOUR))
+            container.instances.markSkipped(row.id)
+            val toasts = ToastLog()
+            val vm = TodayViewModel(container, zone = { UTC }, log = { _, _ -> }, toast = toasts::add)
+            vm.refresh().join()
+
+            vm.undo(vm.state.value.rows.single()).join()
+
+            assertEquals(InstanceStatus.Pending, vm.state.value.rows.single().status)
+            assertEquals(emptySet(), vm.state.value.undoable)
+            assertEquals("Answer taken back", toasts.shown.single().message)
+        }
+
+    @Test
+    fun `an Occurrence with no Instance has nothing to undo`() =
+        withUi(MIDNIGHT + 9 * HOUR + 30 * 60_000) {
+            reminder("med", schedule = dailyTimes(listOf("09:00")), createdAt = MIDNIGHT - 10 * DAY)
+            val toasts = ToastLog()
+            val vm = TodayViewModel(container, zone = { UTC }, log = { _, _ -> }, toast = toasts::add)
+            vm.refresh().join()
+
+            vm.undo(vm.state.value.rows.single()).join()
+
+            assertTrue(toasts.shown.isEmpty())
+        }
+
+    @Test
+    fun `an undo that fails says so and the day is read again`() =
+        withUi(MIDNIGHT + 9 * HOUR + 30 * 60_000) {
+            reminder("med", schedule = dailyTimes(listOf("09:00")), createdAt = MIDNIGHT - 10 * DAY)
+            val row = container.instances.create(CreateReminderInstanceInput(USER, "med", ReminderKind.Medication, MIDNIGHT + 9 * HOUR))
+            container.instances.markSkipped(row.id)
+            val toasts = ToastLog()
+            val logged = mutableListOf<String>()
+            val vm = TodayViewModel(container, zone = { UTC }, log = { what, _ -> logged += what }, toast = toasts::add, undoAnswer = { error("boom") })
+            vm.refresh().join()
+
+            vm.undo(vm.state.value.rows.single()).join()
+
+            assertEquals("Couldn't take that back" to ToastKind.Error, toasts.shown.single().let { it.message to it.kind })
+            assertEquals(listOf("undoing an answer failed"), logged)
+            assertEquals(InstanceStatus.Skipped, vm.state.value.rows.single().status)
         }
 
     @Test
