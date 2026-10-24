@@ -56,11 +56,12 @@ object NotificationPoster {
                         putString(EXTRA_NAME, spec.title)
                     },
                 )
-        // A dose can be answered from the shade; a task cannot (it is not a dose, and has no batch to join).
-        if (spec.tier == Tier.Medication) {
-            for ((action, label) in DOSE_ACTIONS) {
-                builder.addAction(0, label, actionIntent(context, action, spec.scheduledTime, arrayListOf(spec.reminderId), "dose/${Uri.encode(spec.id)}"))
-            }
+        // Either Kind can be answered from the shade. A dose can also be snoozed and joins a batch;
+        // a task is finished or skipped, and never has a batch (it is not a dose).
+        val actions = if (spec.tier == Tier.Medication) DOSE_ACTIONS else TASK_ACTIONS
+        val scope = if (spec.tier == Tier.Medication) "dose" else "task"
+        for ((action, label) in actions) {
+            builder.addAction(0, label, actionIntent(context, action, spec.scheduledTime, arrayListOf(spec.reminderId), "$scope/${Uri.encode(spec.id)}"))
         }
         manager.notify(spec.id, 0, builder.build())
         if (spec.tier == Tier.Medication) showBatch(context, manager, spec.scheduledTime, doses(manager, spec.scheduledTime))
@@ -129,18 +130,22 @@ object NotificationPoster {
     }
 
     /**
-     * Removes the shade entries of [reminderIds] at [scheduledTime]. The moment's batch
-     * notification is rebuilt from the doses that remain, or removed when fewer than a
-     * batch are left: answering one dose of three leaves a batch of two, not of three.
+     * Removes the shade entries of [reminderIds] at [scheduledTime], doses and tasks alike. The
+     * moment's batch notification is rebuilt from the doses that remain, or removed when fewer
+     * than a batch are left: answering one dose of three leaves a batch of two, not of three.
      */
     fun dismiss(context: Context, scheduledTime: Long, reminderIds: List<String>) {
         val manager = context.getSystemService(NotificationManager::class.java)
-        val (answered, remaining) = doses(manager, scheduledTime).partition { it.notification.extras.getString(EXTRA_REMINDER) in reminderIds }
-        for (sbn in answered) manager.cancel(sbn.tag, sbn.id)
-        showBatch(context, manager, scheduledTime, remaining)
+        fun StatusBarNotification.answered() = notification.extras.getString(EXTRA_REMINDER) in reminderIds
+        // A task's notification carries the same extras but is not a dose, so it is found here and not in `doses`.
+        for (sbn in manager.activeNotifications) {
+            if (sbn.notification.extras.getLong(EXTRA_TIME) == scheduledTime && sbn.answered()) manager.cancel(sbn.tag, sbn.id)
+        }
+        showBatch(context, manager, scheduledTime, doses(manager, scheduledTime).filterNot { it.answered() })
     }
 
     private val DOSE_ACTIONS = listOf(BatchAction.Take to "Take", BatchAction.Snooze to "Snooze", BatchAction.Skip to "Skip")
+    private val TASK_ACTIONS = listOf(BatchAction.Take to "Done", BatchAction.Skip to "Skip")
     private val ACTION_LABELS = listOf(BatchAction.Take to "Take all", BatchAction.Snooze to "Snooze all", BatchAction.Skip to "Skip all")
 
     private const val EXTRA_DOSE = "taskrx.dose"

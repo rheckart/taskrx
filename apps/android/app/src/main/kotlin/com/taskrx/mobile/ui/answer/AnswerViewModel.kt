@@ -7,6 +7,7 @@ import com.taskrx.core.domain.ReminderInstance
 import com.taskrx.mobile.AppContainer
 import com.taskrx.mobile.data.CreateReminderInstanceInput
 import com.taskrx.core.snooze.rescheduleInstant
+import com.taskrx.core.time.takenAtOrNull
 import com.taskrx.mobile.format.formatTime
 import com.taskrx.mobile.format.undoToast
 import com.taskrx.mobile.undo.UndoResult
@@ -116,13 +117,27 @@ class AnswerViewModel(
         return AnswerState.Loaded(reminder, scheduledTime, instance)
     }
 
-    fun complete(): Job =
-        answer(Action.Completing, failure = "Couldn't record it — will retry on next sync") { loaded ->
-            val now = app.clock()
-            app.instances.markCompleted(loaded.instance.id, now)
-            toast(ToastRequest(wordsFor(loaded.reminder.kind).completed, ToastKind.Success))
-            now
+    /**
+     * Records the answer as done now, or at [hour]:[minute] on the day it was scheduled for when
+     * the person says when (the screen asks for a missed dose). A time still ahead writes nothing.
+     */
+    fun complete(hour: Int? = null, minute: Int? = null): Job {
+        val stated = hour != null && minute != null
+        if (stated) {
+            val loaded = mutable.value as? AnswerState.Loaded
+            if (loaded != null && takenAtOrNull(loaded.scheduledTime, hour!!, minute!!, app.clock()) == null) {
+                toast(ToastRequest("That time hasn't happened yet", ToastKind.Error))
+                return Job().also { it.complete() }
+            }
         }
+        return answer(Action.Completing, failure = "Couldn't record it — will retry on next sync") { loaded ->
+            val now = app.clock()
+            val at = if (stated) takenAtOrNull(loaded.scheduledTime, hour!!, minute!!, now) ?: now else now
+            app.instances.markCompleted(loaded.instance.id, at)
+            toast(ToastRequest(wordsFor(loaded.reminder.kind).completed, ToastKind.Success))
+            at
+        }
+    }
 
     fun skip(): Job =
         answer(Action.Skipping, failure = "Couldn't record skip — will retry on next sync") { loaded ->

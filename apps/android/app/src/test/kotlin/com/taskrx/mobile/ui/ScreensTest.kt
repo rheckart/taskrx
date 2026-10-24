@@ -96,7 +96,7 @@ class ScreensTest {
                 onNextDay = { log += "next" },
                 onToday = { log += "today" },
                 onToggleHideCompleted = { log += "hide" },
-                onAnswerSlot = { rows, action -> log += "slot:${action.wire}:${rows.joinToString(",") { it.name }}" },
+                onAnswerSlot = { rows, action, h, m -> log += "slot:${action.wire}:${rows.joinToString(",") { it.name }}" + (if (h != null) ":$h:$m" else "") },
                 onRefresh = { log += "refresh" },
                 onOpenAnswer = { log += "answer:${it.name}" },
                 onChangeTime = { row, h, m -> log += "time:${row.name}:$h:$m" },
@@ -135,6 +135,18 @@ class ScreensTest {
         compose.onNodeWithText("Undo take").performClick()
 
         assertEquals(listOf("undo:Taken"), calls.log)
+    }
+
+    @Test
+    fun `a done task offers Undo done, not Undo take`() {
+        val calls = Calls()
+        val done = row("Call", kind = ReminderKind.Task, status = InstanceStatus.Completed, completedAt = NINE + 5 * 60_000)
+        today(state(done, undoable = setOf("i-Call")), calls)
+
+        compose.onAllNodesWithText("Undo take").assertCountEquals(0)
+        compose.onNodeWithText("Undo done").performClick()
+
+        assertEquals(listOf("undo:Call"), calls.log)
     }
 
     @Test
@@ -197,6 +209,32 @@ class ScreensTest {
         compose.onNodeWithText("Skip all").performClick()
 
         assertEquals(listOf("slot:take:A,B", "slot:snooze:A,B", "slot:skip:A,B"), calls.log)
+    }
+
+    @Test
+    fun `Take all on missed doses asks when they were taken instead of answering`() {
+        val calls = Calls()
+        today(state(row("A", status = InstanceStatus.Missed), row("B", status = InstanceStatus.Missed)), calls)
+
+        compose.onNodeWithText("Take all").performClick()
+
+        assertEquals(emptyList(), calls.log)
+        compose.onNodeWithText("When did you take them?").assertExists()
+        compose.onNodeWithText("OK").performClick()
+        assertEquals(1, calls.log.size)
+        assertTrue(calls.log.single().startsWith("slot:take:A,B:"), calls.log.single())
+    }
+
+    @Test
+    fun `cancelling the question answers nothing`() {
+        val calls = Calls()
+        today(state(row("A", status = InstanceStatus.Missed), row("B", status = InstanceStatus.Missed)), calls)
+
+        compose.onNodeWithText("Take all").performClick()
+        compose.onNodeWithText("Cancel").performClick()
+
+        assertEquals(emptyList(), calls.log)
+        compose.onAllNodesWithText("When did you take them?").assertCountEquals(0)
     }
 
     @Test
@@ -529,6 +567,7 @@ class ScreensTest {
                     now,
                     snoozeMinutes,
                     onComplete = { calls += "complete" },
+                    onCompleteAt = { hour, minute -> calls += "completeAt:$hour:$minute" },
                     onSkip = { calls += "skip" },
                     onSnooze = { calls += "snooze" },
                     onReschedule = { hour, minute -> calls += "reschedule:$hour:$minute" },
@@ -559,6 +598,29 @@ class ScreensTest {
         compose.onNodeWithText("Mark taken").assertExists()
         compose.onNodeWithText("Skip").assertExists()
         compose.onAllNodesWithText("Snooze 15 min").assertCountEquals(0)
+    }
+
+    @Test
+    fun `taking a missed moment asks when it was taken instead of recording it`() {
+        val open = loaded(ReminderKind.Medication)
+        val calls = answer(open.copy(instance = open.instance.copy(status = InstanceStatus.Missed)))
+
+        compose.onNodeWithText("Mark taken").performClick()
+
+        assertEquals(emptyList(), calls)
+        compose.onNodeWithText("When did you take it?").assertExists()
+        compose.onNodeWithText("OK").performClick()
+        assertEquals(listOf("completeAt:9:0"), calls)
+    }
+
+    @Test
+    fun `taking a moment that is not missed records it straight away`() {
+        val calls = answer(loaded(ReminderKind.Medication))
+
+        compose.onNodeWithText("Mark taken").performClick()
+
+        assertEquals(listOf("complete"), calls)
+        compose.onAllNodesWithText("When did you take it?").assertCountEquals(0)
     }
 
     @Test

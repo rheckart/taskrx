@@ -49,6 +49,7 @@ import com.taskrx.mobile.ui.search.SearchStatus
 import com.taskrx.mobile.ui.supplies.SuppliesActions
 import com.taskrx.mobile.ui.supplies.SuppliesContent
 import com.taskrx.mobile.ui.supplies.SuppliesState
+import com.taskrx.mobile.ui.supplies.SupplySort
 import com.taskrx.mobile.ui.supplies.SupplyDraft
 import java.time.Instant
 import java.time.ZoneId
@@ -375,6 +376,7 @@ class ListScreensTest {
         fun actions() =
             SuppliesActions(
                 onRefresh = { log += "refresh" },
+                onSort = { log += "sort:${it.label}" },
                 onEdit = { log += "edit:$it" },
                 onCancelEdit = { log += "cancel" },
                 onSave = { id, draft ->
@@ -412,6 +414,54 @@ class ListScreensTest {
         compose.onNodeWithText("Add how many you have to see how long it lasts.").assertExists()
         compose.onNodeWithText("Add how many you take at a time to see how long it lasts.").assertExists()
         compose.onAllNodesWithText("0 days", substring = true).assertCountEquals(0)
+    }
+
+    @Test
+    fun `supplies are sorted by name unless told otherwise, ignoring case`() {
+        val rows = listOf(row(reminder("c", "cetirizine", pills = 1.0, perDose = 1.0)), row(reminder("a", "Atorvastatin", pills = 90.0, perDose = 1.0)), row(reminder("b", "Bupropion", pills = 30.0, perDose = 1.0)))
+
+        assertEquals(listOf("Atorvastatin", "Bupropion", "cetirizine"), SuppliesState(rows = rows).sortedRows.map { it.medication.name })
+    }
+
+    @Test
+    fun `sorting by pills left puts the fewest first and an unrecorded count last`() {
+        val rows =
+            listOf(
+                row(reminder("a", "Alpha", pills = 90.0, perDose = 1.0)),
+                row(reminder("b", "Beta", pills = null, perDose = 1.0)),
+                row(reminder("c", "Gamma", pills = 4.0, perDose = 1.0)),
+                row(reminder("d", "Delta", pills = 0.0, perDose = 1.0)),
+            )
+
+        val sorted = SuppliesState(rows = rows, sort = SupplySort.PillsLeft).sortedRows
+
+        assertEquals(listOf("Delta", "Gamma", "Alpha", "Beta"), sorted.map { it.medication.name })
+    }
+
+    @Test
+    fun `sorting by days left puts the soonest to run out first, and ties fall back to the name`() {
+        val rows =
+            listOf(
+                row(reminder("a", "Zinc", pills = 10.0, perDose = 1.0)),
+                row(reminder("b", "Untracked", pills = null, perDose = 1.0)),
+                row(reminder("c", "Aspirin", pills = 10.0, perDose = 1.0)),
+                row(reminder("d", "Iron", pills = 2.0, perDose = 1.0)),
+            )
+
+        val sorted = SuppliesState(rows = rows, sort = SupplySort.DaysLeft).sortedRows
+
+        assertEquals(listOf("Iron", "Aspirin", "Zinc", "Untracked"), sorted.map { it.medication.name })
+    }
+
+    @Test
+    fun `the sort chips choose the order`() {
+        val calls = SupplyCalls()
+        supplies(SuppliesState(rows = listOf(row(reminder("m", "Atorvastatin", pills = 12.0, perDose = 1.0))), loading = false), calls)
+
+        compose.onNodeWithText("Pills left").performClick()
+        compose.onNodeWithText("Days left").performClick()
+
+        assertEquals(listOf("sort:Pills left", "sort:Days left"), calls.log)
     }
 
     @Test

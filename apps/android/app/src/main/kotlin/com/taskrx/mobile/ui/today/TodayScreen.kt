@@ -72,8 +72,11 @@ data class TodayActions(
     val onNextDay: () -> Unit,
     val onToday: () -> Unit,
     val onToggleHideCompleted: () -> Unit,
-    /** Take, snooze or skip every dose in a slot: the rows share one moment. */
-    val onAnswerSlot: (List<TimelineRow>, BatchAction) -> Unit,
+    /**
+     * Take, snooze or skip every dose in a slot: the rows share one moment. A Take of missed
+     * doses carries the hour and minute the person said they were taken at; otherwise both are null.
+     */
+    val onAnswerSlot: (List<TimelineRow>, BatchAction, Int?, Int?) -> Unit,
     val onRefresh: () -> Unit,
     val onOpenAnswer: (TimelineRow) -> Unit,
     /** Move the time a completed dose was taken to this hour and minute, on its own day. */
@@ -153,6 +156,21 @@ private fun DayBar(state: TodayState, actions: TodayActions) {
 private fun Timeline(state: TodayState, actions: TodayActions) {
     // The dose whose time is being changed, if any.
     var editing by remember { mutableStateOf<TimelineRow?>(null) }
+    // The slot whose missed doses are waiting to be told when they were taken.
+    var takingAll by remember { mutableStateOf<List<TimelineRow>?>(null) }
+    takingAll?.let { rows ->
+        val now = Instant.now().atZone(ZoneId.systemDefault())
+        TimeDialog(
+            hour = now.hour,
+            minute = now.minute,
+            title = "When did you take them?",
+            onDismiss = { takingAll = null },
+            onConfirm = { hour, minute ->
+                takingAll = null
+                actions.onAnswerSlot(rows, BatchAction.Take, hour, minute)
+            },
+        )
+    }
     editing?.let { row ->
         val at = (row.completedAt ?: row.scheduledTime).let { Instant.ofEpochMilli(it).atZone(ZoneId.systemDefault()) }
         TimeDialog(
@@ -208,7 +226,18 @@ private fun Timeline(state: TodayState, actions: TodayActions) {
                     LazyColumn(Modifier.fillMaxSize()) {
                         items(entries, key = { it.key }) { entry ->
                             when (entry) {
-                                is Entry.Slot -> SlotBar(entry, onAnswer = { actions.onAnswerSlot(entry.rows, it) })
+                                is Entry.Slot ->
+                                    SlotBar(
+                                        entry,
+                                        onAnswer = {
+                                            // Missed means the app only guessed; ask rather than record now.
+                                            if (it == BatchAction.Take && entry.rows.any { row -> row.status == InstanceStatus.Missed }) {
+                                                takingAll = entry.rows
+                                            } else {
+                                                actions.onAnswerSlot(entry.rows, it, null, null)
+                                            }
+                                        },
+                                    )
                                 is Entry.Dose ->
                                     TimelineRowView(
                                         entry.row,
@@ -350,7 +379,7 @@ fun TimelineRowView(
         // Outside the row's merged description: it is a control of its own, not part of what the row says.
         if (onUndo != null) {
             Row(Modifier.fillMaxWidth().padding(end = 8.dp), horizontalArrangement = Arrangement.End) {
-                TextButton(onClick = onUndo) { Text("Undo ${undoLabel(row.status)}") }
+                TextButton(onClick = onUndo) { Text("Undo ${undoLabel(row.status, row.kind)}") }
             }
         }
         HorizontalDivider(color = TaskRxColors.Divider)
@@ -358,9 +387,9 @@ fun TimelineRowView(
 }
 
 /** What Undo takes back, named on the button so the row reads "Undo skip", not an unexplained "Undo". */
-private fun undoLabel(status: InstanceStatus): String =
+private fun undoLabel(status: InstanceStatus, kind: ReminderKind): String =
     when (status) {
-        InstanceStatus.Completed -> "take"
+        InstanceStatus.Completed -> if (kind == ReminderKind.Medication) "take" else "done"
         InstanceStatus.Skipped -> "skip"
         else -> "snooze"
     }

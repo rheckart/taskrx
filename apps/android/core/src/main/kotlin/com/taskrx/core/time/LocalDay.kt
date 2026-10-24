@@ -94,3 +94,11 @@ fun localCalendarDaysBetween(
  */
 fun atClockTimeOnDayOf(dayMs: Long, hour: Int, minute: Int, zone: ZoneId = ZoneId.systemDefault()): Long =
     Instant.ofEpochMilli(dayMs).atZone(zone).toLocalDate().atTime(hour, minute).atZone(zone).toInstant().toEpochMilli()
+
+/**
+ * When a dose scheduled for [scheduledTime] was taken, given the clock time the person
+ * says: [hour]:[minute] on the day it was scheduled for. `null` when that is still ahead of
+ * [now], since a dose cannot have been taken in the future.
+ */
+fun takenAtOrNull(scheduledTime: Long, hour: Int, minute: Int, now: Long, zone: ZoneId = ZoneId.systemDefault()): Long? =
+    atClockTimeOnDayOf(scheduledTime, hour, minute, zone).takeIf { it <= now }

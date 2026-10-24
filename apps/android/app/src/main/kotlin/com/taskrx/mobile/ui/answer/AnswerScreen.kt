@@ -54,6 +54,8 @@ fun AnswerContent(
     now: Long,
     snoozeMinutes: Int,
     onComplete: () -> Unit,
+    /** A missed dose asks when it was taken first; this is that answer. */
+    onCompleteAt: (hour: Int, minute: Int) -> Unit,
     onSkip: () -> Unit,
     onSnooze: () -> Unit,
     onReschedule: (hour: Int, minute: Int) -> Unit,
@@ -74,7 +76,7 @@ fun AnswerContent(
                 modifier,
             )
         is AnswerState.Failed -> Problem("Could not load this reminder", state.message, onDone, modifier)
-        is AnswerState.Loaded -> Loaded(state, now, snoozeMinutes, onComplete, onSkip, onSnooze, onReschedule, onUndo, onDone, modifier)
+        is AnswerState.Loaded -> Loaded(state, now, snoozeMinutes, onComplete, onCompleteAt, onSkip, onSnooze, onReschedule, onUndo, onDone, modifier)
     }
 }
 
@@ -97,6 +99,7 @@ private fun Loaded(
     now: Long,
     snoozeMinutes: Int,
     onComplete: () -> Unit,
+    onCompleteAt: (hour: Int, minute: Int) -> Unit,
     onSkip: () -> Unit,
     onSnooze: () -> Unit,
     onReschedule: (hour: Int, minute: Int) -> Unit,
@@ -105,6 +108,8 @@ private fun Loaded(
     modifier: Modifier,
 ) {
     var picking by rememberSaveable { mutableStateOf(false) }
+    var askingWhen by rememberSaveable { mutableStateOf(false) }
+    val missed = state.instance.status == InstanceStatus.Missed
     val reminder = state.reminder
     val words = wordsFor(reminder.kind)
     val idle = state.action == Action.Idle
@@ -161,10 +166,11 @@ private fun Loaded(
             }
         } else {
             Column(Modifier.padding(top = 24.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                PrimaryButton(words.complete, onComplete, enabled = idle, busy = state.action == Action.Completing, color = TaskRxColors.CompleteButton)
+                // The app only guesses a missed dose was taken now; the person knows when.
+                PrimaryButton(words.complete, if (missed) ({ askingWhen = true }) else onComplete, enabled = idle, busy = state.action == Action.Completing, color = TaskRxColors.CompleteButton)
                 PrimaryButton("Skip", onSkip, enabled = idle, busy = state.action == Action.Skipping, color = TaskRxColors.SkipButton)
                 // A missed moment is over: there is nothing left to put off.
-                if (state.instance.status != InstanceStatus.Missed) {
+                if (!missed) {
                     PrimaryButton(
                         "Snooze $snoozeMinutes min",
                         onSnooze,
@@ -186,6 +192,21 @@ private fun Loaded(
         }
 
         state.error?.let { Text(it, Modifier.fillMaxWidth().padding(top = 16.dp), color = TaskRxColors.Error, textAlign = TextAlign.Center) }
+    }
+
+    if (askingWhen) {
+        // Opens on now, the likeliest answer; the title says what is being asked.
+        val start = java.time.Instant.ofEpochMilli(now).atZone(java.time.ZoneId.systemDefault())
+        TimeDialog(
+            hour = start.hour,
+            minute = start.minute,
+            title = "When did you take it?",
+            onDismiss = { askingWhen = false },
+            onConfirm = { hour, minute ->
+                askingWhen = false
+                onCompleteAt(hour, minute)
+            },
+        )
     }
 
     if (picking) {
