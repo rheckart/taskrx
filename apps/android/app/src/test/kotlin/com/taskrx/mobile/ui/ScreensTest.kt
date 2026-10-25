@@ -947,7 +947,25 @@ class ScreensTest {
     fun `an interval says how often it fires`() {
         compose.setContent { TaskRxTheme { SchedulePicker(com.taskrx.core.domain.intervalTimes(1, NINE), onChange = {}, now = { NINE - 1 }) } }
 
-        compose.onNodeWithText("Interval (hours)").assertExists()
+        compose.onNodeWithText("Repeat every").assertExists()
         compose.onNodeWithText("every 1 hour from", substring = true).assertExists()
+    }
+
+    @Test
+    fun `an interval of two weeks opens as 2 weeks and says so`() {
+        compose.setContent { TaskRxTheme { SchedulePicker(com.taskrx.core.domain.intervalTimes(336, NINE), onChange = {}, now = { NINE - 1 }) } }
+
+        compose.onNodeWithText("2").assertExists()
+        compose.onNodeWithText("every 2 weeks from", substring = true).assertExists()
+    }
+
+    @Test
+    fun `choosing weeks turns the amount into hours`() {
+        var saved: com.taskrx.core.domain.ScheduleTimes? = null
+        compose.setContent { TaskRxTheme { SchedulePicker(com.taskrx.core.domain.intervalTimes(2, NINE), onChange = { saved = it }, now = { NINE - 1 }) } }
+
+        compose.onNodeWithText("Weeks").performClick()
+
+        assertEquals(com.taskrx.core.domain.intervalTimes(336, NINE), saved)
     }
 }

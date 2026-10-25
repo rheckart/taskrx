@@ -28,6 +28,18 @@ class ScheduleFormatTest {
     private fun at(h: Int, m: Int) = ZonedDateTime.of(2026, 1, 15, h, m, 0, 0, utc).toInstant().toEpochMilli()
 
     @Test
+    fun `an interval is said in the largest unit that counts it exactly`() {
+        assertEquals("1 hour", describeInterval(1))
+        assertEquals("36 hours", describeInterval(36))
+        assertEquals("1 day", describeInterval(24))
+        assertEquals("3 days", describeInterval(72))
+        assertEquals("1 week", describeInterval(168))
+        assertEquals("2 weeks", describeInterval(336))
+        assertEquals("0 hours", describeInterval(0))
+        assertEquals("Every 2 weeks starting 07:30", describeSchedule(intervalTimes(336, at(7, 30)), utc))
+    }
+
+    @Test
     fun `names every daily time`() {
         assertEquals("Daily at 08:00, 18:00", describeSchedule(dailyTimes(listOf("08:00", "18:00")), utc))
     }
@@ -54,17 +66,17 @@ class ScheduleFormatTest {
 
     @Test
     fun `names the gap and where an interval starts`() {
-        assertEquals("Every 8h starting 07:30", describeSchedule(intervalTimes(8, at(7, 30)), utc))
+        assertEquals("Every 8 hours starting 07:30", describeSchedule(intervalTimes(8, at(7, 30)), utc))
     }
 
     @Test
     fun `writes an interval start as a two-digit clock time`() {
-        assertEquals("Every 6h starting 07:05", describeSchedule(intervalTimes(6, at(7, 5)), utc))
+        assertEquals("Every 6 hours starting 07:05", describeSchedule(intervalTimes(6, at(7, 5)), utc))
     }
 
     @Test
     fun `an interval start is the local clock time in the zone asked for`() {
-        assertEquals("Every 6h starting 02:05", describeSchedule(intervalTimes(6, at(7, 5)), ZoneId.of("America/New_York")))
+        assertEquals("Every 6 hours starting 02:05", describeSchedule(intervalTimes(6, at(7, 5)), ZoneId.of("America/New_York")))
     }
 
     @Test

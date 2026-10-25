@@ -12,6 +12,9 @@ import com.taskrx.mobile.ui.forms.hourMinuteToTimeInput
 import com.taskrx.mobile.ui.forms.instantHourMinute
 import com.taskrx.mobile.ui.forms.isValidTimeInput
 import com.taskrx.mobile.ui.forms.parseCount
+import com.taskrx.mobile.ui.forms.IntervalUnit
+import com.taskrx.mobile.ui.forms.bestIntervalUnit
+import com.taskrx.mobile.ui.forms.intervalHours
 import com.taskrx.mobile.ui.forms.parseIntervalHours
 import com.taskrx.mobile.ui.forms.pickedInstant
 import com.taskrx.mobile.ui.forms.pickerDateMillis
@@ -62,6 +65,25 @@ class ScheduleEditingTest {
         assertFalse(isValidTimeInput("09:60"))
         assertFalse(isValidTimeInput("9:00"))
         assertFalse(isValidTimeInput(""))
+    }
+
+    @Test
+    fun `an interval opens in the largest unit that counts it exactly`() {
+        assertEquals(IntervalUnit.Weeks, bestIntervalUnit(336))
+        assertEquals(IntervalUnit.Days, bestIntervalUnit(72))
+        assertEquals(IntervalUnit.Days, bestIntervalUnit(24))
+        assertEquals(IntervalUnit.Hours, bestIntervalUnit(36))
+        assertEquals(IntervalUnit.Hours, bestIntervalUnit(8))
+        assertEquals(IntervalUnit.Hours, bestIntervalUnit(0))
+    }
+
+    @Test
+    fun `an amount of days or weeks is kept as hours, and never wraps`() {
+        assertEquals(5, intervalHours(5, IntervalUnit.Hours))
+        assertEquals(72, intervalHours(3, IntervalUnit.Days))
+        assertEquals(336, intervalHours(2, IntervalUnit.Weeks))
+        assertEquals(0, intervalHours(0, IntervalUnit.Weeks))
+        assertEquals(Int.MAX_VALUE, intervalHours(Int.MAX_VALUE, IntervalUnit.Weeks))
     }
 
     @Test

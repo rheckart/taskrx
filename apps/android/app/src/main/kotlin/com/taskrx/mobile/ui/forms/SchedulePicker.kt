@@ -45,6 +45,7 @@ import com.taskrx.core.domain.dailyTimes
 import com.taskrx.core.domain.intervalTimes
 import com.taskrx.core.domain.onceTimes
 import com.taskrx.core.domain.weeklyTimes
+import com.taskrx.mobile.format.describeInterval
 import com.taskrx.mobile.format.formatFullDayTime
 import com.taskrx.mobile.format.formatTime
 import com.taskrx.mobile.ui.TaskRxColors
@@ -226,24 +227,28 @@ private fun WeeklyPicker(value: WeeklyTimes, onChange: (ScheduleTimes) -> Unit) 
 
 @Composable
 private fun IntervalPicker(value: IntervalTimes, onChange: (ScheduleTimes) -> Unit, now: () -> Long) {
-    var hoursText by rememberSaveable { mutableStateOf(value.hours.toString()) }
-    FieldLabel("Interval (hours)")
+    // Opens in the unit the stored hours divide into evenly, so an edited 336 shows as 2 weeks.
+    var unit by rememberSaveable { mutableStateOf(bestIntervalUnit(value.hours)) }
+    var amountText by rememberSaveable { mutableStateOf((value.hours / unit.hours).toString()) }
+    fun changed(text: String, to: IntervalUnit) {
+        amountText = text
+        unit = to
+        onChange(intervalTimes(intervalHours(parseIntervalHours(text), to), value.startAt))
+    }
+    FieldLabel("Repeat every")
     OutlinedTextField(
-        value = hoursText,
-        onValueChange = {
-            hoursText = it
-            onChange(intervalTimes(parseIntervalHours(it), value.startAt))
-        },
+        value = amountText,
+        onValueChange = { changed(it, unit) },
         modifier = Modifier.fillMaxWidth().padding(top = 4.dp),
         singleLine = true,
-        placeholder = { Text("8") },
-        isError = parseIntervalHours(hoursText) == 0,
+        placeholder = { Text("1") },
+        isError = parseIntervalHours(amountText) == 0,
         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
     )
+    ChoiceRow(IntervalUnit.entries.map { it to it.label }, unit, { changed(amountText, it) })
     InstantField(
         label = "First reminder at",
-        hint =
-            "Reminders fire every ${value.hours} hour${if (value.hours == 1) "" else "s"} from this start.",
+        hint = "Reminders fire every ${describeInterval(value.hours)} from this start.",
         value = value.startAt,
         onChange = { onChange(intervalTimes(value.hours, it)) },
         now = now,
