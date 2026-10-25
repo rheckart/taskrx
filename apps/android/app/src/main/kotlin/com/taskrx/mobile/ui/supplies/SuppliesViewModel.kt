@@ -1,14 +1,19 @@
 package com.taskrx.mobile.ui.supplies
 
+import android.util.Log
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.taskrx.core.domain.Reminder
 import com.taskrx.core.refill.RefillProjection
+import com.taskrx.core.time.atClockTimeOnDayOf
 import com.taskrx.mobile.AppContainer
 import com.taskrx.mobile.data.Change
 import com.taskrx.mobile.data.UpdateReminderPatch
+import com.taskrx.mobile.dose.RecordResult
 import com.taskrx.mobile.refill.RefillRow
 import com.taskrx.mobile.ui.components.ToastKind
 import com.taskrx.mobile.ui.components.ToastRequest
+import java.time.ZoneId
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -69,7 +74,12 @@ data class SupplyDraft(
  * What the pass did is said out loud: a Reminder that appears or vanishes with no account
  * of why is the app acting behind somebody's back.
  */
-class SuppliesViewModel(private val app: AppContainer) : ViewModel() {
+class SuppliesViewModel(
+    private val app: AppContainer,
+    private val zone: () -> ZoneId = { ZoneId.systemDefault() },
+    private val toast: (ToastRequest) -> Unit = app.toaster::show,
+    private val log: (String, Throwable) -> Unit = { what, e -> Log.e("supplies", what, e) },
+) : ViewModel() {
     private val mutable = MutableStateFlow(SuppliesState())
     val state: StateFlow<SuppliesState> = mutable
 
@@ -126,6 +136,33 @@ class SuppliesViewModel(private val app: AppContainer) : ViewModel() {
                 // A toast and not the error screen: the projection on screen is still the truth about what is stored.
                 app.toaster.show(ToastRequest(e.message ?: "Couldn't save the supply", ToastKind.Error))
                 return@launch
+            }
+            loads.withLock { load() }
+        }
+
+    /**
+     * Records [medication] as taken at [hour]:[minute] today, the same write as the Add Dose
+     * screen. A time that has not happened yet is refused. The read that follows shows the
+     * pills it used up, and may raise a Refill Reminder the new count calls for.
+     */
+    fun recordDose(medication: Reminder, hour: Int, minute: Int): Job =
+        viewModelScope.launch {
+            val now = app.clock()
+            val at = atClockTimeOnDayOf(now, hour, minute, zone())
+            if (at > now) {
+                toast(ToastRequest("That time hasn't happened yet", ToastKind.Error))
+                return@launch
+            }
+            try {
+                when (app.doses.record(medication, at)) {
+                    RecordResult.Recorded -> toast(ToastRequest("Recorded as taken", ToastKind.Success))
+                    RecordResult.AlreadyRecorded -> toast(ToastRequest("Already recorded at that time", ToastKind.Error))
+                }
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                log("recording a dose failed", e)
+                toast(ToastRequest("Couldn't record it", ToastKind.Error))
             }
             loads.withLock { load() }
         }

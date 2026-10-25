@@ -88,7 +88,26 @@ fun timeInputToHourMinute(value: String): Pair<Int, Int>? =
 /** The stored "HH:MM" for a picked [hour] and [minute]: 24-hour and zero-padded, whatever the device shows. */
 fun hourMinuteToTimeInput(hour: Int, minute: Int): String = String.format(Locale.ROOT, "%02d:%02d", hour, minute)
 
-/** The hours field: a positive whole number, or 0 (which the schedule then refuses to save). */
+/**
+ * What an interval is counted in on the form. The schedule itself only holds hours (the same
+ * JSON the server stores), so a day is 24 of them and a week 168: the unit is how a person
+ * says it, and [hours] is how it is kept.
+ */
+enum class IntervalUnit(val label: String, val hours: Int) {
+    Hours("Hours", 1),
+    Days("Days", 24),
+    Weeks("Weeks", 7 * 24),
+}
+
+/** The largest unit that counts [hours] exactly, so 336 reads back as 2 weeks and 36 as 36 hours. */
+fun bestIntervalUnit(hours: Int): IntervalUnit =
+    IntervalUnit.entries.reversed().firstOrNull { hours > 0 && hours % it.hours == 0 } ?: IntervalUnit.Hours
+
+/** [amount] of [unit] as the hours the schedule keeps, held at the largest Int rather than wrapping round to a negative. */
+fun intervalHours(amount: Int, unit: IntervalUnit): Int =
+    minOf(amount.toLong() * unit.hours, Int.MAX_VALUE.toLong()).toInt()
+
+/** The amount field of an interval: a positive whole number, or 0 (which the schedule then refuses to save). */
 fun parseIntervalHours(text: String): Int {
     // Leading digits, as JavaScript's parseInt read them.
     val parsed = Regex("""^\s*\d+""").find(text)?.value?.trim()?.toIntOrNull() ?: return 0

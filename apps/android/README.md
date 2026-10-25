@@ -76,6 +76,17 @@ The keep rules the libraries do not ship themselves are in `app/proguard-rules.p
   crash at run time. Install the release APK and exercise sign-in, sync and a reminder before
   trusting it.
 
+## Releasing to a phone (Obtainium)
+
+    scripts/release.sh 0.2.0          # build, check the signature, publish a GitHub Release
+    scripts/release.sh 0.2.0 --build  # build and check only; writes build/taskrx-v0.2.0.apk
+
+Obtainium watches the repo's GitHub Releases and installs the APK attached to the newest one. The
+repo is private, so Obtainium needs a GitHub token with read access to it (Obtainium's settings).
+The version is `X.Y.Z` and must go up each time: `versionCode` is `X*10000 + Y*100 + Z`, and Android
+ignores an update whose code does not rise. Publishing needs a clean, pushed commit. A phone with a
+debug build installed must uninstall it once: the debug and upload keys differ.
+
 ## Sign-in and sync
 
 - Email passcode sign-in and sign-up (`ui/auth`), over the Clerk Android SDK (`auth/ClerkAuthGateway`).

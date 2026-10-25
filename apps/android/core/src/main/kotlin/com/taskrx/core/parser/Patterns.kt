@@ -10,7 +10,7 @@ import com.taskrx.core.domain.weeklyTimes
 
 /*
  * The reminder parser's token patterns, ported from
- * `TaskRx.Core/ReminderParserPatterns.cs` on the `archive/dotnet-maui` branch.
+ * `TaskRx.Core/ReminderParserPatterns.cs` in the retired .NET app.
  *
  * The C# uses `bool TryX(..., out T value, out int consumed)`. Here each
  * function returns `null` for "no match" and a [Match] (or a plain count, where

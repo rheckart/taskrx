@@ -13,8 +13,7 @@ import { v } from "convex/values";
  * replacing the POC pair is `kind`: one reminder is either a medication or a
  * task, where `medications` could only express the former. Weekly schedules,
  * priority, tags, refill tracking, caregiver fan-out, and snoozing arrived with
- * it. The Postgres target this shape came from is on the archive branch, at
- * `src/TaskRx.Data/Migrations/M0001_InitialSchema.cs`.
+ * it.
  *
  * The field validators are exported rather than inlined into `defineTable` so
  * the query/mutation modules can build argument and return validators from the

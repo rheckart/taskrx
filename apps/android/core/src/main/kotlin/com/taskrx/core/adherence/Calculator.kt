@@ -9,7 +9,7 @@ import java.time.ZoneId
 
 /*
  * The adherence calculator, ported from `AdherenceCalculator.Compute` in
- * `TaskRx.Core/AdherenceCalculator.cs` on the `archive/dotnet-maui` branch.
+ * `TaskRx.Core/AdherenceCalculator.cs` in the retired .NET app.
  *
  * ## Adherence is medication-only
  *

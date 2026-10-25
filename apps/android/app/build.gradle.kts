@@ -24,8 +24,9 @@ android {
         applicationId = "com.taskrx.mobile"
         minSdk = 33
         targetSdk = 34
-        versionCode = 1
-        versionName = "0.1.0"
+        // scripts/release.sh passes both. Android only installs an update whose versionCode is higher.
+        versionCode = (findProperty("versionCode") as String?)?.toInt() ?: 1
+        versionName = (findProperty("versionName") as String?) ?: "0.1.0"
 
         buildConfigField("String", "CONVEX_URL", "\"${setting("CONVEX_URL")}\"")
         buildConfigField("String", "CLERK_PUBLISHABLE_KEY", "\"${setting("CLERK_PUBLISHABLE_KEY")}\"")

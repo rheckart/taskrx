@@ -10,6 +10,7 @@ import com.taskrx.mobile.auth.LocalOnlyAuth
 import com.taskrx.mobile.data.Clock
 import com.taskrx.mobile.data.IdGenerator
 import com.taskrx.mobile.data.LocalAdoption
+import com.taskrx.mobile.dose.DoseRecorder
 import com.taskrx.mobile.data.RandomUuid
 import com.taskrx.mobile.data.ReminderInstancesRepository
 import com.taskrx.mobile.data.RemindersRepository
@@ -91,6 +92,15 @@ class AppContainer(
             snoozeMinutes = { settings.snoozeMinutes.value },
             userId = { session.userId },
             armSnooze = notifications.scheduler::snooze,
+            rescheduleAfterWrite = notifications::rescheduleAfterWrite,
+            dismiss = notifications::dismissPosted,
+        )
+
+    /** Records a dose at a moment the person names: the Add Dose form and the Supplies screen's button. */
+    val doses =
+        DoseRecorder(
+            instances,
+            userId = { session.userId },
             rescheduleAfterWrite = notifications::rescheduleAfterWrite,
             dismiss = notifications::dismissPosted,
         )

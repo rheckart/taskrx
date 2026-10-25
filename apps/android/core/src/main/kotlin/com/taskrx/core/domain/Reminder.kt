@@ -2,8 +2,7 @@ package com.taskrx.core.domain
 
 /*
  * The unified reminder aggregate, ported from `TaskRx.Core/Reminder.cs`,
- * `ReminderInstance.cs`, and `Caregiver.cs` on the `archive/dotnet-maui`
- * branch.
+ * `ReminderInstance.cs`, and `Caregiver.cs` in the retired .NET app.
  *
  * "Unified" is the point: a single [Reminder] carries a [ReminderKind] of
  * medication or task, where the POC's `Medication` type can only express the

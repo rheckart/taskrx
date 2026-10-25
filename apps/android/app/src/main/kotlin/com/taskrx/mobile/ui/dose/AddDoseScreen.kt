@@ -70,8 +70,9 @@ fun AddDoseContent(
     picked?.let { medication -> RecordDialog(medication, now(), onDismiss = { picked = null }, onRecord = { h, m -> picked = null; onRecord(medication, h, m) }) }
 }
 
+/** Says when a dose was taken (it opens on [now]) and records it. Also the Supplies screen's. */
 @Composable
-private fun RecordDialog(medication: Reminder, now: Long, onDismiss: () -> Unit, onRecord: (Int, Int) -> Unit) {
+internal fun RecordDialog(medication: Reminder, now: Long, onDismiss: () -> Unit, onRecord: (Int, Int) -> Unit) {
     val start = Instant.ofEpochMilli(now).atZone(ZoneId.systemDefault())
     var hour by remember { mutableStateOf(start.hour) }
     var minute by remember { mutableStateOf(start.minute) }

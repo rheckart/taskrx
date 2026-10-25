@@ -6,9 +6,8 @@ Convex backend on Postgres, with Clerk for sign-in.
 
 [![Android](https://img.shields.io/badge/platform-Android-green)](./apps/android)
 
-The stack has changed twice. A .NET MAUI + ASP.NET Core line is preserved on
-`archive/dotnet-maui`. The React Native + Expo app that followed it is preserved
-on `archive/expo-rn`, together with `packages/shared`, the TypeScript domain
+The stack has changed. The React Native + Expo app is preserved on
+`archive/expo-rn`, together with `packages/shared`, the TypeScript domain
 package the Kotlin `:core` module was ported from. The reasoning for the move to
 Kotlin and self-hosting is in
 [docs/specs/kotlin-and-self-hosted-convex.md](./docs/specs/kotlin-and-self-hosted-convex.md).
@@ -112,4 +111,4 @@ and the notification design. The domain language is in [CONTEXT.md](./CONTEXT.md
 
 ## License
 
-UNLICENSED. Proprietary.
+MIT. See [LICENSE](LICENSE).

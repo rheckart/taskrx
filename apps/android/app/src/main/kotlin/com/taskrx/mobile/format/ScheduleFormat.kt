@@ -36,8 +36,19 @@ fun describeSchedule(
             }
         is IntervalTimes -> {
             val start = Instant.ofEpochMilli(schedule.startAt).atZone(zone)
-            "Every ${schedule.hours}h starting %02d:%02d".format(Locale.ROOT, start.hour, start.minute)
+            "Every ${describeInterval(schedule.hours)} starting %02d:%02d".format(Locale.ROOT, start.hour, start.minute)
         }
         is OnceTimes -> "Once, ${formatDayTime(schedule.at, zone, locale)}"
         NoneTimes -> "In your backlog — no time set"
     }
+
+/** An interval in the largest unit that counts it exactly: "2 weeks", "3 days", "1 hour", "36 hours". */
+fun describeInterval(hours: Int): String {
+    val (count, noun) =
+        when {
+            hours > 0 && hours % 168 == 0 -> hours / 168 to "week"
+            hours > 0 && hours % 24 == 0 -> hours / 24 to "day"
+            else -> hours to "hour"
+        }
+    return "$count $noun${if (count == 1) "" else "s"}"
+}

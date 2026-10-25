@@ -1,8 +1,7 @@
 package com.taskrx.core.domain
 
 /*
- * The unified reminder domain enums, ported from `TaskRx.Core/Enums.cs` on the
- * `archive/dotnet-maui` branch.
+ * The unified reminder domain enums, ported from `TaskRx.Core/Enums.cs` in the retired .NET app.
  *
  * The C# side serialized these as PascalCase member names. The stored and
  * synced spelling here is lowercase `snake_case`, matching the local SQLite

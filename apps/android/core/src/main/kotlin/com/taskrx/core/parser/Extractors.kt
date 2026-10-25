@@ -2,8 +2,7 @@ package com.taskrx.core.parser
 
 /*
  * The inventory extractors, ported from
- * `TaskRx.Core/ReminderParserExtractors.cs` on the `archive/dotnet-maui`
- * branch.
+ * `TaskRx.Core/ReminderParserExtractors.cs` in the retired .NET app.
  *
  * These re-scan the whole token list rather than reading state accumulated by
  * the main loop, exactly as the C# does: `ReminderParser.BuildReminder` calls

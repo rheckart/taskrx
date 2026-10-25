@@ -56,6 +56,7 @@ import java.time.ZoneId
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertNotNull
+import kotlin.test.assertNull
 import kotlin.test.assertTrue
 import org.junit.Rule
 import org.junit.runner.RunWith
@@ -372,6 +373,7 @@ class ListScreensTest {
     private class SupplyCalls {
         val log = mutableListOf<String>()
         var saved: SupplyDraft? = null
+        var recorded: Triple<String, Int, Int>? = null
 
         fun actions() =
             SuppliesActions(
@@ -384,11 +386,12 @@ class ListScreensTest {
                     saved = draft
                 },
                 onOpenBacklog = { log += "backlog" },
+                onRecordDose = { medication, hour, minute -> recorded = Triple(medication.id, hour, minute) },
             )
     }
 
     private fun supplies(state: SuppliesState, calls: SupplyCalls = SupplyCalls()) {
-        compose.setContent { TaskRxTheme { SuppliesContent(state, calls.actions()) } }
+        compose.setContent { TaskRxTheme { SuppliesContent(state, calls.actions(), now = { NOW }) } }
     }
 
     private fun row(med: Reminder) = RefillRow(med, projectRefill(med, NOW, ZoneId.of("UTC")))
@@ -545,6 +548,40 @@ class ListScreensTest {
 
         assertEquals(listOf("edit:m"), calls.log)
         compose.onAllNodesWithText("Blank means", substring = true).assertCountEquals(0)
+    }
+
+    @Test
+    fun `a closed row offers to record a dose, which asks when and then reports the time`() {
+        val calls = SupplyCalls()
+        val med = reminder("m", "Atorvastatin", pills = 3.0, perDose = 1.0)
+        supplies(SuppliesState(rows = listOf(row(med)), loading = false), calls)
+
+        compose.onNodeWithText("Record a dose").performClick()
+        compose.onNodeWithText("Record Atorvastatin").assertExists()
+        compose.onNodeWithText("Record").performClick()
+
+        assertEquals(Triple("m", 8, 0), calls.recorded)
+    }
+
+    @Test
+    fun `cancelling the dose dialog records nothing`() {
+        val calls = SupplyCalls()
+        val med = reminder("m", "Atorvastatin", pills = 3.0, perDose = 1.0)
+        supplies(SuppliesState(rows = listOf(row(med)), loading = false), calls)
+
+        compose.onNodeWithText("Record a dose").performClick()
+        compose.onNodeWithText("Cancel").performClick()
+
+        assertNull(calls.recorded)
+        compose.onAllNodesWithText("Record Atorvastatin").assertCountEquals(0)
+    }
+
+    @Test
+    fun `an open editor has no record button, so there is one thing to do at a time`() {
+        val med = reminder("m", "Atorvastatin", pills = 3.0, perDose = 1.0)
+        supplies(SuppliesState(rows = listOf(row(med)), editingId = "m", loading = false))
+
+        compose.onAllNodesWithText("Record a dose").assertCountEquals(0)
     }
 
     // ---- drug search ----

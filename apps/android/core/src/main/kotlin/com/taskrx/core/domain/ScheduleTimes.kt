@@ -17,7 +17,7 @@ import kotlinx.serialization.json.putJsonArray
 
 /*
  * `ScheduleTimes` — the polymorphic schedule shape, ported from
- * `TaskRx.Core/ScheduleTimes.cs` on the `archive/dotnet-maui` branch.
+ * `TaskRx.Core/ScheduleTimes.cs` in the retired .NET app.
  *
  * The C# version models this as an abstract record with three sealed
  * subrecords, and reconstructs the runtime type on deserialization through
@@ -176,7 +176,7 @@ private fun parseTimes(value: JsonElement?): List<String>? {
 /**
  * Reads a `DayOfWeek`.
  *
- * Both encodings the archived C# produced are accepted, because it wrote two:
+ * Both encodings the retired C# produced are accepted, because it wrote two:
  * `TaskRx.Data/DapperInitializer.cs` persists with options that carry only the
  * `ScheduleTimes` converter, so `DayOfWeek` lands as an ordinal, while
  * `apps/TaskRx.Maui/ReminderApiClient.cs:14` adds a global

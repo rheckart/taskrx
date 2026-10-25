@@ -1,11 +1,13 @@
 package com.taskrx.mobile.ui
 
+import com.taskrx.core.domain.InstanceStatus
 import com.taskrx.core.domain.ReminderKind
 import com.taskrx.core.domain.dailyTimes
 import com.taskrx.core.domain.noneTimes
 import com.taskrx.core.refill.RefillProjection
 import com.taskrx.mobile.DAY
 import com.taskrx.mobile.USER
+import com.taskrx.mobile.data.InstanceFilter
 import com.taskrx.mobile.ui.adherence.AdherenceViewModel
 import com.taskrx.mobile.ui.components.ToastKind
 import com.taskrx.mobile.ui.supplies.SuppliesViewModel
@@ -179,6 +181,87 @@ class SuppliesViewModelTest {
             assertEquals(ToastKind.Error, container.toaster.current.value?.kind)
             assertNull(vm.state.value.error)
             assertEquals(1, vm.state.value.rows.size)
+        }
+
+    private fun com.taskrx.mobile.Fixture.recordingVm(logged: MutableList<String> = mutableListOf()) =
+        SuppliesViewModel(container, zone = { java.time.ZoneOffset.UTC }, log = { what, _ -> logged += what })
+
+    @Test
+    fun `recording a dose writes it at that time, uses up the pills and shows the new count`() =
+        withUi(sevenAm) {
+            val med = medication(30.0)
+            val vm = recordingVm()
+            vm.refresh().join()
+
+            vm.recordDose(med, 7, 30).join()
+
+            val row = container.instances.list(InstanceFilter(USER)).single()
+            assertEquals(InstanceStatus.Completed, row.status)
+            assertEquals(sevenAm - 30 * 60_000, row.scheduledTime)
+            assertEquals(row.scheduledTime, row.completedAt)
+            assertEquals(29.0, vm.state.value.rows.single().medication.pillsRemaining)
+            assertEquals("Recorded as taken", container.toaster.current.value?.message)
+        }
+
+    @Test
+    fun `a time that has not happened yet is refused and nothing is written`() =
+        withUi(sevenAm) {
+            val med = medication(30.0)
+            val vm = recordingVm()
+
+            vm.recordDose(med, 9, 0).join()
+
+            assertEquals(emptyList(), container.instances.list(InstanceFilter(USER)))
+            assertEquals("That time hasn't happened yet", container.toaster.current.value?.message)
+            assertEquals(30.0, container.reminders.get("med")!!.pillsRemaining)
+        }
+
+    @Test
+    fun `the same minute twice is refused, so the pills are not used up twice`() =
+        withUi(sevenAm) {
+            val med = medication(30.0)
+            val vm = recordingVm()
+            vm.recordDose(med, 7, 30).join()
+
+            vm.recordDose(med, 7, 30).join()
+
+            assertEquals(1, container.instances.list(InstanceFilter(USER)).size)
+            assertEquals("Already recorded at that time", container.toaster.current.value?.message)
+            assertEquals(29.0, container.reminders.get("med")!!.pillsRemaining)
+        }
+
+    @Test
+    fun `recording the dose that is in the shade clears it`() =
+        withUi(sevenAm) {
+            val med = medication(30.0)
+            val context = androidx.test.core.app.ApplicationProvider.getApplicationContext<android.app.Application>()
+            val manager = context.getSystemService(android.app.NotificationManager::class.java)
+            val at = sevenAm - 2 * 60 * 60_000
+            com.taskrx.mobile.notifications.NotificationPoster.post(
+                context,
+                com.taskrx.core.notifications.medicationSpec(com.taskrx.core.schedule.ScheduledOccurrence("occ", med.id, med.name, med.dosage, at)),
+            )
+            assertEquals(1, manager.activeNotifications.size)
+
+            recordingVm().recordDose(med, 6, 0).join()
+
+            assertEquals(0, manager.activeNotifications.size)
+        }
+
+    @Test
+    fun `a dose that cannot be written is a toast and a log line, and the screen stays up`() =
+        withUi(sevenAm) {
+            val med = medication(30.0)
+            val logged = mutableListOf<String>()
+            val vm = recordingVm(logged)
+            vm.refresh().join()
+            database.openHelper.writableDatabase.execSQL("ALTER TABLE reminder_instances RENAME TO instances_gone")
+
+            vm.recordDose(med, 7, 30).join()
+
+            assertEquals(listOf("recording a dose failed"), logged)
+            assertEquals(ToastKind.Error, container.toaster.current.value?.kind)
+            assertNull(vm.state.value.error)
         }
 
     @Test

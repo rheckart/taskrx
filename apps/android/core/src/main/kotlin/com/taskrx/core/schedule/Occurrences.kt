@@ -15,7 +15,7 @@ import java.time.ZonedDateTime
 
 /**
  * The reminder schedule engine, ported from `ScheduleEngine.NextOccurrences`
- * in `TaskRx.Core/ScheduleEngine.cs` on the `archive/dotnet-maui` branch.
+ * in `TaskRx.Core/ScheduleEngine.cs` in the retired .NET app.
  *
  * It works on the unified `Reminder`, so `task` reminders schedule too, and it
  * handles `weekly`.

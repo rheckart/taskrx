@@ -376,7 +376,9 @@ private fun AppNavHost(container: AppContainer, navController: NavController) {
                     onCancelEdit = vm::cancelEdit,
                     onSave = { id, draft -> vm.saveSupply(id, draft) },
                     onOpenBacklog = { host.navigate(Routes.BACKLOG) },
+                    onRecordDose = { medication, hour, minute -> vm.recordDose(medication, hour, minute) },
                 ),
+                now = container.clock::invoke,
             )
         }
 
