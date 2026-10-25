@@ -4,7 +4,7 @@
   "private": true,
   "type": "module",
   "description": "Combined task and medication reminder app: Convex functions (packages/convex), a self-hosted Convex deployment (infra/convex), and the Kotlin Android app (apps/android, built with Gradle)",
-  "license": "UNLICENSED",
+  "license": "MIT",
   "workspaces": [
     "packages/*"
   ],

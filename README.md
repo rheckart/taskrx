@@ -112,4 +112,4 @@ and the notification design. The domain language is in [CONTEXT.md](./CONTEXT.md
 
 ## License
 
-UNLICENSED. Proprietary.
+MIT. See [LICENSE](LICENSE).
