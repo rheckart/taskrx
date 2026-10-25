@@ -3,11 +3,14 @@ package com.taskrx.mobile.ui.supplies
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.FilterChip
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -17,6 +20,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
@@ -39,6 +43,7 @@ import com.taskrx.mobile.ui.components.NumberField
 
 data class SuppliesActions(
     val onRefresh: () -> Unit,
+    val onSort: (SupplySort) -> Unit,
     val onEdit: (String) -> Unit,
     val onCancelEdit: () -> Unit,
     val onSave: (String, SupplyDraft) -> Unit,
@@ -76,11 +81,28 @@ fun SuppliesContent(state: SuppliesState, actions: SuppliesActions, modifier: Mo
                 )
             }
         } else {
-            items(state.rows, key = { it.medication.id }) { row ->
+            item(key = "sort") { SortChips(state.sort, actions.onSort) }
+            items(state.sortedRows, key = { it.medication.id }) { row ->
                 MedicationRow(row, editing = state.editingId == row.medication.id, actions)
             }
         }
     }
+}
+
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+private fun SortChips(selected: SupplySort, onSort: (SupplySort) -> Unit) {
+    FlowRow(
+        Modifier.fillMaxWidth().padding(horizontal = 16.dp),
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+        itemVerticalAlignment = Alignment.CenterVertically,
+    ) {
+        Text("Sort by", color = TaskRxColors.Secondary, style = MaterialTheme.typography.labelLarge)
+        for (sort in SupplySort.entries) {
+            FilterChip(selected = sort == selected, onClick = { onSort(sort) }, label = { Text(sort.label) })
+        }
+    }
+    HorizontalDivider(color = TaskRxColors.Divider, modifier = Modifier.padding(top = 4.dp))
 }
 
 /** Both directions, not just the raise: a task disappearing on its own is the one a person would assume they had done. */

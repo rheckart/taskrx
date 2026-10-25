@@ -97,6 +97,7 @@ dependencies {
     implementation(libs.androidx.work.runtime)
     implementation(libs.androidx.core.ktx)
     implementation(libs.convex.mobile)
+    implementation(libs.jna) { artifact { type = "aar" } }
     implementation(libs.clerk.android.api)
     ksp(libs.room.compiler)
 

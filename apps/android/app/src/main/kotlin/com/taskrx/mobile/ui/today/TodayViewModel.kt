@@ -5,7 +5,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.taskrx.core.batch.BatchAction
 import com.taskrx.core.domain.InstanceStatus
-import com.taskrx.core.time.atClockTimeOnDayOf
+import com.taskrx.core.time.takenAtOrNull
 import com.taskrx.core.undo.UNDOABLE_STATUSES
 import com.taskrx.core.undo.isScheduledOccurrence
 import com.taskrx.mobile.format.undoToast
@@ -97,8 +97,8 @@ class TodayViewModel(
         viewModelScope.launch {
             val instanceId = row.instanceId ?: return@launch
             if (row.status != InstanceStatus.Completed) return@launch
-            val taken = atClockTimeOnDayOf(row.scheduledTime, hour, minute, zone())
-            if (taken > app.clock()) {
+            val taken = takenAtOrNull(row.scheduledTime, hour, minute, app.clock(), zone())
+            if (taken == null) {
                 toast(ToastRequest("That time hasn't happened yet", ToastKind.Error))
                 return@launch
             }
@@ -132,12 +132,22 @@ class TodayViewModel(
     /**
      * Takes, snoozes or skips every dose in [rows], which share one moment. Which rows form
      * a batch is `batchSlots` in :core; this only reports how it went and re-reads the day.
+     * [hour] and [minute], for a Take, are when the doses were taken; without them it is now.
      */
-    fun answerSlot(rows: List<TimelineRow>, action: BatchAction): Job =
+    fun answerSlot(rows: List<TimelineRow>, action: BatchAction, hour: Int? = null, minute: Int? = null): Job =
         viewModelScope.launch {
             val first = rows.firstOrNull() ?: return@launch
+            // A time only means something for a Take; the screen asks for one when a dose was missed.
+            var takenAt: Long? = null
+            if (action == BatchAction.Take && hour != null && minute != null) {
+                takenAt = takenAtOrNull(first.scheduledTime, hour, minute, app.clock(), zone())
+                if (takenAt == null) {
+                    toast(ToastRequest("That time hasn't happened yet", ToastKind.Error))
+                    return@launch
+                }
+            }
             try {
-                val result = app.batch.answer(action, first.scheduledTime, rows.map { it.reminderId })
+                val result = app.batch.answer(action, first.scheduledTime, rows.map { it.reminderId }, takenAt)
                 toast(
                     if (result.failed > 0) {
                         ToastRequest("Couldn't answer ${result.failed} of ${rows.size}", ToastKind.Error)

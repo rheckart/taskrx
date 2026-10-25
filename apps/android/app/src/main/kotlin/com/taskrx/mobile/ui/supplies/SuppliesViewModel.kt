@@ -2,6 +2,7 @@ package com.taskrx.mobile.ui.supplies
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.taskrx.core.refill.RefillProjection
 import com.taskrx.mobile.AppContainer
 import com.taskrx.mobile.data.Change
 import com.taskrx.mobile.data.UpdateReminderPatch
@@ -17,8 +18,16 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 
+/** What the list is ordered by. Each puts the medication to look at first on top; "not recorded" is always last. */
+enum class SupplySort(val label: String) {
+    Name("Name"),
+    PillsLeft("Pills left"),
+    DaysLeft("Days left"),
+}
+
 data class SuppliesState(
     val rows: List<RefillRow> = emptyList(),
+    val sort: SupplySort = SupplySort.Name,
     /** Names of the Refill Reminders the last read added to the Backlog. */
     val raised: List<String> = emptyList(),
     /** Names of the Refill Reminders the last read withdrew. */
@@ -28,7 +37,20 @@ data class SuppliesState(
     val loading: Boolean = true,
     val refreshing: Boolean = false,
     val error: String? = null,
-)
+) {
+    /** [rows] in the order of [sort]. Ties fall back to the name, so the order never shuffles between reads. */
+    val sortedRows: List<RefillRow>
+        get() {
+            val byName = compareBy<RefillRow, String>(String.CASE_INSENSITIVE_ORDER) { it.medication.name }
+            val key: (RefillRow) -> Double? =
+                when (sort) {
+                    SupplySort.Name -> return rows.sortedWith(byName)
+                    SupplySort.PillsLeft -> { row -> row.medication.pillsRemaining }
+                    SupplySort.DaysLeft -> { row -> (row.projection as? RefillProjection.RefillOutlook)?.daysRemaining?.toDouble() }
+                }
+            return rows.sortedWith(compareBy<RefillRow> { key(it) == null }.thenBy { key(it) }.then(byName))
+        }
+}
 
 /** The three numbers a supply is projected from. Null is "not recorded", which is not zero. */
 data class SupplyDraft(
@@ -75,6 +97,8 @@ class SuppliesViewModel(private val app: AppContainer) : ViewModel() {
             mutable.update { it.copy(loading = false, refreshing = false) }
         }
     }
+
+    fun sortBy(sort: SupplySort) = mutable.update { it.copy(sort = sort) }
 
     fun edit(medicationId: String) = mutable.update { it.copy(editingId = medicationId) }
 

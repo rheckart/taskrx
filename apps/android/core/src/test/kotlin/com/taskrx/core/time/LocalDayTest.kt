@@ -5,6 +5,7 @@ import java.time.ZoneId
 import java.time.ZonedDateTime
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertNull
 
 private const val MS_PER_HOUR = 3_600_000L
 
@@ -215,5 +216,27 @@ class AtClockTimeOnDayOfTest {
         val taken = local(2026, 8, 14, 2, 30)
 
         assertEquals(local(2026, 8, 13, 20, 0, newYork), atClockTimeOnDayOf(taken, 20, 0, newYork))
+    }
+}
+
+class TakenAtOrNullTest {
+    private val scheduled = local(2026, 8, 13, 9, 0)
+
+    @Test
+    fun `is the stated clock time on the scheduled day`() {
+        assertEquals(local(2026, 8, 13, 9, 40), takenAtOrNull(scheduled, 9, 40, now = local(2026, 8, 13, 12, 0)))
+    }
+
+    @Test
+    fun `keeps the scheduled day when it is asked on a later one`() {
+        assertEquals(local(2026, 8, 13, 9, 40), takenAtOrNull(scheduled, 9, 40, now = local(2026, 8, 14, 8, 0)))
+    }
+
+    @Test
+    fun `allows exactly now and refuses a minute ahead`() {
+        val now = local(2026, 8, 13, 12, 0)
+
+        assertEquals(now, takenAtOrNull(scheduled, 12, 0, now))
+        assertNull(takenAtOrNull(scheduled, 12, 1, now))
     }
 }

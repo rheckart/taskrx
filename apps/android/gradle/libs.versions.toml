@@ -18,6 +18,8 @@ navigation = "2.9.8"
 lifecycle = "2.9.4"
 convexMobile = "0.8.0"
 clerk = "1.1.11"
+# Pinned above what convex-mobile pulls in (5.14.0): that build fails the 16 KB page-size check.
+jna = "5.19.1"
 
 [libraries]
 kotlin-test = { module = "org.jetbrains.kotlin:kotlin-test", version.ref = "kotlin" }
@@ -49,6 +51,7 @@ androidx-work-runtime = { module = "androidx.work:work-runtime", version.ref = "
 androidx-work-testing = { module = "androidx.work:work-testing", version.ref = "work" }
 
 convex-mobile = { module = "dev.convex:android-convexmobile", version.ref = "convexMobile" }
+jna = { module = "net.java.dev.jna:jna", version.ref = "jna" }
 clerk-android-api = { module = "com.clerk:clerk-android-api", version.ref = "clerk" }
 
 [plugins]

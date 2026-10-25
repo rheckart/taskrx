@@ -39,7 +39,8 @@ class BatchAnswers(
     private val dismiss: (scheduledTime: Long, reminderIds: List<String>) -> Unit,
     private val log: (String, Throwable) -> Unit = { what, e -> Log.e("batch", what, e) },
 ) {
-    suspend fun answer(action: BatchAction, scheduledTime: Long, reminderIds: List<String>): BatchResult {
+    /** [takenAt] is when a Take happened, when the person said so; absent, it is now. Skips and snoozes ignore it. */
+    suspend fun answer(action: BatchAction, scheduledTime: Long, reminderIds: List<String>, takenAt: Long? = null): BatchResult {
         val user = userId()
         val now = clock()
         val snoozeUntil = snoozeUntil(now, snoozeMinutes())
@@ -61,7 +62,7 @@ class BatchAnswers(
                     instance = instances.create(CreateReminderInstanceInput(user, reminderId, reminder.kind, scheduledTime))
                 }
                 when (action) {
-                    BatchAction.Take -> instances.markCompleted(instance.id, now)
+                    BatchAction.Take -> instances.markCompleted(instance.id, takenAt ?: now)
                     BatchAction.Skip -> instances.markSkipped(instance.id)
                     BatchAction.Snooze -> {
                         instances.markSnoozed(instance.id, snoozeUntil)

@@ -188,10 +188,44 @@ class BatchNotificationTest {
     }
 
     @Test
-    fun `a task notification has no buttons`() {
+    fun `a task notification can be finished or skipped, but not snoozed`() {
         NotificationPoster.post(app, spec("a", tier = Tier.Task))
 
-        assertNull(active().single().notification.actions)
+        assertEquals(listOf("Done", "Skip"), active().single().notification.actions.map { it.title })
+    }
+
+    @Test
+    fun `Done on a task completes it and clears its notification`() {
+        container.notifications.currentUser.set(USER)
+        runBlocking {
+            container.reminders.create(CreateReminderInput(id = "t", userId = USER, kind = ReminderKind.Task, name = "Name t", schedule = onceTimes(NINE)))
+        }
+        NotificationPoster.post(app, spec("t", tier = Tier.Task))
+        val sbn = active().single()
+
+        val intent = shadowOf(sbn.notification.actions.single { it.title == "Done" }.actionIntent).savedIntent
+        BatchActionReceiver().handle(app, intent)?.let { job -> runBlocking { job.join() } }
+
+        assertEquals(mapOf("t" to InstanceStatus.Completed), statuses())
+        assertTrue(active().isEmpty())
+    }
+
+    @Test
+    fun `Skip on a task skips it and leaves a dose due at the same moment alone`() {
+        create("a")
+        runBlocking {
+            container.reminders.create(CreateReminderInput(id = "t", userId = USER, kind = ReminderKind.Task, name = "Name t", schedule = onceTimes(NINE)))
+        }
+        NotificationPoster.post(app, spec("a"))
+        NotificationPoster.post(app, spec("t", tier = Tier.Task))
+        val task = active().single { it.tag == "task-t-$NINE" }
+
+        val intent = shadowOf(task.notification.actions.single { it.title == "Skip" }.actionIntent).savedIntent
+        BatchActionReceiver().handle(app, intent)?.let { job -> runBlocking { job.join() } }
+
+        assertEquals(mapOf("t" to InstanceStatus.Skipped), statuses())
+        assertTrue(active().none { it.tag == "task-t-$NINE" })
+        assertTrue(active().any { it.tag == "a-$NINE" })
     }
 
     @Test

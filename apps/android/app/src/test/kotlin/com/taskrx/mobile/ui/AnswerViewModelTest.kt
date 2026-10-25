@@ -107,6 +107,37 @@ class AnswerViewModelTest {
         }
 
     @Test
+    fun `a missed dose taken at a stated time is recorded at that time, on the day it was scheduled`() =
+        withUi(NOW) {
+            reminder("med", ReminderKind.Medication, dailyTimes(listOf("09:00")), createdAt = NOW - 10 * DAY)
+            container.instances.create(
+                CreateReminderInstanceInput(USER, "med", ReminderKind.Medication, NINE, status = InstanceStatus.Missed),
+            )
+            val vm = vm()
+            vm.load("med", NINE).join()
+
+            vm.complete(9, 3).join()
+
+            val expected = NINE + 3 * 60_000
+            assertEquals(expected, stored().single().completedAt)
+            assertEquals(expected, assertIs<AnswerState.Loaded>(vm.state.value).recordedAt)
+        }
+
+    @Test
+    fun `a stated time still ahead records nothing`() =
+        withUi(NOW) {
+            reminder("med", ReminderKind.Medication, dailyTimes(listOf("09:00")), createdAt = NOW - 10 * DAY)
+            val vm = vm()
+            vm.load("med", NINE).join()
+
+            vm.complete(23, 59).join()
+
+            assertEquals(InstanceStatus.Pending, stored().single().status)
+            assertEquals(Action.Idle, assertIs<AnswerState.Loaded>(vm.state.value).action)
+            assertEquals(listOf("That time hasn't happened yet" to ToastKind.Error), toasts.shown.map { it.message to it.kind })
+        }
+
+    @Test
     fun `completing a medication records it, says taken, and shows the confirmation`() =
         withUi(NOW) {
             reminder("med", ReminderKind.Medication, dailyTimes(listOf("09:00")), createdAt = NOW - 10 * DAY)

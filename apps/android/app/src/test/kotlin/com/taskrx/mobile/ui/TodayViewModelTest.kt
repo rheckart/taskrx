@@ -274,6 +274,33 @@ class TodayViewModelTest {
         }
 
     @Test
+    fun `taking a slot at a stated time records that time, not now`() =
+        withUi(MIDNIGHT + 12 * HOUR) {
+            for (id in listOf("a", "b")) reminder(id, schedule = dailyTimes(listOf("09:00")), createdAt = MIDNIGHT - 10 * DAY)
+            val vm = vm()
+            vm.refresh().join()
+
+            vm.answerSlot(vm.state.value.rows, BatchAction.Take, 9, 40).join()
+
+            val taken = MIDNIGHT + 9 * HOUR + 40 * 60_000
+            assertEquals(listOf(taken, taken), vm.state.value.rows.map { it.completedAt })
+        }
+
+    @Test
+    fun `a stated time still ahead answers nothing and says so`() =
+        withUi(MIDNIGHT + 9 * HOUR + 30 * 60_000) {
+            for (id in listOf("a", "b")) reminder(id, schedule = dailyTimes(listOf("09:00")), createdAt = MIDNIGHT - 10 * DAY)
+            val toasts = ToastLog()
+            val vm = TodayViewModel(container, zone = { UTC }, log = { _, _ -> }, toast = toasts::add)
+            vm.refresh().join()
+
+            vm.answerSlot(vm.state.value.rows, BatchAction.Take, 23, 0).join()
+
+            assertEquals(listOf(InstanceStatus.Pending, InstanceStatus.Pending), vm.state.value.rows.map { it.status })
+            assertEquals("That time hasn't happened yet", toasts.shown.single().message)
+        }
+
+    @Test
     fun `a slot that cannot be written says so`() =
         withUi(MIDNIGHT + 9 * HOUR + 30 * 60_000) {
             for (id in listOf("a", "b")) reminder(id, schedule = dailyTimes(listOf("09:00")), createdAt = MIDNIGHT - 10 * DAY)

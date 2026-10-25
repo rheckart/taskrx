@@ -168,12 +168,18 @@ private fun clockLabel(hour: Int, minute: Int): String = formatTime((hour * 60L 
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-internal fun TimeDialog(hour: Int, minute: Int, onDismiss: () -> Unit, onConfirm: (hour: Int, minute: Int) -> Unit) {
+internal fun TimeDialog(
+    hour: Int,
+    minute: Int,
+    onDismiss: () -> Unit,
+    onConfirm: (hour: Int, minute: Int) -> Unit,
+    title: String = "Pick a time",
+) {
     val state = rememberTimePickerState(hour, minute, android.text.format.DateFormat.is24HourFormat(LocalContext.current))
     var dial by rememberSaveable { mutableStateOf(true) }
     TimePickerDialog(
         onDismissRequest = onDismiss,
-        title = { Text("Pick a time") },
+        title = { Text(title) },
         confirmButton = { TextButton(onClick = { onConfirm(state.hour, state.minute) }) { Text("OK") } },
         dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } },
         modeToggleButton = { TextButton(onClick = { dial = !dial }) { Text(if (dial) "Type it" else "Use dial") } },
