@@ -12,6 +12,9 @@ import com.taskrx.mobile.Fixture
 import com.taskrx.mobile.HOUR
 import com.taskrx.mobile.USER
 import com.taskrx.mobile.data.InstanceFilter
+import com.taskrx.core.schedule.ScheduledOccurrence
+import com.taskrx.core.notifications.medicationSpec
+import com.taskrx.mobile.notifications.NotificationPoster
 import com.taskrx.mobile.ui.answer.Action
 import com.taskrx.mobile.ui.answer.AnswerState
 import com.taskrx.mobile.ui.answer.AnswerViewModel
@@ -153,6 +156,78 @@ class AnswerViewModelTest {
             assertEquals(Action.Done, done.action)
             assertEquals(NOW, done.recordedAt)
             assertEquals(listOf("Recorded as taken" to ToastKind.Success), toasts.shown.map { it.message to it.kind })
+        }
+
+    private fun Fixture.vmDismissing(calls: MutableList<Pair<Long, List<String>>>, fail: Boolean = false, logged: MutableList<String> = mutableListOf()) =
+        AnswerViewModel(
+            container,
+            toasts::add,
+            dismiss = { time, ids ->
+                calls += time to ids
+                if (fail) error("shade unavailable")
+            },
+            log = { what, _ -> logged += what },
+        )
+
+    @Test
+    fun `taking a dose in the app clears its reminder from the shade`() =
+        withUi(NOW) {
+            reminder("med", ReminderKind.Medication, dailyTimes(listOf("09:00")), createdAt = NOW - 10 * DAY)
+            val calls = mutableListOf<Pair<Long, List<String>>>()
+            val vm = vmDismissing(calls)
+            vm.load("med", NINE).join()
+
+            vm.complete().join()
+
+            assertEquals(listOf(NINE to listOf("med")), calls)
+        }
+
+    @Test
+    fun `skipping and snoozing a dose in the app clear it from the shade as well`() =
+        withUi(NOW) {
+            reminder("a", ReminderKind.Medication, dailyTimes(listOf("09:00")), createdAt = NOW - 10 * DAY)
+            reminder("b", ReminderKind.Medication, dailyTimes(listOf("09:00")), createdAt = NOW - 10 * DAY)
+            val calls = mutableListOf<Pair<Long, List<String>>>()
+            val skipping = vmDismissing(calls).also { it.load("a", NINE).join() }
+            val snoozing = vmDismissing(calls).also { it.load("b", NINE).join() }
+
+            skipping.skip().join()
+            snoozing.snooze().join()
+
+            assertEquals(listOf(NINE to listOf("a"), NINE to listOf("b")), calls)
+        }
+
+    @Test
+    fun `a shade that cannot be cleared does not turn a recorded answer into a failed one`() =
+        withUi(NOW) {
+            reminder("med", ReminderKind.Medication, dailyTimes(listOf("09:00")), createdAt = NOW - 10 * DAY)
+            val calls = mutableListOf<Pair<Long, List<String>>>()
+            val logged = mutableListOf<String>()
+            val vm = vmDismissing(calls, fail = true, logged = logged)
+            vm.load("med", NINE).join()
+
+            vm.complete().join()
+
+            assertEquals(InstanceStatus.Completed, stored().single().status)
+            assertEquals(Action.Done, assertIs<AnswerState.Loaded>(vm.state.value).action)
+            assertEquals(1, logged.size)
+            assertEquals(listOf("Recorded as taken" to ToastKind.Success), toasts.shown.map { it.message to it.kind })
+        }
+
+    @Test
+    fun `the real shade entry for the dose is gone after it is taken in the app`() =
+        withUi(NOW) {
+            val med = reminder("med", ReminderKind.Medication, dailyTimes(listOf("09:00")), createdAt = NOW - 10 * DAY)
+            val context = ApplicationProvider.getApplicationContext<android.app.Application>()
+            val manager = context.getSystemService(android.app.NotificationManager::class.java)
+            NotificationPoster.post(context, medicationSpec(ScheduledOccurrence("occ", med.id, med.name, med.dosage, NINE)))
+            assertEquals(1, manager.activeNotifications.size)
+            val vm = vm()
+            vm.load("med", NINE).join()
+
+            vm.complete().join()
+
+            assertEquals(0, manager.activeNotifications.size)
         }
 
     @Test

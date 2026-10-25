@@ -28,6 +28,7 @@ import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import com.taskrx.core.domain.Reminder
 import com.taskrx.core.refill.DEFAULT_REFILL_REMINDER_DAYS
 import com.taskrx.core.refill.RefillProjection
 import com.taskrx.mobile.format.RefillUrgency
@@ -40,6 +41,7 @@ import com.taskrx.mobile.ui.components.EmptyState
 import com.taskrx.mobile.ui.components.HintText
 import com.taskrx.mobile.ui.components.ListScaffold
 import com.taskrx.mobile.ui.components.NumberField
+import com.taskrx.mobile.ui.dose.RecordDialog
 
 data class SuppliesActions(
     val onRefresh: () -> Unit,
@@ -48,6 +50,7 @@ data class SuppliesActions(
     val onCancelEdit: () -> Unit,
     val onSave: (String, SupplyDraft) -> Unit,
     val onOpenBacklog: () -> Unit,
+    val onRecordDose: (Reminder, Int, Int) -> Unit,
 )
 
 /**
@@ -57,7 +60,7 @@ data class SuppliesActions(
  * sentence saying what is missing and the same box to put it right.
  */
 @Composable
-fun SuppliesContent(state: SuppliesState, actions: SuppliesActions, modifier: Modifier = Modifier) {
+fun SuppliesContent(state: SuppliesState, actions: SuppliesActions, now: () -> Long, modifier: Modifier = Modifier) {
     ListScaffold(
         loading = state.loading,
         error = state.error,
@@ -83,7 +86,7 @@ fun SuppliesContent(state: SuppliesState, actions: SuppliesActions, modifier: Mo
         } else {
             item(key = "sort") { SortChips(state.sort, actions.onSort) }
             items(state.sortedRows, key = { it.medication.id }) { row ->
-                MedicationRow(row, editing = state.editingId == row.medication.id, actions)
+                MedicationRow(row, editing = state.editingId == row.medication.id, actions, now)
             }
         }
     }
@@ -125,10 +128,11 @@ private fun BacklogChanges(raised: List<String>, retired: List<String>, onOpenBa
 }
 
 @Composable
-private fun MedicationRow(row: RefillRow, editing: Boolean, actions: SuppliesActions) {
+private fun MedicationRow(row: RefillRow, editing: Boolean, actions: SuppliesActions, now: () -> Long) {
     val medication = row.medication
     val headline = refillHeadline(medication, row.projection)
     val detail = refillDetail(medication, row.projection)
+    var recording by remember(medication.id) { mutableStateOf(false) }
 
     Column(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 14.dp)) {
         // One sentence for a screen reader: name, headline and working, not three fragments.
@@ -150,9 +154,15 @@ private fun MedicationRow(row: RefillRow, editing: Boolean, actions: SuppliesAct
         if (editing) {
             SupplyEditor(row, actions)
         } else {
-            // Named for the act rather than the fields: someone opens this because they have just come back from the pharmacy.
-            TextButton(onClick = { actions.onEdit(medication.id) }, Modifier.padding(top = 4.dp)) { Text("I collected a refill") }
+            Row(Modifier.padding(top = 4.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                TextButton(onClick = { recording = true }) { Text("Record a dose") }
+                // Named for the act rather than the fields: someone opens this because they have just come back from the pharmacy.
+                TextButton(onClick = { actions.onEdit(medication.id) }) { Text("I collected a refill") }
+            }
         }
+    }
+    if (recording) {
+        RecordDialog(medication, now(), onDismiss = { recording = false }, onRecord = { h, m -> recording = false; actions.onRecordDose(medication, h, m) })
     }
     HorizontalDivider(color = TaskRxColors.Divider)
 }

@@ -5,10 +5,9 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.taskrx.core.domain.Reminder
 import com.taskrx.core.domain.ReminderKind
-import com.taskrx.core.domain.isAnswerable
 import com.taskrx.core.time.atClockTimeOnDayOf
 import com.taskrx.mobile.AppContainer
-import com.taskrx.mobile.data.CreateReminderInstanceInput
+import com.taskrx.mobile.dose.RecordResult
 import com.taskrx.mobile.ui.components.ToastKind
 import com.taskrx.mobile.ui.components.ToastRequest
 import java.time.ZoneId
@@ -71,18 +70,11 @@ class AddDoseViewModel(
                 toast(ToastRequest("That time hasn't happened yet", ToastKind.Error))
                 return@launch
             }
-            val user = app.session.userId
             try {
-                val existing = app.instances.findAnyForOccurrence(user, medication.id, at)
-                if (existing != null && !isAnswerable(existing.status)) {
-                    // Same medication, same minute, already answered: a second row would be hidden behind the first.
+                if (app.doses.record(medication, at) == RecordResult.AlreadyRecorded) {
                     toast(ToastRequest("Already recorded at that time", ToastKind.Error))
                     return@launch
                 }
-                val instance =
-                    existing ?: app.instances.create(CreateReminderInstanceInput(user, medication.id, medication.kind, at))
-                app.instances.markCompleted(instance.id, at)
-                app.notifications.rescheduleAfterWrite(user)
                 toast(ToastRequest("Recorded as taken", ToastKind.Success))
                 mutable.update { it.copy(saved = true) }
             } catch (e: CancellationException) {

@@ -1,5 +1,6 @@
 package com.taskrx.mobile.ui.answer
 
+import android.util.Log
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.taskrx.core.domain.Reminder
@@ -68,6 +69,9 @@ class AnswerViewModel(
     private val armSnooze: suspend (String, Long, Long) -> Boolean = app.notifications.scheduler::snooze,
     /** Takes an answer back, by Instance id. A parameter so a test can make it fail. */
     private val undoAnswer: suspend (String) -> UndoResult = app.undo::undo,
+    /** Takes the answered dose out of the shade: `(scheduledTime, reminderIds)`. A parameter so a test can see it called. */
+    private val dismiss: (Long, List<String>) -> Unit = app.notifications::dismissPosted,
+    private val log: (String, Throwable) -> Unit = { what, e -> Log.e("answer", what, e) },
 ) : ViewModel() {
     private val mutable = MutableStateFlow<AnswerState>(AnswerState.Loading)
     val state: StateFlow<AnswerState> = mutable
@@ -219,6 +223,7 @@ class AnswerViewModel(
                 val at = write(loaded)
                 // The write has happened; a reschedule failure must not read as one.
                 app.notifications.rescheduleAfterWrite(app.session.userId)
+                clearShade(loaded)
                 mutable.update { (it as AnswerState.Loaded).copy(action = Action.Done, recordedAt = at) }
             } catch (e: CancellationException) {
                 throw e
@@ -227,4 +232,18 @@ class AnswerViewModel(
                 toast(ToastRequest(failure, ToastKind.Error))
             }
         }
+
+    /**
+     * Any answer, taken or put off, ends the reminder still sitting in the shade for this moment.
+     * Logged and dropped: the row is written, and a failure to tidy the shade is not a failed answer.
+     */
+    private fun clearShade(loaded: AnswerState.Loaded) {
+        try {
+            dismiss(loaded.scheduledTime, listOf(loaded.reminder.id))
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            log("clearing the shade after answering ${loaded.reminder.id} failed", e)
+        }
+    }
 }
