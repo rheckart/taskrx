@@ -1,6 +1,6 @@
 # TaskRx Architecture
 
-TaskRx is a native Kotlin Android app that keeps its data in SQLite on the device and syncs it to a self-hosted Convex backend. Sign-in is Clerk. The reasons for this stack are in `docs/specs/kotlin-and-self-hosted-convex.md`. Earlier lines of work are preserved on branches: `archive/dotnet-maui` (.NET MAUI + ASP.NET Core) and `archive/expo-rn` (React Native + Expo, with the TypeScript domain package `packages/shared` that `apps/android/core` was ported from).
+TaskRx is a native Kotlin Android app that keeps its data in SQLite on the device and syncs it to a self-hosted Convex backend. Sign-in is Clerk. The reasons for this stack are in `docs/specs/kotlin-and-self-hosted-convex.md`. The earlier React Native + Expo app is preserved on the `archive/expo-rn` branch (with the TypeScript domain package `packages/shared` that `apps/android/core` was ported from).
 
 ## High-level diagram
 

@@ -10,8 +10,8 @@ import java.time.ZoneId
 /*
  * The Refill Reminder: what to raise, and when.
  *
- * Ported from `RefillPlanner.Plan` in `TaskRx.Core/RefillPlanner.cs` on the
- * `archive/dotnet-maui` branch (paired with `RefillDecision.cs`). Three
+ * Ported from `RefillPlanner.Plan` in `TaskRx.Core/RefillPlanner.cs` in the
+ * retired .NET app (paired with `RefillDecision.cs`). Three
  * differences from the C# source, all deliberate.
  *
  * - **Result shape.** The C# returns a `RefillDecision(bool NeedsRefill,

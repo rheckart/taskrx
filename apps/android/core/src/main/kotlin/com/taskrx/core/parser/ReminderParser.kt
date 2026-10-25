@@ -12,7 +12,7 @@ import com.taskrx.core.domain.weeklyTimes
 /*
  * The natural-language reminder parser, ported from
  * `TaskRx.Core/ReminderParser.cs` (plus its `Patterns`, `Lexicon`,
- * `Extractors` and `State` partials) on the `archive/dotnet-maui` branch.
+ * `Extractors` and `State` partials) in the retired .NET app.
  *
  * It turns a phrase like `"atorvastatin 20mg every morning with food"` into a
  * [Reminder]. The grammar is small, deterministic and entirely offline — no

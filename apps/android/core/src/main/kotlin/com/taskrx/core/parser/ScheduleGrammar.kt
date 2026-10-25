@@ -2,8 +2,7 @@ package com.taskrx.core.parser
 
 /*
  * The natural-language schedule grammar parser, ported from
- * `ScheduleGrammarParser` in `TaskRx.Core/ScheduleGrammarParser.cs` on the
- * `archive/dotnet-maui` branch.
+ * `ScheduleGrammarParser` in `TaskRx.Core/ScheduleGrammarParser.cs` in the retired .NET app.
  *
  * Turns phrases like `"MWF at 09:00"` or `"every day at 8am, 8pm"` into a day
  * set plus a time set. It deliberately stays a *grammar* parser: it recognizes

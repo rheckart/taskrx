@@ -2,7 +2,7 @@ package com.taskrx.core.parser
 
 /*
  * The reminder parser's word lists, ported from
- * `TaskRx.Core/ReminderParserLexicon.cs` on the `archive/dotnet-maui` branch.
+ * `TaskRx.Core/ReminderParserLexicon.cs` in the retired .NET app.
  *
  * The C# collections carry `StringComparer.OrdinalIgnoreCase`, so every lookup
  * is case-insensitive. Here the keys are stored lowercase and each accessor

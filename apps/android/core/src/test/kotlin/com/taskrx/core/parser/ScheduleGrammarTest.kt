@@ -11,8 +11,8 @@ import kotlin.test.assertTrue
 
 /*
  * Ported from `ScheduleGrammarParserTests` in
- * `TaskRx.Core.Tests/ScheduleGrammarParserTests.cs` on the `archive/dotnet-maui`
- * branch, by way of `schedule-grammar.test.ts`.
+ * `TaskRx.Core.Tests/ScheduleGrammarParserTests.cs` in the retired .NET app,
+ * by way of `schedule-grammar.test.ts`.
  *
  * The first class is the 17 xUnit cases, one-for-one and in source order. The
  * rest cover the grammar the C# suite exercises only indirectly — the
