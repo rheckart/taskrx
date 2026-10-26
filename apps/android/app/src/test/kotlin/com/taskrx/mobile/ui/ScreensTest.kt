@@ -114,8 +114,13 @@ class ScreensTest {
             )
     }
 
-    private fun today(state: TodayState, calls: Calls = Calls(), banner: @androidx.compose.runtime.Composable () -> Unit = {}) {
-        compose.setContent { TaskRxTheme { TodayContent(state, calls.actions(), banner = banner) } }
+    private fun today(
+        state: TodayState,
+        calls: Calls = Calls(),
+        banner: @androidx.compose.runtime.Composable () -> Unit = {},
+        now: Long = NINE,
+    ) {
+        compose.setContent { TaskRxTheme { TodayContent(state, calls.actions(), banner = banner, now = { now }) } }
     }
 
     private fun state(
@@ -223,6 +228,29 @@ class ScreensTest {
         compose.onNodeWithText("OK").performClick()
         assertEquals(1, calls.log.size)
         assertTrue(calls.log.single().startsWith("slot:take:A,B:"), calls.log.single())
+    }
+
+    @Test
+    fun `Take all on doses past their grace period asks even if they are not marked Missed yet`() {
+        val calls = Calls()
+        today(state(row("A"), row("B")), calls, now = NINE + 3 * 3_600_000L)
+
+        compose.onNodeWithText("Take all").performClick()
+
+        assertEquals(emptyList(), calls.log)
+        compose.onNodeWithText("When did you take them?").assertExists()
+        compose.onNodeWithText("OK").performClick()
+        assertTrue(calls.log.single().startsWith("slot:take:A,B:"), calls.log.single())
+    }
+
+    @Test
+    fun `Take all exactly one grace period late still answers at once`() {
+        val calls = Calls()
+        today(state(row("A"), row("B")), calls, now = NINE + 2 * 3_600_000L)
+
+        compose.onNodeWithText("Take all").performClick()
+
+        assertEquals(listOf("slot:take:A,B"), calls.log)
     }
 
     @Test

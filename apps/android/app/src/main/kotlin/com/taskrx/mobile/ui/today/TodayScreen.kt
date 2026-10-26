@@ -56,6 +56,7 @@ import com.taskrx.core.domain.ReminderKind
 import com.taskrx.core.domain.isAnswerable
 import com.taskrx.core.timeline.TimelineRow
 import com.taskrx.core.timeline.timelineRowKey
+import com.taskrx.core.undo.undoWillBeMissed
 import com.taskrx.mobile.format.dayHeading
 import com.taskrx.mobile.format.emptyDayBody
 import com.taskrx.mobile.format.formatTime
@@ -105,12 +106,14 @@ fun TodayContent(
     actions: TodayActions,
     modifier: Modifier = Modifier,
     banner: @Composable () -> Unit = {},
+    /** Read when a button is pressed, so a screen left open for hours still judges by the real time. */
+    now: () -> Long = System::currentTimeMillis,
 ) {
     Column(modifier.fillMaxSize()) {
         banner()
         DayBar(state, actions)
         Box(Modifier.weight(1f).fillMaxWidth()) {
-            Timeline(state, actions)
+            Timeline(state, actions, now)
         }
         Footer(actions)
     }
@@ -153,16 +156,16 @@ private fun DayBar(state: TodayState, actions: TodayActions) {
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-private fun Timeline(state: TodayState, actions: TodayActions) {
+private fun Timeline(state: TodayState, actions: TodayActions, now: () -> Long) {
     // The dose whose time is being changed, if any.
     var editing by remember { mutableStateOf<TimelineRow?>(null) }
-    // The slot whose missed doses are waiting to be told when they were taken.
+    // The slot whose overdue doses are waiting to be told when they were taken.
     var takingAll by remember { mutableStateOf<List<TimelineRow>?>(null) }
     takingAll?.let { rows ->
-        val now = Instant.now().atZone(ZoneId.systemDefault())
+        val opened = Instant.ofEpochMilli(now()).atZone(ZoneId.systemDefault())
         TimeDialog(
-            hour = now.hour,
-            minute = now.minute,
+            hour = opened.hour,
+            minute = opened.minute,
             title = "When did you take them?",
             onDismiss = { takingAll = null },
             onConfirm = { hour, minute ->
@@ -230,8 +233,8 @@ private fun Timeline(state: TodayState, actions: TodayActions) {
                                     SlotBar(
                                         entry,
                                         onAnswer = {
-                                            // Missed means the app only guessed; ask rather than record now.
-                                            if (it == BatchAction.Take && entry.rows.any { row -> row.status == InstanceStatus.Missed }) {
+                                            // Past its Grace Period the app can only guess; ask rather than record now.
+                                            if (it == BatchAction.Take && entry.rows.any { row -> isPastGrace(row, now()) }) {
                                                 takingAll = entry.rows
                                             } else {
                                                 actions.onAnswerSlot(entry.rows, it, null, null)
@@ -252,6 +255,13 @@ private fun Timeline(state: TodayState, actions: TodayActions) {
             }
     }
 }
+
+/**
+ * Whether a dose is Missed, or will be as soon as the sweep next runs. The stored status
+ * lags the clock (the sweep only runs when the app opens), so the time is checked too.
+ */
+private fun isPastGrace(row: TimelineRow, now: Long): Boolean =
+    row.status == InstanceStatus.Missed || (isAnswerable(row.status) && undoWillBeMissed(row.scheduledTime, now))
 
 private sealed interface Entry {
     val key: String

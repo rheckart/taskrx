@@ -197,6 +197,7 @@ private fun AppNavHost(container: AppContainer, navController: NavController) {
 
             TodayContent(
                 state = state,
+                now = container.clock::invoke,
                 actions =
                     TodayActions(
                         onPreviousDay = { vm.previousDay() },
