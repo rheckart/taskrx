@@ -52,7 +52,7 @@ backend:
 - **Traefik** (already on the box) terminates TLS with Let's Encrypt. The backend publishes no port: ufw is
   off on that box, so a published port would be on the internet. The one public route is `taskrx.caballus.tech`
   to 3210. There is no dashboard and no route for 3211, because the app has no HTTP actions.
-- **Postgres** is the one in the caballus stack, reached as `postgres` on the `caballus_default` network.
+- **Postgres** is the one in the caballus stack, reached as `postgres` on `pg-taskrx`, an internal network the caballus stack creates for this backend alone. Traefik reaches the backend on `taskrx_default`.
   TaskRx has its own role and database, `taskrx`, created once by hand (a plain role, owner of its database).
 - **The image is pinned by digest**, and labelled so Watchtower (which updates every container daily on that
   box) leaves it alone. Bump it on purpose, after trying the new build locally.

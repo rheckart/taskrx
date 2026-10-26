@@ -12,6 +12,14 @@ services:
     # something to find out about from a phone.
     image: ghcr.io/get-convex/convex-backend@sha256:d715e9ec088784407ca4ba2d3db592702cd328d02c76cdca3852c0018f2a76b4
     restart: unless-stopped
+    # Hardening (2026-10-26 audit): no privilege escalation, only the
+    # capabilities this service needs, and a ceiling on memory and processes.
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    mem_limit: 1g
+    pids_limit: 256
     # No `ports:`. ufw is off on this box, so a published port is on the internet.
     # Traefik runs with host networking and reaches the container by its address.
     environment:
@@ -32,21 +40,25 @@ services:
       interval: 10s
       start_period: 20s
     networks:
+      # default: Traefik reaches the backend here. postgres: the database.
+      - default
       - postgres
     labels:
       - com.centurylinklabs.watchtower.enable=false
       - traefik.enable=true
-      - traefik.docker.network=caballus_default
+      - traefik.docker.network=taskrx_default
       - traefik.http.routers.taskrx.rule=Host(`taskrx.caballus.tech`)
       - traefik.http.routers.taskrx.entrypoints=websecure
       - traefik.http.routers.taskrx.tls.certresolver=letsencrypt
       - traefik.http.services.taskrx.loadbalancer.server.port=3210
 
 networks:
+  default:
   postgres:
     external: true
-    # The network the caballus stack's Postgres is on, where it answers to "postgres".
-    name: caballus_default
+    # This stack's internal network to the caballus stack's Postgres, where it
+    # answers to "postgres". Internal: no other stack, and no internet, on it.
+    name: pg-taskrx
 
 volumes:
   data:
