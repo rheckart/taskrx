@@ -4,6 +4,7 @@ import android.content.Context
 import com.taskrx.mobile.adherence.AdherenceReader
 import com.taskrx.mobile.auth.AuthGateway
 import com.taskrx.mobile.batch.BatchAnswers
+import com.taskrx.mobile.catchup.CatchUpReader
 import com.taskrx.mobile.auth.ClerkAuthGateway
 import com.taskrx.mobile.auth.ConvexSession
 import com.taskrx.mobile.auth.LocalOnlyAuth
@@ -73,6 +74,9 @@ class AppContainer(
 
     val sweep = MissedSweepRunner(RoomSweepStore(reminders, instances))
     val adherence = AdherenceReader(sweep, instances)
+
+    /** The Missed rows of the last week: the Catch up screen's list and the Today banner's count. */
+    val catchUp = CatchUpReader(reminders, instances)
     val refills = RefillReader(reminders, newId)
 
     val notifications = NotificationsModule(context, reminders, instances, clock)

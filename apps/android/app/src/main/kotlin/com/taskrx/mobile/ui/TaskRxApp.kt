@@ -76,6 +76,8 @@ import com.taskrx.mobile.ui.forms.NewReminderContent
 import com.taskrx.mobile.ui.forms.NewReminderViewModel
 import com.taskrx.mobile.ui.today.TodayActions
 import com.taskrx.mobile.ui.today.TodayContent
+import com.taskrx.mobile.ui.catchup.CatchUpContent
+import com.taskrx.mobile.ui.catchup.CatchUpViewModel
 import com.taskrx.mobile.ui.today.TodayViewModel
 
 /**
@@ -218,6 +220,7 @@ private fun AppNavHost(container: AppContainer, navController: NavController) {
                         onAdherence = { host.navigate(Routes.ADHERENCE) },
                         onSupplies = { host.navigate(Routes.SUPPLIES) },
                         onHistory = { host.navigate(Routes.HISTORY) },
+                        onCatchUp = { host.navigate(Routes.CATCH_UP) },
                         onSettings = { host.navigate(Routes.SETTINGS) },
                     ),
                 banner = {
@@ -298,6 +301,18 @@ private fun AppNavHost(container: AppContainer, navController: NavController) {
                     onMoveToTimeline = { reminder, schedule -> vm.moveToTimeline(reminder, schedule) },
                 ),
                 now = container.clock::invoke,
+            )
+        }
+
+        composable(Routes.CATCH_UP) {
+            val vm = screenViewModel { CatchUpViewModel(container) }
+            val state by vm.state.collectAsState()
+            LifecycleEventEffect(Lifecycle.Event.ON_RESUME) { vm.refresh() }
+            CatchUpContent(
+                state = state,
+                onRefresh = { vm.refresh(pulled = true) },
+                onAnswer = { rows, action -> vm.answer(rows, action) },
+                onUndo = { vm.undo() },
             )
         }
 

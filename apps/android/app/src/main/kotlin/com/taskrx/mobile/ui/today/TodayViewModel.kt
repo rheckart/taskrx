@@ -42,6 +42,8 @@ data class TodayState(
     val hideCompleted: Boolean = false,
     /** The Instances whose answer can be taken back from the row (see [TodayViewModel.undo]). */
     val undoable: Set<String> = emptySet(),
+    /** How many doses and tasks of the last week are Missed and unanswered: the banner to Catch up. */
+    val catchUpCount: Int = 0,
 ) {
     /** What the list draws: every row, or all but the completed ones. */
     val visibleRows: List<TimelineRow>
@@ -226,6 +228,8 @@ class TodayViewModel(
         // After the day is on screen, and the day is re-projected only if it recorded something.
         try {
             if (sweep(userId, now) > 0) project()
+            val missed = app.catchUp.read(userId, now).size
+            mutable.update { it.copy(catchUpCount = missed) }
         } catch (e: CancellationException) {
             throw e
         } catch (e: Exception) {
