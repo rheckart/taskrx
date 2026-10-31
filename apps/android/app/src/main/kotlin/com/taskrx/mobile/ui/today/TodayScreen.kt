@@ -93,6 +93,7 @@ data class TodayActions(
     val onSupplies: () -> Unit,
     val onHistory: () -> Unit,
     val onSettings: () -> Unit,
+    val onCatchUp: () -> Unit = {},
 )
 
 /**
@@ -111,12 +112,33 @@ fun TodayContent(
 ) {
     Column(modifier.fillMaxSize()) {
         banner()
+        if (state.catchUpCount > 0) CatchUpBanner(state.catchUpCount, actions.onCatchUp)
         DayBar(state, actions)
         Box(Modifier.weight(1f).fillMaxWidth()) {
             Timeline(state, actions, now)
         }
         Footer(actions)
     }
+}
+
+/** Missed doses from the last week that nobody answered: one tap to the screen that answers them together. */
+@Composable
+private fun CatchUpBanner(count: Int, onClick: () -> Unit) {
+    val words = if (count == 1) "1 dose needs an answer" else "$count doses need an answer"
+    Row(
+        Modifier
+            .fillMaxWidth()
+            .background(TaskRxColors.NextTint)
+            .clickable(role = Role.Button, onClickLabel = "Catch up", onClick = onClick)
+            .padding(horizontal = 16.dp, vertical = 12.dp)
+            .semantics { contentDescription = "$words. Open Catch up" },
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Text(words, fontWeight = FontWeight.SemiBold)
+        Text("Catch up ›", color = TaskRxColors.Accent, fontWeight = FontWeight.Bold)
+    }
+    HorizontalDivider(color = TaskRxColors.Divider)
 }
 
 @Composable

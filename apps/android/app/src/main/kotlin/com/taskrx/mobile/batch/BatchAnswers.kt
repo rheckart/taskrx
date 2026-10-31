@@ -9,8 +9,11 @@ import com.taskrx.mobile.data.RemindersRepository
 import com.taskrx.core.snooze.snoozeUntil
 import kotlinx.coroutines.CancellationException
 
-/** How a batch went: how many doses it changed, and how many it could not. Already-answered doses are neither. */
-data class BatchResult(val changed: Int, val failed: Int)
+/**
+ * How a batch went: how many doses it changed, and how many it could not. Already-answered doses are neither.
+ * [changedIds] are the Instances it wrote, so a caller can take the whole batch back.
+ */
+data class BatchResult(val changed: Int, val failed: Int, val changedIds: List<String> = emptyList())
 
 /**
  * Takes, skips or snoozes every dose due at one moment, from the Today screen or from the
@@ -46,6 +49,7 @@ class BatchAnswers(
         val snoozeUntil = snoozeUntil(now, snoozeMinutes())
         var changed = 0
         var failed = 0
+        val changedIds = mutableListOf<String>()
         val snoozed = mutableListOf<String>()
 
         for (reminderId in reminderIds.distinct()) {
@@ -70,6 +74,7 @@ class BatchAnswers(
                     }
                 }
                 changed++
+                changedIds += instance.id
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
@@ -97,6 +102,6 @@ class BatchAnswers(
         }
         // A shade that still shows a dose that failed is the only honest thing to leave.
         if (failed == 0) dismiss(scheduledTime, reminderIds)
-        return BatchResult(changed, failed)
+        return BatchResult(changed, failed, changedIds)
     }
 }

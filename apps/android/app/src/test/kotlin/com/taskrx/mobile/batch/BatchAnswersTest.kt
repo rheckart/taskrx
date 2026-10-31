@@ -36,8 +36,9 @@ class BatchAnswersTest {
 
             val result = container.batch.answer(BatchAction.Take, NINE, ids)
 
-            assertEquals(BatchResult(changed = 3, failed = 0), result)
+            assertEquals(3 to 0, result.changed to result.failed)
             val rows = instances()
+            assertEquals(rows.map { it.id }.toSet(), result.changedIds.toSet())
             assertEquals(3, rows.size)
             assertEquals(setOf(InstanceStatus.Completed), rows.map { it.status }.toSet())
             assertEquals(setOf(now), rows.map { it.completedAt }.toSet())
@@ -86,7 +87,7 @@ class BatchAnswersTest {
 
             val result = container.batch.answer(BatchAction.Take, NINE, ids)
 
-            assertEquals(BatchResult(changed = 2, failed = 0), result)
+            assertEquals(2 to 0, result.changed to result.failed)
             val forA = instances().filter { it.reminderId == "a" }
             assertEquals(1, forA.size)
             assertEquals(NINE + 60_000, forA.single().completedAt)
@@ -124,7 +125,7 @@ class BatchAnswersTest {
 
             val result = container.batch.answer(BatchAction.Take, NINE, listOf("a", "gone", "b"))
 
-            assertEquals(BatchResult(changed = 2, failed = 0), result)
+            assertEquals(2 to 0, result.changed to result.failed)
             assertNull(instances().firstOrNull { it.reminderId == "gone" })
         }
 
@@ -165,7 +166,7 @@ class BatchAnswersTest {
 
             val result = batch.answer(BatchAction.Take, NINE, ids)
 
-            assertEquals(BatchResult(changed = 0, failed = 3), result)
+            assertEquals(0 to 3, result.changed to result.failed)
             assertEquals(3, logged.size)
             assertTrue(!dismissed)
         }
@@ -179,7 +180,7 @@ class BatchAnswersTest {
 
             val result = batch.answer(BatchAction.Snooze, NINE, ids)
 
-            assertEquals(BatchResult(3, 0), result)
+            assertEquals(3 to 0, result.changed to result.failed)
             assertEquals(3, logged.size)
             assertEquals(setOf(InstanceStatus.Snoozed), instances().map { it.status }.toSet())
         }
@@ -193,7 +194,7 @@ class BatchAnswersTest {
 
             val result = batch.answer(BatchAction.Take, NINE, ids)
 
-            assertEquals(BatchResult(3, 0), result)
+            assertEquals(3 to 0, result.changed to result.failed)
             assertEquals(listOf("reschedule after a batch failed"), logged)
         }
 
