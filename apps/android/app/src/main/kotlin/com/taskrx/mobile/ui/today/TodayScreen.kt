@@ -121,10 +121,10 @@ fun TodayContent(
     }
 }
 
-/** Missed doses from the last week that nobody answered: one tap to the screen that answers them together. */
+/** Missed reminders (doses and tasks) from the last week that nobody answered: one tap to the screen that answers them together. */
 @Composable
 private fun CatchUpBanner(count: Int, onClick: () -> Unit) {
-    val words = if (count == 1) "1 dose needs an answer" else "$count doses need an answer"
+    val words = if (count == 1) "1 reminder needs an answer" else "$count reminders need an answer"
     Row(
         Modifier
             .fillMaxWidth()
