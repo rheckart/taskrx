@@ -1,10 +1,13 @@
 package com.taskrx.mobile.data
 
 import androidx.room.withTransaction
+import com.taskrx.core.domain.PauseWindow
 import com.taskrx.core.domain.Priority
 import com.taskrx.core.domain.Reminder
 import com.taskrx.core.domain.ReminderKind
 import com.taskrx.core.domain.ScheduleTimes
+import com.taskrx.core.domain.addPause
+import com.taskrx.core.domain.resumePause
 import com.taskrx.mobile.data.db.ReminderEntity
 import com.taskrx.mobile.data.db.SyncStatus
 import com.taskrx.mobile.data.db.TaskRxDatabase
@@ -55,6 +58,8 @@ data class UpdateReminderPatch(
     val refillReminderDays: Change<Int?> = Change.Keep,
     val caregiverIds: List<String>? = null,
     val active: Boolean? = null,
+    /** The whole list of pause windows, replacing the stored one. Null leaves it. */
+    val pauses: List<PauseWindow>? = null,
 )
 
 /** A reminder as it arrives from a remote pull: the domain shape plus the two columns it does not carry. */
@@ -187,6 +192,7 @@ class RemindersRepository(
                     refillReminderDays = patch.refillReminderDays.resolve(existing.refillReminderDays),
                     caregiverIds = patch.caregiverIds ?: existing.caregiverIds,
                     active = patch.active ?: existing.active,
+                    pauses = patch.pauses ?: existing.pauses,
                     updatedAt = now,
                 )
 
@@ -204,6 +210,7 @@ class RemindersRepository(
                     refillReminderDays = next.refillReminderDays,
                     caregiverIds = Codecs.stringsToColumn(next.caregiverIds),
                     active = next.active,
+                    pauses = Codecs.pausesToColumn(next.pauses),
                     updatedAt = now,
                     syncStatus = SyncStatus.PENDING,
                 ),
@@ -235,10 +242,33 @@ class RemindersRepository(
                     active = next.active,
                     createdAt = next.createdAt,
                     updatedAt = now,
+                    // Only when this caller meant to set them, like the fields above: an
+                    // unrelated edit must not overwrite windows set on another device.
+                    pauses = patch.pauses,
                 ),
             )
 
             requireNotNull(get(id)) { "Reminder $id disappeared after update" }
+        }
+
+    /**
+     * Pauses a Reminder over `[from, until)`, or from [from] until the person resumes when
+     * [until] is null. The Reminder stays active and is not deleted anywhere. The caller
+     * reschedules, since the armed notifications now differ.
+     *
+     * @throws IllegalArgumentException when it is already paused or waiting to be (see `addPause`).
+     */
+    suspend fun pause(id: String, from: Long, until: Long?): Reminder =
+        database.withTransaction {
+            val existing = checkNotNull(get(id)) { "Reminder $id not found" }
+            update(id, UpdateReminderPatch(pauses = addPause(existing.pauses, from, until, clock())))
+        }
+
+    /** Ends the running pause now, or cancels one that has not started; a no-op if neither. */
+    suspend fun resume(id: String): Reminder =
+        database.withTransaction {
+            val existing = checkNotNull(get(id)) { "Reminder $id not found" }
+            update(id, UpdateReminderPatch(pauses = resumePause(existing.pauses, clock())))
         }
 
     /**
@@ -295,6 +325,7 @@ class RemindersRepository(
                 active = existing.active,
                 createdAt = existing.createdAt,
                 updatedAt = existing.updatedAt,
+                pauses = existing.pauses.takeIf { it.isNotEmpty() },
             ),
         )
     }
@@ -363,6 +394,7 @@ class RemindersRepository(
                         createdAt = reminder.createdAt,
                         updatedAt = reminder.updatedAt,
                         syncStatus = SyncStatus.SYNCED,
+                        pauses = Codecs.pausesToColumn(reminder.pauses),
                     ),
                 )
             }

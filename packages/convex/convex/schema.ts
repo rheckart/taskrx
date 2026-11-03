@@ -108,6 +108,16 @@ export const scheduleTimesValidator = v.union(
 );
 
 /**
+ * A window during which a medication is paused (before surgery, say). `from`
+ * and `until` are unix ms; an absent `until` means open-ended, paused until the
+ * person resumes.
+ */
+export const pauseWindowValidator = v.object({
+  from: v.number(),
+  until: v.optional(v.number()),
+});
+
+/**
  * Stored fields of a `reminders` document.
  *
  * `userId` is the Clerk subject; `localId` is the stable UUID the device
@@ -141,6 +151,9 @@ export const reminderFields = {
   createdAt: v.number(),
   updatedAt: v.number(),
   deletedAt: v.optional(v.number()),
+  // Optional at the top level so documents written before pauses existed stay
+  // valid. An empty array is a real value: it is how a client clears them.
+  pauses: v.optional(v.array(pauseWindowValidator)),
 };
 
 /**

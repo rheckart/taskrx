@@ -3,6 +3,7 @@ import { v } from "convex/values";
 import { mutation, query } from "./_generated/server.js";
 import { getCurrentUserId } from "./auth.js";
 import {
+  pauseWindowValidator,
   priorityValidator,
   reminderFields,
   reminderKindValidator,
@@ -99,6 +100,7 @@ export const create = mutation({
     refillReminderDays: v.optional(v.number()),
     caregiverIds: v.optional(v.array(v.string())),
     active: v.optional(v.boolean()),
+    pauses: v.optional(v.array(pauseWindowValidator)),
     createdAt: v.number(),
     updatedAt: v.number(),
   },
@@ -173,6 +175,7 @@ export const create = mutation({
         ...(args.refillReminderDays !== undefined
           ? { refillReminderDays: args.refillReminderDays }
           : {}),
+        ...(args.pauses !== undefined ? { pauses: args.pauses } : {}),
       });
 
       return existing._id;
@@ -204,6 +207,7 @@ export const create = mutation({
       ...(args.refillReminderDays !== undefined
         ? { refillReminderDays: args.refillReminderDays }
         : {}),
+      ...(args.pauses !== undefined ? { pauses: args.pauses } : {}),
     });
   },
 });
@@ -223,6 +227,7 @@ export const update = mutation({
     refillReminderDays: v.optional(v.number()),
     caregiverIds: v.optional(v.array(v.string())),
     active: v.optional(v.boolean()),
+    pauses: v.optional(v.array(pauseWindowValidator)),
     updatedAt: v.optional(v.number()),
   },
   returns: v.id("reminders"),
@@ -258,6 +263,7 @@ export const update = mutation({
         ? { caregiverIds: args.caregiverIds }
         : {}),
       ...(args.active !== undefined ? { active: args.active } : {}),
+      ...(args.pauses !== undefined ? { pauses: args.pauses } : {}),
     });
 
     return args.id;

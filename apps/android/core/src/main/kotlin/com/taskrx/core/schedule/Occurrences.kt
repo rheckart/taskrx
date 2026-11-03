@@ -7,6 +7,7 @@ import com.taskrx.core.domain.OnceTimes
 import com.taskrx.core.domain.Reminder
 import com.taskrx.core.domain.ScheduleTimes
 import com.taskrx.core.domain.WeeklyTimes
+import com.taskrx.core.domain.isPausedAt
 import java.time.Instant
 import java.time.LocalDate
 import java.time.LocalTime
@@ -228,8 +229,55 @@ fun nextOccurrences(
 ): List<ScheduledOccurrence> {
     require(count >= 0) { "count must be a non-negative integer, received $count." }
     if (count == 0) return emptyList()
+    if (reminder.pauses.isEmpty()) return scheduledOccurrences(reminder, fromMs, count, zone)
 
-    return when (val schedule = reminder.schedule) {
+    return unpausedOccurrences(reminder, fromMs, count, zone)
+}
+
+/**
+ * [nextOccurrences] for a Reminder with pauses: the same moments minus the paused ones, still
+ * [count] of them when the Schedule has that many.
+ *
+ * Filtering a counted batch would hand back fewer than asked for, and a pause that spans the
+ * whole batch would hand back none even though doses resume a week later. So each round asks the
+ * Schedule for as many as are still missing, keeps the unpaused ones, and goes again from the
+ * last moment seen. When the next moment would land inside a pause with an end, the walk jumps to
+ * the end instead of stepping through it; one with no end leaves nothing more to find.
+ */
+private fun unpausedOccurrences(
+    reminder: Reminder,
+    fromMs: Long,
+    count: Int,
+    zone: ZoneId,
+): List<ScheduledOccurrence> {
+    val results = mutableListOf<ScheduledOccurrence>()
+    var cursor = fromMs
+    while (results.size < count) {
+        // The earliest moment that could come next is one millisecond past the cursor.
+        val covering = reminder.pauses.firstOrNull { isPausedAt(listOf(it), cursor + 1) }
+        if (covering != null) {
+            val until = covering.until ?: break
+            cursor = until - 1
+        }
+
+        val batch = scheduledOccurrences(reminder, cursor, count - results.size, zone)
+        // Nothing, not merely few: a short batch can be the Schedule's own look-ahead running
+        // out inside a long pause, with doses still waiting beyond it.
+        if (batch.isEmpty()) break
+        results.addAll(batch.filterNot { isPausedAt(reminder.pauses, it.fireAt) })
+        cursor = batch.last().fireAt
+    }
+
+    return results
+}
+
+private fun scheduledOccurrences(
+    reminder: Reminder,
+    fromMs: Long,
+    count: Int,
+    zone: ZoneId,
+): List<ScheduledOccurrence> =
+    when (val schedule = reminder.schedule) {
         is DailyTimes -> dailyOccurrences(reminder, schedule, fromMs, count, zone)
         is IntervalTimes -> intervalOccurrences(reminder, schedule, fromMs, count)
         is WeeklyTimes -> weeklyOccurrences(reminder, schedule, fromMs, count, zone)
@@ -239,4 +287,3 @@ fun nextOccurrences(
         // acted on from the Backlog surface instead.
         NoneTimes -> emptyList()
     }
-}

@@ -4,6 +4,7 @@ import com.taskrx.core.domain.InstanceStatus
 import com.taskrx.core.domain.NoneTimes
 import com.taskrx.core.domain.Priority
 import com.taskrx.core.domain.Reminder
+import com.taskrx.core.domain.pausesFromJson
 import com.taskrx.core.domain.ReminderInstance
 import com.taskrx.core.domain.ReminderKind
 import com.taskrx.core.sync.scheduleFromServer
@@ -50,6 +51,8 @@ internal data class ServerReminder(
     val createdAt: Double,
     val updatedAt: Double,
     val deletedAt: Double? = null,
+    /** Absent on a document written before pausing existed. */
+    val pauses: JsonElement? = null,
 )
 
 @Serializable
@@ -106,6 +109,7 @@ internal object ServerDocs {
                     active = doc.active,
                     createdAt = doc.createdAt.toLong(),
                     updatedAt = doc.updatedAt.toLong(),
+                    pauses = pausesFromJson(doc.pauses),
                 ),
             convexId = doc.id,
             rxcui = doc.rxcui,

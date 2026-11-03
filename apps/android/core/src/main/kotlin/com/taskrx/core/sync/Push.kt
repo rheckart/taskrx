@@ -70,7 +70,7 @@ private fun MutableMap<String, Any?>.putIfPresent(payload: JsonObject, keys: Lis
 }
 
 private val OPTIONAL_REMINDER_FIELDS =
-    listOf("priority", "tags", "caregiverIds", "rxcui", "dosage", "instructions", "pillsRemaining", "pillsPerDose", "refillReminderDays")
+    listOf("priority", "tags", "caregiverIds", "rxcui", "dosage", "instructions", "pillsRemaining", "pillsPerDose", "refillReminderDays", "pauses")
 
 /**
  * `reminders.create`. A repeated create for the same `localId` is an upsert on the server,

@@ -6,8 +6,11 @@ import com.taskrx.core.domain.ReminderInstance
 import com.taskrx.core.domain.ReminderKind
 import com.taskrx.core.domain.InstanceStatus
 import com.taskrx.core.domain.NoneTimes
+import com.taskrx.core.domain.PauseWindow
 import com.taskrx.core.domain.ScheduleTimes
 import com.taskrx.core.domain.parseScheduleTimes
+import com.taskrx.core.domain.pausesFromJson
+import com.taskrx.core.domain.pausesToJson
 import com.taskrx.core.domain.serializeScheduleTimes
 import com.taskrx.mobile.data.db.ReminderEntity
 import com.taskrx.mobile.data.db.ReminderInstanceEntity
@@ -51,6 +54,16 @@ internal object Codecs {
             NoneTimes
         }
 
+    fun pausesToColumn(windows: List<PauseWindow>): String = pausesToJson(windows).toString()
+
+    /** An unreadable column reads as not paused: the Reminder keeps ringing rather than going quiet. */
+    fun pausesFromColumn(text: String): List<PauseWindow> =
+        try {
+            pausesFromJson(Json.parseToJsonElement(text))
+        } catch (_: IllegalArgumentException) {
+            emptyList()
+        }
+
     fun stringsToColumn(values: List<String>): String =
         buildJsonArray { values.forEach { add(JsonPrimitive(it)) } }.toString()
 
@@ -81,6 +94,7 @@ internal object Codecs {
             active = row.active,
             createdAt = row.createdAt,
             updatedAt = row.updatedAt,
+            pauses = pausesFromColumn(row.pauses),
         )
 
     fun toInstance(row: ReminderInstanceEntity): ReminderInstance =
