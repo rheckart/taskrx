@@ -2,6 +2,7 @@ package com.taskrx.mobile.ui
 
 import com.taskrx.core.batch.BatchAction
 import com.taskrx.core.domain.InstanceStatus
+import com.taskrx.core.domain.ReminderKind
 import com.taskrx.core.domain.dailyTimes
 import com.taskrx.mobile.DAY
 import com.taskrx.mobile.Fixture
@@ -61,7 +62,7 @@ class CatchUpViewModelTest {
             assertEquals(2, done.size)
             assertEquals(setOf(yesterday.dayStart + 9 * HOUR), done.map { it.completedAt }.toSet())
             assertTrue(vm.state.value.days.none { it.dayStart == yesterday.dayStart })
-            assertEquals("2 marked done", vm.state.value.undo?.message)
+            assertEquals("2 taken", vm.state.value.undo?.message)
         }
 
     @Test
@@ -92,6 +93,74 @@ class CatchUpViewModelTest {
             assertNull(vm.state.value.undo)
             assertEquals(before, vm.state.value.total)
             assertEquals("Taken back", container.toaster.current.value?.message)
+        }
+
+    @Test
+    fun `one row answered leaves the other alone and names the row`() =
+        withUi(MIDNIGHT + 12 * HOUR) {
+            twoMeds()
+            val vm = vm()
+            vm.refresh().join()
+            val a = vm.state.value.days[0].rows.single { it.name == "A" }
+
+            vm.answer(listOf(a), BatchAction.Take).join()
+
+            val done = stored().filter { it.status == InstanceStatus.Completed }
+            assertEquals(1, done.size)
+            assertEquals(a.reminderId, done.single().reminderId)
+            assertEquals(MIDNIGHT + 9 * HOUR, done.single().completedAt)
+            assertEquals(listOf("B"), vm.state.value.days[0].rows.map { it.name })
+            assertEquals("A taken", vm.state.value.undo?.message)
+        }
+
+    @Test
+    fun `a task is done, not taken, and a skipped row is skipped`() =
+        withUi(MIDNIGHT + 12 * HOUR) {
+            reminder("t", kind = ReminderKind.Task, schedule = dailyTimes(listOf("09:00")), createdAt = MIDNIGHT - 10 * DAY, name = "Water plants")
+            reminder("m", schedule = dailyTimes(listOf("09:00")), createdAt = MIDNIGHT - 10 * DAY, name = "Metformin")
+            val vm = vm()
+            vm.refresh().join()
+            val today = vm.state.value.days[0].rows
+            val task = today.single { it.name == "Water plants" }
+            val med = today.single { it.name == "Metformin" }
+
+            vm.answer(listOf(task), BatchAction.Take).join()
+            assertEquals("Water plants done", vm.state.value.undo?.message)
+
+            vm.answer(listOf(med), BatchAction.Skip).join()
+            assertEquals("Metformin skipped", vm.state.value.undo?.message)
+        }
+
+    @Test
+    fun `a batch of tasks is done, and a batch with any task in it is not called taken`() =
+        withUi(MIDNIGHT + 12 * HOUR) {
+            for (n in listOf("t1", "t2")) reminder(n, kind = ReminderKind.Task, schedule = dailyTimes(listOf("09:00")), createdAt = MIDNIGHT - 10 * DAY, name = n)
+            reminder("m", schedule = dailyTimes(listOf("09:00")), createdAt = MIDNIGHT - 10 * DAY, name = "Metformin")
+            val vm = vm()
+            vm.refresh().join()
+            val today = vm.state.value.days[0].rows
+
+            vm.answer(today.filter { it.kind == ReminderKind.Task }, BatchAction.Take).join()
+            assertEquals("2 done", vm.state.value.undo?.message)
+
+            vm.answer(vm.state.value.days[1].rows, BatchAction.Take).join()
+            assertEquals("3 done", vm.state.value.undo?.message)
+        }
+
+    @Test
+    fun `undo takes back one row after it has left the list`() =
+        withUi(MIDNIGHT + 12 * HOUR) {
+            twoMeds()
+            val vm = vm()
+            vm.refresh().join()
+            val a = vm.state.value.days[0].rows.single { it.name == "A" }
+
+            vm.answer(listOf(a), BatchAction.Take).join()
+            assertTrue(vm.state.value.days[0].rows.none { it.name == "A" })
+            vm.undo().join()
+
+            assertTrue(vm.state.value.days[0].rows.any { it.name == "A" })
+            assertTrue(stored().none { it.status == InstanceStatus.Completed })
         }
 
     @Test

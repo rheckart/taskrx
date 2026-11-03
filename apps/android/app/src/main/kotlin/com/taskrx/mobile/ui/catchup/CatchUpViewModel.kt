@@ -7,6 +7,7 @@ import com.taskrx.core.batch.BatchAction
 import com.taskrx.core.catchup.CatchUpDay
 import com.taskrx.core.catchup.catchUpDays
 import com.taskrx.core.catchup.catchUpSlots
+import com.taskrx.core.domain.ReminderKind
 import com.taskrx.core.timeline.TimelineRow
 import com.taskrx.mobile.AppContainer
 import com.taskrx.mobile.ui.components.ToastKind
@@ -21,7 +22,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 
-/** The last bulk answer, kept so one tap can take it all back. */
+/** The last answer, kept so one tap can take it all back. */
 data class CatchUpUndo(val message: String, val instanceIds: List<String>)
 
 data class CatchUpState(
@@ -60,7 +61,7 @@ class CatchUpViewModel(
             loads.withLock { load() }
         }
 
-    /** Marks [rows] Completed ([BatchAction.Take]) or Skipped. The screen offers no snooze. */
+    /** Marks [rows], one row or a part of a day, Completed ([BatchAction.Take]) or Skipped. The screen offers no snooze. */
     fun answer(rows: List<TimelineRow>, action: BatchAction): Job =
         viewModelScope.launch {
             var changed = 0
@@ -74,11 +75,10 @@ class CatchUpViewModel(
                     failed += result.failed
                     ids += result.changedIds
                 }
-                val words = if (action == BatchAction.Take) "marked done" else "skipped"
                 if (failed > 0) {
                     toast(ToastRequest("Couldn't answer $failed of ${rows.size}", ToastKind.Error))
                 }
-                mutable.update { it.copy(undo = if (ids.isEmpty()) null else CatchUpUndo("$changed $words", ids)) }
+                mutable.update { it.copy(undo = if (ids.isEmpty()) null else CatchUpUndo(undoMessage(rows, action, changed), ids)) }
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
@@ -88,7 +88,18 @@ class CatchUpViewModel(
             loads.withLock { load() }
         }
 
-    /** Takes the last bulk answer back, all of it. */
+    /** "Metformin taken" for one row, "3 done" for a part of a day: the word a medication or a task is answered with. */
+    private fun undoMessage(rows: List<TimelineRow>, action: BatchAction, changed: Int): String {
+        val words =
+            when {
+                action == BatchAction.Skip -> "skipped"
+                rows.all { it.kind == ReminderKind.Medication } -> "taken"
+                else -> "done"
+            }
+        return "${if (rows.size == 1) rows.single().name else changed} $words"
+    }
+
+    /** Takes the last answer back, all of it. */
     fun undo(): Job =
         viewModelScope.launch {
             val last = mutable.value.undo ?: return@launch
