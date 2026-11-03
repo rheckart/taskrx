@@ -149,6 +149,20 @@ class BatchNotificationTest {
     }
 
     @Test
+    fun `Take all also takes a dose the batch button was built without`() {
+        create("a", "b", "c")
+        for (id in listOf("a", "b", "c")) NotificationPoster.post(app, spec(id))
+        // Alarms that fire together can leave the batch's list a dose short: the button names only a and b.
+        val intent = shadowOf(batchOf()!!.notification.actions.single { it.title == "Take all" }.actionIntent).savedIntent
+        intent.putStringArrayListExtra(BatchActionReceiver.EXTRA_REMINDER_IDS, arrayListOf("a", "b"))
+
+        BatchActionReceiver().handle(app, intent)?.let { job -> runBlocking { job.join() } }
+
+        assertEquals(mapOf("a" to InstanceStatus.Completed, "b" to InstanceStatus.Completed, "c" to InstanceStatus.Completed), statuses())
+        assertEquals(emptyList(), active())
+    }
+
+    @Test
     fun `Snooze all and Skip all do their own thing`() {
         create("a", "b")
         for (id in listOf("a", "b")) NotificationPoster.post(app, spec(id))

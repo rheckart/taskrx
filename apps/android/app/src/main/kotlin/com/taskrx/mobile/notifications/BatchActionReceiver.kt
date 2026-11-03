@@ -30,9 +30,11 @@ class BatchActionReceiver : BroadcastReceiver() {
             Log.w("batch", "ignored a batch intent that could not be read")
             return null
         }
+        // The batch button stands for the whole moment, so it answers what is in the shade now, not only what it was built with.
+        val ids = if (intent.getBooleanExtra(EXTRA_WHOLE_MOMENT, false)) (reminderIds + NotificationPoster.doseReminderIds(context, scheduledTime)).distinct() else reminderIds
         val container = (context.applicationContext as TaskRxApplication).container
         return CoroutineScope(Dispatchers.Default).launch {
-            val result = container.batch.answer(action, scheduledTime, reminderIds)
+            val result = container.batch.answer(action, scheduledTime, ids)
             Log.i("batch", "${action.wire} $scheduledTime: changed=${result.changed} failed=${result.failed}")
         }
     }
@@ -41,6 +43,8 @@ class BatchActionReceiver : BroadcastReceiver() {
         const val ACTION_BATCH = "com.taskrx.mobile.action.BATCH_ANSWER"
         const val EXTRA_ACTION = "action"
         const val EXTRA_TIME = "scheduledTime"
+        /** Set on the batch notification's buttons only; a single dose's buttons answer that dose. */
+        const val EXTRA_WHOLE_MOMENT = "wholeMoment"
         const val EXTRA_REMINDER_IDS = "reminderIds"
     }
 }

@@ -64,8 +64,28 @@ object NotificationPoster {
             builder.addAction(0, label, actionIntent(context, action, spec.scheduledTime, arrayListOf(spec.reminderId), "$scope/${Uri.encode(spec.id)}"))
         }
         manager.notify(spec.id, 0, builder.build())
-        if (spec.tier == Tier.Medication) showBatch(context, manager, spec.scheduledTime, doses(manager, spec.scheduledTime))
+        if (spec.tier == Tier.Medication) {
+            // `notify` is queued, so the shade may not list this dose yet; name it here rather than lean on that.
+            val showing = doseEntries(manager, spec.scheduledTime)
+            showBatch(context, manager, spec.scheduledTime, if (showing.any { it.first == spec.reminderId }) showing else showing + (spec.reminderId to spec.title))
+        }
     }
+
+    /** `(reminderId, name)` of each dose in the shade for [scheduledTime]. */
+    private fun doseEntries(manager: NotificationManager, scheduledTime: Long): List<Pair<String, String>> =
+        doses(manager, scheduledTime).mapNotNull { sbn ->
+            val extras = sbn.notification.extras
+            val id = extras.getString(EXTRA_REMINDER) ?: return@mapNotNull null
+            id to (extras.getString(EXTRA_NAME) ?: id)
+        }
+
+    /**
+     * Every dose in the shade for [scheduledTime]. A batch button was built from the shade as it
+     * looked when it was posted, and alarms that fire together can leave it a dose short; the
+     * button asks again when it is pressed.
+     */
+    fun doseReminderIds(context: Context, scheduledTime: Long): List<String> =
+        doseEntries(context.getSystemService(NotificationManager::class.java), scheduledTime).map { it.first }.distinct()
 
     private fun doses(manager: NotificationManager, scheduledTime: Long): List<StatusBarNotification> =
         manager.activeNotifications.filter {
@@ -79,13 +99,13 @@ object NotificationPoster {
      * same second converge: the last one to post sees every dose and writes the full list.
      * It never alerts: each dose already did.
      */
-    private fun showBatch(context: Context, manager: NotificationManager, scheduledTime: Long, showing: List<StatusBarNotification>) {
+    private fun showBatch(context: Context, manager: NotificationManager, scheduledTime: Long, showing: List<Pair<String, String>>) {
         if (showing.size < MIN_BATCH_SIZE) {
             manager.cancel(batchNotificationId(scheduledTime), 0)
             return
         }
-        val reminderIds = ArrayList(showing.mapNotNull { it.notification.extras.getString(EXTRA_REMINDER) }.distinct())
-        val names = showing.mapNotNull { it.notification.extras.getString(EXTRA_NAME) }
+        val reminderIds = ArrayList(showing.map { it.first }.distinct())
+        val names = showing.map { it.second }
         val text = batchText(names)
         val builder =
             NotificationCompat.Builder(context, deliveryFor(Tier.Medication).channelId)
@@ -125,6 +145,7 @@ object NotificationPoster {
                 .setData(Uri.parse("taskrx://$scope/$scheduledTime/${action.wire}"))
                 .putExtra(BatchActionReceiver.EXTRA_ACTION, action.wire)
                 .putExtra(BatchActionReceiver.EXTRA_TIME, scheduledTime)
+                .putExtra(BatchActionReceiver.EXTRA_WHOLE_MOMENT, scope == "batch")
                 .putStringArrayListExtra(BatchActionReceiver.EXTRA_REMINDER_IDS, reminderIds)
         return PendingIntent.getBroadcast(context, 0, intent, PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
     }
@@ -141,7 +162,7 @@ object NotificationPoster {
         for (sbn in manager.activeNotifications) {
             if (sbn.notification.extras.getLong(EXTRA_TIME) == scheduledTime && sbn.answered()) manager.cancel(sbn.tag, sbn.id)
         }
-        showBatch(context, manager, scheduledTime, doses(manager, scheduledTime).filterNot { it.answered() })
+        showBatch(context, manager, scheduledTime, doseEntries(manager, scheduledTime).filterNot { it.first in reminderIds })
     }
 
     private val DOSE_ACTIONS = listOf(BatchAction.Take to "Take", BatchAction.Snooze to "Snooze", BatchAction.Skip to "Skip")
