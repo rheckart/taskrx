@@ -3,10 +3,12 @@ package com.taskrx.mobile.ui
 import com.taskrx.core.domain.DailyTimes
 import com.taskrx.core.domain.InstanceStatus
 import com.taskrx.core.domain.NoneTimes
+import com.taskrx.core.domain.PauseWindow
 import com.taskrx.core.domain.ReminderKind
 import com.taskrx.core.domain.dailyTimes
 import com.taskrx.core.domain.noneTimes
 import com.taskrx.core.domain.onceTimes
+import com.taskrx.mobile.DAY
 import com.taskrx.mobile.HOUR
 import com.taskrx.mobile.USER
 import com.taskrx.mobile.data.CreateReminderInstanceInput
@@ -14,6 +16,7 @@ import com.taskrx.mobile.data.InstanceFilter
 import com.taskrx.mobile.ui.components.ToastKind
 import com.taskrx.mobile.ui.reminders.EditReminderViewModel
 import com.taskrx.mobile.ui.reminders.EditState
+import com.taskrx.mobile.ui.reminders.PauseChoice
 import com.taskrx.mobile.ui.reminders.RemindersViewModel
 import java.time.Instant
 import kotlin.test.Test
@@ -94,6 +97,112 @@ class RemindersViewModelTest {
 
             assertNotNull(vm.state.value.error)
             assertFalse(vm.state.value.loading)
+        }
+
+    // ---- pause ----
+
+    @Test
+    fun `pausing silences the alarms inside the window and keeps the Reminder listed with its pause`() =
+        withUi(NOW) {
+            val r = reminder("med", name = "Warfarin", schedule = onceTimes(NOW + 2 * HOUR))
+            container.notifications.rescheduleAfterWrite(USER)
+            assertTrue(alarms().any { it.triggerAtTime == NOW + 2 * HOUR })
+            val vm = RemindersViewModel(container)
+            vm.refresh().join()
+
+            vm.pause(r, PauseChoice(NOW, NOW + 24 * HOUR)).join()
+
+            val entry = vm.state.value.entries.single()
+            assertEquals(PauseWindow(NOW, NOW + 24 * HOUR), entry.pause)
+            assertTrue(entry.reminder.active)
+            assertTrue(alarms().none { it.triggerAtTime == NOW + 2 * HOUR })
+            assertEquals("Paused Warfarin" to ToastKind.Success, container.toaster.current.value?.let { it.message to it.kind })
+        }
+
+    @Test
+    fun `a snooze already armed does not ring inside a pause that has begun`() =
+        withUi(NOW) {
+            val r = reminder("med", name = "Warfarin", schedule = dailyTimes(listOf("09:00")))
+            container.notifications.scheduler.snooze("med", NOW - HOUR, NOW + 15 * 60_000)
+            assertTrue(alarms().any { it.triggerAtTime == NOW + 15 * 60_000 })
+            val vm = RemindersViewModel(container)
+            vm.refresh().join()
+
+            vm.pause(r, PauseChoice(NOW, null)).join()
+
+            assertTrue(alarms().none { it.triggerAtTime == NOW + 15 * 60_000 }, "the snooze still rings")
+            assertTrue(container.notifications.snoozes.all().isEmpty())
+        }
+
+    @Test
+    fun `a snooze is left alone by a pause that starts later`() =
+        withUi(NOW) {
+            val r = reminder("med", name = "Warfarin", schedule = dailyTimes(listOf("09:00")))
+            container.notifications.scheduler.snooze("med", NOW - HOUR, NOW + 15 * 60_000)
+            val vm = RemindersViewModel(container)
+            vm.refresh().join()
+
+            vm.pause(r, PauseChoice(NOW + 2 * DAY, null)).join()
+
+            assertTrue(alarms().any { it.triggerAtTime == NOW + 15 * 60_000 })
+        }
+
+    @Test
+    fun `resuming brings the alarms back`() =
+        withUi(NOW) {
+            val r = reminder("med", name = "Warfarin", schedule = onceTimes(NOW + 2 * HOUR))
+            val vm = RemindersViewModel(container)
+            vm.refresh().join()
+            vm.pause(r, PauseChoice(NOW, null)).join()
+            assertTrue(alarms().none { it.triggerAtTime == NOW + 2 * HOUR })
+
+            vm.resume(r).join()
+
+            assertNull(vm.state.value.entries.single().pause)
+            assertTrue(alarms().any { it.triggerAtTime == NOW + 2 * HOUR })
+            assertEquals("Resumed Warfarin" to ToastKind.Success, container.toaster.current.value?.let { it.message to it.kind })
+        }
+
+    @Test
+    fun `a pause that finished is no longer shown as one`() =
+        withUi(NOW) {
+            val r = reminder("med")
+            container.reminders.pause("med", NOW, NOW + HOUR)
+            val vm = RemindersViewModel(container)
+            vm.refresh().join()
+            assertNotNull(vm.state.value.entries.single().pause)
+
+            now = NOW + 2 * HOUR
+            vm.refresh().join()
+
+            assertNull(vm.state.value.entries.single().pause)
+            assertEquals(1, vm.state.value.entries.single().reminder.pauses.size, "the window is kept for the sweep")
+        }
+
+    @Test
+    fun `a pause on top of a pause says so`() =
+        withUi(NOW) {
+            val r = reminder("med")
+            val vm = RemindersViewModel(container)
+            vm.refresh().join()
+            vm.pause(r, PauseChoice(NOW, null)).join()
+
+            vm.pause(r, PauseChoice(NOW + HOUR, null)).join()
+
+            assertEquals("It is already paused." to ToastKind.Error, container.toaster.current.value?.let { it.message to it.kind })
+        }
+
+    @Test
+    fun `a resume that cannot be written says so`() =
+        withUi(NOW) {
+            val r = reminder("med")
+            val vm = RemindersViewModel(container)
+            vm.refresh().join()
+            database.openHelper.writableDatabase.execSQL("ALTER TABLE reminders RENAME TO reminders_gone")
+
+            vm.resume(r).join()
+
+            assertEquals(ToastKind.Error, container.toaster.current.value?.kind)
         }
 
     // ---- edit ----

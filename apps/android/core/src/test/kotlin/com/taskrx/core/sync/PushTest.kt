@@ -80,6 +80,17 @@ class ReminderPushTest {
     }
 
     @Test
+    fun `pause windows go to the server as they are, open ones without an end, and an empty list clears`() {
+        val withPauses = REMINDER.replace(""""active":true""", """"pauses":[{"from":1000,"until":2000},{"from":3000}],"active":true""")
+        val expected = listOf(mapOf("from" to 1000.0, "until" to 2000.0), mapOf("from" to 3000.0))
+
+        assertEquals(expected, reminderCreateCall(obj(withPauses)).args["pauses"])
+        assertEquals(expected, reminderUpdateCall(obj(withPauses), "cid").args["pauses"])
+        assertEquals(emptyList<Any?>(), reminderUpdateCall(obj(REMINDER.replace(""""active":true""", """"pauses":[],"active":true""")), "cid").args["pauses"])
+        assertFalse(reminderUpdateCall(obj(REMINDER), "cid").args.containsKey("pauses"), "no value means leave the server's windows alone")
+    }
+
+    @Test
     fun `treats an absent optional like a null one`() {
         val args = reminderCreateCall(obj("""{"localId":"r","userId":"u","kind":"task","name":"n","schedule":{"type":"none"},"active":true,"createdAt":1,"updatedAt":2}""")).args
         assertEquals(8, args.size)

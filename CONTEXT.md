@@ -46,6 +46,17 @@ Occurrence itself: an Occurrence is when something was due, an Instance is what
 became of it.
 _Avoid_: Log, Entry, Dose log, Completion
 
+**Pause**:
+A stretch of time in which a Reminder has no Occurrences, after which it carries on as
+before. It starts now or on a later day and ends on a day the person names, or when they
+resume. Nothing inside it is Missed. Not Stop: a stopped Reminder is gone for good.
+_Avoid_: Suspend, Hold, Snooze (a snooze defers one Occurrence)
+
+**Stop**:
+Ending a Reminder for good, e.g. a course of treatment that is over. The history is kept;
+the Reminder no longer reminds, is no longer listed, and cannot be brought back.
+_Avoid_: Delete, Discontinue
+
 **Backlog**:
 The Reminders that have no Schedule at all. They are real commitments with no
 moment attached, so they never produce Occurrences and never appear on the
