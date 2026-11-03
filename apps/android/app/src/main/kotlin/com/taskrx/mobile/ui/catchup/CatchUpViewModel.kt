@@ -83,7 +83,7 @@ class CatchUpViewModel(
                 throw e
             } catch (e: Exception) {
                 log("a bulk answer failed", e)
-                toast(ToastRequest("Couldn't answer those doses", ToastKind.Error))
+                toast(ToastRequest("Couldn't answer those reminders", ToastKind.Error))
             }
             loads.withLock { load() }
         }

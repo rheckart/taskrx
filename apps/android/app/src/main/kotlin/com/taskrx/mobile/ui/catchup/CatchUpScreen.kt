@@ -62,7 +62,7 @@ fun CatchUpContent(
             refreshing = state.refreshing,
             onRefresh = onRefresh,
             skeletonRows = 6,
-            loadingDescription = "Loading missed doses",
+            loadingDescription = "Loading missed reminders",
             modifier = Modifier.weight(1f),
         ) {
             if (state.days.isEmpty()) {
