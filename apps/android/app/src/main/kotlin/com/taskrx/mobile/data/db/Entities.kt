@@ -50,6 +50,8 @@ data class ReminderEntity(
     @ColumnInfo(name = "created_at") val createdAt: Long,
     @ColumnInfo(name = "updated_at") val updatedAt: Long,
     @ColumnInfo(name = "sync_status") val syncStatus: String,
+    /** JSON array of pause windows (`pausesToJson`). Added in version 2; `[]` for every older row. */
+    @ColumnInfo(name = "pauses", defaultValue = "[]") val pauses: String = "[]",
 )
 
 /**

@@ -87,6 +87,7 @@ Room entities in `apps/android/app/src/main/kotlin/com/taskrx/mobile/data/db/Ent
 | `refill_reminder_days` | INTEGER | Refill tracking, nullable |
 | `caregiver_ids` | TEXT | JSON string array |
 | `active` | INTEGER | 1 = active |
+| `pauses` | TEXT | JSON array of `{from, until?}` windows (ADR 0009). `[]` when never paused. Added in database version 2 |
 | `created_at` | INTEGER | Unix ms |
 | `updated_at` | INTEGER | Unix ms |
 | `sync_status` | TEXT | `pending`, `synced`, or `error` |
@@ -136,7 +137,7 @@ table, and a task is never taken — see ADR 0001. The UI still *displays*
 
 See `packages/convex/convex/schema.ts`.
 
-- `reminders` mirrors the local `reminders` rows, keyed by `userId`.
+- `reminders` mirrors the local `reminders` rows, keyed by `userId`. `pauses` is an optional array of `{from, until?}` windows.
 - `reminderInstances` mirrors the local instance rows, with the parent named by its Convex document id.
 - Soft deletes use `deletedAt` on Convex; local rows are marked inactive or hard-deleted depending on the flow.
 - The `schedule` validator accepts the five variants (`daily`, `interval`, `weekly`, `once`, `none`) and rejects malformed payloads.
@@ -245,6 +246,10 @@ The gate commands are in the README.
 - A web client.
 - Drug interaction checking.
 - Push notifications (currently local-only; caregiver alerts via FCM deferred).
+
+### Pausing
+
+A medication can be paused (ADR 0009) from the Reminders screen: from now or a later day, until a chosen day or until the person resumes. A pause is a window on the Reminder (`pauses`), and `nextOccurrences` leaves out every moment inside one, so the Horizon, the timeline, the Missed sweep, Catch up and the refill projection all agree without each knowing about it. Pausing and resuming reschedule the notifications straight after, like Stop. Resuming ends the window at that moment rather than deleting it, so the sweep's seven-day lookback does not turn the paused doses into Missed ones.
 
 ### Recording a dose nobody scheduled
 

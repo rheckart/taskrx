@@ -340,8 +340,11 @@ private fun AppNavHost(container: AppContainer, navController: NavController) {
                     onRefresh = { vm.refresh(pulled = true) },
                     onEdit = { host.navigate(Routes.edit(it.id)) },
                     onStop = { vm.stop(it) },
+                    onPause = vm::pause,
+                    onResume = vm::resume,
                     onSearchDrug = { host.navigate(Routes.DRUG_SEARCH) },
                 ),
+                now = container.clock::invoke,
             )
         }
 

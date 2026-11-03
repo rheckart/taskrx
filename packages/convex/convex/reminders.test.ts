@@ -247,3 +247,152 @@ describe("reminders.update", () => {
     });
   });
 });
+
+/**
+ * Pause windows. A medication can be paused for a span (before surgery) and
+ * resumed later; `until` absent means open-ended. `pauses` is optional at the
+ * top level, so every document written before it existed stays valid.
+ *
+ * An empty array is a real value — it is how a client clears its pauses — so
+ * the conditional spreads test `!== undefined`, and several cases below exist
+ * only to tell `[]` apart from "not sent".
+ */
+const SURGERY = { from: NOW + 86_400_000, until: NOW + 7 * 86_400_000 };
+const OPEN_ENDED = { from: NOW + 86_400_000 };
+
+describe("reminders pauses on create", () => {
+  it("stores the windows it is given", async () => {
+    const t = deployment();
+    const id = await t.mutation(api.reminders.create, {
+      ...DEVICE_PUSH,
+      pauses: [SURGERY],
+    });
+
+    expect((await t.query(api.reminders.get, { id }))?.pauses).toEqual([
+      SURGERY,
+    ]);
+  });
+
+  it("leaves the field undefined when none are sent", async () => {
+    const t = deployment();
+    const id = await t.mutation(api.reminders.create, DEVICE_PUSH);
+
+    expect((await t.query(api.reminders.get, { id }))?.pauses).toBeUndefined();
+  });
+
+  it("accepts an open-ended window with no until", async () => {
+    const t = deployment();
+    const id = await t.mutation(api.reminders.create, {
+      ...DEVICE_PUSH,
+      pauses: [OPEN_ENDED],
+    });
+
+    const stored = (await t.query(api.reminders.get, { id }))?.pauses;
+    expect(stored).toEqual([OPEN_ENDED]);
+    expect(stored?.[0]).not.toHaveProperty("until");
+  });
+
+  it("rejects a window whose until is not a number", async () => {
+    const t = deployment();
+
+    await expect(
+      t.mutation(api.reminders.create, {
+        ...DEVICE_PUSH,
+        pauses: [
+          { from: NOW, until: "tomorrow" } as unknown as { from: number },
+        ],
+      })
+    ).rejects.toThrow();
+  });
+
+  it("rejects a window with no from", async () => {
+    const t = deployment();
+
+    await expect(
+      t.mutation(api.reminders.create, {
+        ...DEVICE_PUSH,
+        pauses: [{ until: NOW } as unknown as { from: number }],
+      })
+    ).rejects.toThrow();
+  });
+});
+
+describe("reminders pauses on a create replayed for the same localId", () => {
+  it("applies the windows it carries", async () => {
+    const t = deployment();
+    const id = await t.mutation(api.reminders.create, DEVICE_PUSH);
+
+    await t.mutation(api.reminders.create, {
+      ...DEVICE_PUSH,
+      pauses: [SURGERY],
+      updatedAt: NOW + 60_000,
+    });
+
+    expect((await t.query(api.reminders.get, { id }))?.pauses).toEqual([
+      SURGERY,
+    ]);
+  });
+
+  it("leaves existing windows alone when it carries none", async () => {
+    const t = deployment();
+    const id = await t.mutation(api.reminders.create, {
+      ...DEVICE_PUSH,
+      pauses: [SURGERY],
+    });
+
+    await t.mutation(api.reminders.create, {
+      ...DEVICE_PUSH,
+      name: "Metformin 500mg",
+      updatedAt: NOW + 60_000,
+    });
+
+    expect(await t.query(api.reminders.get, { id })).toMatchObject({
+      name: "Metformin 500mg",
+      pauses: [SURGERY],
+    });
+  });
+});
+
+describe("reminders pauses on update", () => {
+  it("sets them", async () => {
+    const t = deployment();
+    const id = await t.mutation(api.reminders.create, DEVICE_PUSH);
+
+    await t.mutation(api.reminders.update, { id, pauses: [SURGERY] });
+
+    expect((await t.query(api.reminders.get, { id }))?.pauses).toEqual([
+      SURGERY,
+    ]);
+  });
+
+  it("stores an empty array, which is how a client clears them", async () => {
+    const t = deployment();
+    const id = await t.mutation(api.reminders.create, {
+      ...DEVICE_PUSH,
+      pauses: [SURGERY],
+    });
+
+    await t.mutation(api.reminders.update, { id, pauses: [] });
+
+    expect((await t.query(api.reminders.get, { id }))?.pauses).toEqual([]);
+  });
+
+  it("leaves existing windows untouched when the update omits them", async () => {
+    const t = deployment();
+    const id = await t.mutation(api.reminders.create, {
+      ...DEVICE_PUSH,
+      pauses: [SURGERY, OPEN_ENDED],
+    });
+
+    await t.mutation(api.reminders.update, {
+      id,
+      name: "Metformin 850mg",
+      updatedAt: NOW + 60_000,
+    });
+
+    expect(await t.query(api.reminders.get, { id })).toMatchObject({
+      name: "Metformin 850mg",
+      pauses: [SURGERY, OPEN_ENDED],
+    });
+  });
+});

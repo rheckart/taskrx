@@ -8,6 +8,18 @@ for commit discipline (POC tags use `0.x.x`).
 
 ## [Unreleased]
 
+### 2026-11-02 — A medication can be paused
+
+For a medication you will start again, such as one held before surgery, the Reminders screen now has **Pause**.
+Choose when it starts (now, or a later day) and the day it starts again, or leave that open and press **Resume** when
+you are told to. While paused it does not remind you, and nothing in that time is counted as missed. A pause that has
+not started yet can be cancelled. **Stop** is still the way to end a course for good. ADR 0009 records the decision.
+
+- **Refill.** Doses that are not due do not use up the supply, so the run-out date moves out by the length of the pause.
+- **Sync.** Convex gains an optional `pauses` field on reminders. The phone's database moves to version 2 with a
+  migration that keeps every row.
+- **Deploy order:** deploy the Convex backend before installing an app that can pause.
+
 ### 2026-10-22 — A take, a skip or a snooze can be taken back
 
 A mis-tap on "Mark taken" used to be final. Now the confirmation card has an **Undo** button, and every answered

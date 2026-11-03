@@ -27,6 +27,7 @@ import com.taskrx.core.domain.ReminderKind
 import com.taskrx.mobile.format.describeSchedule
 import com.taskrx.mobile.format.formatDayTime
 import com.taskrx.mobile.format.kindLabel
+import com.taskrx.mobile.format.pauseLine
 import com.taskrx.mobile.ui.TaskRxColors
 import com.taskrx.mobile.ui.components.EmptyState
 import com.taskrx.mobile.ui.components.ListScaffold
@@ -35,6 +36,8 @@ data class RemindersActions(
     val onRefresh: () -> Unit,
     val onEdit: (Reminder) -> Unit,
     val onStop: (Reminder) -> Unit,
+    val onPause: (Reminder, PauseChoice) -> Unit,
+    val onResume: (Reminder) -> Unit,
     val onSearchDrug: () -> Unit,
 )
 
@@ -46,10 +49,17 @@ fun lastCompletedLine(entry: ReminderEntry): String {
 
 /** The Reminder list, drawn from [state]. Stopping asks first; it cannot be undone from here. */
 @Composable
-fun RemindersContent(state: RemindersState, actions: RemindersActions, modifier: Modifier = Modifier) {
+fun RemindersContent(
+    state: RemindersState,
+    actions: RemindersActions,
+    modifier: Modifier = Modifier,
+    now: () -> Long = System::currentTimeMillis,
+) {
     // The id, not the Reminder, so the dialog survives rotation.
     var confirming by rememberSaveable { mutableStateOf<String?>(null) }
+    var pausing by rememberSaveable { mutableStateOf<String?>(null) }
     val pending = state.entries.firstOrNull { it.reminder.id == confirming }?.reminder
+    val toPause = state.entries.firstOrNull { it.reminder.id == pausing }?.reminder
 
     ListScaffold(
         loading = state.loading,
@@ -70,9 +80,28 @@ fun RemindersContent(state: RemindersState, actions: RemindersActions, modifier:
             }
         } else {
             items(state.entries, key = { it.reminder.id }) { entry ->
-                ReminderRow(entry, onEdit = { actions.onEdit(entry.reminder) }, onStop = { confirming = entry.reminder.id })
+                ReminderRow(
+                    entry,
+                    now = now(),
+                    onEdit = { actions.onEdit(entry.reminder) },
+                    onStop = { confirming = entry.reminder.id },
+                    onPause = { pausing = entry.reminder.id },
+                    onResume = { actions.onResume(entry.reminder) },
+                )
             }
         }
+    }
+
+    if (toPause != null) {
+        PauseDialog(
+            toPause,
+            now = now(),
+            onConfirm = {
+                pausing = null
+                actions.onPause(toPause, it)
+            },
+            onDismiss = { pausing = null },
+        )
     }
 
     if (pending != null) {
@@ -92,7 +121,14 @@ fun RemindersContent(state: RemindersState, actions: RemindersActions, modifier:
 }
 
 @Composable
-private fun ReminderRow(entry: ReminderEntry, onEdit: () -> Unit, onStop: () -> Unit) {
+private fun ReminderRow(
+    entry: ReminderEntry,
+    now: Long,
+    onEdit: () -> Unit,
+    onStop: () -> Unit,
+    onPause: () -> Unit,
+    onResume: () -> Unit,
+) {
     val reminder = entry.reminder
     Column(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 12.dp)) {
         Column(
@@ -110,10 +146,18 @@ private fun ReminderRow(entry: ReminderEntry, onEdit: () -> Unit, onStop: () -> 
                 Modifier.padding(top = 4.dp),
                 color = TaskRxColors.BodyText,
             )
+            entry.pause?.let { Text(pauseLine(it, now), Modifier.padding(top = 4.dp), fontWeight = FontWeight.SemiBold, color = TaskRxColors.Secondary) }
             Text(lastCompletedLine(entry), Modifier.padding(top = 4.dp), color = TaskRxColors.Accent, style = MaterialTheme.typography.bodySmall)
         }
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             TextButton(onClick = onEdit, modifier = Modifier.semantics { contentDescription = "Edit ${reminder.name}" }) { Text("Edit") }
+            // A Task has no doses to hold back; pausing is for medications.
+            if (entry.pause != null) {
+                val word = if (entry.pause.from > now) "Cancel pause" else "Resume"
+                TextButton(onClick = onResume, modifier = Modifier.semantics { contentDescription = "$word ${reminder.name}" }) { Text(word) }
+            } else if (reminder.kind == ReminderKind.Medication) {
+                TextButton(onClick = onPause, modifier = Modifier.semantics { contentDescription = "Pause ${reminder.name}" }) { Text("Pause") }
+            }
             TextButton(onClick = onStop, modifier = Modifier.semantics { contentDescription = "Stop ${reminder.name}" }) {
                 Text("Stop", color = TaskRxColors.Error)
             }

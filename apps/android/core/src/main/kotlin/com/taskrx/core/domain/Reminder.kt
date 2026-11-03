@@ -40,6 +40,8 @@ data class Reminder(
     val active: Boolean,
     val createdAt: Long,
     override val updatedAt: Long,
+    /** Stretches in which this Reminder is paused; see `Pause.kt`. Empty for almost every Reminder. */
+    val pauses: List<PauseWindow> = emptyList(),
 ) : Timestamped
 
 /**
@@ -67,6 +69,7 @@ fun createReminder(
     refillReminderDays: Int? = null,
     caregiverIds: List<String> = emptyList(),
     active: Boolean = true,
+    pauses: List<PauseWindow> = emptyList(),
 ): Reminder =
     Reminder(
         id = id,
@@ -85,6 +88,7 @@ fun createReminder(
         active = active,
         createdAt = createdAt,
         updatedAt = updatedAt,
+        pauses = pauses.toList(),
     )
 
 data class ReminderInstance(

@@ -241,6 +241,8 @@ class ListScreensTest {
                 onRefresh = { log += "refresh" },
                 onEdit = { log += "edit:${it.name}" },
                 onStop = { log += "stop:${it.name}" },
+                onPause = { r, c -> log += "pause:${r.name}:${c.from}:${c.until}" },
+                onResume = { log += "resume:${it.name}" },
                 onSearchDrug = { log += "search" },
             )
     }

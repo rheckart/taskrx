@@ -43,6 +43,8 @@ kover {
             "com.taskrx.core.domain.InstanceStatus*",
             "com.taskrx.core.domain.NotificationType*",
             "com.taskrx.core.domain.ReminderKt*",
+            "com.taskrx.core.domain.PauseKt*",
+            "com.taskrx.core.domain.PauseWindow",
             "com.taskrx.core.domain.Reminder",
             "com.taskrx.core.domain.ReminderInstance",
             "com.taskrx.core.domain.Caregiver",
