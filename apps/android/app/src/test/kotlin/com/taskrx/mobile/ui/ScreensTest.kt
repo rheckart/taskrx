@@ -130,7 +130,8 @@ class ScreensTest {
         error: String? = null,
         undoable: Set<String> = emptySet(),
         kind: ReminderKind = ReminderKind.Medication,
-    ) = TodayState(dayOffset = offset, windowStart = 0, rows = rows.toList(), loading = loading, error = error, undoable = undoable, kind = kind)
+        hideCompleted: Boolean = false,
+    ) = TodayState(dayOffset = offset, windowStart = 0, rows = rows.toList(), loading = loading, error = error, undoable = undoable, kind = kind, hideCompleted = hideCompleted)
 
     @Test
     fun `a taken row offers Undo take`() {
@@ -588,6 +589,21 @@ class ScreensTest {
         compose.onNodeWithContentDescription("Back to today").performClick()
 
         assertEquals(listOf("prev", "today"), calls.log)
+    }
+
+    @Test
+    fun `on Tasks the next arrow is live from today, and on a day ahead`() {
+        val calls = Calls()
+        today(state(offset = 2, kind = ReminderKind.Task), calls)
+
+        compose.onNodeWithContentDescription("Next day").assertIsEnabled().performClick()
+
+        assertEquals(listOf("next"), calls.log)
+    }
+
+    @Test
+    fun `Hide done is on until the person turns it off`() {
+        assertTrue(TodayState(windowStart = 0).hideCompleted)
     }
 
     @Test

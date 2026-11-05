@@ -165,12 +165,10 @@ private fun DayBar(state: TodayState, actions: TodayActions) {
         TextButton(onClick = actions.onToday, modifier = Modifier.semantics { contentDescription = "Back to today" }) {
             Text(heading, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
         }
-        // Forward only as far as today. On a future day every row is ahead of now, so the
-        // first would be badged NEXT, which reads as "do this now" about something not due
-        // for a day.
+        // Medications stop at today; tasks can look ahead.
         TextButton(
             onClick = actions.onNextDay,
-            enabled = state.dayOffset < 0,
+            enabled = state.canGoForward,
             modifier = Modifier.semantics { contentDescription = "Next day" },
         ) {
             Text("›", fontSize = 44.sp)

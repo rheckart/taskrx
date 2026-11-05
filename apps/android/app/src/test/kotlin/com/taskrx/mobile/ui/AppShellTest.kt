@@ -183,6 +183,9 @@ class AppShellTest {
         compose.onNodeWithText("Mark taken").performClick()
         awaitText("Recorded")
         compose.onNodeWithText("Done").performScrollTo().performClick()
+        // Hide done is on to begin with, so the answered dose leaves the list until it is turned off.
+        awaitText("All done")
+        compose.onNodeWithText("Hide done").performClick()
         awaitText("Taken", substring = true)
 
         compose.onNodeWithText("Metformin").assertExists()

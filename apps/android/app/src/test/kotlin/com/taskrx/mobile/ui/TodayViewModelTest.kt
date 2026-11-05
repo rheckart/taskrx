@@ -172,12 +172,12 @@ class TodayViewModelTest {
             val vm = vm()
             vm.refresh().join()
 
-            assertEquals(2, vm.state.value.visibleRows.size)
-            vm.toggleHideCompleted()
             assertEquals(listOf(InstanceStatus.Pending), vm.state.value.visibleRows.map { it.status })
             assertEquals(2, vm.state.value.rows.size)
             vm.toggleHideCompleted()
             assertEquals(2, vm.state.value.visibleRows.size)
+            vm.toggleHideCompleted()
+            assertEquals(listOf(InstanceStatus.Pending), vm.state.value.visibleRows.map { it.status })
         }
 
     @Test
@@ -435,6 +435,37 @@ class TodayViewModelTest {
             vm.nextDay().join()
             assertEquals(0, vm.state.value.dayOffset)
             assertEquals(MIDNIGHT, vm.state.value.windowStart)
+        }
+
+    @Test
+    fun `tasks can look ahead, and nothing on a day ahead is badged next`() =
+        withUi(MIDNIGHT + 8 * HOUR) {
+            reminder("task", ReminderKind.Task, onceTimes(MIDNIGHT + DAY + 10 * HOUR), createdAt = MIDNIGHT - DAY, name = "Call pharmacy")
+            val vm = vm()
+            vm.refresh().join()
+            assertEquals(ReminderKind.Task, vm.state.value.kind)
+
+            vm.nextDay().join()
+
+            assertEquals(1, vm.state.value.dayOffset)
+            assertEquals(listOf("Call pharmacy"), vm.state.value.rows.map { it.name })
+            assertEquals(listOf(false), vm.state.value.rows.map { it.isNext })
+            vm.nextDay().join()
+            assertEquals(2, vm.state.value.dayOffset)
+        }
+
+    @Test
+    fun `leaving Tasks on a day ahead comes back to today`() =
+        withUi(MIDNIGHT + 8 * HOUR) {
+            reminder("task", ReminderKind.Task, onceTimes(MIDNIGHT + DAY + 10 * HOUR), createdAt = MIDNIGHT - DAY, name = "Call pharmacy")
+            val vm = vm()
+            vm.refresh().join()
+            vm.nextDay().join()
+
+            vm.selectKind(ReminderKind.Medication).join()
+
+            assertEquals(0, vm.state.value.dayOffset)
+            assertEquals(ReminderKind.Medication, vm.state.value.kind)
         }
 
     @Test
