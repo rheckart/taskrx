@@ -137,7 +137,7 @@ table, and a task is never taken — see ADR 0001. The UI still *displays*
 
 See `packages/convex/convex/schema.ts`.
 
-- `reminders` mirrors the local `reminders` rows, keyed by `userId`. `pauses` is an optional array of `{from, until?}` windows.
+- `reminders` mirrors the local `reminders` rows, keyed by `userId`. `pauses` is an optional array of `{from, until?}` windows. `schedule` is a union, one member of which is `{type: "asNeeded", minGapMinutes, maxPer24h?}` (ADR 0010).
 - `reminderInstances` mirrors the local instance rows, with the parent named by its Convex document id.
 - Soft deletes use `deletedAt` on Convex; local rows are marked inactive or hard-deleted depending on the flow.
 - The `schedule` validator accepts the five variants (`daily`, `interval`, `weekly`, `once`, `none`) and rejects malformed payloads.
@@ -246,6 +246,10 @@ The gate commands are in the README.
 - A web client.
 - Drug interaction checking.
 - Push notifications (currently local-only; caregiver alerts via FCM deferred).
+
+### Taking a medication as needed
+
+A medication can be taken **as needed** (ADR 0010): the Schedule variant `AsNeededTimes(minGapMinutes, maxPer24h?)`, which has no Occurrences. `asNeededStatus` in `:core` reads the moments its doses were taken (Completed Instances) and says when the next is allowed. Today shows each as a card with a countdown at the top of the Medications tab; the notification scheduler arms one "you can take another dose" prompt at that moment (id `ready-<reminderId>-<readyAt>`, Medication Tier) and arms nothing once it has passed. Its Take button records a dose through `DoseRecorder`; Skip writes nothing. Adherence leaves these medications out.
 
 ### Pausing
 

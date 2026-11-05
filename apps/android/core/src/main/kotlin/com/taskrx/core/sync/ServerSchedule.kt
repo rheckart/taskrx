@@ -1,5 +1,6 @@
 package com.taskrx.core.sync
 
+import com.taskrx.core.domain.AsNeededTimes
 import com.taskrx.core.domain.DailyTimes
 import com.taskrx.core.domain.IntervalTimes
 import com.taskrx.core.domain.NoneTimes
@@ -77,6 +78,13 @@ fun scheduleFromServer(value: JsonElement?): ScheduleTimes? {
         }
         "once" -> value["at"].whole()?.let(::OnceTimes)
         "none" -> NoneTimes
+        "asNeeded" -> {
+            val gap = value["minGapMinutes"].whole()?.takeIf { it in 1..Int.MAX_VALUE }
+            val max = value["maxPer24h"]
+            val limit = max.whole()?.takeIf { it in 1..Int.MAX_VALUE }
+            // A limit that is absent is "no limit"; one that is present but unreadable is a schedule that cannot be trusted.
+            if (gap == null || (max != null && limit == null)) null else AsNeededTimes(gap.toInt(), limit?.toInt())
+        }
         else -> null
     }
 }

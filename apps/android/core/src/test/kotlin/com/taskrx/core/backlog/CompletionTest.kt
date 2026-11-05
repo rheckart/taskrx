@@ -7,6 +7,7 @@ import com.taskrx.core.domain.ScheduleTimes
 import com.taskrx.core.domain.createReminder
 import com.taskrx.core.domain.dailyTimes
 import com.taskrx.core.domain.intervalTimes
+import com.taskrx.core.domain.asNeededTimes
 import com.taskrx.core.domain.noneTimes
 import com.taskrx.core.domain.onceTimes
 import com.taskrx.core.domain.weeklyTimes
@@ -108,5 +109,6 @@ class PlanBacklogCompletionTest {
     @Test
     fun `spells the none variant as the wire does, though a refusal never reaches it`() {
         assertEquals("none", scheduleTypeName(noneTimes()))
+        assertEquals("asNeeded", scheduleTypeName(asNeededTimes(240)))
     }
 }

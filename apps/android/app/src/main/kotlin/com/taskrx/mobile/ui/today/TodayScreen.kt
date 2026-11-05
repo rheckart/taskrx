@@ -10,6 +10,7 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.semantics.onLongClick
 import com.taskrx.mobile.ui.forms.TimeDialog
 import java.time.Instant
+import kotlinx.coroutines.delay
 import java.time.ZoneId
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -27,6 +28,8 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Button
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.FloatingActionButton
@@ -38,6 +41,8 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -50,15 +55,21 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.taskrx.core.asneeded.AsNeededStatus
+import com.taskrx.core.asneeded.AsNeededWait
+import com.taskrx.core.asneeded.asNeededStatus
 import com.taskrx.core.batch.BatchAction
 import com.taskrx.core.batch.batchSlots
 import com.taskrx.core.domain.InstanceStatus
+import com.taskrx.core.domain.Reminder
 import com.taskrx.core.domain.ReminderKind
 import com.taskrx.core.domain.isAnswerable
 import com.taskrx.core.timeline.TimelineRow
 import com.taskrx.core.timeline.timelineRowKey
 import com.taskrx.core.undo.undoWillBeMissed
+import com.taskrx.mobile.format.asNeededLines
 import com.taskrx.mobile.format.dayHeading
+import com.taskrx.mobile.format.describeMinutes
 import com.taskrx.mobile.format.emptyDayBody
 import com.taskrx.mobile.format.formatTime
 import com.taskrx.mobile.format.kindLabel
@@ -98,6 +109,8 @@ data class TodayActions(
     val onHistory: () -> Unit,
     val onSettings: () -> Unit,
     val onCatchUp: () -> Unit = {},
+    /** Record a dose of an as-needed medication as taken now. */
+    val onTakeAsNeeded: (Reminder) -> Unit = {},
 )
 
 /**
@@ -123,11 +136,91 @@ fun TodayContent(
                 MoreMenu(actions)
             }
             DayBar(state, actions)
+            // Outside the list, so an as-needed medication on its own does not read as "no medications scheduled".
+            if (state.kind == ReminderKind.Medication && state.dayOffset == 0 && state.asNeeded.isNotEmpty()) {
+                AsNeededCards(state.asNeeded, actions.onTakeAsNeeded, now)
+            }
             Box(Modifier.weight(1f).fillMaxWidth()) {
                 Timeline(state, actions, now)
             }
         }
         AddButton(actions, Modifier.align(Alignment.BottomEnd).padding(16.dp))
+    }
+}
+
+/**
+ * The medications taken as needed, each with when its next dose is allowed. Read from the takings
+ * every minute rather than stored, so the countdown runs and a dose leaves the 24-hour window on
+ * time. Taking one before it is allowed asks first, and says why, but never refuses: a dose already
+ * swallowed must always be recordable, and the person knows their situation better than a rule does.
+ */
+@Composable
+private fun AsNeededCards(entries: List<AsNeededEntry>, onTake: (Reminder) -> Unit, now: () -> Long) {
+    var current by remember(entries) { mutableLongStateOf(now()) }
+    LaunchedEffect(entries) {
+        while (true) {
+            current = now()
+            delay(60_000L - current % 60_000L)
+        }
+    }
+    var asking by remember { mutableStateOf<AsNeededEntry?>(null) }
+    Text(
+        "As needed",
+        Modifier.padding(start = 16.dp, top = 8.dp),
+        style = MaterialTheme.typography.labelLarge,
+        color = TaskRxColors.Secondary,
+    )
+    for (entry in entries) {
+        val status = asNeededStatus(entry.schedule, entry.takings, current)
+        val ready = status.isReady(current)
+        val lines = asNeededLines(entry.schedule, status, current)
+        val name = entry.reminder.name + (entry.reminder.dosage?.let { " ($it)" } ?: "")
+        Row(
+            Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 16.dp, vertical = 6.dp)
+                .semantics(mergeDescendants = true) { contentDescription = "$name. ${lines.headline}. ${lines.detail}" },
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Column(Modifier.weight(1f)) {
+                Text(name, style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.SemiBold)
+                Text(lines.headline, fontWeight = FontWeight.SemiBold, color = if (ready) TaskRxColors.Completed else TaskRxColors.Accent)
+                if (lines.detail.isNotEmpty()) Text(lines.detail, color = TaskRxColors.Secondary, fontSize = 14.sp)
+            }
+            Button(
+                onClick = { if (ready) onTake(entry.reminder) else asking = entry },
+                shape = RoundedCornerShape(6.dp),
+                modifier = Modifier.semantics { contentDescription = "Take ${entry.reminder.name} now" },
+            ) { Text(if (ready) "Take" else "Take anyway") }
+        }
+        HorizontalDivider(color = TaskRxColors.Divider)
+    }
+    asking?.let { entry ->
+        val status = asNeededStatus(entry.schedule, entry.takings, current)
+        AlertDialog(
+            onDismissRequest = { asking = null },
+            title = { Text("Take ${entry.reminder.name} now?") },
+            text = { Text(tooSoonWords(entry, status, current)) },
+            confirmButton = {
+                TextButton(onClick = {
+                    asking = null
+                    onTake(entry.reminder)
+                }) { Text("Take anyway") }
+            },
+            dismissButton = { TextButton(onClick = { asking = null }) { Text("Not yet") } },
+        )
+    }
+}
+
+/** Why the app is asking: which rule the dose would break, in the person's own numbers. */
+private fun tooSoonWords(entry: AsNeededEntry, status: AsNeededStatus, now: Long): String {
+    val schedule = entry.schedule
+    val limit = schedule.maxPer24h
+    return if (status.wait == AsNeededWait.Limit && limit != null) {
+        "You have taken ${status.takenIn24h} in the last 24 hours, and you set no more than $limit. Take it anyway?"
+    } else {
+        val since = maxOf(1L, (now - (status.lastTakenAt ?: now)) / 60_000L).toInt()
+        "The last dose was ${describeMinutes(since)} ago, and you set at least ${describeMinutes(schedule.minGapMinutes)} between doses. Take it anyway?"
     }
 }
 
@@ -232,13 +325,24 @@ private fun Timeline(state: TodayState, actions: TodayActions, now: () -> Long) 
                     LazyColumn(Modifier.fillMaxSize()) {
                         item {
                             Centered(Modifier.fillParentMaxSize()) {
+                                // With as-needed medications above, "no medications" would sit under a card that says
+                                // "Ready now": it is the scheduled doses there are none of.
+                                val asNeededAbove = state.kind == ReminderKind.Medication && state.dayOffset == 0 && state.asNeeded.isNotEmpty()
                                 Text(
-                                    if (allDone) "All done" else "No ${tabWord(state.kind).lowercase()} scheduled",
+                                    when {
+                                        allDone -> "All done"
+                                        asNeededAbove -> "No scheduled doses"
+                                        else -> "No ${tabWord(state.kind).lowercase()} scheduled"
+                                    },
                                     style = MaterialTheme.typography.titleMedium,
                                     fontWeight = FontWeight.SemiBold,
                                 )
                                 Text(
-                                    if (allDone) "Everything on this day is completed." else emptyDayBody(state.dayOffset, dayHeading(state.dayOffset, state.windowStart)),
+                                    when {
+                                        allDone -> "Everything on this day is completed."
+                                        asNeededAbove -> "Take an as-needed medication from its card above."
+                                        else -> emptyDayBody(state.dayOffset, dayHeading(state.dayOffset, state.windowStart))
+                                    },
                                     Modifier.padding(top = 8.dp),
                                     color = TaskRxColors.Secondary,
                                     textAlign = TextAlign.Center,

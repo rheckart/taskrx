@@ -3,6 +3,7 @@ package com.taskrx.mobile.ui
 import com.taskrx.core.batch.BatchAction
 import com.taskrx.core.domain.InstanceStatus
 import com.taskrx.core.domain.ReminderKind
+import com.taskrx.core.domain.asNeededTimes
 import com.taskrx.core.domain.dailyTimes
 import com.taskrx.core.domain.onceTimes
 import com.taskrx.mobile.DAY
@@ -82,6 +83,118 @@ class TodayViewModelTest {
             vm.refresh().join()
 
             vm.selectKind(ReminderKind.Medication)
+            vm.refresh().join()
+
+            assertEquals(ReminderKind.Medication, vm.state.value.kind)
+        }
+
+    @Test
+    fun `a medication taken as needed is a card with its takings, and no row on the day`() =
+        withUi(MIDNIGHT + 12 * HOUR) {
+            val r = reminder("tylenol", schedule = asNeededTimes(240, 5), createdAt = MIDNIGHT - 10 * DAY, name = "Tylenol")
+            val taken = MIDNIGHT + 9 * HOUR
+            val instance = container.instances.create(CreateReminderInstanceInput(USER, r.id, r.kind, taken))
+            container.instances.markCompleted(instance.id, taken)
+            val vm = vm()
+
+            vm.refresh().join()
+
+            val card = vm.state.value.asNeeded.single()
+            assertEquals("Tylenol", card.reminder.name)
+            assertEquals(asNeededTimes(240, 5), card.schedule)
+            assertEquals(listOf(taken), card.takings)
+            // Nothing was due, so the day has no row of its own for it except the one dose that was taken.
+            assertEquals(listOf(InstanceStatus.Completed), vm.state.value.rows.map { it.status })
+        }
+
+    @Test
+    fun `a skipped dose or one on another medication is not one of this medication's takings`() =
+        withUi(MIDNIGHT + 12 * HOUR) {
+            val a = reminder("a", schedule = asNeededTimes(240), createdAt = MIDNIGHT - 10 * DAY)
+            val b = reminder("b", schedule = asNeededTimes(240), createdAt = MIDNIGHT - 10 * DAY)
+            container.instances.markSkipped(container.instances.create(CreateReminderInstanceInput(USER, a.id, a.kind, MIDNIGHT + 8 * HOUR)).id)
+            val other = container.instances.create(CreateReminderInstanceInput(USER, b.id, b.kind, MIDNIGHT + 9 * HOUR))
+            container.instances.markCompleted(other.id, MIDNIGHT + 9 * HOUR)
+            val vm = vm()
+
+            vm.refresh().join()
+
+            assertEquals(mapOf("a" to emptyList(), "b" to listOf(MIDNIGHT + 9 * HOUR)), vm.state.value.asNeeded.associate { it.reminder.id to it.takings })
+        }
+
+    @Test
+    fun `a task that arrived with an as-needed schedule is no card`() =
+        withUi(MIDNIGHT + 12 * HOUR) {
+            reminder("odd", ReminderKind.Task, asNeededTimes(240), createdAt = MIDNIGHT - 10 * DAY)
+            val vm = vm()
+
+            vm.refresh().join()
+
+            assertEquals(emptyList(), vm.state.value.asNeeded)
+        }
+
+    @Test
+    fun `a stopped as-needed medication has no card`() =
+        withUi(MIDNIGHT + 12 * HOUR) {
+            val r = reminder("a", schedule = asNeededTimes(240), createdAt = MIDNIGHT - 10 * DAY)
+            container.reminders.update(r.id, com.taskrx.mobile.data.UpdateReminderPatch(active = false))
+            val vm = vm()
+
+            vm.refresh().join()
+
+            assertEquals(emptyList(), vm.state.value.asNeeded)
+        }
+
+    @Test
+    fun `taking an as-needed dose records it now and starts the wait, with a prompt armed for when it ends`() =
+        withUi(MIDNIGHT + 12 * HOUR) {
+            val r = reminder("tylenol", schedule = asNeededTimes(240), createdAt = MIDNIGHT - 10 * DAY, name = "Tylenol")
+            val vm = vm()
+            vm.refresh().join()
+
+            vm.takeAsNeeded(r).join()
+
+            assertEquals(listOf(now), vm.state.value.asNeeded.single().takings)
+            assertEquals("Tylenol recorded as taken", container.toaster.current.value?.message)
+            assertTrue(alarms().any { it.triggerAtTime == now + 4 * HOUR }, "no prompt at the end of the wait")
+        }
+
+    @Test
+    fun `recording a second dose in the same minute says so and does not add another`() =
+        withUi(MIDNIGHT + 12 * HOUR) {
+            val r = reminder("tylenol", schedule = asNeededTimes(240), createdAt = MIDNIGHT - 10 * DAY, name = "Tylenol")
+            val vm = vm()
+            vm.refresh().join()
+            vm.takeAsNeeded(r).join()
+
+            vm.takeAsNeeded(r).join()
+
+            assertEquals(1, vm.state.value.asNeeded.single().takings.size)
+            assertEquals("Already recorded at this time", container.toaster.current.value?.message)
+        }
+
+    @Test
+    fun `moving the time a dose was taken moves the prompt for the next one`() =
+        withUi(MIDNIGHT + 12 * HOUR) {
+            val r = reminder("tylenol", schedule = asNeededTimes(240), createdAt = MIDNIGHT - 10 * DAY, name = "Tylenol")
+            val vm = vm()
+            vm.refresh().join()
+            vm.takeAsNeeded(r).join()
+            assertTrue(alarms().any { it.triggerAtTime == now + 4 * HOUR })
+
+            vm.changeTakenTime(vm.state.value.rows.single(), 11, 30).join()
+
+            val movedTo = MIDNIGHT + 11 * HOUR + 30 * 60_000 + 4 * HOUR
+            assertTrue(alarms().any { it.triggerAtTime == movedTo }, "the prompt did not follow the new time")
+            assertFalse(alarms().any { it.triggerAtTime == now + 4 * HOUR }, "the old prompt is still armed")
+        }
+
+    @Test
+    fun `with only an as-needed medication entered Today opens on Medications, where its card is`() =
+        withUi(MIDNIGHT + 12 * HOUR) {
+            reminder("tylenol", schedule = asNeededTimes(240), createdAt = MIDNIGHT - 10 * DAY, name = "Tylenol")
+            val vm = vm()
+
             vm.refresh().join()
 
             assertEquals(ReminderKind.Medication, vm.state.value.kind)

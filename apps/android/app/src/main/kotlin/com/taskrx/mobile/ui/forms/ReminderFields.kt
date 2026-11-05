@@ -53,7 +53,7 @@ fun ReminderFields(
         )
 
         FieldLabel("Schedule type")
-        ScheduleTypeChooser(scheduleTypeOf(schedule), onSchedule, now)
+        ScheduleTypeChooser(scheduleTypeOf(schedule), onSchedule, now, offerAsNeeded = !isTask)
         SchedulePicker(schedule, onSchedule, now = now)
     }
 }

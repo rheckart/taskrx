@@ -35,12 +35,14 @@ import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
+import com.taskrx.core.domain.AsNeededTimes
 import com.taskrx.core.domain.DailyTimes
 import com.taskrx.core.domain.IntervalTimes
 import com.taskrx.core.domain.NoneTimes
 import com.taskrx.core.domain.OnceTimes
 import com.taskrx.core.domain.ScheduleTimes
 import com.taskrx.core.domain.WeeklyTimes
+import com.taskrx.core.domain.asNeededTimes
 import com.taskrx.core.domain.dailyTimes
 import com.taskrx.core.domain.intervalTimes
 import com.taskrx.core.domain.onceTimes
@@ -79,9 +81,11 @@ fun ScheduleTypeChooser(
     onChange: (ScheduleTimes) -> Unit,
     now: () -> Long,
     modifier: Modifier = Modifier,
+    /** "As needed" is a way to take a medication; a task has no doses to space out, and the Backlog is for things with no rule. */
+    offerAsNeeded: Boolean = false,
 ) {
     ChoiceRow(
-        options = ScheduleType.entries.map { it to it.label },
+        options = ScheduleType.entries.filter { offerAsNeeded || it != ScheduleType.AsNeeded }.map { it to it.label },
         value = value,
         // Receives a fresh default for the chosen variant, not the bare type.
         onChange = { onChange(defaultSchedule(it, now())) },
@@ -113,6 +117,7 @@ fun SchedulePicker(
                 HintText(
                     "No time at all. This goes to your Backlog, where you can complete it whenever you get to it — or give it a time later.",
                 )
+            is AsNeededTimes -> AsNeededPicker(value, onChange)
         }
     }
 }
@@ -223,6 +228,45 @@ private fun WeeklyPicker(value: WeeklyTimes, onChange: (ScheduleTimes) -> Unit) 
     }
     if (value.daysOfWeek.isEmpty()) ErrorText("Pick at least one day.")
     TimesEditor(value.times) { onChange(weeklyTimes(value.daysOfWeek, it)) }
+}
+
+/**
+ * How soon the next dose of an as-needed medication is allowed: the least time between doses and,
+ * if wanted, the most doses in 24 hours. No times at all; the app says when the next dose can be taken.
+ */
+@Composable
+private fun AsNeededPicker(value: AsNeededTimes, onChange: (ScheduleTimes) -> Unit) {
+    var unit by rememberSaveable { mutableStateOf(bestGapUnit(value.minGapMinutes)) }
+    var gapText by rememberSaveable { mutableStateOf((value.minGapMinutes / unit.minutes).toString()) }
+    var limitText by rememberSaveable { mutableStateOf(value.maxPer24h?.toString() ?: "") }
+    fun changed(gap: String, to: GapUnit, limit: String) {
+        gapText = gap
+        unit = to
+        limitText = limit
+        onChange(asNeededTimes(gapMinutes(parseIntervalHours(gap), to), parseDailyLimit(limit)))
+    }
+    FieldLabel("At least this long between doses")
+    OutlinedTextField(
+        value = gapText,
+        onValueChange = { changed(it, unit, limitText) },
+        modifier = Modifier.fillMaxWidth().padding(top = 4.dp),
+        singleLine = true,
+        placeholder = { Text("4") },
+        isError = parseIntervalHours(gapText) == 0,
+        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+    )
+    ChoiceRow(GapUnit.entries.map { it to it.label }, unit, { changed(gapText, it, limitText) })
+    FieldLabel("No more than this many doses in 24 hours (optional)")
+    OutlinedTextField(
+        value = limitText,
+        onValueChange = { changed(gapText, unit, it) },
+        modifier = Modifier.fillMaxWidth().padding(top = 4.dp),
+        singleLine = true,
+        placeholder = { Text("No limit") },
+        isError = limitText.isNotBlank() && parseDailyLimit(limitText) == 0,
+        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+    )
+    HintText("No times. After you take a dose, the app shows when the next one is allowed and reminds you then. You can always skip it.")
 }
 
 @Composable

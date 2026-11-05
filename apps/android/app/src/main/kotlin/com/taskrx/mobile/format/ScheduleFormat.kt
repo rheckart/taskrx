@@ -1,5 +1,6 @@
 package com.taskrx.mobile.format
 
+import com.taskrx.core.domain.AsNeededTimes
 import com.taskrx.core.domain.DailyTimes
 import com.taskrx.core.domain.IntervalTimes
 import com.taskrx.core.domain.NoneTimes
@@ -40,7 +41,26 @@ fun describeSchedule(
         }
         is OnceTimes -> "Once, ${formatDayTime(schedule.at, zone, locale)}"
         NoneTimes -> "In your backlog — no time set"
+        is AsNeededTimes -> describeAsNeeded(schedule)
     }
+
+/** "As needed · at least 4 hours apart · up to 5 a day": the rule, since there are no times to read out. */
+fun describeAsNeeded(schedule: AsNeededTimes): String {
+    val gap = "at least ${describeMinutes(schedule.minGapMinutes)} apart"
+    return "As needed · $gap" + (schedule.maxPer24h?.let { " · up to $it in 24 hours" } ?: "")
+}
+
+/** "4 hours", "90 minutes", "1 hour 30 minutes". */
+fun describeMinutes(minutes: Int): String {
+    val hours = minutes / 60
+    val rest = minutes % 60
+    fun unit(count: Int, noun: String) = "$count $noun${if (count == 1) "" else "s"}"
+    return when {
+        hours == 0 -> unit(rest, "minute")
+        rest == 0 -> unit(hours, "hour")
+        else -> "${unit(hours, "hour")} ${unit(rest, "minute")}"
+    }
+}
 
 /** An interval in the largest unit that counts it exactly: "2 weeks", "3 days", "1 hour", "36 hours". */
 fun describeInterval(hours: Int): String {

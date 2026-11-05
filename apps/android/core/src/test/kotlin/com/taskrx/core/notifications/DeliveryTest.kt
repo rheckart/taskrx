@@ -2,6 +2,7 @@ package com.taskrx.core.notifications
 
 import com.taskrx.core.domain.Reminder
 import com.taskrx.core.domain.ReminderKind
+import com.taskrx.core.domain.asNeededTimes
 import com.taskrx.core.domain.createReminder
 import com.taskrx.core.domain.dailyTimes
 import com.taskrx.core.schedule.ScheduledOccurrence
@@ -41,6 +42,7 @@ class ChannelAndIdTest {
         assertEquals("r1-1000", medicationNotificationId("r1", 1000))
         assertEquals("task-r1-1000", taskNotificationId("r1", 1000))
         assertEquals("snooze-r1-1000-2000", snoozeNotificationId("r1", 1000, 2000))
+        assertEquals("ready-r1-2000", readyNotificationId("r1", 2000))
     }
 
     @Test
@@ -55,6 +57,8 @@ class ChannelAndIdTest {
         assertTrue(belongsToReminder("r1-5", "r1"))
         assertTrue(belongsToReminder("task-r1-5", "r1"))
         assertTrue(belongsToReminder("snooze-r1-5-9", "r1"))
+        assertTrue(belongsToReminder("ready-r1-5", "r1"))
+        assertFalse(belongsToReminder("ready-r2-5", "r1"))
         assertFalse(belongsToReminder("r2-5", "r1"))
         assertFalse(belongsToReminder("task-r2-5", "r1"))
         assertFalse(belongsToReminder("snooze-r2-5-9", "r1"))
@@ -179,5 +183,85 @@ class DesiredNotificationsTest {
     @Test
     fun `defaults to the system zone`() {
         assertTrue(desiredNotifications(listOf(rem("m", ReminderKind.Medication)), 0).isNotEmpty())
+    }
+}
+
+class AsNeededReadyTest {
+    private val hour = 3_600_000L
+    private val now = 1_000 * hour
+
+    private fun tylenol(active: Boolean = true, max: Int? = null) =
+        createReminder(
+            id = "t",
+            userId = "u",
+            kind = ReminderKind.Medication,
+            name = "Tylenol",
+            dosage = "500mg",
+            schedule = asNeededTimes(240, max),
+            createdAt = 0,
+            updatedAt = 0,
+            active = active,
+        )
+
+    private fun desired(reminder: Reminder, takings: List<Long>) =
+        desiredNotifications(listOf(reminder), now, ZoneOffset.UTC, takings = mapOf("t" to takings))
+
+    @Test
+    fun `a dose just taken is prompted for again when the gap is over`() {
+        val specs = desired(tylenol(), listOf(now - hour))
+
+        val spec = specs.single()
+        assertEquals("ready-t-${now + 3 * hour}", spec.id)
+        assertEquals(now + 3 * hour, spec.fireAt)
+        assertEquals(Tier.Medication, spec.tier)
+        assertEquals("Tylenol", spec.title)
+        assertEquals("You can take another dose (500mg)", spec.body)
+        assertTrue(spec.asNeeded)
+    }
+
+    @Test
+    fun `nothing is armed once the moment has passed, so an ignored prompt is not re-armed`() {
+        assertEquals(emptyList(), desired(tylenol(), listOf(now - 5 * hour)))
+    }
+
+    @Test
+    fun `nothing is armed before a first dose`() {
+        assertEquals(emptyList(), desired(tylenol(), emptyList()))
+        assertEquals(emptyList(), desiredNotifications(listOf(tylenol()), now, ZoneOffset.UTC))
+    }
+
+    @Test
+    fun `at the daily limit the prompt waits for the limit, not the gap`() {
+        val takings = listOf(now - 23 * hour, now - 22 * hour, now - 21 * hour, now - 20 * hour, now - 19 * hour)
+
+        assertEquals(now + hour, desired(tylenol(max = 5), takings).single().fireAt)
+    }
+
+    @Test
+    fun `a task never prompts on the alarm clock, whatever schedule it arrived with`() {
+        val task = createReminder("t", "u", ReminderKind.Task, "Chore", schedule = asNeededTimes(240), createdAt = 0, updatedAt = 0)
+
+        assertEquals(emptyList(), desiredNotifications(listOf(task), now, ZoneOffset.UTC, takings = mapOf("t" to listOf(now - hour))))
+    }
+
+    @Test
+    fun `a stopped medication prompts for nothing`() {
+        assertEquals(emptyList(), desired(tylenol(active = false), listOf(now - hour)))
+    }
+
+    @Test
+    fun `taking another dose moves the prompt rather than adding a second`() {
+        val first = desired(tylenol(), listOf(now - hour)).single().id
+        val second = desired(tylenol(), listOf(now - hour, now)).single().id
+
+        assertFalse(first == second)
+    }
+
+    @Test
+    fun `a prompt does not use up a scheduled dose's place in the budget`() {
+        val doses = rem("m", ReminderKind.Medication)
+        val withPrompt = desiredNotifications(listOf(doses, tylenol()), 0, ZoneOffset.UTC, takings = mapOf("t" to listOf(0L)))
+
+        assertEquals(desiredNotifications(listOf(doses), 0, ZoneOffset.UTC).size + 1, withPrompt.size)
     }
 }

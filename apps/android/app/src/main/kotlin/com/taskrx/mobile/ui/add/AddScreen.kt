@@ -151,7 +151,7 @@ private fun DraftStep(state: AddState, draft: ReminderDraft, vm: AddViewModel, n
 
     FieldLabel("Schedule")
     Text(describeSchedule(draft.schedule), Modifier.padding(top = 4.dp, bottom = 8.dp), style = MaterialTheme.typography.bodyLarge)
-    ScheduleTypeChooser(scheduleTypeOf(draft.schedule), vm::setSchedule, now)
+    ScheduleTypeChooser(scheduleTypeOf(draft.schedule), vm::setSchedule, now, offerAsNeeded = draft.kind == ReminderKind.Medication)
     SchedulePicker(draft.schedule, vm::setSchedule, now = now)
 
     // Supply, for a medication. Shown outright when the phrase named any of the three,

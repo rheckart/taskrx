@@ -1,5 +1,7 @@
 package com.taskrx.mobile.notifications
 
+import com.taskrx.core.asneeded.takings
+import com.taskrx.core.domain.AsNeededTimes
 import com.taskrx.core.domain.Reminder
 import com.taskrx.core.domain.isAnswerable
 import com.taskrx.core.notifications.RearmCause
@@ -43,6 +45,10 @@ class NotificationScheduler(
 ) {
     private val lock = Mutex()
 
+    private companion object {
+        const val DAY_MS = 24 * 60 * 60_000L
+    }
+
     private fun gateway(tier: Tier): TierGateway =
         when (tier) {
             Tier.Medication -> medication
@@ -75,7 +81,7 @@ class NotificationScheduler(
             instances.list(InstanceFilter(userId = userId, since = now))
                 .filterNot { isAnswerable(it.status) }
                 .mapTo(HashSet()) { it.reminderId to it.scheduledTime }
-        val desired = desiredNotifications(list, now, zone(), answered)
+        val desired = desiredNotifications(list, now, zone(), answered, takingsOf(userId, list, now))
         val armed = medication.armed() + tasks.armed()
         val plan = planReschedule(desired, armed, exactAllowed(), rearm)
 
@@ -90,6 +96,18 @@ class NotificationScheduler(
             for (spec in snoozesToRearm(snoozes.all(), cause, now)) gateway(spec.tier).arm(spec)
         }
         return plan
+    }
+
+    /**
+     * When each as-needed medication's doses were taken, for the prompt that says it can be taken
+     * again. Empty (and unread) when there is no such medication. Two days back, by the Instance's
+     * own moment, covers the 24-hour window with room for a time that was moved after the fact.
+     */
+    private suspend fun takingsOf(userId: String, list: List<Reminder>, now: Long): Map<String, List<Long>> {
+        val asNeeded = list.filter { it.schedule is AsNeededTimes }.mapTo(HashSet()) { it.id }
+        if (asNeeded.isEmpty()) return emptyMap()
+        val recent = instances.list(InstanceFilter(userId = userId, since = now - 2 * DAY_MS))
+        return asNeeded.associateWith { takings(recent, it) }
     }
 
     /**

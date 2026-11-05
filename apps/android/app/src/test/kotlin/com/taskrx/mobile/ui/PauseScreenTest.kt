@@ -14,6 +14,7 @@ import com.taskrx.core.domain.PauseWindow
 import com.taskrx.core.domain.Reminder
 import com.taskrx.core.domain.ReminderKind
 import com.taskrx.core.domain.createReminder
+import com.taskrx.core.domain.asNeededTimes
 import com.taskrx.core.domain.dailyTimes
 import com.taskrx.core.domain.noneTimes
 import com.taskrx.mobile.ui.reminders.ReminderEntry
@@ -90,6 +91,14 @@ class PauseScreenTest {
         compose.onNodeWithText("No date").performClick()
         compose.onNodeWithContentDescription("Start again on, When I resume it").performClick()
         compose.onNodeWithText("OK").assertExists()
+    }
+
+    @Test
+    fun `a medication taken as needed has no Pause, there being no times to hold back`() {
+        show(ReminderEntry(createReminder("r", "u", ReminderKind.Medication, "Tylenol", NOW, NOW, schedule = asNeededTimes(240)), null))
+
+        compose.onNodeWithContentDescription("Edit Tylenol").assertExists()
+        compose.onAllNodesWithText("Pause").assertCountEquals(0)
     }
 
     @Test

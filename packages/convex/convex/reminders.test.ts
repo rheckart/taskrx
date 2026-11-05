@@ -176,6 +176,36 @@ describe("reminders.create and the schedule variants", () => {
     });
   });
 
+  it("stores a medication taken as needed, with or without a daily limit", async () => {
+    const t = deployment();
+    const limited = await t.mutation(api.reminders.create, {
+      ...DEVICE_PUSH,
+      schedule: { type: "asNeeded", minGapMinutes: 240, maxPer24h: 5 },
+    });
+    const unlimited = await t.mutation(api.reminders.create, {
+      ...DEVICE_PUSH,
+      localId: "local_2",
+      schedule: { type: "asNeeded", minGapMinutes: 240 },
+    });
+
+    expect(await t.query(api.reminders.get, { id: limited })).toMatchObject({
+      schedule: { type: "asNeeded", minGapMinutes: 240, maxPer24h: 5 },
+    });
+    const stored = await t.query(api.reminders.get, { id: unlimited });
+    expect(stored?.schedule).toEqual({ type: "asNeeded", minGapMinutes: 240 });
+  });
+
+  it("rejects an as-needed schedule with no gap", async () => {
+    const t = deployment();
+
+    await expect(
+      t.mutation(api.reminders.create, {
+        ...DEVICE_PUSH,
+        schedule: { type: "asNeeded" } as unknown as { type: "none" },
+      })
+    ).rejects.toThrow();
+  });
+
   it("moves a backlog reminder onto the timeline by giving it a moment", async () => {
     const t = deployment();
     const id = await t.mutation(api.reminders.create, {

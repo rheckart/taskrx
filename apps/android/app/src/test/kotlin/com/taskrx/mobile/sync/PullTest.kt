@@ -1,5 +1,6 @@
 package com.taskrx.mobile.sync
 
+import com.taskrx.core.domain.AsNeededTimes
 import com.taskrx.core.domain.DailyTimes
 import com.taskrx.core.domain.InstanceStatus
 import com.taskrx.core.domain.IntervalTimes
@@ -147,6 +148,7 @@ class PullTest {
                     reminderDoc(localId = "weekly", id = "c3", schedule = """{"type":"weekly","daysOfWeek":[1.0,3.0],"times":["08:00"]}"""),
                     reminderDoc(localId = "once", id = "c4", schedule = """{"type":"once","at":1780000500000.0}"""),
                     reminderDoc(localId = "none", id = "c5", schedule = """{"type":"none"}"""),
+                    reminderDoc(localId = "asNeeded", id = "c6", schedule = """{"type":"asNeeded","minGapMinutes":240.0,"maxPer24h":5.0}"""),
                 ),
             )
             suspend fun schedule(id: String) = container.reminders.get(id)!!.schedule
@@ -155,6 +157,7 @@ class PullTest {
             assertEquals(WeeklyTimes(listOf(1, 3), listOf("08:00")), schedule("weekly"))
             assertEquals(OnceTimes(T0 + 500_000), schedule("once"))
             assertEquals(NoneTimes, schedule("none"))
+            assertEquals(AsNeededTimes(240, 5), schedule("asNeeded"))
         }
 
     @Test

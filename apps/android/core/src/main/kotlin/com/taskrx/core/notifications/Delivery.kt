@@ -1,6 +1,9 @@
 package com.taskrx.core.notifications
 
+import com.taskrx.core.asneeded.asNeededStatus
+import com.taskrx.core.domain.AsNeededTimes
 import com.taskrx.core.domain.Reminder
+import com.taskrx.core.domain.ReminderKind
 import com.taskrx.core.schedule.ScheduledOccurrence
 import com.taskrx.core.schedule.selectMedicationHorizon
 import com.taskrx.core.schedule.selectTaskHorizon
@@ -44,6 +47,7 @@ const val MAX_TASK_TRIGGERS: Int = 32
  */
 const val TASK_ID_PREFIX: String = "task-"
 const val SNOOZE_ID_PREFIX: String = "snooze-"
+const val READY_ID_PREFIX: String = "ready-"
 
 /** A dose's notification id: `${reminderId}-${scheduledTime}`. */
 fun medicationNotificationId(reminderId: String, scheduledTime: Long): String = "$reminderId-$scheduledTime"
@@ -60,14 +64,21 @@ fun snoozeNotificationId(reminderId: String, scheduledTime: Long, snoozeUntil: L
     "$SNOOZE_ID_PREFIX${medicationNotificationId(reminderId, scheduledTime)}-$snoozeUntil"
 
 /**
- * Whether [id] belongs to [reminderId] in either namespace. Both are checked rather
+ * "You can take another dose" for an as-needed medication: one per moment it becomes allowed,
+ * so taking a dose (which moves that moment) replaces the one before it rather than adding to it.
+ */
+fun readyNotificationId(reminderId: String, readyAt: Long): String = "$READY_ID_PREFIX$reminderId-$readyAt"
+
+/**
+ * Whether [id] belongs to [reminderId] in any of the namespaces. Both are checked rather
  * than looking the Kind up, because this is the path a DELETED reminder is cancelled
  * from: the row may already be gone, and an unknown Kind must still leave nothing armed.
  */
 fun belongsToReminder(id: String, reminderId: String): Boolean =
     id.startsWith("$reminderId-") ||
         id.startsWith(taskIdPrefixFor(reminderId)) ||
-        id.startsWith("$SNOOZE_ID_PREFIX$reminderId-")
+        id.startsWith("$SNOOZE_ID_PREFIX$reminderId-") ||
+        id.startsWith("$READY_ID_PREFIX$reminderId-")
 
 /** Which operating-system subsystem carries a Tier (ADR 0003, ADR 0007). */
 enum class Mechanism {
@@ -115,6 +126,12 @@ data class NotificationSpec(
     /** The Occurrence this answers; for a snooze, the moment it was deferred FROM. */
     val scheduledTime: Long,
     val snoozed: Boolean = false,
+    /**
+     * "You can take another dose" of an as-needed medication. It is answered with Take or Skip
+     * only, joins no batch, and opens Today rather than an answer screen, because no
+     * Occurrence stands behind it.
+     */
+    val asNeeded: Boolean = false,
 )
 
 private fun dosageLabel(dosage: String?): String = if (dosage != null) " ($dosage)" else ""
@@ -139,6 +156,22 @@ fun taskSpec(occurrence: ScheduledOccurrence): NotificationSpec =
         body = "Time to do it",
         reminderId = occurrence.reminderId,
         scheduledTime = occurrence.fireAt,
+    )
+
+/**
+ * The prompt that [reminder] can be taken again, at [readyAt]. Medication Tier like any dose: it
+ * is the same promise, kept the same way.
+ */
+fun asNeededReadySpec(reminder: Reminder, readyAt: Long): NotificationSpec =
+    NotificationSpec(
+        id = readyNotificationId(reminder.id, readyAt),
+        tier = Tier.Medication,
+        fireAt = readyAt,
+        title = reminder.name,
+        body = "You can take another dose${dosageLabel(reminder.dosage)}",
+        reminderId = reminder.id,
+        scheduledTime = readyAt,
+        asNeeded = true,
     )
 
 /**
@@ -182,6 +215,8 @@ fun desiredNotifications(
     now: Long,
     zone: ZoneId = ZoneId.systemDefault(),
     answered: Set<Pair<String, Long>> = emptySet(),
+    /** When each reminder's doses were taken, by reminder id: what an as-needed medication's next dose is read from. */
+    takings: Map<String, List<Long>> = emptyMap(),
 ): List<NotificationSpec> {
     fun unanswered(picked: List<ScheduledOccurrence>, budget: Int) =
         picked.filter { (it.reminderId to it.fireAt) !in answered }.take(budget)
@@ -189,5 +224,20 @@ fun desiredNotifications(
     val extra = answered.size
     return unanswered(selectMedicationHorizon(reminders, now, MAX_MEDICATION_TRIGGERS + extra, zone), MAX_MEDICATION_TRIGGERS)
         .map(::medicationSpec) +
-        unanswered(selectTaskHorizon(reminders, now, MAX_TASK_TRIGGERS + extra, zone), MAX_TASK_TRIGGERS).map(::taskSpec)
+        unanswered(selectTaskHorizon(reminders, now, MAX_TASK_TRIGGERS + extra, zone), MAX_TASK_TRIGGERS).map(::taskSpec) +
+        asNeededReadySpecs(reminders, takings, now)
 }
+
+/**
+ * One prompt for each as-needed medication that is waiting, at the moment it stops waiting. None
+ * once that moment has passed: nothing was due, so a prompt that went unanswered is not a debt,
+ * and arming one in the past would ring it again at every reschedule.
+ */
+private fun asNeededReadySpecs(reminders: List<Reminder>, takings: Map<String, List<Long>>, now: Long): List<NotificationSpec> =
+    reminders.mapNotNull { reminder ->
+        val schedule = reminder.schedule as? AsNeededTimes ?: return@mapNotNull null
+        // A medication only: a task never uses the alarm clock (ADR 0007), whatever a pull delivered.
+        if (!reminder.active || reminder.kind != ReminderKind.Medication) return@mapNotNull null
+        val readyAt = asNeededStatus(schedule, takings[reminder.id].orEmpty(), now).readyAt
+        if (readyAt == null || readyAt <= now) null else asNeededReadySpec(reminder, readyAt)
+    }

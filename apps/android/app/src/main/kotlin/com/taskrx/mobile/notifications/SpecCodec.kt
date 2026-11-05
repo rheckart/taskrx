@@ -15,6 +15,7 @@ private class WireSpec(
     val reminderId: String,
     val scheduledTime: Long,
     val snoozed: Boolean = false,
+    val asNeeded: Boolean = false,
 )
 
 /**
@@ -29,13 +30,13 @@ object SpecCodec {
 
     fun encode(spec: NotificationSpec): String =
         json.encodeToString(
-            WireSpec(spec.id, spec.tier.wire, spec.fireAt, spec.title, spec.body, spec.reminderId, spec.scheduledTime, spec.snoozed),
+            WireSpec(spec.id, spec.tier.wire, spec.fireAt, spec.title, spec.body, spec.reminderId, spec.scheduledTime, spec.snoozed, spec.asNeeded),
         )
 
     fun decode(text: String?): NotificationSpec? {
         if (text == null) return null
         val wire = runCatching { json.decodeFromString<WireSpec>(text) }.getOrNull() ?: return null
         val tier = Tier.entries.firstOrNull { it.wire == wire.tier } ?: return null
-        return NotificationSpec(wire.id, tier, wire.fireAt, wire.title, wire.body, wire.reminderId, wire.scheduledTime, wire.snoozed)
+        return NotificationSpec(wire.id, tier, wire.fireAt, wire.title, wire.body, wire.reminderId, wire.scheduledTime, wire.snoozed, wire.asNeeded)
     }
 }

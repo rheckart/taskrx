@@ -1,5 +1,6 @@
 package com.taskrx.mobile.ui
 
+import com.taskrx.core.domain.AsNeededTimes
 import com.taskrx.core.domain.DailyTimes
 import com.taskrx.core.domain.IntervalTimes
 import com.taskrx.core.domain.NoneTimes
@@ -12,7 +13,11 @@ import com.taskrx.mobile.ui.forms.hourMinuteToTimeInput
 import com.taskrx.mobile.ui.forms.instantHourMinute
 import com.taskrx.mobile.ui.forms.isValidTimeInput
 import com.taskrx.mobile.ui.forms.parseCount
+import com.taskrx.mobile.ui.forms.GapUnit
 import com.taskrx.mobile.ui.forms.IntervalUnit
+import com.taskrx.mobile.ui.forms.bestGapUnit
+import com.taskrx.mobile.ui.forms.gapMinutes
+import com.taskrx.mobile.ui.forms.parseDailyLimit
 import com.taskrx.mobile.ui.forms.bestIntervalUnit
 import com.taskrx.mobile.ui.forms.intervalHours
 import com.taskrx.mobile.ui.forms.parseIntervalHours
@@ -38,6 +43,33 @@ class ScheduleEditingTest {
             assertTrue(isWellFormedSchedule(schedule), "$type")
             assertEquals(type, scheduleTypeOf(schedule))
         }
+    }
+
+    @Test
+    fun `as needed starts at four hours with no daily limit`() {
+        assertEquals(AsNeededTimes(240, null), defaultSchedule(ScheduleType.AsNeeded, now))
+        assertEquals(ScheduleType.AsNeeded, scheduleTypeOf(AsNeededTimes(90, 5)))
+    }
+
+    @Test
+    fun `a gap reads back in hours when it is a whole number of them, else in minutes`() {
+        assertEquals(GapUnit.Hours, bestGapUnit(240))
+        assertEquals(GapUnit.Hours, bestGapUnit(60))
+        assertEquals(GapUnit.Minutes, bestGapUnit(90))
+        assertEquals(GapUnit.Minutes, bestGapUnit(0))
+        assertEquals(240, gapMinutes(4, GapUnit.Hours))
+        assertEquals(45, gapMinutes(45, GapUnit.Minutes))
+        assertEquals(Int.MAX_VALUE, gapMinutes(Int.MAX_VALUE, GapUnit.Hours))
+    }
+
+    @Test
+    fun `the daily limit box is no limit when empty and refused when it is not a count`() {
+        assertNull(parseDailyLimit(""))
+        assertNull(parseDailyLimit("  "))
+        assertEquals(5, parseDailyLimit("5"))
+        assertEquals(0, parseDailyLimit("abc"))
+        assertEquals(0, parseDailyLimit("0"))
+        assertFalse(isWellFormedSchedule(AsNeededTimes(240, parseDailyLimit("0"))))
     }
 
     @Test

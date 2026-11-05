@@ -9,6 +9,7 @@ import com.taskrx.core.domain.WeeklyTimes
 import com.taskrx.core.domain.createReminder
 import com.taskrx.core.domain.dailyTimes
 import com.taskrx.core.domain.intervalTimes
+import com.taskrx.core.domain.asNeededTimes
 import com.taskrx.core.domain.noneTimes
 import com.taskrx.core.domain.onceTimes
 import com.taskrx.core.domain.weeklyTimes
@@ -104,6 +105,8 @@ class RemindersRepositoryTest {
                     weeklyTimes(listOf(1, 3), listOf("07:00")),
                     onceTimes(T0 + 1000),
                     noneTimes(),
+                    asNeededTimes(240),
+                    asNeededTimes(90, 6),
                 )
             schedules.forEachIndexed { i, schedule ->
                 container.reminders.create(
@@ -199,6 +202,8 @@ class RemindersRepositoryTest {
                     weeklyTimes(listOf(0, 6), listOf("10:15")) to """{"type":"weekly","daysOfWeek":[0,6],"times":["10:15"]}""",
                     onceTimes(T0) to """{"type":"once","at":$T0}""",
                     noneTimes() to """{"type":"none"}""",
+                    asNeededTimes(240) to """{"type":"asNeeded","minGapMinutes":240}""",
+                    asNeededTimes(240, 5) to """{"type":"asNeeded","minGapMinutes":240,"maxPer24h":5}""",
                 )
             shapes.keys.forEachIndexed { i, schedule ->
                 container.reminders.create(

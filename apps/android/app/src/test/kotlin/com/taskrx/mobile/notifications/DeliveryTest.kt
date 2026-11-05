@@ -109,7 +109,7 @@ class PostingTest {
 class SpecCodecTest {
     @Test
     fun `round trips both Tiers and the snooze flag`() {
-        for (spec in listOf(DOSE, TASK, TASK.copy(snoozed = true))) {
+        for (spec in listOf(DOSE, TASK, TASK.copy(snoozed = true), DOSE.copy(asNeeded = true))) {
             assertEquals(spec, SpecCodec.decode(SpecCodec.encode(spec)))
         }
     }

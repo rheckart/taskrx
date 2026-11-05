@@ -2,6 +2,7 @@ package com.taskrx.mobile.format
 
 import com.taskrx.core.domain.dailyTimes
 import com.taskrx.core.domain.intervalTimes
+import com.taskrx.core.domain.asNeededTimes
 import com.taskrx.core.domain.noneTimes
 import com.taskrx.core.domain.onceTimes
 import com.taskrx.core.domain.weeklyTimes
@@ -84,6 +85,22 @@ class ScheduleFormatTest {
         val text = describeSchedule(onceTimes(at(7, 30)), utc, Locale.US)
         assertTrue(text.startsWith("Once, "), text)
         assertContains(text, "7:30")
+    }
+
+    @Test
+    fun `says an as-needed medication's rule, since it has no times`() {
+        assertEquals("As needed · at least 4 hours apart", describeSchedule(asNeededTimes(240), utc))
+        assertEquals("As needed · at least 1 hour 30 minutes apart · up to 5 in 24 hours", describeSchedule(asNeededTimes(90, 5), utc))
+    }
+
+    @Test
+    fun `says minutes in the largest unit that counts them exactly`() {
+        assertEquals("1 minute", describeMinutes(1))
+        assertEquals("45 minutes", describeMinutes(45))
+        assertEquals("1 hour", describeMinutes(60))
+        assertEquals("4 hours", describeMinutes(240))
+        assertEquals("1 hour 30 minutes", describeMinutes(90))
+        assertEquals("2 hours 1 minute", describeMinutes(121))
     }
 
     @Test

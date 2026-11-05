@@ -43,6 +43,11 @@
             android:name=".notifications.BatchActionReceiver"
             android:exported="false" />
 
+        <!-- The Take / Skip buttons on "you can take another dose". Private to the app. -->
+        <receiver
+            android:name=".notifications.AsNeededActionReceiver"
+            android:exported="false" />
+
         <!-- Re-arms after reboot, app update, clock/zone change, or an exact-alarm permission change. -->
         <receiver
             android:name=".notifications.RearmReceiver"

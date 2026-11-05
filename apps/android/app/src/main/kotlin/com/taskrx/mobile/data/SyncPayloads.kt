@@ -1,5 +1,6 @@
 package com.taskrx.mobile.data
 
+import com.taskrx.core.domain.AsNeededTimes
 import com.taskrx.core.domain.DailyTimes
 import com.taskrx.core.domain.IntervalTimes
 import com.taskrx.core.domain.NoneTimes
@@ -59,6 +60,12 @@ internal object SyncPayloads {
                     put("at", schedule.at)
                 }
             NoneTimes -> buildJsonObject { put("type", "none") }
+            is AsNeededTimes ->
+                buildJsonObject {
+                    put("type", "asNeeded")
+                    put("minGapMinutes", schedule.minGapMinutes)
+                    schedule.maxPer24h?.let { put("maxPer24h", it) }
+                }
         }
 
     @Suppress("LongParameterList")

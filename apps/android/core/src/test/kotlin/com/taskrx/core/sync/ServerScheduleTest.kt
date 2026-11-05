@@ -1,5 +1,6 @@
 package com.taskrx.core.sync
 
+import com.taskrx.core.domain.AsNeededTimes
 import com.taskrx.core.domain.DailyTimes
 import com.taskrx.core.domain.IntervalTimes
 import com.taskrx.core.domain.NoneTimes
@@ -29,6 +30,22 @@ class ScheduleFromServerTest {
     @Test
     fun `reads none`() {
         assertEquals(NoneTimes, read("""{"type":"none"}"""))
+    }
+
+    @Test
+    fun `reads as needed, with or without a daily limit`() {
+        assertEquals(AsNeededTimes(240, null), read("""{"type":"asNeeded","minGapMinutes":240}"""))
+        assertEquals(AsNeededTimes(240, 5), read("""{"type":"asNeeded","minGapMinutes":240.0,"maxPer24h":5}"""))
+    }
+
+    @Test
+    fun `rejects an as-needed schedule it cannot trust`() {
+        assertNull(read("""{"type":"asNeeded"}"""))
+        assertNull(read("""{"type":"asNeeded","minGapMinutes":0}"""))
+        assertNull(read("""{"type":"asNeeded","minGapMinutes":240,"maxPer24h":0}"""))
+        assertNull(read("""{"type":"asNeeded","minGapMinutes":240,"maxPer24h":"five"}"""))
+        assertNull(read("""{"type":"asNeeded","minGapMinutes":3000000000}"""))
+        assertNull(read("""{"type":"asNeeded","minGapMinutes":240,"maxPer24h":3000000000}"""))
     }
 
     @Test
