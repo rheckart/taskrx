@@ -397,13 +397,21 @@ class ScreensTest {
     }
 
     @Test
-    fun `the Hide done chip asks to toggle`() {
+    fun `the done chip asks to toggle`() {
         val calls = Calls()
         today(state(row()), calls)
 
         compose.onNodeWithText("Hide done").performClick()
 
         assertEquals(listOf("hide"), calls.log)
+    }
+
+    @Test
+    fun `while done rows are hidden the chip offers to show them`() {
+        today(state(row(), hideCompleted = true))
+
+        compose.onNodeWithText("Show done").assertExists()
+        compose.onAllNodesWithText("Hide done").assertCountEquals(0)
     }
 
     @Test
