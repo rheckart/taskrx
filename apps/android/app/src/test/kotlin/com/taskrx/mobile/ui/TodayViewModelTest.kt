@@ -123,6 +123,17 @@ class TodayViewModelTest {
         }
 
     @Test
+    fun `a task that arrived with an as-needed schedule is no card`() =
+        withUi(MIDNIGHT + 12 * HOUR) {
+            reminder("odd", ReminderKind.Task, asNeededTimes(240), createdAt = MIDNIGHT - 10 * DAY)
+            val vm = vm()
+
+            vm.refresh().join()
+
+            assertEquals(emptyList(), vm.state.value.asNeeded)
+        }
+
+    @Test
     fun `a stopped as-needed medication has no card`() =
         withUi(MIDNIGHT + 12 * HOUR) {
             val r = reminder("a", schedule = asNeededTimes(240), createdAt = MIDNIGHT - 10 * DAY)

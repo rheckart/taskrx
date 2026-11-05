@@ -283,7 +283,7 @@ class TodayViewModel(
                     rows.none { it.kind == ReminderKind.Medication && isAnswerable(it.status) }
             val opensOn = if (noMedications) ReminderKind.Task else ReminderKind.Medication
             val asNeeded =
-                reminders.filter { it.active && it.schedule is AsNeededTimes }.sortedBy { it.name.lowercase() }.let { waiting ->
+                reminders.filter { it.active && it.kind == ReminderKind.Medication && it.schedule is AsNeededTimes }.sortedBy { it.name.lowercase() }.let { waiting ->
                     if (waiting.isEmpty()) {
                         emptyList()
                     } else {

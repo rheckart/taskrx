@@ -556,11 +556,15 @@ class ScreensTest {
     }
 
     @Test
-    fun `an as-needed medication on its own does not turn the day into an empty one`() {
+    fun `an as-needed medication on its own does not turn the day into one with no medications`() {
         today(asNeeded(takings = emptyList()))
 
         compose.onNodeWithText("Tylenol (500mg)").assertExists()
         compose.onNodeWithText("Ready now").assertExists()
+        // It is the scheduled doses there are none of; "no medications" would sit under a card that is one.
+        compose.onNodeWithText("No scheduled doses").assertExists()
+        compose.onAllNodesWithText("No medications scheduled").assertCountEquals(0)
+        compose.onAllNodesWithText("No medications or tasks due today.").assertCountEquals(0)
     }
 
     @Test

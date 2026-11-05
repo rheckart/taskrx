@@ -3,6 +3,7 @@ package com.taskrx.core.notifications
 import com.taskrx.core.asneeded.asNeededStatus
 import com.taskrx.core.domain.AsNeededTimes
 import com.taskrx.core.domain.Reminder
+import com.taskrx.core.domain.ReminderKind
 import com.taskrx.core.schedule.ScheduledOccurrence
 import com.taskrx.core.schedule.selectMedicationHorizon
 import com.taskrx.core.schedule.selectTaskHorizon
@@ -235,7 +236,8 @@ fun desiredNotifications(
 private fun asNeededReadySpecs(reminders: List<Reminder>, takings: Map<String, List<Long>>, now: Long): List<NotificationSpec> =
     reminders.mapNotNull { reminder ->
         val schedule = reminder.schedule as? AsNeededTimes ?: return@mapNotNull null
-        if (!reminder.active) return@mapNotNull null
+        // A medication only: a task never uses the alarm clock (ADR 0007), whatever a pull delivered.
+        if (!reminder.active || reminder.kind != ReminderKind.Medication) return@mapNotNull null
         val readyAt = asNeededStatus(schedule, takings[reminder.id].orEmpty(), now).readyAt
         if (readyAt == null || readyAt <= now) null else asNeededReadySpec(reminder, readyAt)
     }

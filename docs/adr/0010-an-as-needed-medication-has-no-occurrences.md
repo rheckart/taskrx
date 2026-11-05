@@ -31,7 +31,7 @@ is computed, never stored.
   limit is reached, "24 hours after the dose that has to leave the window to get back under it".
   A dose exactly 24 hours old is out of the window. Takings are Completed Instances' `completedAt`,
   so the answer is the same whichever way a dose was recorded: the Today card, Log a dose, the
-  notification's Take, or a time changed afterwards. Undoing a take stops it counting.
+  notification's Take, or a time changed afterwards. If a take is undone it stops counting (ADR 0008). Nothing in the app offers Undo for these rows yet: they are unscheduled doses, which Undo does not reopen into a miss that never was, and that rule has not been extended to cover them.
 - **Today** shows a card per as-needed medication at the top of the Medications tab, outside the
   day's list, with a countdown that updates each minute. It does not depend on the day's rows, so a
   day with only this medication does not read as empty. Taking one before it is allowed asks first

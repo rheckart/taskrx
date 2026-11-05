@@ -2,6 +2,7 @@ package com.taskrx.core.parser
 
 import com.taskrx.core.domain.Priority
 import com.taskrx.core.domain.ReminderKind
+import com.taskrx.core.domain.asNeededTimes
 import com.taskrx.core.domain.dailyTimes
 import com.taskrx.core.domain.intervalTimes
 import com.taskrx.core.domain.noneTimes
@@ -127,6 +128,15 @@ class WithKindTest {
         assertNull(task.pillsRemaining)
         assertNull(task.pillsPerDose)
         assertNull(task.refillReminderDays)
+    }
+
+    @Test
+    fun `an as-needed schedule is a medication's rule, so it goes to the Backlog when the draft becomes a task`() {
+        val medication = read("tylenol 500mg daily").copy(schedule = asNeededTimes(240, 5))
+
+        assertEquals(noneTimes(), withKind(medication, ReminderKind.Task).schedule)
+        // Back to a medication does not bring it back, and a medication keeps it.
+        assertEquals(asNeededTimes(240, 5), withKind(medication, ReminderKind.Medication).schedule)
     }
 
     @Test

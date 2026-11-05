@@ -15,6 +15,7 @@ import com.taskrx.core.batch.batchNotificationId
 import com.taskrx.core.batch.batchText
 import com.taskrx.core.notifications.ChannelImportance
 import com.taskrx.core.notifications.NotificationSpec
+import com.taskrx.core.notifications.READY_ID_PREFIX
 import com.taskrx.core.notifications.Tier
 import com.taskrx.core.notifications.deliveryFor
 import com.taskrx.mobile.MainActivity
@@ -206,6 +207,19 @@ object NotificationPoster {
             if (sbn.notification.extras.getLong(EXTRA_TIME) == scheduledTime && sbn.answered()) manager.cancel(sbn.tag, sbn.id)
         }
         showBatch(context, manager, scheduledTime, doseEntries(manager, scheduledTime).filterNot { it.first in reminderIds })
+        dismissReady(manager, reminderIds)
+    }
+
+    /**
+     * "You can take another dose" for these medications, wherever they were taken from. A dose recorded
+     * on Today or by hand starts a new wait, so a prompt still in the shade is out of date, and its Take
+     * button would record a second dose with no question asked.
+     */
+    private fun dismissReady(manager: NotificationManager, reminderIds: List<String>) {
+        for (sbn in manager.activeNotifications) {
+            val tag = sbn.tag ?: continue
+            if (reminderIds.any { tag.startsWith("$READY_ID_PREFIX$it-") }) manager.cancel(tag, sbn.id)
+        }
     }
 
     private val READY_ACTIONS = listOf(AsNeededActionReceiver.TAKE to "Take", AsNeededActionReceiver.SKIP to "Skip")

@@ -238,6 +238,13 @@ class AsNeededReadyTest {
     }
 
     @Test
+    fun `a task never prompts on the alarm clock, whatever schedule it arrived with`() {
+        val task = createReminder("t", "u", ReminderKind.Task, "Chore", schedule = asNeededTimes(240), createdAt = 0, updatedAt = 0)
+
+        assertEquals(emptyList(), desiredNotifications(listOf(task), now, ZoneOffset.UTC, takings = mapOf("t" to listOf(now - hour))))
+    }
+
+    @Test
     fun `a stopped medication prompts for nothing`() {
         assertEquals(emptyList(), desired(tylenol(active = false), listOf(now - hour)))
     }

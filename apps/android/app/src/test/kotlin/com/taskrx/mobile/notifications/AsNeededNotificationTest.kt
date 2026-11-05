@@ -132,6 +132,23 @@ class AsNeededNotificationTest {
     }
 
     @Test
+    fun `a dose recorded another way takes this medication's prompt out of the shade, and no one else's`() {
+        create()
+        runBlocking {
+            container.reminders.create(
+                CreateReminderInput(id = "ibuprofen", userId = USER, kind = ReminderKind.Medication, name = "Ibuprofen", schedule = asNeededTimes(360)),
+            )
+        }
+        NotificationPoster.post(app, ready)
+        NotificationPoster.post(app, ready.copy(id = "ready-ibuprofen-$READY_AT", reminderId = "ibuprofen", title = "Ibuprofen"))
+
+        // From the Today card, not the shade's own button.
+        runBlocking { container.doses.record(container.reminders.get("tylenol")!!, container.clock()) }
+
+        assertEquals(listOf("ready-ibuprofen-$READY_AT"), manager.activeNotifications.map { it.tag })
+    }
+
+    @Test
     fun `an intent that cannot be read is ignored`() {
         assertNull(AsNeededActionReceiver().handle(app, Intent("something.else")))
         assertNull(

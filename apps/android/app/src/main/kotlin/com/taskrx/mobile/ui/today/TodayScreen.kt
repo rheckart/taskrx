@@ -324,13 +324,24 @@ private fun Timeline(state: TodayState, actions: TodayActions, now: () -> Long) 
                     LazyColumn(Modifier.fillMaxSize()) {
                         item {
                             Centered(Modifier.fillParentMaxSize()) {
+                                // With as-needed medications above, "no medications" would sit under a card that says
+                                // "Ready now": it is the scheduled doses there are none of.
+                                val asNeededAbove = state.kind == ReminderKind.Medication && state.dayOffset == 0 && state.asNeeded.isNotEmpty()
                                 Text(
-                                    if (allDone) "All done" else "No ${tabWord(state.kind).lowercase()} scheduled",
+                                    when {
+                                        allDone -> "All done"
+                                        asNeededAbove -> "No scheduled doses"
+                                        else -> "No ${tabWord(state.kind).lowercase()} scheduled"
+                                    },
                                     style = MaterialTheme.typography.titleMedium,
                                     fontWeight = FontWeight.SemiBold,
                                 )
                                 Text(
-                                    if (allDone) "Everything on this day is completed." else emptyDayBody(state.dayOffset, dayHeading(state.dayOffset, state.windowStart)),
+                                    when {
+                                        allDone -> "Everything on this day is completed."
+                                        asNeededAbove -> "Take an as-needed medication from its card above."
+                                        else -> emptyDayBody(state.dayOffset, dayHeading(state.dayOffset, state.windowStart))
+                                    },
                                     Modifier.padding(top = 8.dp),
                                     color = TaskRxColors.Secondary,
                                     textAlign = TextAlign.Center,

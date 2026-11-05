@@ -1,5 +1,7 @@
 package com.taskrx.core.parser
 
+import com.taskrx.core.domain.AsNeededTimes
+import com.taskrx.core.domain.NoneTimes
 import com.taskrx.core.domain.Priority
 import com.taskrx.core.domain.ReminderKind
 import com.taskrx.core.domain.ScheduleTimes
@@ -168,6 +170,8 @@ fun readPhrase(phrase: String, options: ReadPhraseOptions): PhraseReading {
  * hidden field is still a saved one: `withKind(draft, Task)` on a draft holding
  * `20mg` must not write a task with a dosage.
  *
+ * A schedule of "as needed" goes too, for the same reason: it is a medication's rule.
+ *
  * `rxcui` goes with them. It is a claim about which drug this is, and a task is
  * not one, so a draft corrected from medication to task must not keep pointing
  * at an RxNorm concept.
@@ -181,6 +185,9 @@ fun withKind(draft: ReminderDraft, kind: ReminderKind): ReminderDraft {
 
     return draft.copy(
         kind = kind,
+        // As needed is a way to take a medication. A task has no doses to space out, so it goes to the
+        // Backlog (no time), where a time can be given to it.
+        schedule = if (draft.schedule is AsNeededTimes) NoneTimes else draft.schedule,
         dosage = null,
         pillsRemaining = null,
         pillsPerDose = null,
