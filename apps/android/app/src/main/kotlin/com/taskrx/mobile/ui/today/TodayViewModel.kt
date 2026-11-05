@@ -32,7 +32,7 @@ import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 
 data class TodayState(
-    /** 0 is today, -1 yesterday. Never positive: see [TodayViewModel.nextDay]. */
+    /** 0 is today, -1 yesterday. Positive only on the Tasks tab: see [TodayViewModel.nextDay]. */
     val dayOffset: Int = 0,
     /** Local midnight of the day shown, for naming it. */
     val windowStart: Long,
@@ -40,8 +40,8 @@ data class TodayState(
     val loading: Boolean = true,
     val refreshing: Boolean = false,
     val error: String? = null,
-    /** Show only what is still to do. The rows are all kept, so turning it off needs no re-read. */
-    val hideCompleted: Boolean = false,
+    /** Show only what is still to do. The rows are all kept, so turning it off needs no re-read. On to begin with: a day opens on what is left. */
+    val hideCompleted: Boolean = true,
     /** The Instances whose answer can be taken back from the row (see [TodayViewModel.undo]). */
     val undoable: Set<String> = emptySet(),
     /** How many doses and tasks of the last week are Missed and unanswered: the banner to Catch up. */
@@ -58,6 +58,13 @@ data class TodayState(
     /** What the list draws: every row of the open tab, or all but the completed ones. */
     val visibleRows: List<TimelineRow>
         get() = if (hideCompleted) tabRows.filter { it.status != InstanceStatus.Completed } else tabRows
+
+    /**
+     * Whether the day can move forward. A medication's day stops at today: on a future day every dose
+     * is ahead of now, and the Occurrences it shows are guesses. A task is worth looking ahead for.
+     */
+    val canGoForward: Boolean
+        get() = kind == ReminderKind.Task || dayOffset < 0
 
     /** How many rows of each Kind still want an answer, for the badge on its tab. */
     val toDoByKind: Map<ReminderKind, Int>
@@ -97,12 +104,16 @@ class TodayViewModel(
 
     fun previousDay(): Job = moveTo(mutable.value.dayOffset - 1)
 
-    /** Forward only as far as today: on a future day every row is ahead of now, so the first would be badged NEXT. */
-    fun nextDay(): Job = moveTo(minOf(0, mutable.value.dayOffset + 1))
+    /** Forward only as far as today for medications; without limit for tasks. */
+    fun nextDay(): Job = moveTo(mutable.value.dayOffset + 1)
 
     fun today(): Job = moveTo(0)
 
-    fun selectKind(kind: ReminderKind) = mutable.update { it.copy(kind = kind, kindChosen = true) }
+    fun selectKind(kind: ReminderKind): Job {
+        mutable.update { it.copy(kind = kind, kindChosen = true) }
+        // Medications do not look ahead: leaving a future day of tasks comes back to today.
+        return if (kind == ReminderKind.Medication && mutable.value.dayOffset > 0) today() else Job().also { it.complete() }
+    }
 
     fun toggleHideCompleted() = mutable.update { it.copy(hideCompleted = !it.hideCompleted) }
 
@@ -188,7 +199,8 @@ class TodayViewModel(
             loads.withLock { load() }
         }
 
-    private fun moveTo(offset: Int): Job {
+    private fun moveTo(requested: Int): Job {
+        val offset = if (mutable.value.canGoForward) requested else minOf(0, requested)
         if (offset == mutable.value.dayOffset) return Job().also { it.complete() }
         mutable.update { it.copy(dayOffset = offset, loading = true) }
         return refresh()
@@ -214,8 +226,11 @@ class TodayViewModel(
             // which of them predict new Occurrences is the projection's decision.
             val reminders = app.reminders.list(userId, includeInactive = true)
             val instances = app.instances.list(InstanceFilter(userId, since = window.start, until = window.end))
-            val rows =
+            val projected =
                 projectTimeline(ProjectTimelineInput(reminders, instances, TimelineWindow(window.start, window.end), now, zone()))
+            // On a day ahead every row is ahead of now, so the first would be badged NEXT: "do this now"
+            // about something not due for a day.
+            val rows = if (offset > 0) projected.map { it.copy(isNext = false) } else projected
             // A different day was asked for while this one was reading; its load follows.
             // Which answered rows offer Undo: an answer on a moment the Schedule predicts. An extra
             // dose or a Backlog completion would reopen into a miss that never was (`undoVerdict`).

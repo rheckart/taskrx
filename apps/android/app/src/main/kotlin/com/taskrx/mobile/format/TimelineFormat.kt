@@ -64,4 +64,9 @@ fun rowDescription(
 
 /** The empty-day sentence under "Nothing scheduled". */
 fun emptyDayBody(offset: Int, heading: String): String =
-    if (offset == 0) "No medications or tasks due today." else "You had nothing due ${heading.lowercase()}."
+    when {
+        offset == 0 -> "No medications or tasks due today."
+        offset == 1 -> "Nothing is due tomorrow."
+        offset > 1 -> "Nothing is due on $heading."
+        else -> "You had nothing due ${heading.lowercase()}."
+    }

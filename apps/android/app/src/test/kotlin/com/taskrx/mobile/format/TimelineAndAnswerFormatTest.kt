@@ -81,6 +81,8 @@ class TimelineAndAnswerFormatTest {
         assertEquals("No medications or tasks due today.", emptyDayBody(0, "Today"))
         assertEquals("You had nothing due yesterday.", emptyDayBody(-1, "Yesterday"))
         assertEquals("You had nothing due tue, aug 4.", emptyDayBody(-3, "Tue, Aug 4"))
+        assertEquals("Nothing is due tomorrow.", emptyDayBody(1, "Tomorrow"))
+        assertEquals("Nothing is due on Fri, Aug 7.", emptyDayBody(2, "Fri, Aug 7"))
     }
 
     @Test
