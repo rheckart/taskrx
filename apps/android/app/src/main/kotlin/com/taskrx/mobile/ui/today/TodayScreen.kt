@@ -265,7 +265,7 @@ private fun Timeline(state: TodayState, actions: TodayActions, now: () -> Long) 
                                     )
                                 is Entry.Dose ->
                                     TimelineRowView(
-                                        entry.row,
+                                        shownStatus(entry.row, now()),
                                         onPress = { actions.onOpenAnswer(entry.row) },
                                         onLongPress = if (entry.row.status == InstanceStatus.Completed) ({ editing = entry.row }) else null,
                                         onUndo = if (entry.row.instanceId in state.undoable) ({ actions.onUndo(entry.row) }) else null,
@@ -284,6 +284,14 @@ private fun Timeline(state: TodayState, actions: TodayActions, now: () -> Long) 
  */
 private fun isPastGrace(row: TimelineRow, now: Long): Boolean =
     row.status == InstanceStatus.Missed || (isAnswerable(row.status) && undoWillBeMissed(row.scheduledTime, now))
+
+/**
+ * The row as it reads on screen. An unanswered dose past its Grace Period is shown Missed even
+ * before the sweep has stored it, so one dose never says Missed while its neighbours at the same
+ * moment say nothing. Only Pending: a snooze may run later than the dose's own moment.
+ */
+private fun shownStatus(row: TimelineRow, now: Long): TimelineRow =
+    if (row.status == InstanceStatus.Pending && undoWillBeMissed(row.scheduledTime, now)) row.copy(status = InstanceStatus.Missed) else row
 
 private sealed interface Entry {
     val key: String
