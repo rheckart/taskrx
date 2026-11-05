@@ -5,6 +5,8 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.taskrx.core.batch.BatchAction
 import com.taskrx.core.domain.InstanceStatus
+import com.taskrx.core.domain.ReminderKind
+import com.taskrx.core.domain.isAnswerable
 import com.taskrx.core.time.takenAtOrNull
 import com.taskrx.core.undo.UNDOABLE_STATUSES
 import com.taskrx.core.undo.isScheduledOccurrence
@@ -44,10 +46,22 @@ data class TodayState(
     val undoable: Set<String> = emptySet(),
     /** How many doses and tasks of the last week are Missed and unanswered: the banner to Catch up. */
     val catchUpCount: Int = 0,
+    /** The tab open: the day is split by Kind, medications first. The projection stays Kind-neutral; only the screen filters. */
+    val kind: ReminderKind = ReminderKind.Medication,
+    /** Whether the person picked a tab. Until they do, the tab follows [defaultKind]. */
+    val kindChosen: Boolean = false,
 ) {
-    /** What the list draws: every row, or all but the completed ones. */
+    /** The rows of the open tab, done or not. */
+    val tabRows: List<TimelineRow>
+        get() = rows.filter { it.kind == kind }
+
+    /** What the list draws: every row of the open tab, or all but the completed ones. */
     val visibleRows: List<TimelineRow>
-        get() = if (hideCompleted) rows.filter { it.status != InstanceStatus.Completed } else rows
+        get() = if (hideCompleted) tabRows.filter { it.status != InstanceStatus.Completed } else tabRows
+
+    /** How many rows of each Kind still want an answer, for the badge on its tab. */
+    val toDoByKind: Map<ReminderKind, Int>
+        get() = rows.filter { isAnswerable(it.status) }.groupingBy { it.kind }.eachCount()
 }
 
 /**
@@ -87,6 +101,8 @@ class TodayViewModel(
     fun nextDay(): Job = moveTo(minOf(0, mutable.value.dayOffset + 1))
 
     fun today(): Job = moveTo(0)
+
+    fun selectKind(kind: ReminderKind) = mutable.update { it.copy(kind = kind, kindChosen = true) }
 
     fun toggleHideCompleted() = mutable.update { it.copy(hideCompleted = !it.hideCompleted) }
 
@@ -210,7 +226,15 @@ class TodayViewModel(
                     val reminder = byId[row.reminderId] ?: return@mapNotNullTo null
                     id.takeIf { row.status in UNDOABLE_STATUSES && isScheduledOccurrence(reminder, row.scheduledTime, zone()) }
                 }
-            if (mutable.value.dayOffset == offset) mutable.update { it.copy(rows = rows, undoable = undoable, error = null) }
+            // Nobody with no medication to take should open on an empty Medications tab: it opens on
+            // Tasks until they have one, or choose a tab themselves.
+            val noMedications =
+                reminders.none { it.kind == ReminderKind.Medication && it.active } &&
+                    rows.none { it.kind == ReminderKind.Medication && isAnswerable(it.status) }
+            val opensOn = if (noMedications) ReminderKind.Task else ReminderKind.Medication
+            if (mutable.value.dayOffset == offset) {
+                mutable.update { it.copy(rows = rows, undoable = undoable, error = null, kind = if (it.kindChosen) it.kind else opensOn) }
+            }
         }
 
         try {

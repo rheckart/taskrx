@@ -52,6 +52,42 @@ class TodayViewModelTest {
         }
 
     @Test
+    fun `with no medication entered and no dose pending, Today opens on Tasks`() =
+        withUi(MIDNIGHT + 8 * HOUR) {
+            reminder("task", ReminderKind.Task, onceTimes(MIDNIGHT + 10 * HOUR), createdAt = MIDNIGHT - DAY, name = "Call pharmacy")
+            val vm = vm()
+
+            vm.refresh().join()
+
+            assertEquals(ReminderKind.Task, vm.state.value.kind)
+        }
+
+    @Test
+    fun `a medication entered keeps Today on Medications, even with nothing due yet`() =
+        withUi(MIDNIGHT + 8 * HOUR) {
+            reminder("med", ReminderKind.Medication, dailyTimes(listOf("21:00")), createdAt = MIDNIGHT - 10 * DAY, name = "Metformin")
+            reminder("task", ReminderKind.Task, onceTimes(MIDNIGHT + 10 * HOUR), createdAt = MIDNIGHT - DAY, name = "Call pharmacy")
+            val vm = vm()
+
+            vm.refresh().join()
+
+            assertEquals(ReminderKind.Medication, vm.state.value.kind)
+        }
+
+    @Test
+    fun `a tab the person picked is not taken back by a refresh`() =
+        withUi(MIDNIGHT + 8 * HOUR) {
+            reminder("task", ReminderKind.Task, onceTimes(MIDNIGHT + 10 * HOUR), createdAt = MIDNIGHT - DAY, name = "Call pharmacy")
+            val vm = vm()
+            vm.refresh().join()
+
+            vm.selectKind(ReminderKind.Medication)
+            vm.refresh().join()
+
+            assertEquals(ReminderKind.Medication, vm.state.value.kind)
+        }
+
+    @Test
     fun `next is the upcoming one, not the first of the day`() =
         withUi(MIDNIGHT + 9 * HOUR + 30 * 60_000) {
             reminder("a", schedule = dailyTimes(listOf("09:00", "13:00")), createdAt = MIDNIGHT - 10 * DAY, name = "A")
