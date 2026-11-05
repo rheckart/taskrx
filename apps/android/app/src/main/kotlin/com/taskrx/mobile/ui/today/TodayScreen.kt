@@ -178,7 +178,8 @@ private fun DayBar(state: TodayState, actions: TodayActions) {
         FilterChip(
             selected = state.hideCompleted,
             onClick = actions.onToggleHideCompleted,
-            label = { Text("Hide done") },
+            // Says what a tap does: while done rows are hidden it offers to show them.
+            label = { Text(if (state.hideCompleted) "Show done" else "Hide done") },
         )
     }
     HorizontalDivider(color = TaskRxColors.Divider, modifier = Modifier.padding(top = 4.dp))
