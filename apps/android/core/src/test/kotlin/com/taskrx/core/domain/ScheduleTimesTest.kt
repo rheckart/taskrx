@@ -31,6 +31,7 @@ private fun describeExhaustively(schedule: ScheduleTimes): String =
         is WeeklyTimes -> "weekly:${schedule.daysOfWeek.size}"
         is OnceTimes -> "once:${schedule.at}"
         NoneTimes -> "none"
+        is AsNeededTimes -> "asNeeded:${schedule.minGapMinutes}"
     }
 
 class ScheduleTimesConstructorsTest {
@@ -257,11 +258,36 @@ class ParseScheduleTimesTest {
                 weeklyTimes(listOf(0, 2, 6), listOf("08:00", "20:00")),
                 onceTimes(utc(2026, 8, 7, 14)),
                 noneTimes(),
+                asNeededTimes(240),
+                asNeededTimes(240, 5),
             )
 
         for (schedule in schedules) {
             assertEquals(schedule, parseScheduleTimes(json(wire(schedule))))
         }
+    }
+
+    @Test
+    fun `an as-needed schedule writes its gap in minutes and leaves out a limit it does not have`() {
+        assertEquals("""{"${'$'}type":"AsNeededTimes","MinGapMinutes":240}""", wire(asNeededTimes(240)))
+        assertEquals("""{"${'$'}type":"AsNeededTimes","MinGapMinutes":240,"MaxPer24h":5}""", wire(asNeededTimes(240, 5)))
+    }
+
+    @Test
+    fun `an as-needed schedule that cannot be trusted is not read`() {
+        assertNull(parseScheduleTimes(json("""{"${'$'}type":"AsNeededTimes"}""")))
+        assertNull(parseScheduleTimes(json("""{"${'$'}type":"AsNeededTimes","MinGapMinutes":0}""")))
+        assertNull(parseScheduleTimes(json("""{"${'$'}type":"AsNeededTimes","MinGapMinutes":240,"MaxPer24h":0}""")))
+        assertNull(parseScheduleTimes(json("""{"${'$'}type":"AsNeededTimes","MinGapMinutes":240,"MaxPer24h":"five"}""")))
+    }
+
+    @Test
+    fun `an as-needed schedule is well formed only with a gap and a sensible limit`() {
+        assertTrue(isWellFormedSchedule(asNeededTimes(240)))
+        assertTrue(isWellFormedSchedule(asNeededTimes(240, 5)))
+        assertFalse(isWellFormedSchedule(asNeededTimes(0)))
+        assertFalse(isWellFormedSchedule(asNeededTimes(-60)))
+        assertFalse(isWellFormedSchedule(asNeededTimes(240, 0)))
     }
 
     @Test

@@ -91,6 +91,21 @@ data class OnceTimes(
  */
 data object NoneTimes : ScheduleTimes
 
+/**
+ * A medication taken when it is needed, not at set times (acetaminophen for a headache): it
+ * has no Occurrences at all. What it carries instead is how soon the next dose is allowed.
+ *
+ * [minGapMinutes] is the least time between two takings. [maxPer24h], when set, is the most
+ * takings in any 24 hours. `asneeded/AsNeeded.kt` says when the next dose is allowed.
+ *
+ * Having no Occurrences is the point: with none, nothing can be Missed, Caught up, swept or
+ * counted against the person for a dose they never needed (ADR 0010).
+ */
+data class AsNeededTimes(
+    val minGapMinutes: Int,
+    val maxPer24h: Int? = null,
+) : ScheduleTimes
+
 sealed interface ScheduleTimes
 
 fun dailyTimes(times: List<String>): DailyTimes = DailyTimes(times.toList())
@@ -103,6 +118,8 @@ fun weeklyTimes(daysOfWeek: List<Int>, times: List<String>): WeeklyTimes =
 fun onceTimes(at: Long): OnceTimes = OnceTimes(at)
 
 fun noneTimes(): NoneTimes = NoneTimes
+
+fun asNeededTimes(minGapMinutes: Int, maxPer24h: Int? = null): AsNeededTimes = AsNeededTimes(minGapMinutes, maxPer24h)
 
 /** The span `Date` can represent, in ms either side of the epoch. */
 private const val MAX_MOMENT_MS = 8_640_000_000_000_000L
@@ -134,6 +151,7 @@ fun isWellFormedSchedule(schedule: ScheduleTimes): Boolean =
         is IntervalTimes -> schedule.hours > 0 && isMoment(schedule.startAt)
         is OnceTimes -> isMoment(schedule.at)
         NoneTimes -> true
+        is AsNeededTimes -> schedule.minGapMinutes > 0 && (schedule.maxPer24h == null || schedule.maxPer24h > 0)
     }
 
 /** A `"HH:MM"` the Occurrence engine will accept. */
@@ -286,6 +304,12 @@ fun serializeScheduleTimes(schedule: ScheduleTimes): JsonObject =
                 put("AtUtc", toIsoString(schedule.at))
             }
         NoneTimes -> buildJsonObject { put("\$type", "NoneTimes") }
+        is AsNeededTimes ->
+            buildJsonObject {
+                put("\$type", "AsNeededTimes")
+                put("MinGapMinutes", schedule.minGapMinutes)
+                schedule.maxPer24h?.let { put("MaxPer24h", it) }
+            }
     }
 
 /**
@@ -314,6 +338,13 @@ fun parseScheduleTimes(value: JsonElement?): ScheduleTimes? {
         }
         "OnceTimes" -> parseInstant(value["AtUtc"])?.let(::onceTimes)
         "NoneTimes" -> noneTimes()
+        "AsNeededTimes" -> {
+            val gap = parseHours(value["MinGapMinutes"])
+            // Absent is "no limit"; present but unreadable is a schedule that cannot be trusted.
+            val max = value["MaxPer24h"]
+            val limit = if (max == null) null else parseHours(max) ?: return null
+            if (gap == null) null else asNeededTimes(gap, limit)
+        }
         else -> null
     }
 }

@@ -2,6 +2,7 @@ package com.taskrx.mobile.adherence
 
 import com.taskrx.core.domain.InstanceStatus
 import com.taskrx.core.domain.ReminderKind
+import com.taskrx.core.domain.asNeededTimes
 import com.taskrx.core.domain.dailyTimes
 import com.taskrx.mobile.DAY
 import com.taskrx.mobile.Fixture
@@ -93,6 +94,30 @@ class AdherenceReaderTest {
             assertTrue(stats.percent < 50.0)
             assertTrue(stats.missed > 0)
             assertEquals(1, stats.completed)
+        }
+
+    /**
+     * An as-needed medication has no commitments: its takings would add one to both sides of the
+     * figure, and a dose it never needed is not a miss. Neither may move the number.
+     */
+    @Test
+    fun `leaves out a medication taken as needed, so its doses neither lift the figure nor lower it`() =
+        withFixture(NOW) {
+            parents()
+            record(NOW - DAY, InstanceStatus.Completed)
+            record(NOW - 2 * DAY, InstanceStatus.Missed)
+            val without = read().stats
+
+            reminder("prn", schedule = asNeededTimes(240))
+            for (day in 1..4) {
+                container.instances.create(
+                    CreateReminderInstanceInput(USER, "prn", ReminderKind.Medication, NOW - day * DAY, InstanceStatus.Completed, completedAt = NOW - day * DAY),
+                )
+            }
+            val with = read().stats
+
+            assertEquals(50.0, without.percent)
+            assertEquals(without, with)
         }
 
     @Test

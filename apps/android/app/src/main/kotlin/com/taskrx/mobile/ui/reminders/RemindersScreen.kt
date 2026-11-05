@@ -22,6 +22,7 @@ import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import com.taskrx.core.domain.AsNeededTimes
 import com.taskrx.core.domain.Reminder
 import com.taskrx.core.domain.ReminderKind
 import com.taskrx.mobile.format.describeSchedule
@@ -167,11 +168,11 @@ private fun ReminderRow(
         }
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             TextButton(onClick = onEdit, modifier = Modifier.semantics { contentDescription = "Edit ${reminder.name}" }) { Text("Edit") }
-            // A Task has no doses to hold back; pausing is for medications.
+            // A Task has no doses to hold back, and a medication taken as needed has no times to hold back: pausing is for scheduled medications.
             if (entry.pause != null) {
                 val word = if (entry.pause.from > now) "Cancel pause" else "Resume"
                 TextButton(onClick = onResume, modifier = Modifier.semantics { contentDescription = "$word ${reminder.name}" }) { Text(word) }
-            } else if (reminder.kind == ReminderKind.Medication) {
+            } else if (reminder.kind == ReminderKind.Medication && reminder.schedule !is AsNeededTimes) {
                 TextButton(onClick = onPause, modifier = Modifier.semantics { contentDescription = "Pause ${reminder.name}" }) { Text("Pause") }
             }
             TextButton(onClick = onStop, modifier = Modifier.semantics { contentDescription = "Stop ${reminder.name}" }) {

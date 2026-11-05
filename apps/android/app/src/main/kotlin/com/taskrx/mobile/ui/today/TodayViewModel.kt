@@ -4,7 +4,10 @@ import android.util.Log
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.taskrx.core.batch.BatchAction
+import com.taskrx.core.asneeded.takings
+import com.taskrx.core.domain.AsNeededTimes
 import com.taskrx.core.domain.InstanceStatus
+import com.taskrx.core.domain.Reminder
 import com.taskrx.core.domain.ReminderKind
 import com.taskrx.core.domain.isAnswerable
 import com.taskrx.core.time.takenAtOrNull
@@ -19,6 +22,7 @@ import com.taskrx.core.timeline.TimelineWindow
 import com.taskrx.core.timeline.projectTimeline
 import com.taskrx.mobile.AppContainer
 import com.taskrx.mobile.data.InstanceFilter
+import com.taskrx.mobile.dose.RecordResult
 import com.taskrx.mobile.ui.components.ToastKind
 import com.taskrx.mobile.ui.components.ToastRequest
 import java.time.ZoneId
@@ -30,6 +34,13 @@ import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
+
+/**
+ * A medication taken as needed, with the moments its doses were taken. The wait is not stored: it
+ * depends on the clock (the 24-hour window moves, the countdown runs), so the screen works it out
+ * from these with `asNeededStatus` each time it looks.
+ */
+data class AsNeededEntry(val reminder: Reminder, val schedule: AsNeededTimes, val takings: List<Long>)
 
 data class TodayState(
     /** 0 is today, -1 yesterday. Positive only on the Tasks tab: see [TodayViewModel.nextDay]. */
@@ -50,6 +61,8 @@ data class TodayState(
     val kind: ReminderKind = ReminderKind.Medication,
     /** Whether the person picked a tab. Until they do, the tab follows [defaultKind]. */
     val kindChosen: Boolean = false,
+    /** Medications taken as needed, for the card at the top of the Medications tab. Not part of any day's rows. */
+    val asNeeded: List<AsNeededEntry> = emptyList(),
 ) {
     /** The rows of the open tab, done or not. */
     val tabRows: List<TimelineRow>
@@ -70,6 +83,8 @@ data class TodayState(
     val toDoByKind: Map<ReminderKind, Int>
         get() = rows.filter { isAnswerable(it.status) }.groupingBy { it.kind }.eachCount()
 }
+
+private const val DAY_MS = 24 * 60 * 60_000L
 
 /**
  * The Today timeline. Mirrors archive/expo-rn:apps/mobile/app/(app)/index.tsx.
@@ -115,6 +130,24 @@ class TodayViewModel(
         return if (kind == ReminderKind.Medication && mutable.value.dayOffset > 0) today() else Job().also { it.complete() }
     }
 
+    /** Records a dose of an as-needed medication as taken now, and re-reads so its countdown starts. */
+    fun takeAsNeeded(medication: Reminder): Job =
+        viewModelScope.launch {
+            try {
+                if (app.doses.record(medication, app.clock()) == RecordResult.AlreadyRecorded) {
+                    toast(ToastRequest("Already recorded at this time", ToastKind.Error))
+                } else {
+                    toast(ToastRequest("${medication.name} recorded as taken", ToastKind.Success))
+                }
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                log("recording an as-needed dose failed", e)
+                toast(ToastRequest("Couldn't record it", ToastKind.Error))
+            }
+            loads.withLock { load() }
+        }
+
     fun toggleHideCompleted() = mutable.update { it.copy(hideCompleted = !it.hideCompleted) }
 
     /**
@@ -133,6 +166,8 @@ class TodayViewModel(
             }
             try {
                 app.instances.changeCompletedAt(instanceId, taken)
+                // A dose of an as-needed medication starts its wait from when it was taken.
+                app.notifications.rescheduleAfterWrite(app.session.userId)
                 toast(ToastRequest("Time updated", ToastKind.Success))
             } catch (e: CancellationException) {
                 throw e
@@ -247,8 +282,20 @@ class TodayViewModel(
                 reminders.none { it.kind == ReminderKind.Medication && it.active } &&
                     rows.none { it.kind == ReminderKind.Medication && isAnswerable(it.status) }
             val opensOn = if (noMedications) ReminderKind.Task else ReminderKind.Medication
+            val asNeeded =
+                reminders.filter { it.active && it.schedule is AsNeededTimes }.sortedBy { it.name.lowercase() }.let { waiting ->
+                    if (waiting.isEmpty()) {
+                        emptyList()
+                    } else {
+                        // Two days back, by the Instance's own moment: room for a time moved after the fact.
+                        val recent = app.instances.list(InstanceFilter(userId, since = now - 2 * DAY_MS))
+                        waiting.map { AsNeededEntry(it, it.schedule as AsNeededTimes, takings(recent, it.id)) }
+                    }
+                }
             if (mutable.value.dayOffset == offset) {
-                mutable.update { it.copy(rows = rows, undoable = undoable, error = null, kind = if (it.kindChosen) it.kind else opensOn) }
+                mutable.update {
+                    it.copy(rows = rows, undoable = undoable, asNeeded = asNeeded, error = null, kind = if (it.kindChosen) it.kind else opensOn)
+                }
             }
         }
 

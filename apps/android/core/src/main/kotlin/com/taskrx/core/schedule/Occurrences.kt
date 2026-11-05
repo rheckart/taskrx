@@ -1,5 +1,6 @@
 package com.taskrx.core.schedule
 
+import com.taskrx.core.domain.AsNeededTimes
 import com.taskrx.core.domain.DailyTimes
 import com.taskrx.core.domain.IntervalTimes
 import com.taskrx.core.domain.NoneTimes
@@ -286,4 +287,7 @@ private fun scheduledOccurrences(
         // variant: it never reaches the timeline or the notification horizon, and is
         // acted on from the Backlog surface instead.
         NoneTimes -> emptyList()
+        // Nor does a medication taken as needed: when the next dose is allowed is not a moment
+        // that was due, so nothing about it can be missed (see `asneeded/AsNeeded.kt`).
+        is AsNeededTimes -> emptyList()
     }

@@ -16,7 +16,9 @@ import androidx.compose.ui.test.assertTextContains
 import androidx.compose.ui.test.hasClickAction
 import androidx.compose.ui.test.hasContentDescription
 import androidx.compose.ui.test.hasSetTextAction
+import androidx.compose.ui.test.hasAnyAncestor
 import androidx.compose.ui.test.hasText
+import androidx.compose.ui.test.isDialog
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithContentDescription
@@ -25,9 +27,12 @@ import androidx.compose.ui.test.hasScrollAction
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollTo
 import androidx.compose.ui.test.performScrollToIndex
+import androidx.compose.ui.test.performTextInput
 import androidx.compose.ui.test.performTextReplacement
 import com.taskrx.core.domain.InstanceStatus
 import com.taskrx.core.domain.ReminderKind
+import com.taskrx.core.domain.asNeededTimes
+import com.taskrx.mobile.ui.today.AsNeededEntry
 import com.taskrx.core.domain.createReminder
 import com.taskrx.core.domain.createReminderInstance
 import com.taskrx.core.domain.dailyTimes
@@ -111,6 +116,7 @@ class ScreensTest {
                 onSupplies = { log += "supplies" },
                 onHistory = { log += "history" },
                 onSettings = { log += "settings" },
+                onTakeAsNeeded = { log += "take:${it.name}" },
             )
     }
 
@@ -478,6 +484,83 @@ class ScreensTest {
         compose.onAllNodesWithText("Call").assertCountEquals(0)
         compose.onNodeWithText("Medications (1)").assertExists()
         compose.onNodeWithText("Tasks (1)").assertExists()
+    }
+
+    private fun tylenol(gapMinutes: Int = 240, max: Int? = null) =
+        createReminder("tylenol", "u", ReminderKind.Medication, "Tylenol", createdAt = 0, updatedAt = 0, dosage = "500mg", schedule = asNeededTimes(gapMinutes, max))
+
+    private fun asNeeded(takings: List<Long>, gapMinutes: Int = 240, max: Int? = null, kind: ReminderKind = ReminderKind.Medication, offset: Int = 0) =
+        state(offset = offset, kind = kind).copy(asNeeded = listOf(AsNeededEntry(tylenol(gapMinutes, max), asNeededTimes(gapMinutes, max), takings)))
+
+    @Test
+    fun `an as-needed medication with no wait offers Take, and Take records it`() {
+        val calls = Calls()
+        today(asNeeded(takings = emptyList()), calls)
+
+        compose.onNodeWithText("Tylenol (500mg)").assertExists()
+        compose.onNodeWithText("Ready now").assertExists()
+        compose.onNodeWithContentDescription("Take Tylenol now").performClick()
+
+        assertEquals(listOf("take:Tylenol"), calls.log)
+    }
+
+    @Test
+    fun `while the wait is on the card counts down and Take anyway asks before it records`() {
+        val calls = Calls()
+        today(asNeeded(takings = listOf(NINE - 3_600_000L)), calls)
+
+        compose.onNodeWithText("Next dose in 3 h").assertExists()
+        compose.onNodeWithText("Take anyway").performClick()
+        compose.onNodeWithText("Take Tylenol now?").assertExists()
+        compose.onNodeWithText("The last dose was 1 hour ago, and you set at least 4 hours between doses. Take it anyway?").assertExists()
+        assertEquals(emptyList(), calls.log)
+
+        compose.onNode(hasText("Take anyway") and hasAnyAncestor(isDialog())).performClick()
+
+        assertEquals(listOf("take:Tylenol"), calls.log)
+    }
+
+    @Test
+    fun `Not yet leaves the dose unrecorded`() {
+        val calls = Calls()
+        today(asNeeded(takings = listOf(NINE - 3_600_000L)), calls)
+
+        compose.onNodeWithText("Take anyway").performClick()
+        compose.onNodeWithText("Not yet").performClick()
+
+        assertEquals(emptyList(), calls.log)
+        compose.onAllNodesWithText("Take Tylenol now?").assertCountEquals(0)
+    }
+
+    @Test
+    fun `at the daily limit the card and the question both say it is the limit`() {
+        val calls = Calls()
+        val five = (1..5).map { NINE - (20 - it) * 3_600_000L }
+        today(asNeeded(takings = five, max = 5), calls)
+
+        compose.onNodeWithText("Daily limit reached", substring = true).assertExists()
+        compose.onNodeWithText("Take anyway").performClick()
+        compose.onNodeWithText("You have taken 5 in the last 24 hours, and you set no more than 5. Take it anyway?").assertExists()
+    }
+
+    @Test
+    fun `the card belongs to the Medications tab, today only`() {
+        today(asNeeded(takings = emptyList(), kind = ReminderKind.Task))
+        compose.onAllNodesWithText("Tylenol (500mg)").assertCountEquals(0)
+    }
+
+    @Test
+    fun `the card is not on a past day`() {
+        today(asNeeded(takings = emptyList(), offset = -1))
+        compose.onAllNodesWithText("Tylenol (500mg)").assertCountEquals(0)
+    }
+
+    @Test
+    fun `an as-needed medication on its own does not turn the day into an empty one`() {
+        today(asNeeded(takings = emptyList()))
+
+        compose.onNodeWithText("Tylenol (500mg)").assertExists()
+        compose.onNodeWithText("Ready now").assertExists()
     }
 
     @Test
@@ -1039,6 +1122,60 @@ class ScreensTest {
 
         assertEquals(com.taskrx.core.domain.onceTimes(moment), value)
         compose.onNodeWithText("Next").assertDoesNotExist()
+    }
+
+    @Test
+    fun `As needed is offered for a medication and not for a task`() {
+        compose.setContent { TaskRxTheme { ScheduleTypeChooser(ScheduleType.Daily, onChange = {}, now = { NINE }, offerAsNeeded = true) } }
+
+        compose.onNodeWithText("As needed").assertExists()
+    }
+
+    @Test
+    fun `a task is not offered As needed`() {
+        compose.setContent { TaskRxTheme { ScheduleTypeChooser(ScheduleType.Daily, onChange = {}, now = { NINE }) } }
+
+        compose.onNodeWithText("Daily").assertExists()
+        compose.onAllNodesWithText("As needed").assertCountEquals(0)
+    }
+
+    @Test
+    fun `choosing As needed hands back four hours and no limit`() {
+        var chosen: com.taskrx.core.domain.ScheduleTimes? = null
+        compose.setContent { TaskRxTheme { ScheduleTypeChooser(ScheduleType.Daily, onChange = { chosen = it }, now = { NINE }, offerAsNeeded = true) } }
+
+        compose.onNodeWithText("As needed").performClick()
+
+        assertEquals(asNeededTimes(240), chosen)
+    }
+
+    @Test
+    fun `the as-needed picker edits the gap in hours or minutes, and an optional daily limit`() {
+        var value by mutableStateOf<com.taskrx.core.domain.ScheduleTimes>(asNeededTimes(240))
+        compose.setContent { TaskRxTheme { SchedulePicker(value, onChange = { value = it }, now = { NINE }) } }
+
+        compose.onNodeWithText("At least this long between doses").assertExists()
+        compose.onNodeWithText("4").performTextReplacement("6")
+        assertEquals(asNeededTimes(360), value)
+
+        compose.onNodeWithText("Minutes").performClick()
+        assertEquals(asNeededTimes(6), value)
+
+        compose.onNodeWithText("No limit").performTextInput("5")
+        assertEquals(asNeededTimes(6, 5), value)
+
+        compose.onNodeWithText("5").performTextReplacement("")
+        assertEquals(asNeededTimes(6, null), value)
+    }
+
+    @Test
+    fun `a zero gap or limit is refused by the schedule, so the form cannot save it`() {
+        var value by mutableStateOf<com.taskrx.core.domain.ScheduleTimes>(asNeededTimes(240))
+        compose.setContent { TaskRxTheme { SchedulePicker(value, onChange = { value = it }, now = { NINE }) } }
+
+        compose.onNodeWithText("4").performTextReplacement("0")
+
+        assertEquals(false, com.taskrx.core.domain.isWellFormedSchedule(value))
     }
 
     @Test

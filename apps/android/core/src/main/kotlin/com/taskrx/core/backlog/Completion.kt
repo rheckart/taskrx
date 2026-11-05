@@ -1,5 +1,6 @@
 package com.taskrx.core.backlog
 
+import com.taskrx.core.domain.AsNeededTimes
 import com.taskrx.core.domain.DailyTimes
 import com.taskrx.core.domain.InstanceStatus
 import com.taskrx.core.domain.IntervalTimes
@@ -96,4 +97,5 @@ internal fun scheduleTypeName(schedule: ScheduleTimes): String =
         is WeeklyTimes -> "weekly"
         is OnceTimes -> "once"
         NoneTimes -> "none"
+        is AsNeededTimes -> "asNeeded"
     }

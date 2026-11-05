@@ -1,11 +1,13 @@
 package com.taskrx.mobile.ui.forms
 
+import com.taskrx.core.domain.AsNeededTimes
 import com.taskrx.core.domain.DailyTimes
 import com.taskrx.core.domain.IntervalTimes
 import com.taskrx.core.domain.NoneTimes
 import com.taskrx.core.domain.OnceTimes
 import com.taskrx.core.domain.ScheduleTimes
 import com.taskrx.core.domain.WeeklyTimes
+import com.taskrx.core.domain.asNeededTimes
 import com.taskrx.core.domain.dailyTimes
 import com.taskrx.core.domain.intervalTimes
 import com.taskrx.core.domain.noneTimes
@@ -34,6 +36,9 @@ enum class ScheduleType(val label: String) {
     Interval("Interval"),
     Once("Once"),
     None("No time"),
+
+    /** A medication only: no times, a rule about how soon the next dose is allowed. */
+    AsNeeded("As needed"),
 }
 
 fun scheduleTypeOf(schedule: ScheduleTimes): ScheduleType =
@@ -43,6 +48,7 @@ fun scheduleTypeOf(schedule: ScheduleTimes): ScheduleType =
         is IntervalTimes -> ScheduleType.Interval
         is OnceTimes -> ScheduleType.Once
         NoneTimes -> ScheduleType.None
+        is AsNeededTimes -> ScheduleType.AsNeeded
     }
 
 /**
@@ -60,6 +66,8 @@ fun defaultSchedule(type: ScheduleType, now: Long): ScheduleTimes =
         // An hour out, so the moment is ahead of the person filling the form in.
         ScheduleType.Once -> onceTimes(now + 3_600_000L)
         ScheduleType.None -> noneTimes()
+        // Four hours is what the label of most over-the-counter pain relief says; no daily limit until one is typed.
+        ScheduleType.AsNeeded -> asNeededTimes(4 * 60)
     }
 
 /** Sunday first; the index is the domain's weekday number. */
@@ -113,6 +121,24 @@ fun parseIntervalHours(text: String): Int {
     val parsed = Regex("""^\s*\d+""").find(text)?.value?.trim()?.toIntOrNull() ?: return 0
     return if (parsed > 0) parsed else 0
 }
+
+/** What the least time between as-needed doses is counted in on the form. The schedule keeps minutes. */
+enum class GapUnit(val label: String, val minutes: Int) {
+    Minutes("Minutes", 1),
+    Hours("Hours", 60),
+}
+
+/** Hours when [minutes] is a whole number of them, so 240 reads back as 4 hours and 90 as 90 minutes. */
+fun bestGapUnit(minutes: Int): GapUnit = if (minutes > 0 && minutes % GapUnit.Hours.minutes == 0) GapUnit.Hours else GapUnit.Minutes
+
+/** [amount] of [unit] as the minutes the schedule keeps, held at the largest Int rather than wrapping round to a negative. */
+fun gapMinutes(amount: Int, unit: GapUnit): Int = minOf(amount.toLong() * unit.minutes, Int.MAX_VALUE.toLong()).toInt()
+
+/**
+ * The "no more than" box: empty is no limit (null), and anything else is read as a count, with 0
+ * for what is not one, which the schedule then refuses to save.
+ */
+fun parseDailyLimit(text: String): Int? = if (text.isBlank()) null else parseIntervalHours(text)
 
 /**
  * The instant for a day the date picker returned and a time the time picker returned, in [zone].

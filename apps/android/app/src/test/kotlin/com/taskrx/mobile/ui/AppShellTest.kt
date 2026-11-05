@@ -20,6 +20,7 @@ import androidx.work.testing.SynchronousExecutor
 import androidx.work.testing.WorkManagerTestInitHelper
 import com.taskrx.core.domain.InstanceStatus
 import com.taskrx.core.domain.ReminderKind
+import com.taskrx.core.domain.asNeededTimes
 import com.taskrx.core.domain.dailyTimes
 import com.taskrx.core.domain.noneTimes
 import com.taskrx.core.domain.onceTimes
@@ -120,6 +121,19 @@ class AppShellTest {
 
         compose.onNodeWithText("TaskRx").assertExists()
         compose.onNodeWithText("Today").assertExists()
+    }
+
+    @Test
+    fun `an as-needed medication is a card on Today, and taking a dose starts the countdown to the next`() {
+        runBlocking { fx.reminder("prn", ReminderKind.Medication, asNeededTimes(240, 5), createdAt = NOW - DAY, name = "Tylenol") }
+        show()
+        awaitText("Ready now")
+
+        compose.onNodeWithContentDescription("Take Tylenol now").performClick()
+
+        awaitText("Next dose in 4 h")
+        compose.onNodeWithText("Allowed at", substring = true).assertExists()
+        compose.onNodeWithText("Take anyway").assertExists()
     }
 
     @Test

@@ -5,6 +5,7 @@ import com.taskrx.core.domain.Reminder
 import com.taskrx.core.domain.ReminderKind
 import com.taskrx.core.domain.ScheduleTimes
 import com.taskrx.core.domain.createReminder
+import com.taskrx.core.domain.asNeededTimes
 import com.taskrx.core.domain.dailyTimes
 import com.taskrx.core.domain.intervalTimes
 import com.taskrx.core.domain.noneTimes
@@ -340,6 +341,15 @@ class NextOccurrencesNoneTest {
     @Test
     fun `never comes due, which is what puts a reminder in the Backlog`() {
         val r = reminder(noneTimes())
+
+        assertEquals(emptyList(), nextOccurrences(r, local(2026, 7, 3), 64))
+    }
+}
+
+class NextOccurrencesAsNeededTest {
+    @Test
+    fun `never comes due, so nothing about an as-needed medication can be missed`() {
+        val r = reminder(asNeededTimes(240, 5))
 
         assertEquals(emptyList(), nextOccurrences(r, local(2026, 7, 3), 64))
     }

@@ -8,6 +8,21 @@ for commit discipline (POC tags use `0.x.x`).
 
 ## [Unreleased]
 
+### 2026-11-06 — A medication can be taken as needed
+
+For a medication with no set times, like acetaminophen for a headache, choose **As needed** when you add it. Say how long
+must pass between doses (4 hours, say) and, if you like, the most doses in 24 hours. Today then shows a card for it on the
+Medications tab: **Ready now**, or **Next dose in 3 h 12 min** with the time it is allowed. Take it when you need it;
+taking it early asks first and says which rule it would break, but never stops you. When the wait is over you get one
+reminder, **You can take another dose**, with **Take** and **Skip**. Skip just clears it. At the daily limit the card says
+so and counts down to when a dose leaves the 24 hours.
+
+- **Adherence** leaves these medications out: a dose you did not need is not a miss, and a dose you took is not a commitment met.
+- **Pause** is not offered for them, since they have no times to hold back.
+- **Sync.** Convex gains the `asNeeded` schedule type. The phone's database does not change. ADR 0010 records the decision.
+- **Deploy order:** deploy the Convex backend before installing an app that can create one.
+- **Not yet:** typing "as needed" in Add by typing. Choose it on the form.
+
 ### 2026-11-02 — A medication can be paused
 
 For a medication you will start again, such as one held before surgery, the Reminders screen now has **Pause**.

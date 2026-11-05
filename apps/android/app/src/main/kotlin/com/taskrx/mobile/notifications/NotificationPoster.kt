@@ -35,6 +35,11 @@ object NotificationPoster {
             Log.w(TAG, "notifications are off; ${spec.id} will be discarded")
         }
 
+        if (spec.asNeeded) {
+            postReady(context, manager, spec)
+            return
+        }
+
         val delivery = deliveryFor(spec.tier)
         val builder =
             NotificationCompat.Builder(context, delivery.channelId)
@@ -69,6 +74,44 @@ object NotificationPoster {
             val showing = doseEntries(manager, spec.scheduledTime)
             showBatch(context, manager, spec.scheduledTime, if (showing.any { it.first == spec.reminderId }) showing else showing + (spec.reminderId to spec.title))
         }
+    }
+
+    /**
+     * "You can take another dose" of an as-needed medication. Take and Skip only, and no Snooze: the
+     * wait it announces is over, and there is nothing due that could be deferred. It is not a dose
+     * of the shade as far as a batch is concerned (no `EXTRA_DOSE`), and a tap opens Today, where
+     * the medication's card is, because no Occurrence stands behind it for an answer screen to find.
+     */
+    private fun postReady(context: Context, manager: NotificationManager, spec: NotificationSpec) {
+        val open =
+            PendingIntent.getActivity(
+                context,
+                0,
+                Intent(context, MainActivity::class.java)
+                    .setData(Uri.parse("taskrx://ready/${Uri.encode(spec.id)}"))
+                    .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP),
+                PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
+            )
+        val builder =
+            NotificationCompat.Builder(context, deliveryFor(spec.tier).channelId)
+                .setSmallIcon(android.R.drawable.ic_popup_reminder)
+                .setContentTitle(spec.title)
+                .setContentText(spec.body)
+                .setPriority(NotificationCompat.PRIORITY_HIGH)
+                .setCategory(NotificationCompat.CATEGORY_REMINDER)
+                .setAutoCancel(true)
+                .setContentIntent(open)
+        for ((wire, label) in READY_ACTIONS) {
+            val intent =
+                Intent(context, AsNeededActionReceiver::class.java)
+                    .setAction(AsNeededActionReceiver.ACTION_ANSWER)
+                    .setData(Uri.parse("taskrx://ready-action/${Uri.encode(spec.id)}/$wire"))
+                    .putExtra(AsNeededActionReceiver.EXTRA_ACTION, wire)
+                    .putExtra(AsNeededActionReceiver.EXTRA_REMINDER_ID, spec.reminderId)
+                    .putExtra(AsNeededActionReceiver.EXTRA_NOTIFICATION_ID, spec.id)
+            builder.addAction(0, label, PendingIntent.getBroadcast(context, 0, intent, PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE))
+        }
+        manager.notify(spec.id, 0, builder.build())
     }
 
     /** `(reminderId, name)` of each dose in the shade for [scheduledTime]. */
@@ -165,6 +208,7 @@ object NotificationPoster {
         showBatch(context, manager, scheduledTime, doseEntries(manager, scheduledTime).filterNot { it.first in reminderIds })
     }
 
+    private val READY_ACTIONS = listOf(AsNeededActionReceiver.TAKE to "Take", AsNeededActionReceiver.SKIP to "Skip")
     private val DOSE_ACTIONS = listOf(BatchAction.Take to "Take", BatchAction.Snooze to "Snooze", BatchAction.Skip to "Skip")
     private val TASK_ACTIONS = listOf(BatchAction.Take to "Done", BatchAction.Skip to "Skip")
     private val ACTION_LABELS = listOf(BatchAction.Take to "Take all", BatchAction.Snooze to "Snooze all", BatchAction.Skip to "Skip all")

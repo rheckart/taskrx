@@ -46,6 +46,14 @@ Occurrence itself: an Occurrence is when something was due, an Instance is what
 became of it.
 _Avoid_: Log, Entry, Dose log, Completion
 
+**As needed**:
+A medication taken when it is wanted, not at set times (acetaminophen for a headache). Its
+Schedule has no times, so it has no Occurrences: nothing about it is ever due, Missed or
+caught up. What it has instead is a rule on spacing: at least so long between doses, and
+optionally no more than so many in 24 hours. The app says when the next dose is allowed, and
+reminds you once when that moment arrives. Not part of Adherence.
+_Avoid_: PRN, Optional, Backlog (a Backlog item is a commitment with no moment; this is not a commitment)
+
 **Pause**:
 A stretch of time in which a Reminder has no Occurrences, after which it carries on as
 before. It starts now or on a later day and ends on a day the person names, or when they

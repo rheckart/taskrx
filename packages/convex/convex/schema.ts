@@ -104,6 +104,13 @@ export const scheduleTimesValidator = v.union(
   }),
   v.object({
     type: v.literal("none"),
+  }),
+  // A medication taken when it is needed: no moments at all, only how soon the
+  // next dose is allowed. `maxPer24h` absent means no limit. See ADR 0010.
+  v.object({
+    type: v.literal("asNeeded"),
+    minGapMinutes: v.number(),
+    maxPer24h: v.optional(v.number()),
   })
 );
 
