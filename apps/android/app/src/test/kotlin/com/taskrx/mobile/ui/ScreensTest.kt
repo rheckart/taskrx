@@ -477,6 +477,24 @@ class ScreensTest {
     }
 
     @Test
+    fun `a pending dose past its Grace Period reads Missed before the sweep stores it, and one inside it does not`() {
+        val late = row("Late")
+        val deferred = row("Deferred", status = InstanceStatus.Snoozed)
+
+        today(state(late, deferred), now = NINE + 3 * 3_600_000L)
+        compose.onNodeWithText("Missed").assertExists()
+        // The test screen is small: the last row may be below the fold.
+        compose.onNode(hasScrollAction()).performScrollToIndex(2)
+        compose.onNodeWithText("Snoozed").assertExists()
+    }
+
+    @Test
+    fun `a pending dose inside its Grace Period shows no status`() {
+        today(state(row("OnTime")), now = NINE + 3_600_000L)
+        compose.onNodeWithText("Missed").assertDoesNotExist()
+    }
+
+    @Test
     fun `holding a taken row offers its time, and confirming reports the new one`() {
         val calls = Calls()
         val taken = row("Taken", status = InstanceStatus.Completed, completedAt = NINE + 5 * 60_000)
