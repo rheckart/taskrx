@@ -129,7 +129,8 @@ class ScreensTest {
         loading: Boolean = false,
         error: String? = null,
         undoable: Set<String> = emptySet(),
-    ) = TodayState(dayOffset = offset, windowStart = 0, rows = rows.toList(), loading = loading, error = error, undoable = undoable)
+        kind: ReminderKind = ReminderKind.Medication,
+    ) = TodayState(dayOffset = offset, windowStart = 0, rows = rows.toList(), loading = loading, error = error, undoable = undoable, kind = kind)
 
     @Test
     fun `a taken row offers Undo take`() {
@@ -146,7 +147,7 @@ class ScreensTest {
     fun `a done task offers Undo done, not Undo take`() {
         val calls = Calls()
         val done = row("Call", kind = ReminderKind.Task, status = InstanceStatus.Completed, completedAt = NINE + 5 * 60_000)
-        today(state(done, undoable = setOf("i-Call")), calls)
+        today(state(done, undoable = setOf("i-Call"), kind = ReminderKind.Task), calls)
 
         compose.onAllNodesWithText("Undo take").assertCountEquals(0)
         compose.onNodeWithText("Undo done").performClick()
@@ -199,7 +200,7 @@ class ScreensTest {
     fun `an empty day says so in a sentence`() {
         today(state())
 
-        compose.onNodeWithText("Nothing scheduled").assertExists()
+        compose.onNodeWithText("No medications scheduled").assertExists()
         compose.onNodeWithText("No medications or tasks due today.").assertExists()
     }
 
@@ -270,6 +271,7 @@ class ScreensTest {
         val calls = Calls()
         today(state(row("A")), calls)
 
+        compose.onNodeWithContentDescription("More").performClick()
         compose.onNodeWithText("Settings").performClick()
 
         assertEquals(listOf("settings"), calls.log)
@@ -297,11 +299,12 @@ class ScreensTest {
     }
 
     @Test
-    fun `the footer offers to add a dose`() {
+    fun `the add menu offers to log a dose`() {
         val calls = Calls()
         today(state(row()), calls)
 
-        compose.onNodeWithText("+ Dose").performClick()
+        compose.onNodeWithContentDescription("Add").performClick()
+        compose.onNodeWithText("Log a dose").performClick()
 
         assertEquals(listOf("dose"), calls.log)
     }
@@ -433,29 +436,75 @@ class ScreensTest {
     }
 
     @Test
-    fun `a row is one phrase for a screen reader, with the Kind in words`() {
+    fun `a medication row is one phrase for a screen reader, with the Kind in words`() {
         val med = row("Metformin", ReminderKind.Medication, InstanceStatus.Completed)
-        val task = row("Call pharmacy", ReminderKind.Task, InstanceStatus.Pending)
-        today(state(med, task))
+        today(state(med))
 
         compose.onNodeWithContentDescription(rowDescription(med)).assertExists()
-        compose.onNodeWithContentDescription(rowDescription(task)).assertExists()
         assertTrue(rowDescription(med).startsWith("Medication: Metformin at "))
         assertTrue(rowDescription(med).endsWith(", Taken"))
+    }
+
+    @Test
+    fun `a task row is one phrase for a screen reader, with the Kind in words`() {
+        val task = row("Call pharmacy", ReminderKind.Task, InstanceStatus.Pending)
+        today(state(task, kind = ReminderKind.Task))
+
+        compose.onNodeWithContentDescription(rowDescription(task)).assertExists()
         assertTrue(rowDescription(task).startsWith("Task: Call pharmacy at "))
     }
 
     @Test
-    fun `a medication reads Taken and a task reads Done on the row itself`() {
-        today(
-            state(
-                row("Metformin", ReminderKind.Medication, InstanceStatus.Completed),
-                row("Bins", ReminderKind.Task, InstanceStatus.Completed),
-            ),
-        )
+    fun `a medication reads Taken on the row itself`() {
+        today(state(row("Metformin", ReminderKind.Medication, InstanceStatus.Completed)))
 
         compose.onNodeWithText("Taken").assertExists()
+    }
+
+    @Test
+    fun `a task reads Done on the row itself`() {
+        today(state(row("Bins", ReminderKind.Task, InstanceStatus.Completed), kind = ReminderKind.Task))
+
         compose.onNodeWithText("Done").assertExists()
+    }
+
+    @Test
+    fun `each tab shows only its own Kind, and a tab's count is what still wants an answer`() {
+        val rows = arrayOf(row("Metformin"), row("Statin", status = InstanceStatus.Completed, completedAt = NINE), row("Call", kind = ReminderKind.Task))
+        today(state(*rows))
+
+        compose.onNodeWithText("Metformin").assertExists()
+        compose.onAllNodesWithText("Call").assertCountEquals(0)
+        compose.onNodeWithText("Medications (1)").assertExists()
+        compose.onNodeWithText("Tasks (1)").assertExists()
+    }
+
+    @Test
+    fun `the Tasks tab hides the medications`() {
+        today(state(row("Metformin"), row("Call", kind = ReminderKind.Task), kind = ReminderKind.Task))
+
+        compose.onNodeWithText("Call").assertExists()
+        compose.onAllNodesWithText("Metformin").assertCountEquals(0)
+    }
+
+    @Test
+    fun `tapping a tab asks for that Kind`() {
+        val selected = mutableListOf<ReminderKind>()
+        compose.setContent {
+            TaskRxTheme { TodayContent(state(row("A")), Calls().actions().copy(onSelectKind = { selected += it }), now = { NINE }) }
+        }
+
+        compose.onNodeWithText("Tasks").performClick()
+
+        assertEquals(listOf(ReminderKind.Task), selected)
+    }
+
+    @Test
+    fun `a day with only tasks says so on the Medications tab`() {
+        today(state(row("Call", kind = ReminderKind.Task)))
+
+        compose.onNodeWithText("No medications scheduled").assertExists()
+        compose.onNodeWithText("Tasks (1)").assertExists()
     }
 
     @Test
@@ -552,13 +601,14 @@ class ScreensTest {
     }
 
     @Test
-    fun `the footer reaches both ways of adding`() {
+    fun `the add menu reaches each way of adding`() {
         val calls = Calls()
         today(state(), calls)
 
-        compose.onNodeWithText("+ Add").performClick()
-        compose.onNodeWithText("+ Task").performClick()
-        compose.onNodeWithText("+ Medication").performClick()
+        for (item in listOf("Add by typing", "New task", "New medication")) {
+            compose.onNodeWithContentDescription("Add").performClick()
+            compose.onNodeWithText(item).performClick()
+        }
 
         assertEquals(listOf("add", "task", "med"), calls.log)
     }

@@ -258,6 +258,8 @@ class ListScreensTest {
         reminders(RemindersState(entries = entries, loading = false))
 
         compose.onNodeWithText("Medication · Daily at 09:00").assertExists()
+        compose.onAllNodesWithText("Task · In your backlog — no time set").assertCountEquals(0)
+        compose.onNodeWithText("Tasks").performClick()
         compose.onNodeWithText("Task · In your backlog — no time set").assertExists()
         compose.onNodeWithText("Last done: Never").assertExists()
         assertTrue(lastCompletedLine(entries[0]).startsWith("Last taken: "))
@@ -295,8 +297,11 @@ class ListScreensTest {
     fun `an empty reminder list says where to add one`() {
         reminders(RemindersState(loading = false))
 
-        compose.onNodeWithText("No reminders yet").assertExists()
+        compose.onNodeWithText("No medications yet").assertExists()
         compose.onNodeWithText("+ Find a medication").assertExists()
+        compose.onNodeWithText("Tasks").performClick()
+        compose.onNodeWithText("No tasks yet").assertExists()
+        compose.onAllNodesWithText("+ Find a medication").assertCountEquals(0)
     }
 
     // ---- adherence ----

@@ -30,7 +30,9 @@ import com.taskrx.mobile.format.kindLabel
 import com.taskrx.mobile.format.pauseLine
 import com.taskrx.mobile.ui.TaskRxColors
 import com.taskrx.mobile.ui.components.EmptyState
+import com.taskrx.mobile.ui.components.KindTabs
 import com.taskrx.mobile.ui.components.ListScaffold
+import com.taskrx.mobile.ui.components.tabWord
 
 data class RemindersActions(
     val onRefresh: () -> Unit,
@@ -61,33 +63,47 @@ fun RemindersContent(
     val pending = state.entries.firstOrNull { it.reminder.id == confirming }?.reminder
     val toPause = state.entries.firstOrNull { it.reminder.id == pausing }?.reminder
 
-    ListScaffold(
-        loading = state.loading,
-        error = state.error,
-        refreshing = state.refreshing,
-        onRefresh = actions.onRefresh,
-        skeletonRows = 6,
-        loadingDescription = "Loading your reminders",
-        modifier = modifier,
-    ) {
-        item(key = "search") {
-            TextButton(onClick = actions.onSearchDrug, Modifier.padding(horizontal = 8.dp)) { Text("+ Find a medication") }
-            HorizontalDivider(color = TaskRxColors.Divider)
-        }
-        if (state.entries.isEmpty()) {
-            item {
-                EmptyState("No reminders yet", "Tap + Add on the Today screen to add your first.", Modifier.fillParentMaxSize())
+    // The list is split by Kind, as Today is. Kept as its wire word so it survives rotation.
+    var tab by rememberSaveable { mutableStateOf(ReminderKind.Medication.wire) }
+    val kind = ReminderKind.fromWire(tab) ?: ReminderKind.Medication
+    val shown = state.entries.filter { it.reminder.kind == kind }
+
+    Column(modifier) {
+        KindTabs(kind, emptyMap(), { tab = it.wire })
+        ListScaffold(
+            loading = state.loading,
+            error = state.error,
+            refreshing = state.refreshing,
+            onRefresh = actions.onRefresh,
+            skeletonRows = 6,
+            loadingDescription = "Loading your reminders",
+            modifier = Modifier.weight(1f),
+        ) {
+            if (kind == ReminderKind.Medication) {
+                item(key = "search") {
+                    TextButton(onClick = actions.onSearchDrug, Modifier.padding(horizontal = 8.dp)) { Text("+ Find a medication") }
+                    HorizontalDivider(color = TaskRxColors.Divider)
+                }
             }
-        } else {
-            items(state.entries, key = { it.reminder.id }) { entry ->
-                ReminderRow(
-                    entry,
-                    now = now(),
-                    onEdit = { actions.onEdit(entry.reminder) },
-                    onStop = { confirming = entry.reminder.id },
-                    onPause = { pausing = entry.reminder.id },
-                    onResume = { actions.onResume(entry.reminder) },
-                )
+            if (shown.isEmpty()) {
+                item {
+                    EmptyState(
+                        "No ${tabWord(kind).lowercase()} yet",
+                        "Tap + on the Today screen to add your first.",
+                        Modifier.fillParentMaxSize(),
+                    )
+                }
+            } else {
+                items(shown, key = { it.reminder.id }) { entry ->
+                    ReminderRow(
+                        entry,
+                        now = now(),
+                        onEdit = { actions.onEdit(entry.reminder) },
+                        onStop = { confirming = entry.reminder.id },
+                        onPause = { pausing = entry.reminder.id },
+                        onResume = { actions.onResume(entry.reminder) },
+                    )
+                }
             }
         }
     }

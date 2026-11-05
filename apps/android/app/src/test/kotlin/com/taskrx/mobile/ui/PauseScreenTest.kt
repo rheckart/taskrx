@@ -95,7 +95,9 @@ class PauseScreenTest {
     @Test
     fun `a task has no Pause`() {
         show(ReminderEntry(med(ReminderKind.Task), null))
+        compose.onNodeWithText("Tasks").performClick()
 
+        compose.onNodeWithContentDescription("Edit Warfarin").assertExists()
         compose.onAllNodesWithText("Pause").assertCountEquals(0)
     }
 

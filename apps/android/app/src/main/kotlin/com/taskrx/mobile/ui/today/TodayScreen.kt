@@ -15,8 +15,7 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.ExperimentalLayoutApi
-import androidx.compose.foundation.layout.FlowRow
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.IntrinsicSize
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxHeight
@@ -28,7 +27,9 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material3.Button
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
@@ -65,7 +66,9 @@ import com.taskrx.mobile.format.rowDescription
 import com.taskrx.mobile.format.statusLabel
 import com.taskrx.mobile.ui.TaskRxColors
 import com.taskrx.mobile.ui.components.Centered
+import com.taskrx.mobile.ui.components.KindTabs
 import com.taskrx.mobile.ui.components.SkeletonList
+import com.taskrx.mobile.ui.components.tabWord
 
 /** Where each footer link goes. */
 data class TodayActions(
@@ -73,6 +76,7 @@ data class TodayActions(
     val onNextDay: () -> Unit,
     val onToday: () -> Unit,
     val onToggleHideCompleted: () -> Unit,
+    val onSelectKind: (ReminderKind) -> Unit = {},
     /**
      * Take, snooze or skip every dose in a slot: the rows share one moment. A Take of missed
      * doses carries the hour and minute the person said they were taken at; otherwise both are null.
@@ -110,14 +114,20 @@ fun TodayContent(
     /** Read when a button is pressed, so a screen left open for hours still judges by the real time. */
     now: () -> Long = System::currentTimeMillis,
 ) {
-    Column(modifier.fillMaxSize()) {
-        banner()
-        if (state.catchUpCount > 0) CatchUpBanner(state.catchUpCount, actions.onCatchUp)
-        DayBar(state, actions)
-        Box(Modifier.weight(1f).fillMaxWidth()) {
-            Timeline(state, actions, now)
+    Box(modifier.fillMaxSize()) {
+        Column(Modifier.fillMaxSize()) {
+            banner()
+            if (state.catchUpCount > 0) CatchUpBanner(state.catchUpCount, actions.onCatchUp)
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                KindTabs(state.kind, state.toDoByKind, actions.onSelectKind, Modifier.weight(1f))
+                MoreMenu(actions)
+            }
+            DayBar(state, actions)
+            Box(Modifier.weight(1f).fillMaxWidth()) {
+                Timeline(state, actions, now)
+            }
         }
-        Footer(actions)
+        AddButton(actions, Modifier.align(Alignment.BottomEnd).padding(16.dp))
     }
 }
 
@@ -219,12 +229,12 @@ private fun Timeline(state: TodayState, actions: TodayActions, now: () -> Long) 
                 val visible = state.visibleRows
                 if (visible.isEmpty()) {
                     // Inside the refresh box so an empty day can still be pulled.
-                    val allDone = state.rows.isNotEmpty()
+                    val allDone = state.tabRows.isNotEmpty()
                     LazyColumn(Modifier.fillMaxSize()) {
                         item {
                             Centered(Modifier.fillParentMaxSize()) {
                                 Text(
-                                    if (allDone) "All done" else "Nothing scheduled",
+                                    if (allDone) "All done" else "No ${tabWord(state.kind).lowercase()} scheduled",
                                     style = MaterialTheme.typography.titleMedium,
                                     fontWeight = FontWeight.SemiBold,
                                 )
@@ -248,7 +258,8 @@ private fun Timeline(state: TodayState, actions: TodayActions, now: () -> Long) 
                         }
                         entries += Entry.Dose(row)
                     }
-                    LazyColumn(Modifier.fillMaxSize()) {
+                    // Room under the last row for the + button to float over.
+                    LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(bottom = 88.dp)) {
                         items(entries, key = { it.key }) { entry ->
                             when (entry) {
                                 is Entry.Slot ->
@@ -445,29 +456,53 @@ private fun statusColor(status: InstanceStatus): Color =
     }
 
 /**
- * "+ Add" is first, filled, and the only one that says "+" for both Kinds: natural-language
- * entry is the primary creation surface for both. The two hand-entry forms stay reachable,
- * because "+ Task" is still the shorter road when there was never a phrase to type.
+ * The way to make something new, one round button over the list. "Add" is first and is the
+ * only one that takes a phrase: natural-language entry is the primary creation surface for
+ * both Kinds. The hand-entry forms stay reachable, because "New task" is still the shorter
+ * road when there was never a phrase to type.
  */
-@OptIn(ExperimentalLayoutApi::class)
 @Composable
-private fun Footer(actions: TodayActions) {
-    HorizontalDivider(color = TaskRxColors.Divider)
-    FlowRow(
-        Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 8.dp),
-        horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.CenterHorizontally),
-        verticalArrangement = Arrangement.spacedBy(4.dp),
-        itemVerticalAlignment = Alignment.CenterVertically,
-    ) {
-        Button(onClick = actions.onAdd, shape = RoundedCornerShape(6.dp)) { Text("+ Add", fontWeight = FontWeight.Bold) }
-        TextButton(onClick = actions.onNewTask) { Text("+ Task") }
-        TextButton(onClick = actions.onNewMedication) { Text("+ Medication") }
-        TextButton(onClick = actions.onAddDose) { Text("+ Dose") }
-        TextButton(onClick = actions.onReminders) { Text("Reminders") }
-        TextButton(onClick = actions.onBacklog) { Text("Backlog") }
-        TextButton(onClick = actions.onAdherence) { Text("How it's going") }
-        TextButton(onClick = actions.onSupplies) { Text("Supplies") }
-        TextButton(onClick = actions.onHistory) { Text("History") }
-        TextButton(onClick = actions.onSettings) { Text("Settings") }
+private fun AddButton(actions: TodayActions, modifier: Modifier = Modifier) {
+    var open by remember { mutableStateOf(false) }
+    Box(modifier) {
+        FloatingActionButton(
+            onClick = { open = true },
+            modifier = Modifier.semantics { contentDescription = "Add" },
+        ) { Text("+", fontSize = 28.sp, fontWeight = FontWeight.Bold) }
+        DropdownMenu(expanded = open, onDismissRequest = { open = false }) {
+            for ((label, go) in
+                listOf(
+                    "Add by typing" to actions.onAdd,
+                    "New task" to actions.onNewTask,
+                    "New medication" to actions.onNewMedication,
+                    "Log a dose" to actions.onAddDose,
+                )) {
+                DropdownMenuItem(text = { Text(label) }, onClick = { open = false; go() })
+            }
+        }
+    }
+}
+
+/** The screens that are not today: the rest of what the footer used to hold. */
+@Composable
+private fun MoreMenu(actions: TodayActions) {
+    var open by remember { mutableStateOf(false) }
+    Box {
+        TextButton(onClick = { open = true }, modifier = Modifier.semantics { contentDescription = "More" }) {
+            Text("⋮", fontSize = 28.sp)
+        }
+        DropdownMenu(expanded = open, onDismissRequest = { open = false }) {
+            for ((label, go) in
+                listOf(
+                    "Reminders" to actions.onReminders,
+                    "Backlog" to actions.onBacklog,
+                    "How it's going" to actions.onAdherence,
+                    "Supplies" to actions.onSupplies,
+                    "History" to actions.onHistory,
+                    "Settings" to actions.onSettings,
+                )) {
+                DropdownMenuItem(text = { Text(label) }, onClick = { open = false; go() })
+            }
+        }
     }
 }
