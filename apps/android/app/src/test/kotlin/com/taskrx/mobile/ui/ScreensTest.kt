@@ -388,6 +388,14 @@ class ScreensTest {
     }
 
     @Test
+    fun `hide done also drops skipped rows`() {
+        today(TodayState(windowStart = 0, loading = false, hideCompleted = true, rows = listOf(row("Passed", status = InstanceStatus.Skipped), row("Todo"))))
+
+        compose.onAllNodesWithText("Passed").assertCountEquals(0)
+        compose.onNodeWithText("Todo").assertExists()
+    }
+
+    @Test
     fun `hide done off shows completed rows`() {
         today(state(row("Done", status = InstanceStatus.Completed, completedAt = NINE), row("Todo")))
 
