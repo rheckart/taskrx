@@ -378,6 +378,45 @@ class AppShellTest {
     }
 
     @Test
+    fun `a medication can be edited from Supplies, and returns there`() {
+        seed()
+        show()
+        awaitText("Metformin")
+        openMenu("Supplies")
+        awaitText("Supply not tracked")
+
+        compose.onNodeWithContentDescription("Edit Metformin").performClick()
+        awaitText("Save changes")
+        compose.onNodeWithText("As needed").performClick()
+        compose.onNodeWithText("Save changes").performScrollTo().performClick()
+
+        awaitText("Supply not tracked")
+        runBlocking {
+            assertEquals(asNeededTimes(240), fx.container.reminders.get("med")!!.schedule)
+        }
+    }
+
+    @Test
+    fun `an existing medication can be edited to be taken as needed from Reminders`() {
+        seed()
+        show()
+        awaitText("Metformin")
+        openMenu("Reminders")
+        awaitText("Metformin")
+
+        compose.onNodeWithContentDescription("Edit Metformin").performClick()
+        awaitText("Save changes")
+        compose.onNodeWithText("As needed").performClick()
+        compose.onNodeWithText("At least this long between doses").assertExists()
+        compose.onNodeWithText("Save changes").performScrollTo().performClick()
+
+        awaitText("+ Find a medication")
+        runBlocking {
+            assertEquals(asNeededTimes(240), fx.container.reminders.get("med")!!.schedule)
+        }
+    }
+
+    @Test
     fun `stopping a reminder asks, then it leaves the list but not the history`() {
         seed()
         show()

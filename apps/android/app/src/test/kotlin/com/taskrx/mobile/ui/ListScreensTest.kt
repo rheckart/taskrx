@@ -394,6 +394,7 @@ class ListScreensTest {
                 },
                 onOpenBacklog = { log += "backlog" },
                 onRecordDose = { medication, hour, minute -> recorded = Triple(medication.id, hour, minute) },
+                onEditMedication = { log += "editMedication:${it.name}" },
             )
     }
 
@@ -412,6 +413,16 @@ class ListScreensTest {
         compose.onNodeWithText("enough for 12 more", substring = true).assertExists()
         compose.onAllNodesWithText("Reorder now").assertCountEquals(0)
         compose.onAllNodesWithText("Out of stock").assertCountEquals(0)
+    }
+
+    @Test
+    fun `a medication can be edited from its supply row, apart from collecting a refill`() {
+        val calls = SupplyCalls()
+        supplies(SuppliesState(rows = listOf(row(reminder("m", "Atorvastatin", pills = 12.0, perDose = 1.0))), loading = false), calls)
+
+        compose.onNodeWithContentDescription("Edit Atorvastatin").performClick()
+
+        assertEquals(listOf("editMedication:Atorvastatin"), calls.log)
     }
 
     @Test

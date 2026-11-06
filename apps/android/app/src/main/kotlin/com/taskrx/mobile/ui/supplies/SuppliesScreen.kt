@@ -51,6 +51,8 @@ data class SuppliesActions(
     val onSave: (String, SupplyDraft) -> Unit,
     val onOpenBacklog: () -> Unit,
     val onRecordDose: (Reminder, Int, Int) -> Unit,
+    /** Open the edit form: name, dosage and schedule, including taking it as needed. */
+    val onEditMedication: (Reminder) -> Unit = {},
 )
 
 /**
@@ -158,6 +160,10 @@ private fun MedicationRow(row: RefillRow, editing: Boolean, actions: SuppliesAct
                 TextButton(onClick = { recording = true }) { Text("Record a dose") }
                 // Named for the act rather than the fields: someone opens this because they have just come back from the pharmacy.
                 TextButton(onClick = { actions.onEdit(medication.id) }) { Text("I collected a refill") }
+                TextButton(
+                    onClick = { actions.onEditMedication(medication) },
+                    modifier = Modifier.semantics { contentDescription = "Edit ${medication.name}" },
+                ) { Text("Edit") }
             }
         }
     }
