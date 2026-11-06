@@ -68,9 +68,9 @@ data class TodayState(
     val tabRows: List<TimelineRow>
         get() = rows.filter { it.kind == kind }
 
-    /** What the list draws: every row of the open tab, or all but the completed ones. */
+    /** What the list draws: every row of the open tab, or all but the completed and skipped ones. */
     val visibleRows: List<TimelineRow>
-        get() = if (hideCompleted) tabRows.filter { it.status != InstanceStatus.Completed } else tabRows
+        get() = if (hideCompleted) tabRows.filter { it.status != InstanceStatus.Completed && it.status != InstanceStatus.Skipped } else tabRows
 
     /**
      * Whether the day can move forward. A medication's day stops at today: on a future day every dose
