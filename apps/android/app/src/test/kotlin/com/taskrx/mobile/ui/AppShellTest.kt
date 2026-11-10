@@ -28,6 +28,7 @@ import com.taskrx.mobile.DAY
 import com.taskrx.mobile.Fixture
 import com.taskrx.mobile.HOUR
 import com.taskrx.mobile.USER
+import com.taskrx.mobile.data.CreateReminderInstanceInput
 import com.taskrx.mobile.data.InstanceFilter
 import com.taskrx.mobile.notifications.TapHandler
 import com.taskrx.mobile.ui.search.DrugMatch
@@ -124,16 +125,27 @@ class AppShellTest {
     }
 
     @Test
-    fun `an as-needed medication is a card on Today, and taking a dose starts the countdown to the next`() {
-        runBlocking { fx.reminder("prn", ReminderKind.Medication, asNeededTimes(240, 5), createdAt = NOW - DAY, name = "Tylenol") }
+    fun `an as-needed medication shows while its window is open, and Log a dose names the next time`() {
+        runBlocking {
+            val r = fx.reminder("prn", ReminderKind.Medication, asNeededTimes(240, 5), createdAt = NOW - DAY, name = "Tylenol")
+            // A dose four and a half hours ago: the wait is over and the one-hour window is still open.
+            val taken = NOW - 5 * HOUR + 30 * 60_000L
+            val earlier = fx.container.instances.create(CreateReminderInstanceInput(r.userId, r.id, r.kind, taken))
+            fx.container.instances.markCompleted(earlier.id, taken)
+        }
         show()
         awaitText("Ready now")
 
         compose.onNodeWithContentDescription("Take Tylenol now").performClick()
 
+        // Taking it starts the wait again, so Today stops showing a countdown or a Take anyway button.
+        awaitGone("Ready now")
+        compose.onAllNodesWithText("Next dose in", substring = true).assertCountEquals(0)
+        compose.onAllNodesWithText("Take anyway").assertCountEquals(0)
+
+        addMenu("Log a dose")
         awaitText("Next dose in 4 h")
         compose.onNodeWithText("Allowed at", substring = true).assertExists()
-        compose.onNodeWithText("Take anyway").assertExists()
     }
 
     @Test

@@ -2,11 +2,13 @@ package com.taskrx.mobile.ui
 
 import com.taskrx.core.domain.InstanceStatus
 import com.taskrx.core.domain.ReminderKind
+import com.taskrx.core.domain.asNeededTimes
 import com.taskrx.core.domain.dailyTimes
 import com.taskrx.core.domain.noneTimes
 import com.taskrx.mobile.DAY
 import com.taskrx.mobile.HOUR
 import com.taskrx.mobile.USER
+import com.taskrx.mobile.data.CreateReminderInstanceInput
 import com.taskrx.mobile.data.InstanceFilter
 import com.taskrx.mobile.ui.dose.AddDoseViewModel
 import java.time.Instant
@@ -40,6 +42,25 @@ class AddDoseViewModelTest {
 
             assertEquals(listOf("Aspirin", "Zinc", "Amoxicillin"), vm.state.value.medications.map { it.name })
             assertFalse(vm.state.value.loading)
+        }
+
+    @Test
+    fun `running as-needed medications carry the takings that say when the next dose is allowed`() =
+        withUi(MIDNIGHT + 12 * HOUR) {
+            val prn = reminder("prn", schedule = asNeededTimes(240, 5), createdAt = MIDNIGHT - 10 * DAY, name = "Tylenol")
+            val taken = MIDNIGHT - 20 * DAY
+            val earlier = container.instances.create(CreateReminderInstanceInput(USER, prn.id, prn.kind, taken))
+            container.instances.markCompleted(earlier.id, taken)
+            reminder("old", schedule = asNeededTimes(240), name = "Old")
+            container.reminders.update("old", com.taskrx.mobile.data.UpdateReminderPatch(active = false))
+            val vm = vm()
+
+            vm.refresh().join()
+
+            val entry = vm.state.value.asNeeded.single()
+            assertEquals("Tylenol", entry.reminder.name)
+            assertEquals(listOf(taken), entry.takings, "a last dose older than two days still shows")
+            assertTrue(vm.state.value.asNeeded.none { it.reminder.name == "Old" })
         }
 
     @Test

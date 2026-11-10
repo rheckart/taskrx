@@ -13,6 +13,7 @@ import androidx.compose.ui.test.performClick
 import com.taskrx.core.domain.PauseWindow
 import com.taskrx.core.domain.Reminder
 import com.taskrx.core.domain.ReminderKind
+import com.taskrx.core.domain.ReminderPhase
 import com.taskrx.core.domain.createReminder
 import com.taskrx.core.domain.asNeededTimes
 import com.taskrx.core.domain.dailyTimes
@@ -112,7 +113,7 @@ class PauseScreenTest {
 
     @Test
     fun `a running pause shows until when, and offers Resume instead of Pause`() {
-        show(ReminderEntry(med(), null, PauseWindow(NOW - DAY, NOW + 3 * DAY)))
+        show(ReminderEntry(med(), null, ReminderPhase.Paused(PauseWindow(NOW - DAY, NOW + 3 * DAY))))
 
         compose.onNodeWithText("Paused until Fri, Nov 6").assertExists()
         compose.onAllNodesWithText("Pause").assertCountEquals(0)
@@ -123,7 +124,7 @@ class PauseScreenTest {
 
     @Test
     fun `a pause that has not started can be cancelled`() {
-        show(ReminderEntry(med(), null, PauseWindow(NOW + 5 * DAY, NOW + 9 * DAY)))
+        show(ReminderEntry(med(), null, ReminderPhase.Paused(PauseWindow(NOW + 5 * DAY, NOW + 9 * DAY))))
 
         compose.onNodeWithText("Pause starts Sun, Nov 8 · back Thu, Nov 12").assertExists()
         compose.onNodeWithContentDescription("Cancel pause Warfarin").performClick()

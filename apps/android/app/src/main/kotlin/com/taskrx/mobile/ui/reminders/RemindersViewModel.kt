@@ -4,8 +4,11 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.taskrx.core.domain.PauseWindow
 import com.taskrx.core.domain.Reminder
+import com.taskrx.core.domain.ReminderAction
 import com.taskrx.core.domain.ReminderInstance
-import com.taskrx.core.domain.livePause
+import com.taskrx.core.domain.ReminderPhase
+import com.taskrx.core.domain.reminderActions
+import com.taskrx.core.domain.reminderPhase
 import com.taskrx.mobile.AppContainer
 import com.taskrx.mobile.ui.components.ToastKind
 import com.taskrx.mobile.ui.components.ToastRequest
@@ -18,8 +21,22 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 
-/** [pause] is the Reminder's live pause (running, or waiting to start), if it has one. */
-data class ReminderEntry(val reminder: Reminder, val lastCompleted: ReminderInstance?, val pause: PauseWindow? = null)
+/**
+ * One Reminder as the list shows it: its lifecycle phase at the moment of reading, and the
+ * actions that phase offers. [pause] and [actions] are derived from [phase], so a row cannot
+ * say "Paused" while offering Pause, or offer Resume on a Reminder that is running.
+ */
+data class ReminderEntry(
+    val reminder: Reminder,
+    val lastCompleted: ReminderInstance?,
+    val phase: ReminderPhase = ReminderPhase.Active,
+) {
+    /** The live pause, if the Reminder is paused: running now or waiting to start. */
+    val pause: PauseWindow? get() = (phase as? ReminderPhase.Paused)?.window
+
+    /** What this row may offer: Pause, Resume and/or Stop, decided by `:core`'s lifecycle. */
+    val actions: Set<ReminderAction> get() = reminderActions(reminder, phase)
+}
 
 data class RemindersState(
     val entries: List<ReminderEntry> = emptyList(),
@@ -60,7 +77,7 @@ class RemindersViewModel(private val app: AppContainer) : ViewModel() {
             val now = app.clock()
             val entries =
                 app.reminders.list(userId).map {
-                    ReminderEntry(it, app.instances.lastCompletedFor(userId, it.id), livePause(it.pauses, now))
+                    ReminderEntry(it, app.instances.lastCompletedFor(userId, it.id), reminderPhase(it, now))
                 }
             mutable.update { it.copy(entries = entries, error = null) }
         } catch (e: CancellationException) {

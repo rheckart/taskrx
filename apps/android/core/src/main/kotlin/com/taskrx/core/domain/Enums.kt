@@ -85,9 +85,11 @@ enum class InstanceStatus(val wire: String) {
  * each carry a copy: the on-device repository builds its `WHERE status IN (…)`
  * from it, and the timeline decides from it whether a row is still tappable. A
  * row the list offers and the lookup refuses is a button that does nothing.
+ *
+ * The set itself is defined beside the lifecycle it belongs to
+ * (`InstanceLifecycle.kt`), so every surface reads one table.
  */
-val ANSWERABLE_STATUSES: Set<InstanceStatus> =
-    setOf(InstanceStatus.Pending, InstanceStatus.Snoozed, InstanceStatus.Missed)
+val ANSWERABLE_STATUSES: Set<InstanceStatus> = instanceAnswerableStatuses
 
 fun isAnswerable(status: InstanceStatus): Boolean = status in ANSWERABLE_STATUSES
 

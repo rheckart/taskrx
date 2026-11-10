@@ -109,6 +109,52 @@ class AsNeededStatusTest {
     }
 }
 
+class ShowsOnTodayTest {
+    private val fourHours = asNeededTimes(240)
+
+    private fun shows(schedule: com.taskrx.core.domain.AsNeededTimes, takings: List<Long>, now: Long) = showsOnToday(asNeededStatus(schedule, takings, now), now)
+
+    @Test
+    fun `a medication with nothing taken has no card`() {
+        assertFalse(shows(fourHours, emptyList(), NOON))
+    }
+
+    @Test
+    fun `the card stays off the screen through the wait`() {
+        val takings = listOf(NOON)
+
+        assertFalse(shows(fourHours, takings, NOON + HOUR))
+        assertFalse(shows(fourHours, takings, NOON + 4 * HOUR - 1))
+    }
+
+    @Test
+    fun `the card appears when a dose is allowed and stays for an hour`() {
+        val takings = listOf(NOON)
+
+        assertTrue(shows(fourHours, takings, NOON + 4 * HOUR))
+        assertTrue(shows(fourHours, takings, NOON + 5 * HOUR - 1))
+        assertFalse(shows(fourHours, takings, NOON + 5 * HOUR))
+    }
+
+    @Test
+    fun `a daily limit that holds the dose back keeps the card off until the window opens`() {
+        val schedule = asNeededTimes(240, 5)
+        val takings = listOf(NOON - 23 * HOUR, NOON - 22 * HOUR, NOON - 21 * HOUR, NOON - 20 * HOUR, NOON - 19 * HOUR)
+        // The last dose was 19 hours ago, but the oldest does not leave the window until NOON + 1 h.
+        assertFalse(shows(schedule, takings, NOON + HOUR - 1))
+        assertTrue(shows(schedule, takings, NOON + HOUR))
+        assertFalse(shows(schedule, takings, NOON + 2 * HOUR))
+    }
+
+    @Test
+    fun `a longer gap still only shows the card once the dose is allowed`() {
+        val eightHours = asNeededTimes(480)
+
+        assertFalse(shows(eightHours, listOf(NOON), NOON + 7 * HOUR))
+        assertTrue(shows(eightHours, listOf(NOON), NOON + 8 * HOUR))
+    }
+}
+
 class TakingsTest {
     private fun instance(reminderId: String, status: InstanceStatus, completedAt: Long?) =
         createReminderInstance(

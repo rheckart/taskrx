@@ -37,18 +37,21 @@ data class AsNeededStatus(
     /** The first moment another dose is allowed; null when nothing holds it back (none taken yet). */
     val readyAt: Long?,
     val wait: AsNeededWait?,
+    /**
+     * The most recent moment a dose became allowed, or null if none ever has. [readyAt] can be in
+     * the past once a dose has been allowed for a while, so this is what a one-hour window hangs
+     * from; it is also the moment the daily limit releases, which [readyAt] no longer names then.
+     */
+    val openedAt: Long? = null,
 ) {
     /** Whether a dose is allowed at [now]. */
     fun isReady(now: Long): Boolean = readyAt == null || now >= readyAt
 }
 
-/**
- * [takings] are the moments doses were taken (a Completed Instance's `completedAt`), in any
- * order. The window is the 24 hours ending at [now], and a taking exactly 24 hours old is out
- * of it: the dose that left it is the one that makes room.
- */
-fun asNeededStatus(schedule: AsNeededTimes, takings: List<Long>, now: Long): AsNeededStatus {
-    val last = takings.maxOrNull() ?: return AsNeededStatus(null, 0, null, null)
+/** The next moment a dose is allowed, and what holds it back until then. */
+private data class Wait(val readyAt: Long, val wait: AsNeededWait)
+
+private fun waitAt(schedule: AsNeededTimes, takings: List<Long>, now: Long, last: Long): Wait {
     val inWindow = takings.filter { it > now - DAY_MS }.sorted()
 
     val gapReady = last + schedule.minGapMinutes * MINUTE_MS
@@ -60,12 +63,55 @@ fun asNeededStatus(schedule: AsNeededTimes, takings: List<Long>, now: Long): AsN
             ?.let { inWindow[inWindow.size - it] + DAY_MS }
 
     val limitDecides = limitReady != null && limitReady > gapReady
+    return if (limitDecides) Wait(limitReady, AsNeededWait.Limit) else Wait(gapReady, AsNeededWait.Gap)
+}
+
+/**
+ * [takings] are the moments doses were taken (a Completed Instance's `completedAt`), in any
+ * order. The window is the 24 hours ending at [now], and a taking exactly 24 hours old is out
+ * of it: the dose that left it is the one that makes room.
+ */
+fun asNeededStatus(schedule: AsNeededTimes, takings: List<Long>, now: Long): AsNeededStatus {
+    val last = takings.maxOrNull() ?: return AsNeededStatus(null, 0, null, null)
+    val inWindow = takings.filter { it > now - DAY_MS }.sorted()
+    val wait = waitAt(schedule, takings, now, last)
     return AsNeededStatus(
         lastTakenAt = last,
         takenIn24h = inWindow.size,
-        readyAt = if (limitDecides) limitReady else gapReady,
-        wait = if (limitDecides) AsNeededWait.Limit else AsNeededWait.Gap,
+        readyAt = wait.readyAt,
+        wait = wait.wait,
+        openedAt = lastOpenedAt(schedule, takings, now, last),
     )
+}
+
+/**
+ * A dose becomes allowed when the gap since the last taking runs out, or when a taking leaves the
+ * 24-hour window and the count drops below the limit. Those are the only moments a wait can end,
+ * so the latest one at or before [now] that changes the answer is when the current window opened.
+ */
+private fun lastOpenedAt(schedule: AsNeededTimes, takings: List<Long>, now: Long, last: Long): Long? {
+    fun ready(at: Long): Boolean = at >= waitAt(schedule, takings, at, last).readyAt
+    val gap = schedule.minGapMinutes * MINUTE_MS
+    return takings
+        .flatMap { listOf(it + gap, it + DAY_MS) }
+        .distinct()
+        .filter { it <= now }
+        .sortedDescending()
+        .firstOrNull { ready(it) && !ready(it - 1) }
+}
+
+/** How long the card stays after a dose becomes allowed: one hour. */
+const val AS_NEEDED_WINDOW_MS = 60 * MINUTE_MS
+
+/**
+ * Whether the card for this medication belongs on Today at [now]. Only once a dose is allowed,
+ * and for an hour after: a medication waiting hours for its next dose is not on the screen, and
+ * one whose window has passed is not clutter. Nothing taken at all means no card; Log a dose is
+ * how it starts, and that screen says when the next one is allowed.
+ */
+fun showsOnToday(status: AsNeededStatus, now: Long): Boolean {
+    val opened = status.openedAt ?: return false
+    return status.isReady(now) && now < opened + AS_NEEDED_WINDOW_MS
 }
 
 /** The moments [reminder]'s doses were taken, from its Instances. A skip, a miss or a snooze is not a taking. */

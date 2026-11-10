@@ -33,10 +33,11 @@ is computed, never stored.
   so the answer is the same whichever way a dose was recorded: the Today card, Log a dose, the
   notification's Take, or a time changed afterwards. If a take is undone it stops counting (ADR 0008). Nothing in the app offers Undo for these rows yet: they are unscheduled doses, which Undo does not reopen into a miss that never was, and that rule has not been extended to cover them.
 - **Today** shows a card per as-needed medication at the top of the Medications tab, outside the
-  day's list, with a countdown that updates each minute. It does not depend on the day's rows, so a
-  day with only this medication does not read as empty. Taking one before it is allowed asks first
-  and says which rule it would break; it never refuses, because a dose already swallowed must be
-  recordable.
+  day's list, only once a dose is allowed and for an hour after that moment. A medication waiting
+  out a long gap stays off the screen, so the day is not a row of countdowns; the card carries a
+  single Take button, with no countdown and no "Take anyway". It does not depend on the day's
+  rows, so a day with only this medication does not read as empty. A dose taken earlier than the
+  rule allows is recorded through Log a dose, which lets the person choose the time.
 - **The notification** is a Medication Tier spec with id `ready-<reminderId>-<readyAt>`, derived
   like any other by `desiredNotifications`, so the diff, reboot re-arm and Stop all work unchanged
   (`belongsToReminder` knows the prefix). **Only while `readyAt` is still ahead.** Once it has
@@ -51,6 +52,13 @@ is computed, never stored.
   commitments met, and this has none. Counting its takings would add one to both sides of the
   figure and pull it toward 100%; its absence is not a miss. Pause is not offered for it, since it
   has no times to hold back.
+
+- **A card is shown only while its window is open** (`showsOnToday`): from the moment a dose is
+  allowed until one hour later. Before that it would be a countdown nobody can act on; after that
+  it is clutter, so the card goes, and with it the "As needed" heading. A medication with nothing
+  taken in the last two days has no card. The way back is Log a dose, which also says when the last
+  dose was taken and when the next is allowed; the dose it records opens the window again. The
+  notification is unchanged: it was already armed for the moment the wait ends.
 
 ## Sync
 

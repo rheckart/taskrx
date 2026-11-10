@@ -42,6 +42,13 @@ kover {
             "com.taskrx.core.domain.Priority*",
             "com.taskrx.core.domain.InstanceStatus*",
             "com.taskrx.core.domain.NotificationType*",
+            // The explicit lifecycles every answer, pause and stop surface reads:
+            // instance statuses, and the Reminder's active/paused/stopped phase.
+            "com.taskrx.core.domain.InstanceLifecycleKt*",
+            "com.taskrx.core.domain.InstanceAction",
+            "com.taskrx.core.domain.ReminderLifecycleKt*",
+            "com.taskrx.core.domain.ReminderPhase*",
+            "com.taskrx.core.domain.ReminderAction",
             "com.taskrx.core.domain.ReminderKt*",
             "com.taskrx.core.domain.PauseKt*",
             "com.taskrx.core.domain.PauseWindow",
@@ -61,6 +68,9 @@ kover {
             "com.taskrx.core.sync.ConflictKt*",
             // sync/worker.ts retry policy, pull.ts badge, the Convex call shapes
             "com.taskrx.core.sync.PolicyKt*",
+            "com.taskrx.core.sync.QueueLifecycleKt*",
+            "com.taskrx.core.sync.QueuePhase",
+            "com.taskrx.core.sync.QueueFailureOutcome*",
             "com.taskrx.core.sync.BadgeKt*",
             "com.taskrx.core.sync.SyncWorkerStatus",
             "com.taskrx.core.sync.SyncBadge",

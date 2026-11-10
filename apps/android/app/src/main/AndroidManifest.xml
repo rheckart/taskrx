@@ -17,6 +17,8 @@
 
     <application
         android:name=".TaskRxApplication"
+        android:icon="@mipmap/ic_launcher"
+        android:roundIcon="@mipmap/ic_launcher_round"
         android:label="TaskRx"
         android:allowBackup="false"
         android:fullBackupContent="false"
