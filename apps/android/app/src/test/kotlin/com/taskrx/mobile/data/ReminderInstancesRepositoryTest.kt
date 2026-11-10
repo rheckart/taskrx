@@ -265,8 +265,23 @@ class ReminderInstancesRepositoryTest {
         }
 
     @Test
-    fun `a change not pushed yet is known, and one that has been pushed is not`() =
+    fun `a status change the lifecycle forbids is refused, and writes nothing`() =
         withFixture(T0) {
+            reminder("m1")
+            val done = container.instances.create(open())
+            container.instances.markCompleted(done.id, T0)
+            val queued = container.syncQueue.pending().size
+
+            // A completed row is final until the person undoes it (ADR 0008): a later answer
+            // path cannot rewrite it into a skip behind their back, and the sweep leaves it be.
+            assertFailsWith<IllegalArgumentException> { container.instances.markSkipped(done.id) }
+            assertEquals(InstanceStatus.Completed, container.instances.markMissed(done.id).status)
+            assertEquals(InstanceStatus.Completed, container.instances.get(done.id)!!.status)
+            assertEquals(queued, container.syncQueue.pending().size)
+        }
+
+    @Test
+    fun `a change not pushed yet is known, and one that has been pushed is not`() =        withFixture(T0) {
             reminder("m1")
             val row = container.instances.create(open())
             assertTrue(container.instances.hasUnpushedChange(row.id))

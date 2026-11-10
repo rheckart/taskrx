@@ -22,8 +22,8 @@ import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import com.taskrx.core.domain.AsNeededTimes
 import com.taskrx.core.domain.Reminder
+import com.taskrx.core.domain.ReminderAction
 import com.taskrx.core.domain.ReminderKind
 import com.taskrx.mobile.format.describeSchedule
 import com.taskrx.mobile.format.formatDayTime
@@ -168,15 +168,21 @@ private fun ReminderRow(
         }
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             TextButton(onClick = onEdit, modifier = Modifier.semantics { contentDescription = "Edit ${reminder.name}" }) { Text("Edit") }
-            // A Task has no doses to hold back, and a medication taken as needed has no times to hold back: pausing is for scheduled medications.
-            if (entry.pause != null) {
-                val word = if (entry.pause.from > now) "Cancel pause" else "Resume"
+            // What this row offers is `:core`'s lifecycle, not a Kind or Schedule test written
+            // here: a Task and an as-needed medication are never offered Pause, and a paused
+            // Reminder is offered Resume instead ("Cancel pause" before it starts).
+            val actions = entry.actions
+            if (ReminderAction.Resume in actions) {
+                val window = entry.pause
+                val word = if (window != null && window.from > now) "Cancel pause" else "Resume"
                 TextButton(onClick = onResume, modifier = Modifier.semantics { contentDescription = "$word ${reminder.name}" }) { Text(word) }
-            } else if (reminder.kind == ReminderKind.Medication && reminder.schedule !is AsNeededTimes) {
+            } else if (ReminderAction.Pause in actions) {
                 TextButton(onClick = onPause, modifier = Modifier.semantics { contentDescription = "Pause ${reminder.name}" }) { Text("Pause") }
             }
-            TextButton(onClick = onStop, modifier = Modifier.semantics { contentDescription = "Stop ${reminder.name}" }) {
-                Text("Stop", color = TaskRxColors.Error)
+            if (ReminderAction.Stop in actions) {
+                TextButton(onClick = onStop, modifier = Modifier.semantics { contentDescription = "Stop ${reminder.name}" }) {
+                    Text("Stop", color = TaskRxColors.Error)
+                }
             }
         }
     }

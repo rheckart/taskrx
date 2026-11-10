@@ -5,6 +5,8 @@ import com.taskrx.core.domain.ANSWERABLE_STATUSES
 import com.taskrx.core.domain.InstanceStatus
 import com.taskrx.core.domain.ReminderInstance
 import com.taskrx.core.domain.ReminderKind
+import com.taskrx.core.domain.allowsInstanceTransition
+import com.taskrx.core.domain.instanceTransitionProblem
 import com.taskrx.core.refill.supplyAfterDose
 import com.taskrx.core.sweep.GRACE_PERIOD_MS
 import com.taskrx.core.sweep.snoozeRanOut
@@ -135,6 +137,13 @@ class ReminderInstancesRepository(
     ): ReminderInstance =
         database.withTransaction {
             val existing = checkNotNull(dao.get(id)) { "Reminder instance $id not found" }
+            // One table for every status change, so a new answer path cannot invent an edge
+            // the lifecycle does not have. A pull does not come through here: it applies the
+            // conflict rules in `:core` instead.
+            val from = InstanceStatus.fromWire(existing.status)
+            require(allowsInstanceTransition(from, status)) {
+                instanceTransitionProblem(from ?: status, status) ?: "Illegal Reminder Instance transition"
+            }
             val now = clock()
             val updated =
                 existing.copy(

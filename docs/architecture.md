@@ -64,6 +64,29 @@ The app is split into two Gradle modules. `:core` is pure Kotlin/JVM with no And
 8. **An unanswered Occurrence becomes Missed by a sweep, not by a query.** Instances are minted lazily, so a moment nobody answers has no row at all. The sweep planner in `:core` (`core/sweep/Planner.kt`) decides which moments have run out of time; `MissedSweepRunner` in `:app` persists the verdicts, serialized so two foregrounds cannot mint one moment twice. The Grace Period (2h) and lookback (7 days) are ADR 0005.
 9. **A Reminder with no Schedule never reaches the timeline.** `none` produces no Occurrences, so the Backlog screen is rendered from `reminders` rows; completing one mints its Instance at the moment of the act, with `scheduledTime = completedAt` (ADR 0002).
 
+## State machines
+
+Every lifecycle in the app is explicit and pure, in `:core` where more than one surface acts
+on it. Surfaces read the same functions instead of re-deriving a status or a Kind check.
+ADR 0011 is the catalog, with diagrams.
+
+| Lifecycle | States | Module |
+|---|---|---|
+| Reminder Instance | pending, snoozed, missed, completed, skipped | `core/domain/InstanceLifecycle.kt` |
+| Reminder | active, paused(window), stopped | `core/domain/ReminderLifecycle.kt` |
+| Sync queue entry | waiting, dead-lettered | `core/sync/QueueLifecycle.kt` |
+| Notification arming | desired, armed exact/degraded, fired | `core/notifications/Reschedule.kt` |
+| Permission gate | undetermined, authorized, partial, denied | `core/notifications/PermissionState.kt` |
+| Session | loading, signed out, signed in | `auth/AuthGateway.kt`, `Session.kt` |
+| As-needed dose | none yet, waiting (gap/limit), ready, window passed | `core/asneeded/AsNeeded.kt` |
+| Refill warning | unprojectable, outlook; raised, standing, retired | `core/refill/Projection.kt`, `Reconcile.kt` |
+| Missed sweep | no row, pending, snoozed-expired → missed | `core/sweep/Planner.kt` |
+
+`InstanceLifecycle` and `ReminderLifecycle` answer two questions apart: the actions a person
+is offered for a state, and the rewrites the store accepts. `ANSWERABLE_STATUSES` and
+`UNDOABLE_STATUSES` are derived from the Instance table, and `ReminderInstancesRepository`
+refuses any status change the table does not have.
+
 ## Local SQLite schema
 
 Room entities in `apps/android/app/src/main/kotlin/com/taskrx/mobile/data/db/Entities.kt`. There is one fresh schema. The Kotlin app has no migration from the Expo app's database, because that app never shipped a release build or held user data.
@@ -249,7 +272,7 @@ The gate commands are in the README.
 
 ### Taking a medication as needed
 
-A medication can be taken **as needed** (ADR 0010): the Schedule variant `AsNeededTimes(minGapMinutes, maxPer24h?)`, which has no Occurrences. `asNeededStatus` in `:core` reads the moments its doses were taken (Completed Instances) and says when the next is allowed. Today shows each as a card with a countdown at the top of the Medications tab; the notification scheduler arms one "you can take another dose" prompt at that moment (id `ready-<reminderId>-<readyAt>`, Medication Tier) and arms nothing once it has passed. Its Take button records a dose through `DoseRecorder`; Skip writes nothing. Adherence leaves these medications out.
+A medication can be taken **as needed** (ADR 0010): the Schedule variant `AsNeededTimes(minGapMinutes, maxPer24h?)`, which has no Occurrences. `asNeededStatus` in `:core` reads the moments its doses were taken (Completed Instances) and says when the next is allowed. Today shows each as a card at the top of the Medications tab only once a dose is allowed, and for an hour after that moment; before then it stays off the screen, and the card carries a single Take button. Log a dose shows when each as-needed medication was last taken and when the next is allowed. The notification scheduler arms one "you can take another dose" prompt at that moment (id `ready-<reminderId>-<readyAt>`, Medication Tier) and arms nothing once it has passed. Its Take button records a dose through `DoseRecorder`; Skip writes nothing. Adherence leaves these medications out.
 
 ### Pausing
 

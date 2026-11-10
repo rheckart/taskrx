@@ -21,6 +21,7 @@ import com.taskrx.core.timeline.TimelineRow
 import com.taskrx.core.timeline.TimelineWindow
 import com.taskrx.core.timeline.projectTimeline
 import com.taskrx.mobile.AppContainer
+import com.taskrx.mobile.asneeded.AsNeededEntry
 import com.taskrx.mobile.data.InstanceFilter
 import com.taskrx.mobile.dose.RecordResult
 import com.taskrx.mobile.ui.components.ToastKind
@@ -34,13 +35,6 @@ import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
-
-/**
- * A medication taken as needed, with the moments its doses were taken. The wait is not stored: it
- * depends on the clock (the 24-hour window moves, the countdown runs), so the screen works it out
- * from these with `asNeededStatus` each time it looks.
- */
-data class AsNeededEntry(val reminder: Reminder, val schedule: AsNeededTimes, val takings: List<Long>)
 
 data class TodayState(
     /** 0 is today, -1 yesterday. Positive only on the Tasks tab: see [TodayViewModel.nextDay]. */

@@ -28,7 +28,6 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
@@ -55,9 +54,8 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.taskrx.core.asneeded.AsNeededStatus
-import com.taskrx.core.asneeded.AsNeededWait
 import com.taskrx.core.asneeded.asNeededStatus
+import com.taskrx.core.asneeded.showsOnToday
 import com.taskrx.core.batch.BatchAction
 import com.taskrx.core.batch.batchSlots
 import com.taskrx.core.domain.InstanceStatus
@@ -67,9 +65,9 @@ import com.taskrx.core.domain.isAnswerable
 import com.taskrx.core.timeline.TimelineRow
 import com.taskrx.core.timeline.timelineRowKey
 import com.taskrx.core.undo.undoWillBeMissed
+import com.taskrx.mobile.asneeded.AsNeededEntry
 import com.taskrx.mobile.format.asNeededLines
 import com.taskrx.mobile.format.dayHeading
-import com.taskrx.mobile.format.describeMinutes
 import com.taskrx.mobile.format.emptyDayBody
 import com.taskrx.mobile.format.formatTime
 import com.taskrx.mobile.format.kindLabel
@@ -149,10 +147,10 @@ fun TodayContent(
 }
 
 /**
- * The medications taken as needed, each with when its next dose is allowed. Read from the takings
- * every minute rather than stored, so the countdown runs and a dose leaves the 24-hour window on
- * time. Taking one before it is allowed asks first, and says why, but never refuses: a dose already
- * swallowed must always be recordable, and the person knows their situation better than a rule does.
+ * The medications taken as needed whose window is open: a dose is allowed now, and became so
+ * within the last hour. A medication waiting for its next dose stays off the screen, so a long
+ * gap is not a countdown taking up the day. Read from the takings every minute rather than
+ * stored, so a card appears when its window opens and goes when it closes.
  */
 @Composable
 private fun AsNeededCards(entries: List<AsNeededEntry>, onTake: (Reminder) -> Unit, now: () -> Long) {
@@ -163,16 +161,16 @@ private fun AsNeededCards(entries: List<AsNeededEntry>, onTake: (Reminder) -> Un
             delay(60_000L - current % 60_000L)
         }
     }
-    var asking by remember { mutableStateOf<AsNeededEntry?>(null) }
+    val showing = entries.filter { shows(it, current) }
+    if (showing.isEmpty()) return
     Text(
         "As needed",
         Modifier.padding(start = 16.dp, top = 8.dp),
         style = MaterialTheme.typography.labelLarge,
         color = TaskRxColors.Secondary,
     )
-    for (entry in entries) {
+    for (entry in showing) {
         val status = asNeededStatus(entry.schedule, entry.takings, current)
-        val ready = status.isReady(current)
         val lines = asNeededLines(entry.schedule, status, current)
         val name = entry.reminder.name + (entry.reminder.dosage?.let { " ($it)" } ?: "")
         Row(
@@ -184,45 +182,21 @@ private fun AsNeededCards(entries: List<AsNeededEntry>, onTake: (Reminder) -> Un
         ) {
             Column(Modifier.weight(1f)) {
                 Text(name, style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.SemiBold)
-                Text(lines.headline, fontWeight = FontWeight.SemiBold, color = if (ready) TaskRxColors.Completed else TaskRxColors.Accent)
+                Text(lines.headline, fontWeight = FontWeight.SemiBold, color = TaskRxColors.Completed)
                 if (lines.detail.isNotEmpty()) Text(lines.detail, color = TaskRxColors.Secondary, fontSize = 14.sp)
             }
             Button(
-                onClick = { if (ready) onTake(entry.reminder) else asking = entry },
+                onClick = { onTake(entry.reminder) },
                 shape = RoundedCornerShape(6.dp),
                 modifier = Modifier.semantics { contentDescription = "Take ${entry.reminder.name} now" },
-            ) { Text(if (ready) "Take" else "Take anyway") }
+            ) { Text("Take") }
         }
         HorizontalDivider(color = TaskRxColors.Divider)
     }
-    asking?.let { entry ->
-        val status = asNeededStatus(entry.schedule, entry.takings, current)
-        AlertDialog(
-            onDismissRequest = { asking = null },
-            title = { Text("Take ${entry.reminder.name} now?") },
-            text = { Text(tooSoonWords(entry, status, current)) },
-            confirmButton = {
-                TextButton(onClick = {
-                    asking = null
-                    onTake(entry.reminder)
-                }) { Text("Take anyway") }
-            },
-            dismissButton = { TextButton(onClick = { asking = null }) { Text("Not yet") } },
-        )
-    }
 }
 
-/** Why the app is asking: which rule the dose would break, in the person's own numbers. */
-private fun tooSoonWords(entry: AsNeededEntry, status: AsNeededStatus, now: Long): String {
-    val schedule = entry.schedule
-    val limit = schedule.maxPer24h
-    return if (status.wait == AsNeededWait.Limit && limit != null) {
-        "You have taken ${status.takenIn24h} in the last 24 hours, and you set no more than $limit. Take it anyway?"
-    } else {
-        val since = maxOf(1L, (now - (status.lastTakenAt ?: now)) / 60_000L).toInt()
-        "The last dose was ${describeMinutes(since)} ago, and you set at least ${describeMinutes(schedule.minGapMinutes)} between doses. Take it anyway?"
-    }
-}
+/** A card is shown only while its window is open (`showsOnToday`). */
+private fun shows(entry: AsNeededEntry, now: Long): Boolean = showsOnToday(asNeededStatus(entry.schedule, entry.takings, now), now)
 
 /** Missed reminders (doses and tasks) from the last week that nobody answered: one tap to the screen that answers them together. */
 @Composable
@@ -327,7 +301,7 @@ private fun Timeline(state: TodayState, actions: TodayActions, now: () -> Long) 
                             Centered(Modifier.fillParentMaxSize()) {
                                 // With as-needed medications above, "no medications" would sit under a card that says
                                 // "Ready now": it is the scheduled doses there are none of.
-                                val asNeededAbove = state.kind == ReminderKind.Medication && state.dayOffset == 0 && state.asNeeded.isNotEmpty()
+                                val asNeededAbove = state.kind == ReminderKind.Medication && state.dayOffset == 0 && state.asNeeded.any { shows(it, now()) }
                                 Text(
                                     when {
                                         allDone -> "All done"

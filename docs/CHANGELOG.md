@@ -8,6 +8,41 @@ for commit discipline (POC tags use `0.x.x`).
 
 ## [Unreleased]
 
+### 2026-11-10 — Lifecycles are written down
+
+The rules about what a Reminder Instance or a Reminder may become were spread across the
+screens, the repositories and the sync layer, and agreed by coincidence. They are now one
+place each, in `:core`, with the surfaces reading them:
+
+- **Reminder Instance lifecycle** (`core/domain/InstanceLifecycle.kt`). Which statuses are
+  still answerable, which answers can be undone, what each answer targets, and which rewrites
+  the store accepts. The repository refuses a forbidden status change and names the rule.
+  `ANSWERABLE_STATUSES` and `UNDOABLE_STATUSES` are derived from it.
+- **Reminder lifecycle** (`core/domain/ReminderLifecycle.kt`). Active, Paused or Stopped, and
+  which of Pause, Resume and Stop a row offers. The Reminders row no longer spells out the
+  Kind and Schedule test itself.
+- **Sync queue lifecycle** (`core/sync/QueueLifecycle.kt`). Retry with backoff for the first
+  four failures, dead-letter on the fifth, as one value the worker reads.
+
+ADR 0011 is the catalog of every lifecycle in the app, including the ones that were already
+sealed types.
+
+### 2026-11-09 — An as-needed card appears only when a dose can be taken
+
+A medication taken as needed no longer sits on Today with a countdown and a **Take anyway** button. Its card appears when
+a dose becomes allowed, stays for an hour, and offers one **Take** button. While the next dose is still hours away the
+card stays off the screen, so the day is not a row of countdowns. To take a dose outside that window, use **Log a dose**.
+
+**Log a dose** now says where each as-needed medication stands: when the last dose was taken and when the next is
+allowed, including when the 24 hour limit is what holds it back. The dose recorded there opens the card's next window.
+
+### 2026-11-06 — An as-needed card goes away when you stop using it
+
+A medication taken as needed now shows its card only while you are using it: while a dose is still held back, and for
+half a gap after the wait ends. With a 4 hour gap that is until 6 hours after the last dose. After that the card is gone,
+and so is the "As needed" heading when no card is left. A medication with no dose in the last two days has no card at all.
+To take one that is hidden, use **Log a dose** in the menu. That dose brings the card back.
+
 ### 2026-11-06 — A medication can be taken as needed
 
 For a medication with no set times, like acetaminophen for a headache, choose **As needed** when you add it. Say how long

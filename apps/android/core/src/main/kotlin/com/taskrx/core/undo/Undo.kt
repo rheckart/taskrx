@@ -2,6 +2,7 @@ package com.taskrx.core.undo
 
 import com.taskrx.core.domain.InstanceStatus
 import com.taskrx.core.domain.Reminder
+import com.taskrx.core.domain.instanceUndoableStatuses
 import com.taskrx.core.schedule.nextOccurrences
 import com.taskrx.core.sweep.GRACE_PERIOD_MS
 import java.time.ZoneId
@@ -18,8 +19,7 @@ import java.time.ZoneId
  */
 
 /** The answers that can be taken back. `missed` is the app's guess and is answered, not undone. */
-val UNDOABLE_STATUSES: Set<InstanceStatus> =
-    setOf(InstanceStatus.Completed, InstanceStatus.Skipped, InstanceStatus.Snoozed)
+val UNDOABLE_STATUSES: Set<InstanceStatus> = instanceUndoableStatuses
 
 /** Why an undo is not offered, or that it is. */
 enum class UndoVerdict {

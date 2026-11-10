@@ -3,10 +3,14 @@ package com.taskrx.mobile.ui.dose
 import android.util.Log
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.taskrx.core.asneeded.takings
+import com.taskrx.core.domain.AsNeededTimes
 import com.taskrx.core.domain.Reminder
 import com.taskrx.core.domain.ReminderKind
 import com.taskrx.core.time.atClockTimeOnDayOf
 import com.taskrx.mobile.AppContainer
+import com.taskrx.mobile.asneeded.AsNeededEntry
+import com.taskrx.mobile.data.InstanceFilter
 import com.taskrx.mobile.dose.RecordResult
 import com.taskrx.mobile.ui.components.ToastKind
 import com.taskrx.mobile.ui.components.ToastRequest
@@ -18,9 +22,16 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 
+private const val DAY_MS = 24 * 60 * 60_000L
+
+/** How far back to look for a last dose: long enough that Log a dose can always show when it was. */
+private const val HISTORY_MS = 30 * DAY_MS
+
 data class AddDoseState(
     /** Every medication on record, running ones first: a stopped one is still a medication you may take. */
     val medications: List<Reminder> = emptyList(),
+    /** The running medications taken as needed, with their takings, so the list can say when the next dose is allowed. */
+    val asNeeded: List<AsNeededEntry> = emptyList(),
     val loading: Boolean = true,
     val refreshing: Boolean = false,
     val error: String? = null,
@@ -50,8 +61,25 @@ class AddDoseViewModel(
         viewModelScope.launch {
             if (pulled) mutable.update { it.copy(refreshing = true) }
             try {
-                val all = app.reminders.list(app.session.userId, ReminderKind.Medication, includeInactive = true)
-                mutable.update { it.copy(medications = all.sortedWith(compareBy({ !it.active }, { it.name.lowercase() })), error = null) }
+                val userId = app.session.userId
+                val all = app.reminders.list(userId, ReminderKind.Medication, includeInactive = true)
+                val asNeededMeds = all.filter { it.active && it.schedule is AsNeededTimes }
+                // By the Instance's own moment, and far enough back that a last dose taken a while
+                // ago still shows. A time moved after the fact is inside this too.
+                val recent =
+                    if (asNeededMeds.isEmpty()) {
+                        emptyList()
+                    } else {
+                        app.instances.list(InstanceFilter(userId, since = app.clock() - HISTORY_MS))
+                    }
+                val asNeeded = asNeededMeds.map { AsNeededEntry(it, it.schedule as AsNeededTimes, takings(recent, it.id)) }
+                mutable.update {
+                    it.copy(
+                        medications = all.sortedWith(compareBy({ !it.active }, { it.name.lowercase() })),
+                        asNeeded = asNeeded,
+                        error = null,
+                    )
+                }
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {

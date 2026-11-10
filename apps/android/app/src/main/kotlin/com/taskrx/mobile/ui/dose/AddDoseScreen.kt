@@ -19,7 +19,10 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import com.taskrx.core.asneeded.asNeededStatus
 import com.taskrx.core.domain.Reminder
+import com.taskrx.mobile.format.asNeededLines
 import com.taskrx.mobile.format.formatTime
 import com.taskrx.mobile.ui.TaskRxColors
 import com.taskrx.mobile.ui.components.EmptyState
@@ -56,11 +59,20 @@ fun AddDoseContent(
             }
         } else {
             items(state.medications, key = { it.id }) { medication ->
+                // An as-needed medication says where its spacing stands: when the last dose was
+                // taken and when the next is allowed. A scheduled one just says its dosage.
+                val spacing = state.asNeeded.firstOrNull { it.reminder.id == medication.id }
+                val at = now()
                 Column(Modifier.fillMaxWidth().clickable(role = Role.Button, onClickLabel = "Record a dose") { picked = medication }) {
                     Column(Modifier.padding(horizontal = 16.dp, vertical = 14.dp)) {
                         Text(medication.name, style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.SemiBold)
                         val detail = listOfNotNull(medication.dosage, if (medication.active) null else "Stopped").joinToString(" · ")
                         if (detail.isNotEmpty()) Text(detail, color = TaskRxColors.Secondary)
+                        if (spacing != null) {
+                            val lines = asNeededLines(spacing.schedule, asNeededStatus(spacing.schedule, spacing.takings, at), at)
+                            Text(lines.headline, Modifier.padding(top = 4.dp), fontWeight = FontWeight.SemiBold)
+                            if (lines.detail.isNotEmpty()) Text(lines.detail, color = TaskRxColors.Secondary, fontSize = 14.sp)
+                        }
                     }
                     HorizontalDivider(color = TaskRxColors.Divider)
                 }

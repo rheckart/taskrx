@@ -4,11 +4,12 @@ import android.util.Log
 import com.taskrx.core.sync.ConvexFunctions
 import com.taskrx.core.sync.PushCall
 import com.taskrx.core.sync.PushRejected
+import com.taskrx.core.sync.QueueFailureOutcome
 import com.taskrx.core.sync.SyncWorkerStatus
+import com.taskrx.core.sync.afterFailure
 import com.taskrx.core.sync.backoffMillis
 import com.taskrx.core.sync.instanceCreateCall
 import com.taskrx.core.sync.instanceUpdateCall
-import com.taskrx.core.sync.isDeadLetterDue
 import com.taskrx.core.sync.reminderCreateCall
 import com.taskrx.core.sync.reminderDeleteCall
 import com.taskrx.core.sync.reminderUpdateCall
@@ -159,13 +160,14 @@ class PushWorker(
                 break
             }
             queue.markFailed(entry.id, error)
-            if (isDeadLetterDue(entry.attempts)) {
+            val outcome = afterFailure(entry.attempts)
+            if (outcome is QueueFailureOutcome.DeadLetter) {
                 markSourceError(entry, error)
                 queue.markDeadLettered(entry.id)
             }
             failed = true
             state.value = SyncWorkerStatus.Error
-            pause(backoffMillis(entry.attempts + 1))
+            pause(outcome.pauseMs)
         }
         // From what THIS pass did, not a fresh read of the queue: work enqueued while the
         // loop ran is the next drain's, not a failure of this one.

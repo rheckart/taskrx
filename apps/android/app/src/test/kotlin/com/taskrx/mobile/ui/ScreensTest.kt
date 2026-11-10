@@ -16,9 +16,6 @@ import androidx.compose.ui.test.assertTextContains
 import androidx.compose.ui.test.hasClickAction
 import androidx.compose.ui.test.hasContentDescription
 import androidx.compose.ui.test.hasSetTextAction
-import androidx.compose.ui.test.hasAnyAncestor
-import androidx.compose.ui.test.hasText
-import androidx.compose.ui.test.isDialog
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithContentDescription
@@ -32,7 +29,7 @@ import androidx.compose.ui.test.performTextReplacement
 import com.taskrx.core.domain.InstanceStatus
 import com.taskrx.core.domain.ReminderKind
 import com.taskrx.core.domain.asNeededTimes
-import com.taskrx.mobile.ui.today.AsNeededEntry
+import com.taskrx.mobile.asneeded.AsNeededEntry
 import com.taskrx.core.domain.createReminder
 import com.taskrx.core.domain.createReminderInstance
 import com.taskrx.core.domain.dailyTimes
@@ -372,6 +369,50 @@ class ScreensTest {
     }
 
     @Test
+    fun `Log a dose says when an as-needed medication was last taken and when the next is allowed`() {
+        val taken = NINE - 3_600_000L
+        compose.setContent {
+            TaskRxTheme {
+                AddDoseContent(
+                    AddDoseState(
+                        medications = listOf(tylenol()),
+                        asNeeded = listOf(AsNeededEntry(tylenol(), asNeededTimes(240), listOf(taken))),
+                        loading = false,
+                    ),
+                    onRefresh = {},
+                    onRecord = { _, _, _ -> },
+                    now = { NINE },
+                )
+            }
+        }
+
+        compose.onNodeWithText("Next dose in 3 h").assertExists()
+        compose.onNodeWithText("Allowed at", substring = true).assertExists()
+        compose.onNodeWithText("1 dose in the last 24 hours", substring = true).assertExists()
+    }
+
+    @Test
+    fun `Log a dose says when the daily limit is what holds the next dose back`() {
+        val five = (1..5).map { NINE - (20 - it) * 3_600_000L }
+        compose.setContent {
+            TaskRxTheme {
+                AddDoseContent(
+                    AddDoseState(
+                        medications = listOf(tylenol(max = 5)),
+                        asNeeded = listOf(AsNeededEntry(tylenol(max = 5), asNeededTimes(240, 5), five)),
+                        loading = false,
+                    ),
+                    onRefresh = {},
+                    onRecord = { _, _, _ -> },
+                    now = { NINE },
+                )
+            }
+        }
+
+        compose.onNodeWithText("Daily limit reached", substring = true).assertExists()
+    }
+
+    @Test
     fun `hide done drops completed rows and keeps the rest`() {
         today(
             TodayState(
@@ -508,72 +549,57 @@ class ScreensTest {
     private fun asNeeded(takings: List<Long>, gapMinutes: Int = 240, max: Int? = null, kind: ReminderKind = ReminderKind.Medication, offset: Int = 0) =
         state(offset = offset, kind = kind).copy(asNeeded = listOf(AsNeededEntry(tylenol(gapMinutes, max), asNeededTimes(gapMinutes, max), takings)))
 
+    /** A taking that leaves the dose allowed now, but only just: its one-hour window is open at [NINE]. */
+    private val justReady = listOf(NINE - 5 * 3_600_000L + 60_000L)
+
     @Test
-    fun `an as-needed medication with no wait offers Take, and Take records it`() {
+    fun `an as-needed medication with an open window offers Take, and Take records it`() {
         val calls = Calls()
-        today(asNeeded(takings = emptyList()), calls)
+        today(asNeeded(takings = justReady), calls)
 
         compose.onNodeWithText("Tylenol (500mg)").assertExists()
         compose.onNodeWithText("Ready now").assertExists()
+        compose.onAllNodesWithText("Take anyway").assertCountEquals(0)
         compose.onNodeWithContentDescription("Take Tylenol now").performClick()
 
         assertEquals(listOf("take:Tylenol"), calls.log)
     }
 
     @Test
-    fun `while the wait is on the card counts down and Take anyway asks before it records`() {
-        val calls = Calls()
-        today(asNeeded(takings = listOf(NINE - 3_600_000L)), calls)
+    fun `a medication still waiting for its next dose has no card on Today`() {
+        today(asNeeded(takings = listOf(NINE - 3_600_000L)))
 
-        compose.onNodeWithText("Next dose in 3 h").assertExists()
-        compose.onNodeWithText("Take anyway").performClick()
-        compose.onNodeWithText("Take Tylenol now?").assertExists()
-        compose.onNodeWithText("The last dose was 1 hour ago, and you set at least 4 hours between doses. Take it anyway?").assertExists()
-        assertEquals(emptyList(), calls.log)
-
-        compose.onNode(hasText("Take anyway") and hasAnyAncestor(isDialog())).performClick()
-
-        assertEquals(listOf("take:Tylenol"), calls.log)
+        compose.onAllNodesWithText("Tylenol (500mg)").assertCountEquals(0)
+        compose.onAllNodesWithText("As needed").assertCountEquals(0)
+        compose.onAllNodesWithText("Next dose in", substring = true).assertCountEquals(0)
+        compose.onAllNodesWithText("Take anyway").assertCountEquals(0)
     }
 
     @Test
-    fun `Not yet leaves the dose unrecorded`() {
-        val calls = Calls()
-        today(asNeeded(takings = listOf(NINE - 3_600_000L)), calls)
+    fun `a medication whose one-hour window has passed has no card`() {
+        today(asNeeded(takings = listOf(NINE - 5 * 3_600_000L)))
 
-        compose.onNodeWithText("Take anyway").performClick()
-        compose.onNodeWithText("Not yet").performClick()
-
-        assertEquals(emptyList(), calls.log)
-        compose.onAllNodesWithText("Take Tylenol now?").assertCountEquals(0)
-    }
-
-    @Test
-    fun `at the daily limit the card and the question both say it is the limit`() {
-        val calls = Calls()
-        val five = (1..5).map { NINE - (20 - it) * 3_600_000L }
-        today(asNeeded(takings = five, max = 5), calls)
-
-        compose.onNodeWithText("Daily limit reached", substring = true).assertExists()
-        compose.onNodeWithText("Take anyway").performClick()
-        compose.onNodeWithText("You have taken 5 in the last 24 hours, and you set no more than 5. Take it anyway?").assertExists()
+        compose.onAllNodesWithText("Tylenol (500mg)").assertCountEquals(0)
+        compose.onAllNodesWithText("As needed").assertCountEquals(0)
+        // With no card above, the empty day is the plain one.
+        compose.onAllNodesWithText("No scheduled doses").assertCountEquals(0)
     }
 
     @Test
     fun `the card belongs to the Medications tab, today only`() {
-        today(asNeeded(takings = emptyList(), kind = ReminderKind.Task))
+        today(asNeeded(takings = justReady, kind = ReminderKind.Task))
         compose.onAllNodesWithText("Tylenol (500mg)").assertCountEquals(0)
     }
 
     @Test
     fun `the card is not on a past day`() {
-        today(asNeeded(takings = emptyList(), offset = -1))
+        today(asNeeded(takings = justReady, offset = -1))
         compose.onAllNodesWithText("Tylenol (500mg)").assertCountEquals(0)
     }
 
     @Test
     fun `an as-needed medication on its own does not turn the day into one with no medications`() {
-        today(asNeeded(takings = emptyList()))
+        today(asNeeded(takings = justReady))
 
         compose.onNodeWithText("Tylenol (500mg)").assertExists()
         compose.onNodeWithText("Ready now").assertExists()

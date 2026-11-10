@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- A capsule on a diagonal, with a done badge at the lower right. Everything sits inside the
+     66dp safe zone of the 108dp canvas. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <group
+        android:pivotX="48"
+        android:pivotY="48"
+        android:rotation="-45">
+        <path
+            android:fillColor="#FFFFFF"
+            android:pathData="M36,36 H47 V60 H36 A12,12 0 0 1 36,36 Z" />
+        <path
+            android:fillColor="#BFD9FF"
+            android:pathData="M49,36 H60 A12,12 0 0 1 60,60 H49 Z" />
+    </group>
+    <path
+        android:fillColor="#0B8043"
+        android:strokeColor="#007AFF"
+        android:strokeWidth="2.5"
+        android:pathData="M68,56 A12,12 0 1 1 68,80 A12,12 0 1 1 68,56 Z" />
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M61.9,69.6 L66.5,74.3 L74.7,65.6 L72.3,63.4 L66.5,69.7 L64.1,67.4 Z" />
+</vector>
