@@ -103,14 +103,23 @@ private fun tokenize(input: String): List<String> = TOKEN_PATTERN.findAll(input)
 /**
  * Medication or chore.
  *
- * A dosage or a drug-class suffix settles it. Failing that, a leading task verb
- * marks a chore, and then length decides: a short phrase is a chore, a longer
- * one is assumed to name a drug.
+ * A dosage or a drug-class suffix settles it, whatever the opening word.
+ * Failing that, a leading task verb marks a chore (`call`, `do`, `schedule`),
+ * and a phrase built from chore words — `take out the trash`, `Water the
+ * plants downstairs` — is one too. Only then does length decide: a short
+ * phrase is a chore, a longer one is assumed to name a drug.
+ *
+ * Length alone is the wrong question here. It called `take out the trash
+ * every two weeks` a medication, so the review screen opened on the wrong
+ * Kind, and every correction to the name that followed had to be made in a
+ * form showing a Dosage field for a chore.
  */
 private fun detectKind(first: String, tokens: List<String>): ReminderKind {
     if (tokens.any(::looksLikeDosage) || hasDrugSuffix(tokens)) return ReminderKind.Medication
 
     if (isTaskVerb(first)) return ReminderKind.Task
+
+    if (tokens.any(::isTaskSignal)) return ReminderKind.Task
 
     val meaningful = tokens.count { !isNoiseWord(it) }
     return if (meaningful <= 3) ReminderKind.Task else ReminderKind.Medication
@@ -126,6 +135,50 @@ private fun closeNameIfSet(state: ParserState) {
 
 private fun appendName(state: ParserState, token: String) {
     state.name = if (state.name.trim() == "") token else "${state.name} $token"
+}
+
+/**
+ * Whether [token] is the noun a chore is named for (`trash`, `garbage`,
+ * `laundry`) and nothing has been named yet.
+ *
+ * After [consumeTaskNamePrefix] has read `take out`, `take out the trash` still
+ * has to get `trash` into the name: a signal word is not a stray, and the
+ * fallback to `unparsedTokens` would leave the name `take out` with its subject
+ * missing. It is consumed before that fallback for the same reason.
+ */
+private fun isTaskNoun(state: ParserState, token: String): Boolean =
+    state.kind == ReminderKind.Task && state.name.trim() == "" && isTaskSignal(token) && !isTaskVerb(token)
+
+/**
+ * Reads the start of a chore's name as one phrase — a verb, the noise words
+ * after it, then a particle — and returns how many tokens it took.
+ *
+ * The pieces are read separately elsewhere, which leaves a hole: the verb
+ * belongs in a chore's name, the noise words never do, and the particle is only
+ * kept once a name exists. `take out the trash` therefore named itself `trash`.
+ * Reading the verb, the noise words after it and the particle as one phrase
+ * keeps `take out` and leaves `trash` as the noun that follows.
+ *
+ * Returns 0 when [token] is not a chore's opening verb, or a name already
+ * exists (`take atorvastatin` is a dose, and its verb is dropped).
+ */
+private fun consumeTaskNamePrefix(state: ParserState, token: String, tokens: List<String>, index: Int): Int {
+    if (state.kind != ReminderKind.Task || state.name.trim() != "" || !isNamePrefixVerb(token)) return 0
+
+    appendName(state, token)
+
+    var nextIndex = index + 1
+    while (true) {
+        val candidate = tokenAt(tokens, nextIndex) ?: return nextIndex - index
+        when {
+            isNamePrefixParticle(candidate) -> {
+                appendName(state, candidate)
+                return nextIndex - index + 1
+            }
+            isNoiseWord(candidate) -> nextIndex += 1
+            else -> return nextIndex - index
+        }
+    }
 }
 
 /**
@@ -214,11 +267,21 @@ private fun consumeToken(state: ParserState, token: String, index: Int): Int {
         return refill
     }
 
-    if (isNoiseWord(token)) {
-        // `take out trash` keeps its verb; `take atorvastatin` does not.
-        if (state.kind == ReminderKind.Task && isTaskVerb(token)) {
-            appendName(state, token)
-        }
+    // A kicker is `every` that read nothing: the rest of the interval was not
+    // understood, so the word introduced nothing and must not become a stray
+    // token the surface then blames on the person's phrase.
+    if (equalsIgnoreCase(token, "every")) {
+        closeNameIfSet(state)
+        return 1
+    }
+
+    val prefix = consumeTaskNamePrefix(state, token, tokens, index)
+    if (prefix > 0) return prefix
+
+    if (isNoiseWord(token)) return 1
+
+    if (isTaskNoun(state, token)) {
+        appendName(state, token)
         return 1
     }
 

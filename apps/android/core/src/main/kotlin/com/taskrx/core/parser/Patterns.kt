@@ -55,8 +55,43 @@ private val INT_TOKEN_PATTERN = Regex("""\d+""")
 /** `NumberStyles.Float` minus the signs the tokenizer cannot produce. */
 private val FLOAT_TOKEN_PATTERN = Regex("""(?:\d+(?:\.\d*)?|\.\d+)(?:[eE][+-]?\d+)?""")
 
-private val HOUR_UNITS: Set<String> = setOf("hour", "hours")
-private val DAY_UNITS: Set<String> = setOf("day", "days")
+private val UNIT_FORMS: Map<String, Set<String>> =
+    mapOf(
+        "minute" to setOf("minute", "minutes", "min", "mins"),
+        "hour" to setOf("hour", "hours", "hr", "hrs"),
+        "day" to setOf("day", "days"),
+        "fortnight" to setOf("fortnight", "fortnights"),
+        "week" to setOf("week", "weeks", "wk", "wks"),
+    )
+
+/**
+ * Whether [token] is one spelling of [singular], including the abbreviated
+ * plural (`thirty mins`).
+ *
+ * A list rather than the ported `hour`/`hours` pair alone, because that pair
+ * quietly rejected `thirty minutes` as an unknown unit and left the whole
+ * phrase to fall back to a daily 09:00.
+ */
+private fun isUnitOf(token: String?, singular: String): Boolean =
+    token != null && token.lowercase() in UNIT_FORMS.getValue(singular)
+
+/**
+ * `count * hoursPerUnit` hours, saturated at [Int.MAX_VALUE] rather than
+ * wrapped.
+ *
+ * A count of 0 is a phrase that names no interval at all (`every 0 hours`), so
+ * it is no match — the parser's other fallback is a daily 09:00, which would
+ * hide the mistake.
+ */
+internal fun intervalHours(count: Long, hoursPerUnit: Long): Int? {
+    if (count <= 0) return null
+
+    val hours = count * hoursPerUnit
+    // Both operands are non-negative and the cap is applied before narrowing, so
+    // the multiplication can overflow only into a negative, which the cap turns
+    // back into the largest interval the type holds.
+    return if (hours < 0) Int.MAX_VALUE else minOf(hours, Int.MAX_VALUE.toLong()).toInt()
+}
 
 /** `(first, second, value)` from `TryParseInstructions`. */
 private val INSTRUCTION_PHRASES: List<Triple<String, String, String>> =
@@ -138,7 +173,8 @@ fun tryParsePriority(token: String, tokens: List<String>, index: Int): Match<Pri
 }
 
 /**
- * `every N hours`, `every N days`, `every <named time>`, `every <weekday>`.
+ * `every N hours`, `every N days`, `every N weeks`, `every N minutes`,
+ * `every <named time>`, `every <weekday>`.
  *
  * [now] replaces the C#'s `DateTimeOffset.UtcNow`, which is the parser's only
  * reach for ambient state; taking it as an argument is what keeps this pure.
@@ -148,23 +184,41 @@ fun tryParsePriority(token: String, tokens: List<String>, index: Int): Match<Pri
  *
  * `every N days` is N*24 hours, capped at [Int.MAX_VALUE] because
  * `IntervalTimes.hours` is an `Int` here where the TypeScript original held an
- * unbounded double.
+ * unbounded double. `every N weeks` is N*168 hours under the same cap.
+ *
+ * **N may be spelled out** ([lookupNumberWord]), which the ported C# did not
+ * allow: `every two weeks` was read as a bare `every`, silently left `two` and
+ * `weeks` in the name, and fell back to a daily 09:00 schedule — the worst
+ * outcome the parser has, because the reminder looks correctly set up and
+ * fires every day instead of every fortnight. Units shorter than a day
+ * (`minutes`) round up to the one hour `IntervalTimes` can hold rather than
+ * produce a zero or negative interval, which [isWellFormedSchedule] rejects.
  */
 fun tryParseEvery(token: String, tokens: List<String>, index: Int, now: Long): Match<ScheduleTimes>? {
     val next = tokenAt(tokens, index + 1)
     if (next == null || !equalsIgnoreCase(token, "every")) return null
 
-    val count = parseIntToken(next)
+    // `every fortnight` names its unit where the count would be, and means one;
+    // every other form has the count first and the unit after it.
+    val spelledCount = if (isUnitOf(next, "fortnight")) 1 else null
+    val count = spelledCount ?: parseIntToken(next) ?: lookupNumberWord(next)
     if (count != null) {
-        val unit = tokenAt(tokens, index + 2)?.lowercase()
-        if (unit != null && unit in HOUR_UNITS) {
-            return Match(intervalTimes(count, now), 3)
-        }
-        if (unit != null && unit in DAY_UNITS) {
-            val hours = minOf(count.toLong() * 24, Int.MAX_VALUE.toLong()).toInt()
-            return Match(intervalTimes(hours, now), 3)
-        }
-        return null
+        val unit = if (spelledCount != null) next else tokenAt(tokens, index + 2)
+        // IntervalTimes counts whole hours and nothing shorter. Rounding minutes
+        // down would leave `every ten minutes` scheduled hourly while its phrase
+        // said otherwise, so they round up: the shortest interval that is no more
+        // frequent than what was said.
+        val (counted, hoursPerUnit) =
+            when {
+                isUnitOf(unit, "minute") -> (count.toLong() + 59) / 60 to 1L
+                isUnitOf(unit, "hour") -> count.toLong() to 1L
+                isUnitOf(unit, "day") -> count.toLong() to 24L
+                isUnitOf(unit, "week") -> count.toLong() to 168L
+                isUnitOf(unit, "fortnight") -> count.toLong() to 336L
+                else -> return null
+            }
+        val hours = intervalHours(counted, hoursPerUnit) ?: return null
+        return Match(intervalTimes(hours, now), if (spelledCount != null) 2 else 3)
     }
 
     val namedTime = lookupNamedTime(next)

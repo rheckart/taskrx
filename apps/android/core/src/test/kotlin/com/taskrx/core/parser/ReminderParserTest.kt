@@ -12,6 +12,7 @@ import java.time.Instant
 import kotlin.test.Test
 import kotlin.test.assertContains
 import kotlin.test.assertEquals
+import kotlin.test.assertFalse
 import kotlin.test.assertNotEquals
 import kotlin.test.assertNotNull
 import kotlin.test.assertNull
@@ -270,10 +271,10 @@ class ParseReminderKindDetectionTest {
 
     @Test
     fun `treats a long phrase with no drug signal as a medication`() {
-        val reminder = expectReminder(parse("water the plants downstairs today"))
+        val reminder = expectReminder(parse("check the boiler pressure tomorrow"))
 
         assertEquals(ReminderKind.Medication, reminder.kind)
-        assertEquals("water plants downstairs today", reminder.name)
+        assertEquals("check boiler pressure tomorrow", reminder.name)
     }
 
     @Test
@@ -298,6 +299,68 @@ class ParseReminderKindDetectionTest {
 
         assertEquals(ReminderKind.Task, reminder.kind)
         assertEquals("call dentist", reminder.name)
+    }
+
+    // Length alone called chores of four words or more a medication, which opened
+    // the review form on the wrong Kind with a Dosage field for a chore.
+    @Test
+    fun `a long phrase built from chore words is still a task`() {
+        assertEquals(ReminderKind.Task, expectReminder(parse("take out the trash every two weeks")).kind)
+        assertEquals(ReminderKind.Task, expectReminder(parse("water the plants downstairs")).kind)
+        assertEquals(ReminderKind.Task, expectReminder(parse("pick up the recycling bins")).kind)
+        assertEquals(ReminderKind.Task, expectReminder(parse("put the bins out")).kind)
+    }
+
+    @Test
+    fun `takes out is not a drug name just because it is long`() {
+        assertEquals("Water plants downstairs", expectReminder(parse("Water the plants downstairs")).name)
+    }
+
+    // The verb, the noise words after it and the particle are one phrase. Read
+    // apart, the verb and the particle were dropped and the name was `trash`.
+    @Test
+    fun `keeps a chore's verb together with its particle`() {
+        val result = parse("take out the trash")
+        val reminder = expectReminder(result)
+
+        assertEquals(ReminderKind.Task, reminder.kind)
+        assertEquals("take out trash", reminder.name)
+        assertEquals(emptyList(), result.unparsedTokens)
+    }
+
+    @Test
+    fun `keeps a particle that has no noise word in front of it`() {
+        assertEquals("put bins out", expectReminder(parse("put the bins out")).name)
+        assertEquals("pick up bins", expectReminder(parse("pick the up bins")).name)
+    }
+
+    @Test
+    fun `a chore verb with nothing after it is the whole name`() {
+        assertEquals("take", expectReminder(parse("take the")).name)
+    }
+
+    @Test
+    fun `a chore noun with no verb before it is the whole name`() {
+        assertEquals("trash", expectReminder(parse("the trash")).name)
+    }
+
+    @Test
+    fun `keeps a chore's words when the schedule comes first`() {
+        val reminder = expectReminder(parse("take laundry at 9am"))
+
+        assertEquals(ReminderKind.Task, reminder.kind)
+        assertEquals("take laundry", reminder.name)
+        assertEquals(dailyTimes(listOf("09:00")), reminder.schedule)
+    }
+
+    // A drug beats a chore word: `take` leads doses and chores both.
+    @Test
+    fun `a dose phrased with take is still a medication named without the verb`() {
+        val reminder = expectReminder(parse("take ibuprofen 200mg every 8 hours"))
+
+        assertEquals(ReminderKind.Medication, reminder.kind)
+        assertEquals("ibuprofen", reminder.name)
+        assertEquals(intervalTimes(8, NOW), reminder.schedule)
     }
 }
 
@@ -338,6 +401,86 @@ class ParseReminderEveryPhrasesTest {
         val reminder = expectReminder(parse("vitamin d 1000units every 3 days"))
 
         assertEquals(intervalTimes(72, NOW), reminder.schedule)
+    }
+
+    @Test
+    fun `parses every N weeks as an N times 168 hour interval`() {
+        val reminder = expectReminder(parse("water the plants every 2 weeks"))
+
+        assertEquals(intervalTimes(336, NOW), reminder.schedule)
+    }
+
+    // A phrase spelled out is as common as one with a digit, and misreading it is
+    // worse than any other failure: the leftover words land in the name and the
+    // interval falls back to daily, so the reminder looks right and fires 14 times
+    // as often.
+    @Test
+    fun `reads a spoken count in every N units`() {
+        val result = parse("Take out the trash every two weeks")
+        val reminder = expectReminder(result)
+
+        assertEquals(ReminderKind.Task, reminder.kind)
+        assertEquals("Take out trash", reminder.name)
+        assertEquals(emptyList(), result.unparsedTokens)
+        assertEquals(intervalTimes(336, NOW), reminder.schedule)
+    }
+
+    @Test
+    fun `reads a spoken count in hours and days`() {
+        assertEquals(intervalTimes(8, NOW), expectReminder(parse("aspirin 81mg every eight hours")).schedule)
+        assertEquals(intervalTimes(72, NOW), expectReminder(parse("vitamin d 1000units every three days")).schedule)
+    }
+
+    @Test
+    fun `reads every a minute as one hour and every one week as 168 hours`() {
+        assertEquals(intervalTimes(1, NOW), expectReminder(parse("aspirin 81mg every a minute")).schedule)
+        assertEquals(intervalTimes(168, NOW), expectReminder(parse("aspirin 81mg every one week")).schedule)
+    }
+
+    // Minutes are the one unit IntervalTimes cannot hold, and an interval of zero
+    // hours is not a schedule at all. Rounding up gives the shortest reminder the
+    // domain can express; the draft shows the result before anything is saved.
+    @Test
+    fun `rounds a minutes interval up to the shortest one the domain can hold`() {
+        assertEquals(
+            intervalTimes(1, NOW),
+            expectReminder(parse("aspirin 81mg every thirty minutes")).schedule,
+        )
+        assertEquals(intervalTimes(1, NOW), expectReminder(parse("aspirin 81mg every 15 mins")).schedule)
+        assertEquals(intervalTimes(2, NOW), expectReminder(parse("aspirin 81mg every ninety minutes")).schedule)
+    }
+
+    @Test
+    fun `reads the abbreviated and plural unit spellings`() {
+        assertEquals(intervalTimes(2, NOW), expectReminder(parse("aspirin 81mg every 2 hrs")).schedule)
+        assertEquals(intervalTimes(336, NOW), expectReminder(parse("water the plants every fortnight")).schedule)
+        assertEquals(intervalTimes(336, NOW), expectReminder(parse("water the plants every one fortnight")).schedule)
+        assertEquals(intervalTimes(672, NOW), expectReminder(parse("water the plants every two fortnights")).schedule)
+        assertEquals(intervalTimes(336, NOW), expectReminder(parse("water the plants every 2 wks")).schedule)
+        assertEquals(intervalTimes(96, NOW), expectReminder(parse("aspirin 81mg every 4 days")).schedule)
+    }
+
+    @Test
+    fun `ignores a count of zero rather than writing an unusable interval`() {
+        val result = parse("aspirin 81mg every 0 hours")
+
+        assertEquals(dailyTimes(listOf("09:00")), expectReminder(result).schedule)
+        assertEquals(listOf("0", "hours"), result.unparsedTokens)
+    }
+
+    @Test
+    fun `keeps a spoken week interval that fits`() {
+        assertEquals(intervalTimes(2016, NOW), expectReminder(parse("aspirin 81mg every twelve weeks")).schedule)
+    }
+
+    // `N * 168` overflows a Long at about 5.5e16, which is eight digits wider
+    // than any Int, so it can only be reached with a count no phrase holds. The
+    // guard is exercised directly instead.
+    @Test
+    fun `caps a week interval whose arithmetic overflows rather than wrapping to a negative`() {
+        assertEquals(Int.MAX_VALUE, intervalHours(Long.MAX_VALUE, 168))
+        assertNull(intervalHours(0, 168))
+        assertNull(intervalHours(-3, 168))
     }
 
     // Not in the vitest suite: `IntervalTimes.hours` is an Int here, where the
@@ -696,6 +839,10 @@ class ParserPatternHelpersTest {
         assertEquals("08:00", lookupNamedTime("Morning"))
         assertTrue(isNoiseWord("THE"))
         assertTrue(isTaskVerb("Call"))
+        assertTrue(isTaskSignal("TRASH"))
+        assertFalse(isTaskSignal("atorvastatin"))
+        assertEquals(2, lookupNumberWord("Two"))
+        assertNull(lookupNumberWord("21"))
         assertTrue(isDoseUnit("Pills"))
         assertNotNull(DRUG_SUFFIXES.firstOrNull { it == "statin" })
     }
