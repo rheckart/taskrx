@@ -36,8 +36,10 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import com.taskrx.core.domain.AsNeededTimes
+import com.taskrx.core.domain.DAYS_OF_MONTH
 import com.taskrx.core.domain.DailyTimes
 import com.taskrx.core.domain.IntervalTimes
+import com.taskrx.core.domain.MonthlyTimes
 import com.taskrx.core.domain.NoneTimes
 import com.taskrx.core.domain.OnceTimes
 import com.taskrx.core.domain.ScheduleTimes
@@ -45,11 +47,13 @@ import com.taskrx.core.domain.WeeklyTimes
 import com.taskrx.core.domain.asNeededTimes
 import com.taskrx.core.domain.dailyTimes
 import com.taskrx.core.domain.intervalTimes
+import com.taskrx.core.domain.monthlyTimes
 import com.taskrx.core.domain.onceTimes
 import com.taskrx.core.domain.weeklyTimes
 import com.taskrx.mobile.format.describeInterval
 import com.taskrx.mobile.format.formatFullDayTime
 import com.taskrx.mobile.format.formatTime
+import com.taskrx.mobile.format.ordinalOf
 import com.taskrx.mobile.ui.TaskRxColors
 import com.taskrx.mobile.ui.components.ChoiceRow
 import com.taskrx.mobile.ui.components.ErrorText
@@ -61,9 +65,10 @@ import java.time.ZoneOffset
  * Schedule picker for the reminder forms. Mirrors archive/expo-rn:apps/mobile SchedulePicker.tsx.
  *
  * It speaks :core's `ScheduleTimes` directly, one value discriminated by its own type, and
- * all five variants are editable:
+ * every variant is editable:
  *   - daily: a list of time slots
  *   - weekly: a set of weekdays, and the same slots on each
+ *   - monthly: a set of dates of the month, and the same slots on each
  *   - interval: an hours field and a start instant
  *   - once: a single instant (ADR 0006: an instant, never a bare date)
  *   - none: nothing to edit; the reminder goes to the Backlog
@@ -104,6 +109,7 @@ fun SchedulePicker(
         when (value) {
             is DailyTimes -> TimesEditor(value.times) { onChange(dailyTimes(it)) }
             is WeeklyTimes -> WeeklyPicker(value, onChange)
+            is MonthlyTimes -> MonthlyPicker(value, onChange)
             is IntervalTimes -> IntervalPicker(value, onChange, now)
             is OnceTimes ->
                 InstantField(
@@ -228,6 +234,50 @@ private fun WeeklyPicker(value: WeeklyTimes, onChange: (ScheduleTimes) -> Unit) 
     }
     if (value.daysOfWeek.isEmpty()) ErrorText("Pick at least one day.")
     TimesEditor(value.times) { onChange(weeklyTimes(value.daysOfWeek, it)) }
+}
+
+/**
+ * The dates of the month, as a grid of 1 to 31, and the same time slots on each.
+ *
+ * A grid rather than a 31-row list, because picking the 1st and the 15th is two taps on a
+ * sheet of dates and a scroll in a list. The dates are shown as `WeekdayPicker` shows its
+ * days — a checkbox, spoken by its label — with the ordinal a person would say ("1st").
+ */
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+private fun MonthlyPicker(value: MonthlyTimes, onChange: (ScheduleTimes) -> Unit) {
+    FieldLabel("Dates of the month")
+    FlowRow(
+        Modifier.padding(top = 4.dp),
+        horizontalArrangement = Arrangement.spacedBy(6.dp),
+        verticalArrangement = Arrangement.spacedBy(6.dp),
+    ) {
+        DAYS_OF_MONTH.forEach { date ->
+            val on = date in value.daysOfMonth
+            val label = ordinalOf(date)
+            androidx.compose.material3.Surface(
+                shape = androidx.compose.foundation.shape.RoundedCornerShape(6.dp),
+                color = if (on) TaskRxColors.Accent else androidx.compose.ui.graphics.Color.Transparent,
+                contentColor = if (on) androidx.compose.ui.graphics.Color.White else androidx.compose.material3.MaterialTheme.colorScheme.onSurface,
+                border =
+                    androidx.compose.foundation.BorderStroke(
+                        1.dp,
+                        if (on) TaskRxColors.Accent else TaskRxColors.Outline,
+                    ),
+                modifier =
+                    Modifier.toggleable(
+                        value = on,
+                        role = Role.Checkbox,
+                        onValueChange = { onChange(monthlyTimes(toggleMonthDay(value.daysOfMonth, date), value.times)) },
+                    ),
+            ) {
+                Text(label, Modifier.padding(horizontal = 10.dp, vertical = 10.dp))
+            }
+        }
+    }
+    if (value.daysOfMonth.isEmpty()) ErrorText("Pick at least one date.")
+    HintText("A month without that date uses its last day — the 31st fires on February 28.")
+    TimesEditor(value.times) { onChange(monthlyTimes(value.daysOfMonth, it)) }
 }
 
 /**

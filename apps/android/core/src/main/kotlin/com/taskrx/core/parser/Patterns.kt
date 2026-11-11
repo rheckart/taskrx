@@ -1,11 +1,13 @@
 package com.taskrx.core.parser
 
+import com.taskrx.core.domain.DAYS_OF_MONTH
 import com.taskrx.core.domain.DailyTimes
 import com.taskrx.core.domain.Priority
 import com.taskrx.core.domain.ScheduleTimes
 import com.taskrx.core.domain.WeeklyTimes
 import com.taskrx.core.domain.dailyTimes
 import com.taskrx.core.domain.intervalTimes
+import com.taskrx.core.domain.monthlyTimes
 import com.taskrx.core.domain.weeklyTimes
 
 /*
@@ -257,6 +259,75 @@ fun tryParseDayName(token: String): Int? = lookupDayName(token)
 
 fun isWeekly(token: String): Boolean = equalsIgnoreCase(token, "weekly")
 
+/**
+ * `monthly`, or `month` immediately after `every` — and nothing parsed yet.
+ *
+ * Only ever an empty `monthly` schedule, like the bare `weekly`: nothing but a
+ * date and a time goes into it (see `Draft.kt`), and a schedule with no date is
+ * not savable, so the review form asks for one rather than saving a reminder
+ * that never comes due.
+ *
+ * A bare `month` is not this word: `pay this month's rent` is a reminder about a
+ * month, not a monthly one, and the tokenizer splits `month's` into `month` and
+ * `s` regardless. `every month` is the two-token form, which is why this reads
+ * the word before it.
+ */
+fun tryParseMonthly(token: String, tokens: List<String>, index: Int): Match<ScheduleTimes>? {
+    if (equalsIgnoreCase(token, "monthly")) return Match(monthlyTimes(emptyList(), emptyList()), 1)
+
+    if (equalsIgnoreCase(token, "month") && equalsIgnoreCase(tokenAt(tokens, index - 1), "every")) {
+        return Match(monthlyTimes(emptyList(), emptyList()), 2)
+    }
+
+    return null
+}
+
+/**
+ * A date of the month written as an ordinal: `1st`, `2nd`, `15th`, `31ST`.
+ *
+ * The suffix is required here, because this is the token test inside the main
+ * loop and a bare number is far too common in medicine names and doses to give
+ * up to a schedule without the phrase having said `monthly`. `Draft.kt` reads
+ * bare numbers too, once the month word has settled the question.
+ */
+fun tryParseOrdinalDay(token: String): Int? {
+    val match = ORDINAL_DAY_PATTERN.matchEntire(token)
+    if (match == null) return null
+
+    // The pattern admits 0..99; the days outside 1..31 are reported as strays, not dates.
+    val day = match.groupValues[1].toInt()
+    if (day < DAYS_OF_MONTH.first) return null
+    if (day > DAYS_OF_MONTH.last) return null
+    return day
+}
+
+private val ORDINAL_DAY_PATTERN = Regex("""(\d{1,2})(?:st|nd|rd|th)""", RegexOption.IGNORE_CASE)
+
+/** `"HH:MM"` for a bare hour `0`..`23`, or null. Read only behind an `at`, for `monthly on the 9th at 9`. */
+fun tryParseBareHour(token: String?): String? {
+    val hour = parseIntToken(token)
+    if (hour == null) return null
+    if (hour > 23) return null
+    return "${pad(hour)}:00"
+}
+
+/**
+ * A date of the month as `Draft.kt` reads it after the month word: an ordinal,
+ * or a bare `15`.
+ *
+ * The ordinal suffixes are trimmed rather than matched: `1st`, `2nd`, `3rd` and
+ * `4th` all carry two letters, and anything after the digits is a suffix here.
+ * A token that is not 1..31 is no match, so `20mg` and `2026` are untouched.
+ */
+fun tryParseMonthDay(token: String): Int? {
+    val match = MONTH_DAY_PATTERN.matchEntire(token) ?: return null
+    val day = match.groupValues[1].toInt()
+    return day.takeIf { it in DAYS_OF_MONTH }
+}
+
+/** `15`, `15th`, `1st`, `31ST`. */
+private val MONTH_DAY_PATTERN = Regex("""(\d{1,2})(?:st|nd|rd|th)?""", RegexOption.IGNORE_CASE)
+
 fun tryParseInstructions(token: String, tokens: List<String>, index: Int): Match<String>? {
     val next = tokenAt(tokens, index + 1) ?: return null
 
@@ -325,5 +396,7 @@ fun mergeTime(schedule: ScheduleTimes?, time: String): ScheduleTimes =
     when (schedule) {
         is DailyTimes -> dailyTimes(mergeTimes(schedule.times, time))
         is WeeklyTimes -> weeklyTimes(schedule.daysOfWeek, mergeTimes(schedule.times, time))
+        // Nothing else is merged into: a `monthly` time arrives from `Draft.kt`, which can see
+        // the dates this one cannot.
         else -> dailyTimes(listOf(time))
     }

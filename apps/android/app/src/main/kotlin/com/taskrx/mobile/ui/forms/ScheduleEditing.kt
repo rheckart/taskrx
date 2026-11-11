@@ -3,6 +3,7 @@ package com.taskrx.mobile.ui.forms
 import com.taskrx.core.domain.AsNeededTimes
 import com.taskrx.core.domain.DailyTimes
 import com.taskrx.core.domain.IntervalTimes
+import com.taskrx.core.domain.MonthlyTimes
 import com.taskrx.core.domain.NoneTimes
 import com.taskrx.core.domain.OnceTimes
 import com.taskrx.core.domain.ScheduleTimes
@@ -10,6 +11,7 @@ import com.taskrx.core.domain.WeeklyTimes
 import com.taskrx.core.domain.asNeededTimes
 import com.taskrx.core.domain.dailyTimes
 import com.taskrx.core.domain.intervalTimes
+import com.taskrx.core.domain.monthlyTimes
 import com.taskrx.core.domain.noneTimes
 import com.taskrx.core.domain.onceTimes
 import com.taskrx.core.domain.weeklyTimes
@@ -29,10 +31,11 @@ import java.util.Locale
  * become an instant, and the hints shown beside a field.
  */
 
-/** The five variants the picker edits, in the order a person is likely to want them. */
+/** The variants the picker edits, in the order a person is likely to want them. */
 enum class ScheduleType(val label: String) {
     Daily("Daily"),
     Weekly("Weekly"),
+    Monthly("Monthly"),
     Interval("Interval"),
     Once("Once"),
     None("No time"),
@@ -45,6 +48,7 @@ fun scheduleTypeOf(schedule: ScheduleTimes): ScheduleType =
     when (schedule) {
         is DailyTimes -> ScheduleType.Daily
         is WeeklyTimes -> ScheduleType.Weekly
+        is MonthlyTimes -> ScheduleType.Monthly
         is IntervalTimes -> ScheduleType.Interval
         is OnceTimes -> ScheduleType.Once
         NoneTimes -> ScheduleType.None
@@ -62,6 +66,9 @@ fun defaultSchedule(type: ScheduleType, now: Long): ScheduleTimes =
         // Weekdays, which is what "weekly rather than daily" almost always means: the
         // person is excluding the weekend. Sunday is 0.
         ScheduleType.Weekly -> weeklyTimes(listOf(1, 2, 3, 4, 5), listOf("09:00"))
+        // The first of the month, which is what "monthly" almost always means (rent,
+        // a statement, a refill). Someone changing it to the 15th is one tap away.
+        ScheduleType.Monthly -> monthlyTimes(listOf(1), listOf("09:00"))
         ScheduleType.Interval -> intervalTimes(8, now)
         // An hour out, so the moment is ahead of the person filling the form in.
         ScheduleType.Once -> onceTimes(now + 3_600_000L)
@@ -72,6 +79,18 @@ fun defaultSchedule(type: ScheduleType, now: Long): ScheduleTimes =
 
 /** Sunday first; the index is the domain's weekday number. */
 val WEEKDAY_LABELS: List<String> = listOf("Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat")
+
+/**
+ * [dates] with [date] switched on or off, in ascending order.
+ *
+ * Ordering is the same argument as [toggleDay]'s: the stored list is canonical, so
+ * two schedules naming the same dates are the same JSON however they were picked.
+ */
+fun toggleMonthDay(dates: List<Int>, date: Int): List<Int> {
+    val selected = dates.toMutableSet()
+    if (!selected.add(date)) selected.remove(date)
+    return selected.sorted()
+}
 
 /**
  * [day] switched on or off, rebuilt from the canonical order rather than appended to, so

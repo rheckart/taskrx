@@ -5,6 +5,7 @@ import com.taskrx.core.domain.Reminder
 import com.taskrx.core.domain.ReminderKind
 import com.taskrx.core.domain.dailyTimes
 import com.taskrx.core.domain.intervalTimes
+import com.taskrx.core.domain.monthlyTimes
 import com.taskrx.core.domain.parseScheduleTimes
 import com.taskrx.core.domain.serializeScheduleTimes
 import com.taskrx.core.domain.weeklyTimes
@@ -531,6 +532,162 @@ class ParseReminderEveryPhrasesTest {
 
         assertEquals(dailyTimes(listOf("09:00")), expectReminder(result).schedule)
         assertEquals(emptyList(), result.unparsedTokens)
+    }
+}
+
+/**
+ * `monthly` is read in two halves: the parser sees the word and makes an empty
+ * `monthly` schedule, and [readPhrase] fills in the dates and times from the one
+ * phrase whose own words said `monthly`. Both halves are pinned here.
+ */
+class ParseReminderMonthlyTest {
+    /** The phrase as the review form first shows it, which is where the `monthly` dates are read. */
+    private fun read(phrase: String): ReminderDraft = readPhrase(phrase, ReadPhraseOptions(now = NOW)).draft
+
+    @Test
+    fun `the parser reads a date and a time once the month word is behind them`() {
+        val result = parse("pay rent monthly on the 15th at 9am")
+        val reminder = expectReminder(result)
+
+        assertEquals(monthlyTimes(listOf(15), listOf("09:00")), reminder.schedule)
+        assertEquals("pay rent", reminder.name)
+        assertEquals(emptyList(), result.unparsedTokens)
+    }
+
+    @Test
+    fun `the parser reads the month word with nothing after it as an empty monthly`() {
+        assertEquals(monthlyTimes(emptyList(), emptyList()), expectReminder(parse("call landlord monthly")).schedule)
+        assertEquals(monthlyTimes(emptyList(), emptyList()), expectReminder(parse("pay rent every month")).schedule)
+    }
+
+    @Test
+    fun `a bare month is not a monthly schedule`() {
+        // `this month's rent` is a reminder about a month, and the tokenizer splits `month's`.
+        val reminder = expectReminder(parse("pay this month's rent"))
+
+        assertEquals("pay this month s rent", reminder.name)
+    }
+
+    // A bare number is a day only while one has not been read: `monthly on the 9th at 9`
+    // has a date before its clock time, and `monthly at 9` has none.
+    @Test
+    fun `the parser takes a bare number for a date before a clock time`() {
+        assertEquals(monthlyTimes(listOf(9), listOf("09:00")), expectReminder(parse("pay rent monthly on the 9th at 9")).schedule)
+        assertEquals(monthlyTimes(listOf(9), listOf("09:00")), expectReminder(parse("pay rent monthly 9 at 09:00")).schedule)
+        assertEquals(monthlyTimes(emptyList(), listOf("09:00")), expectReminder(parse("pay rent monthly at 9")).schedule)
+        // A number that is no date is still a stray, as it would be anywhere else.
+        assertEquals(listOf("99th"), parse("pay rent monthly on the 99th").unparsedTokens)
+    }
+
+    @Test
+    fun `the parser reads ordinals and keeps several dates and times apart`() {
+        assertEquals(
+            monthlyTimes(listOf(1, 15), listOf("09:00", "20:00")),
+            expectReminder(parse("pay rent every month on the 15th and the 1st at 9am and 8pm")).schedule,
+        )
+    }
+
+    @Test
+    fun `a month word wins over a time read before it`() {
+        // `15` is a clock time to the words before it; once `monthly` arrives the schedule is the
+        // month's, and the `15` is left where it was: in the name.
+        val reminder = expectReminder(parse("pay rent at 15 monthly on the 1st"))
+
+        assertEquals(monthlyTimes(listOf(1), emptyList()), reminder.schedule)
+    }
+
+    @Test
+    fun `a month word survives a schedule word that replaces it, and the month wins at the end`() {
+        // `twice` replaces the schedule outright; the month word is restored once the walk is
+        // over, so the phrase is still monthly rather than twice daily.
+        assertEquals(monthlyTimes(emptyList(), emptyList()), expectReminder(parse("pay rent monthly twice daily")).schedule)
+    }
+
+    @Test
+    fun `a month word wins over a weekday read after it, which leaves its day out`() {
+        assertEquals(
+            monthlyTimes(listOf(15), emptyList()),
+            expectReminder(parse("pay rent monthly on the 15th Monday")).schedule,
+        )
+        // A clock time moves with it: the monthly times are what survive.
+        assertEquals(
+            monthlyTimes(listOf(15), listOf("09:00")),
+            expectReminder(parse("pay rent monthly on the 15th at 9am Monday")).schedule,
+        )
+    }
+
+    @Test
+    fun `reads named times and hours behind an at`() {
+        assertEquals(monthlyTimes(emptyList(), listOf("09:00")), expectReminder(parse("pay rent monthly at 9")).schedule)
+        assertEquals(monthlyTimes(emptyList(), listOf("12:00")), expectReminder(parse("pay rent monthly at noon")).schedule)
+        assertEquals(monthlyTimes(emptyList(), listOf("20:00")), expectReminder(parse("pay rent monthly at 8pm")).schedule)
+        // After the one bare number a month can spend on a date, `24` is no time either.
+        assertEquals(listOf("24"), parse("pay rent monthly the 1st at 24").unparsedTokens)
+        assertEquals(emptyList(), parse("pay rent monthly at 12:30").unparsedTokens)
+    }
+
+    @Test
+    fun `an ordinal is a date wherever it appears, so a word that is neither a date nor a time is no match`() {
+        assertNull(tryParseOrdinalDay("0th"))
+        assertNull(tryParseOrdinalDay("32nd"))
+        assertNull(tryParseOrdinalDay("5"))
+        assertEquals(31, tryParseOrdinalDay("31st"))
+        assertEquals(21, tryParseOrdinalDay("21ST"))
+    }
+
+    @Test
+    fun `treats a month word as part of the schedule rather than the name`() {
+        assertEquals("pay rent", expectReminder(parse("pay rent every month")).name)
+    }
+
+    @Test
+    fun `reads a date and a time with the month word after them`() {
+        val draft = read("take out the trash the 1st at 9am monthly")
+
+        assertEquals(ReminderKind.Task, draft.kind)
+        assertEquals(monthlyTimes(listOf(1), listOf("09:00")), draft.schedule)
+        assertEquals(emptyList(), draft.unparsedTokens)
+    }
+
+    @Test
+    fun `reads the month word before the dates, in any order, with ordinals or not`() {
+        assertEquals(
+            monthlyTimes(listOf(1, 15), listOf("09:00")),
+            read("pay rent every month on the 15th and the 1st at 09:00").schedule,
+        )
+        assertEquals(
+            monthlyTimes(listOf(3), listOf("09:00")),
+            read("pay rent monthly 3 at 9am").schedule,
+        )
+        assertEquals(
+            monthlyTimes(listOf(21), listOf("09:00")),
+            read("pay rent monthly the 21st at 9am").schedule,
+        )
+    }
+
+    @Test
+    fun `keeps several times written after the dates`() {
+        assertEquals(
+            monthlyTimes(listOf(1), listOf("08:00", "20:00")),
+            read("pay rent monthly on the 1st at 8am and 8pm").schedule,
+        )
+    }
+
+    @Test
+    fun `a date out of range is no date, and the day of the month is the number in front of its suffix`() {
+        assertNull(tryParseMonthDay("0"))
+        assertNull(tryParseMonthDay("32"))
+        assertNull(tryParseMonthDay("2nd2nd"))
+        assertEquals(2, tryParseMonthDay("2ND"))
+        assertEquals(23, tryParseMonthDay("23rd"))
+    }
+
+    @Test
+    fun `a month word with no date is not savable, so the form asks for one`() {
+        val draft = read("pay rent monthly")
+
+        assertEquals(monthlyTimes(emptyList(), emptyList()), draft.schedule)
+        assertFalse(isSavableDraft(draft))
     }
 }
 

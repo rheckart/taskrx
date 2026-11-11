@@ -1,8 +1,10 @@
 package com.taskrx.core.schedule
 
 import com.taskrx.core.domain.AsNeededTimes
+import com.taskrx.core.domain.DAYS_OF_MONTH
 import com.taskrx.core.domain.DailyTimes
 import com.taskrx.core.domain.IntervalTimes
+import com.taskrx.core.domain.MonthlyTimes
 import com.taskrx.core.domain.NoneTimes
 import com.taskrx.core.domain.OnceTimes
 import com.taskrx.core.domain.Reminder
@@ -12,6 +14,7 @@ import com.taskrx.core.domain.isPausedAt
 import java.time.Instant
 import java.time.LocalDate
 import java.time.LocalTime
+import java.time.YearMonth
 import java.time.ZoneId
 import java.time.ZonedDateTime
 
@@ -20,7 +23,9 @@ import java.time.ZonedDateTime
  * in `TaskRx.Core/ScheduleEngine.cs` in the retired .NET app.
  *
  * It works on the unified `Reminder`, so `task` reminders schedule too, and it
- * handles `weekly`.
+ * handles `weekly`, plus the variants the union gained later — `monthly` among
+ * them, which walks local days like `weekly` and clamps a 31st to a short
+ * month's last day.
  *
  * Two behaviours differed from the predecessor engine, deliberately, and are
  * worth recording because they are the ones a reimplementation would get wrong:
@@ -47,6 +52,18 @@ private const val DAILY_HORIZON_DAYS = 60
 
 /** Eight weeks, matching the `dayOffset < 56` walk in `NextWeeklyOccurrences`. */
 private const val WEEKLY_HORIZON_DAYS = 56
+
+/**
+ * A year of local days for `monthly`: enough for twelve occurrences of a
+ * once-a-month schedule, and for the next one when a reminder is set for a date
+ * the current month has already passed.
+ *
+ * 400 rather than 366 because `daily` already looks 60 days out and `weekly` 56,
+ * and a monthly reminder is the variant the timeline asks furthest about: a day
+ * either side of the horizon turns its last visible occurrence into a phantom
+ * Missed under the sweep's seven-day lookback.
+ */
+private const val MONTHLY_HORIZON_DAYS = 400
 
 /** The C# `count` default on `NextOccurrences`. */
 private const val DEFAULT_COUNT = 64
@@ -207,11 +224,44 @@ private fun weeklyOccurrences(
 }
 
 /**
+ * The date a `daysOfMonth` entry falls on in [month]: the day itself, or the
+ * month's last day when the month is shorter.
+ *
+ * The clamp is the decision, not an accident of arithmetic: a reminder set for
+ * the 31st fires on the 28th (the 29th in a leap year), the 30th, and so on, so
+ * one is never silently skipped. Clamping the day also keeps two entries that
+ * collide in a short month (`30` and `31` in February) on one date rather than
+ * firing twice a few hours apart.
+ */
+private fun dayOfMonthIn(month: YearMonth, dayOfMonth: Int): LocalDate =
+    month.atDay(minOf(dayOfMonth, month.lengthOfMonth()))
+
+private fun monthlyOccurrences(
+    source: Reminder,
+    schedule: MonthlyTimes,
+    fromMs: Long,
+    count: Int,
+    zone: ZoneId,
+): List<ScheduledOccurrence> {
+    val times = sortedTimesOfDay(schedule.times)
+    val days = schedule.daysOfMonth.filter { it in DAYS_OF_MONTH }
+    if (days.isEmpty() || times.isEmpty()) return emptyList()
+
+    // The clamp happens once, here, so the shared walk only ever sees real
+    // dates: asking whether *this* date is where any wanted date lands is the
+    // one question that also folds a 30th and a 31st onto February's 28th.
+    return walkLocalDays(source, times, fromMs, count, zone, MONTHLY_HORIZON_DAYS) { day ->
+        val month = YearMonth.from(day)
+        days.any { dayOfMonthIn(month, it) == day }
+    }
+}
+
+/**
  * The next [count] occurrences of [reminder] strictly after [fromMs], in
  * chronological order.
  *
  * Returns fewer than [count] when the schedule cannot supply that many inside
- * its horizon: 60 local days for `daily`, 56 for `weekly`. `interval` has no
+ * its horizon: 60 local days for `daily`, 56 for `weekly`, 400 for `monthly`. `interval` has no
  * horizon and always returns exactly [count]. `once` returns at most one and
  * `none` always returns nothing, whatever [count] says.
  *
@@ -282,6 +332,7 @@ private fun scheduledOccurrences(
         is DailyTimes -> dailyOccurrences(reminder, schedule, fromMs, count, zone)
         is IntervalTimes -> intervalOccurrences(reminder, schedule, fromMs, count)
         is WeeklyTimes -> weeklyOccurrences(reminder, schedule, fromMs, count, zone)
+        is MonthlyTimes -> monthlyOccurrences(reminder, schedule, fromMs, count, zone)
         is OnceTimes -> onceOccurrences(reminder, schedule, fromMs)
         // A Backlog reminder has no moments at all, which is the whole point of the
         // variant: it never reaches the timeline or the notification horizon, and is

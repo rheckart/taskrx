@@ -3,6 +3,7 @@ package com.taskrx.mobile.data
 import com.taskrx.core.domain.AsNeededTimes
 import com.taskrx.core.domain.DailyTimes
 import com.taskrx.core.domain.IntervalTimes
+import com.taskrx.core.domain.MonthlyTimes
 import com.taskrx.core.domain.NoneTimes
 import com.taskrx.core.domain.OnceTimes
 import com.taskrx.core.domain.PauseWindow
@@ -52,6 +53,12 @@ internal object SyncPayloads {
                 buildJsonObject {
                     put("type", "weekly")
                     put("daysOfWeek", JsonArray(schedule.daysOfWeek.map(::JsonPrimitive)))
+                    put("times", strings(schedule.times))
+                }
+            is MonthlyTimes ->
+                buildJsonObject {
+                    put("type", "monthly")
+                    put("daysOfMonth", JsonArray(schedule.daysOfMonth.map(::JsonPrimitive)))
                     put("times", strings(schedule.times))
                 }
             is OnceTimes ->

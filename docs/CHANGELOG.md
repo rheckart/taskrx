@@ -8,6 +8,24 @@ for commit discipline (POC tags use `0.x.x`).
 
 ## [Unreleased]
 
+### 2026-11-10 — Monthly is a Schedule
+
+A reminder that comes due on a date of the month — rent on the 1st, a boiler check on the
+15th — had no schedule to say it. `monthly` is a new variant: `daysOfMonth` (any of the 1st
+to the 31st) and the local times each comes due at, pickable in every reminder form and
+beside the other types in Add and Edit.
+
+A date a month does not have lands on that month's last day, so the 31st fires on February
+28 rather than skipping February entirely (ADR 0012). A 30th and a 31st chosen together
+fire once in February, not twice.
+
+Typed in natural language — "pay rent monthly on the 1st", "every month on the 15th at
+9am", "take out the trash the 1st monthly" — the dates are read the way they are written.
+
+The variant is stored as `{"$type":"MonthlyTimes","DaysOfMonth":[…],"Times":[…]}` in the
+column, `{type: "monthly", daysOfMonth, times}` in Convex, which rejects a date no month
+has, and it round-trips through both.
+
 ### 2026-11-10 — "Every two weeks" is a fortnight, not a daily reminder
 
 Typing **Take out the trash every two weeks** produced a daily 09:00 reminder named

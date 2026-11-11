@@ -4,6 +4,7 @@ import com.taskrx.core.domain.AsNeededTimes
 import com.taskrx.core.domain.DailyTimes
 import com.taskrx.core.domain.InstanceStatus
 import com.taskrx.core.domain.IntervalTimes
+import com.taskrx.core.domain.MonthlyTimes
 import com.taskrx.core.domain.NoneTimes
 import com.taskrx.core.domain.OnceTimes
 import com.taskrx.core.domain.Reminder
@@ -95,6 +96,7 @@ internal fun scheduleTypeName(schedule: ScheduleTimes): String =
         is DailyTimes -> "daily"
         is IntervalTimes -> "interval"
         is WeeklyTimes -> "weekly"
+        is MonthlyTimes -> "monthly"
         is OnceTimes -> "once"
         NoneTimes -> "none"
         is AsNeededTimes -> "asNeeded"
