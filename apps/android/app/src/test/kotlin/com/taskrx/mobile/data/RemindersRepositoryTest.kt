@@ -1,6 +1,7 @@
 package com.taskrx.mobile.data
 
 import com.taskrx.core.domain.IntervalTimes
+import com.taskrx.core.domain.MonthlyTimes
 import com.taskrx.core.domain.NoneTimes
 import com.taskrx.core.domain.OnceTimes
 import com.taskrx.core.domain.Priority
@@ -9,6 +10,7 @@ import com.taskrx.core.domain.WeeklyTimes
 import com.taskrx.core.domain.createReminder
 import com.taskrx.core.domain.dailyTimes
 import com.taskrx.core.domain.intervalTimes
+import com.taskrx.core.domain.monthlyTimes
 import com.taskrx.core.domain.asNeededTimes
 import com.taskrx.core.domain.noneTimes
 import com.taskrx.core.domain.onceTimes
@@ -103,6 +105,7 @@ class RemindersRepositoryTest {
                     dailyTimes(listOf("08:30")),
                     intervalTimes(6, T0),
                     weeklyTimes(listOf(1, 3), listOf("07:00")),
+                    monthlyTimes(listOf(1, 15, 31), listOf("07:00")),
                     onceTimes(T0 + 1000),
                     noneTimes(),
                     asNeededTimes(240),
@@ -120,7 +123,19 @@ class RemindersRepositoryTest {
             // Spot-check the concrete types so a lossy codec cannot hide behind equality of `none`.
             assertTrue(container.reminders.get("r1")?.schedule is IntervalTimes)
             assertTrue(container.reminders.get("r2")?.schedule is WeeklyTimes)
-            assertTrue(container.reminders.get("r3")?.schedule is OnceTimes)
+            assertTrue(container.reminders.get("r3")?.schedule is MonthlyTimes)
+            assertTrue(container.reminders.get("r4")?.schedule is OnceTimes)
+        }
+
+    @Test
+    fun `a monthly schedule reaches the queue in the shape Convex stores`() =
+        withFixture(T0) {
+            reminder("r1", schedule = monthlyTimes(listOf(1, 15), listOf("09:00")))
+
+            assertEquals(
+                """{"type":"monthly","daysOfMonth":[1,15],"times":["09:00"]}""",
+                queuePayloads().single()["schedule"].toString(),
+            )
         }
 
     @Test

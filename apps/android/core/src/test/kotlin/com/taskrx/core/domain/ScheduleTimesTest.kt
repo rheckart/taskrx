@@ -29,6 +29,7 @@ private fun describeExhaustively(schedule: ScheduleTimes): String =
         is DailyTimes -> "daily:${schedule.times.size}"
         is IntervalTimes -> "interval:${schedule.hours}"
         is WeeklyTimes -> "weekly:${schedule.daysOfWeek.size}"
+        is MonthlyTimes -> "monthly:${schedule.daysOfMonth.size}"
         is OnceTimes -> "once:${schedule.at}"
         NoneTimes -> "none"
         is AsNeededTimes -> "asNeeded:${schedule.minGapMinutes}"
@@ -55,6 +56,14 @@ class ScheduleTimesConstructorsTest {
     }
 
     @Test
+    fun `tags a monthly schedule`() {
+        assertEquals(
+            MonthlyTimes(daysOfMonth = listOf(1, 15, 31), times = listOf("09:00")),
+            monthlyTimes(listOf(1, 15, 31), listOf("09:00")),
+        )
+    }
+
+    @Test
     fun `tags a single-moment schedule with the instant it happens at`() {
         assertEquals(OnceTimes(utc(2026, 8, 7, 14)), onceTimes(utc(2026, 8, 7, 14)))
     }
@@ -75,12 +84,14 @@ class ScheduleTimesConstructorsTest {
         val days = mutableListOf(1)
         val daily = dailyTimes(times)
         val weekly = weeklyTimes(days, times)
+        val monthly = monthlyTimes(days, times)
 
         times.add("21:00")
         days.add(2)
 
         assertEquals(listOf("09:00"), daily.times)
         assertEquals(WeeklyTimes(listOf(1), listOf("09:00")), weekly)
+        assertEquals(MonthlyTimes(listOf(1), listOf("09:00")), monthly)
     }
 }
 
@@ -92,6 +103,7 @@ class ScheduleTimesExhaustivenessTest {
         assertEquals("once:1700000000000", describeExhaustively(onceTimes(1_700_000_000_000)))
         assertEquals("none", describeExhaustively(noneTimes()))
         assertEquals("weekly:2", describeExhaustively(weeklyTimes(listOf(1, 3), listOf("09:00"))))
+        assertEquals("monthly:2", describeExhaustively(monthlyTimes(listOf(1, 31), listOf("09:00"))))
     }
 
     // The two vitest cases that drive `assertNever` (an incomplete switch throwing
@@ -107,6 +119,7 @@ class IsWellFormedScheduleTest {
     fun `accepts a schedule that names at least one usable moment`() {
         assertTrue(isWellFormedSchedule(dailyTimes(listOf("09:00"))))
         assertTrue(isWellFormedSchedule(weeklyTimes(listOf(1), listOf("09:00"))))
+        assertTrue(isWellFormedSchedule(monthlyTimes(listOf(1), listOf("09:00"))))
         assertTrue(isWellFormedSchedule(intervalTimes(8, 0)))
         assertTrue(isWellFormedSchedule(onceTimes(1_700_000_000_000)))
     }
@@ -124,6 +137,8 @@ class IsWellFormedScheduleTest {
         assertFalse(isWellFormedSchedule(dailyTimes(listOf("breakfast"))))
         assertFalse(isWellFormedSchedule(weeklyTimes(emptyList(), listOf("09:00"))))
         assertFalse(isWellFormedSchedule(weeklyTimes(listOf(1), emptyList())))
+        assertFalse(isWellFormedSchedule(monthlyTimes(emptyList(), listOf("09:00"))))
+        assertFalse(isWellFormedSchedule(monthlyTimes(listOf(1), emptyList())))
     }
 
     @Test
@@ -179,6 +194,19 @@ class SerializeScheduleTimesTest {
             """{"${'$'}type":"WeeklyTimes","DaysOfWeek":[1,3,5],"Times":["08:00:00"]}""",
             wire(weeklyTimes(listOf(1, 3, 5), listOf("08:00"))),
         )
+    }
+
+    @Test
+    fun `writes a monthly schedule on the dates it names`() {
+        assertEquals(
+            """{"${'$'}type":"MonthlyTimes","DaysOfMonth":[1,15,31],"Times":["09:00:00"]}""",
+            wire(monthlyTimes(listOf(1, 15, 31), listOf("09:00"))),
+        )
+        val unset =
+            assertFailsWith<IllegalArgumentException> {
+                serializeScheduleTimes(monthlyTimes(listOf(1), listOf("breakfast")))
+            }
+        assertTrue("TimeOnly" in unset.message.orEmpty())
     }
 
     @Test
@@ -256,6 +284,7 @@ class ParseScheduleTimesTest {
                 dailyTimes(listOf("09:00", "21:30")),
                 intervalTimes(8, utc(2026, 1, 1, 6)),
                 weeklyTimes(listOf(0, 2, 6), listOf("08:00", "20:00")),
+                monthlyTimes(listOf(1, 15, 31), listOf("08:00", "20:00")),
                 onceTimes(utc(2026, 8, 7, 14)),
                 noneTimes(),
                 asNeededTimes(240),
@@ -307,6 +336,10 @@ class ParseScheduleTimesTest {
         assertEquals(
             weeklyTimes(listOf(1, 3, 5), listOf("08:00")),
             parseScheduleTimes(json("""{"${'$'}type":"WeeklyTimes","DaysOfWeek":[1,3,5],"Times":["08:00:00"]}""")),
+        )
+        assertEquals(
+            monthlyTimes(listOf(1, 15, 31), listOf("08:00")),
+            parseScheduleTimes(json("""{"${'$'}type":"MonthlyTimes","DaysOfMonth":[1,15,31],"Times":["08:00:00"]}""")),
         )
         assertEquals(
             onceTimes(utc(2026, 1, 1, 6)),
@@ -366,7 +399,25 @@ class ParseScheduleTimesTest {
 
     @Test
     fun `returns null for an unknown discriminator, matching the C# reader`() {
-        assertNull(parseScheduleTimes(json("""{"${'$'}type":"MonthlyTimes","Times":[]}""")))
+        assertNull(parseScheduleTimes(json("""{"${'$'}type":"YearlyTimes","Times":[]}""")))
+    }
+
+    @Test
+    fun `rejects a monthly payload with a date no month has`() {
+        assertNull(parseScheduleTimes(json("""{"${'$'}type":"MonthlyTimes","DaysOfMonth":[0],"Times":["08:00:00"]}""")))
+        assertNull(parseScheduleTimes(json("""{"${'$'}type":"MonthlyTimes","DaysOfMonth":[32],"Times":["08:00:00"]}""")))
+        assertNull(parseScheduleTimes(json("""{"${'$'}type":"MonthlyTimes","DaysOfMonth":[1.5],"Times":["08:00:00"]}""")))
+        assertNull(parseScheduleTimes(json("""{"${'$'}type":"MonthlyTimes","DaysOfMonth":["1st"],"Times":["08:00:00"]}""")))
+        assertNull(parseScheduleTimes(json("""{"${'$'}type":"MonthlyTimes","Times":["08:00:00"]}""")))
+        assertNull(parseScheduleTimes(json("""{"${'$'}type":"MonthlyTimes","DaysOfMonth":[1]}""")))
+    }
+
+    @Test
+    fun `accepts an empty monthly date set, which the parser produces before dates are known`() {
+        assertEquals(
+            monthlyTimes(emptyList(), listOf("09:00")),
+            parseScheduleTimes(json("""{"${'$'}type":"MonthlyTimes","DaysOfMonth":[],"Times":["09:00:00"]}""")),
+        )
     }
 
     @Test

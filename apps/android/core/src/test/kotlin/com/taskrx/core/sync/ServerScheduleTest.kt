@@ -3,6 +3,7 @@ package com.taskrx.core.sync
 import com.taskrx.core.domain.AsNeededTimes
 import com.taskrx.core.domain.DailyTimes
 import com.taskrx.core.domain.IntervalTimes
+import com.taskrx.core.domain.MonthlyTimes
 import com.taskrx.core.domain.NoneTimes
 import com.taskrx.core.domain.OnceTimes
 import com.taskrx.core.domain.WeeklyTimes
@@ -25,6 +26,14 @@ class ScheduleFromServerTest {
         assertEquals(IntervalTimes(6, 1_700_000_000_000), read("""{"type":"interval","hours":6.0,"startAt":1700000000000.0}"""))
         assertEquals(OnceTimes(1_700_000_000_000), read("""{"type":"once","at":1.7E12}"""))
         assertEquals(WeeklyTimes(listOf(0, 6), listOf("07:00")), read("""{"type":"weekly","daysOfWeek":[0.0,6],"times":["07:00"]}"""))
+    }
+
+    @Test
+    fun `reads a monthly schedule on the dates it names`() {
+        assertEquals(
+            MonthlyTimes(listOf(1, 15, 31), listOf("09:00")),
+            read("""{"type":"monthly","daysOfMonth":[1,15.0,31],"times":["09:00"]}"""),
+        )
     }
 
     @Test
@@ -76,6 +85,13 @@ class ScheduleFromServerTest {
         assertNull(read("""{"type":"weekly","daysOfWeek":[7],"times":["07:00"]}"""))
         assertNull(read("""{"type":"weekly","daysOfWeek":[-1],"times":["07:00"]}"""))
         assertNull(read("""{"type":"weekly","daysOfWeek":["Mon"],"times":["07:00"]}"""))
+        // monthly
+        assertNull(read("""{"type":"monthly","times":["09:00"]}"""))
+        assertNull(read("""{"type":"monthly","daysOfMonth":[1]}"""))
+        assertNull(read("""{"type":"monthly","daysOfMonth":[0],"times":["09:00"]}"""))
+        assertNull(read("""{"type":"monthly","daysOfMonth":[32],"times":["09:00"]}"""))
+        assertNull(read("""{"type":"monthly","daysOfMonth":[1.5],"times":["09:00"]}"""))
+        assertNull(read("""{"type":"monthly","daysOfMonth":["1st"],"times":["09:00"]}"""))
         // once
         assertNull(read("""{"type":"once"}"""))
     }

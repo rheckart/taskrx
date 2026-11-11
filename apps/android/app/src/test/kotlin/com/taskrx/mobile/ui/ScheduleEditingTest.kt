@@ -3,6 +3,7 @@ package com.taskrx.mobile.ui
 import com.taskrx.core.domain.AsNeededTimes
 import com.taskrx.core.domain.DailyTimes
 import com.taskrx.core.domain.IntervalTimes
+import com.taskrx.core.domain.MonthlyTimes
 import com.taskrx.core.domain.NoneTimes
 import com.taskrx.core.domain.OnceTimes
 import com.taskrx.core.domain.WeeklyTimes
@@ -26,6 +27,7 @@ import com.taskrx.mobile.ui.forms.pickerDateMillis
 import com.taskrx.mobile.ui.forms.scheduleTypeOf
 import com.taskrx.mobile.ui.forms.timeInputToHourMinute
 import com.taskrx.mobile.ui.forms.toggleDay
+import com.taskrx.mobile.ui.forms.toggleMonthDay
 import java.time.ZoneId
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -76,6 +78,7 @@ class ScheduleEditingTest {
     fun `the defaults are the common case for each variant`() {
         assertEquals(DailyTimes(listOf("09:00")), defaultSchedule(ScheduleType.Daily, now))
         assertEquals(WeeklyTimes(listOf(1, 2, 3, 4, 5), listOf("09:00")), defaultSchedule(ScheduleType.Weekly, now))
+        assertEquals(MonthlyTimes(listOf(1), listOf("09:00")), defaultSchedule(ScheduleType.Monthly, now))
         assertEquals(IntervalTimes(8, now), defaultSchedule(ScheduleType.Interval, now))
         // An hour out, so the moment is ahead of the person filling the form in.
         assertEquals(OnceTimes(now + 3_600_000L), defaultSchedule(ScheduleType.Once, now))
@@ -87,6 +90,14 @@ class ScheduleEditingTest {
         assertEquals(listOf(0, 1, 2), toggleDay(listOf(2, 1), 0))
         assertEquals(listOf(1, 3), toggleDay(listOf(1, 2, 3), 2))
         assertEquals(emptyList(), toggleDay(listOf(4), 4))
+    }
+
+    @Test
+    fun `a monthly schedule reads back as monthly, and toggling a date keeps it ascending`() {
+        assertEquals(ScheduleType.Monthly, scheduleTypeOf(MonthlyTimes(listOf(1, 15), listOf("09:00"))))
+        assertEquals(listOf(1, 15), toggleMonthDay(listOf(15), 1))
+        assertEquals(listOf(1), toggleMonthDay(listOf(1, 15), 15))
+        assertEquals(emptyList(), toggleMonthDay(listOf(31), 31))
     }
 
     @Test

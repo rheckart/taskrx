@@ -1,8 +1,10 @@
 package com.taskrx.core.sync
 
 import com.taskrx.core.domain.AsNeededTimes
+import com.taskrx.core.domain.DAYS_OF_MONTH
 import com.taskrx.core.domain.DailyTimes
 import com.taskrx.core.domain.IntervalTimes
+import com.taskrx.core.domain.MonthlyTimes
 import com.taskrx.core.domain.NoneTimes
 import com.taskrx.core.domain.OnceTimes
 import com.taskrx.core.domain.ScheduleTimes
@@ -53,6 +55,16 @@ private fun weekdays(value: JsonElement?): List<Int>? {
     }
 }
 
+/** A `daysOfMonth` array: the same whole-number rule, over 1..31. */
+private fun daysOfMonth(value: JsonElement?): List<Int>? {
+    if (value !is JsonArray) return null
+    return value.map { element ->
+        val day = element.whole() ?: return null
+        if (day !in DAYS_OF_MONTH) return null
+        day.toInt()
+    }
+}
+
 /**
  * Reads a server schedule, or returns null for anything malformed. The caller decides what
  * null means; the pull turns it into a Backlog item, because a schedule that cannot be read
@@ -75,6 +87,11 @@ fun scheduleFromServer(value: JsonElement?): ScheduleTimes? {
             val days = weekdays(value["daysOfWeek"])
             val at = times(value["times"])
             if (days == null || at == null) null else WeeklyTimes(days, at)
+        }
+        "monthly" -> {
+            val days = daysOfMonth(value["daysOfMonth"])
+            val at = times(value["times"])
+            if (days == null || at == null) null else MonthlyTimes(days, at)
         }
         "once" -> value["at"].whole()?.let(::OnceTimes)
         "none" -> NoneTimes

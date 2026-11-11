@@ -4,9 +4,11 @@ import com.taskrx.core.domain.Priority
 import com.taskrx.core.domain.Reminder
 import com.taskrx.core.domain.ReminderKind
 import com.taskrx.core.domain.ScheduleTimes
+import com.taskrx.core.domain.MonthlyTimes
 import com.taskrx.core.domain.WeeklyTimes
 import com.taskrx.core.domain.createReminder
 import com.taskrx.core.domain.dailyTimes
+import com.taskrx.core.domain.monthlyTimes
 import com.taskrx.core.domain.weeklyTimes
 
 /*
@@ -85,8 +87,12 @@ private class ParserState(
     var schedule: ScheduleTimes? = null
     var priority: Priority = Priority.Normal
     val days: MutableList<Int> = mutableListOf()
+    /** `the 15th` … the dates of a `monthly` month, in the order they were read. */
+    val monthDays: MutableList<Int> = mutableListOf()
     val unparsedTokens: MutableList<String> = mutableListOf()
     var nameClosed: Boolean = false
+    /** Set by [tryParseMonthly]: a month word is a schedule, and nothing else may claim it. */
+    var monthlyNamed: Boolean = false
 }
 
 private const val EMPTY_INPUT_ERROR = "Input is empty."
@@ -103,14 +109,23 @@ private fun tokenize(input: String): List<String> = TOKEN_PATTERN.findAll(input)
 /**
  * Medication or chore.
  *
- * A dosage or a drug-class suffix settles it. Failing that, a leading task verb
- * marks a chore, and then length decides: a short phrase is a chore, a longer
- * one is assumed to name a drug.
+ * A dosage or a drug-class suffix settles it, whatever the opening word.
+ * Failing that, a leading task verb marks a chore (`call`, `do`, `schedule`),
+ * and a phrase built from chore words — `take out the trash`, `Water the
+ * plants downstairs` — is one too. Only then does length decide: a short
+ * phrase is a chore, a longer one is assumed to name a drug.
+ *
+ * Length alone is the wrong question here. It called `take out the trash
+ * every two weeks` a medication, so the review screen opened on the wrong
+ * Kind, and every correction to the name that followed had to be made in a
+ * form showing a Dosage field for a chore.
  */
 private fun detectKind(first: String, tokens: List<String>): ReminderKind {
     if (tokens.any(::looksLikeDosage) || hasDrugSuffix(tokens)) return ReminderKind.Medication
 
     if (isTaskVerb(first)) return ReminderKind.Task
+
+    if (tokens.any(::isTaskSignal)) return ReminderKind.Task
 
     val meaningful = tokens.count { !isNoiseWord(it) }
     return if (meaningful <= 3) ReminderKind.Task else ReminderKind.Medication
@@ -126,6 +141,101 @@ private fun closeNameIfSet(state: ParserState) {
 
 private fun appendName(state: ParserState, token: String) {
     state.name = if (state.name.trim() == "") token else "${state.name} $token"
+}
+
+/**
+ * Whether [token] is the noun a chore is named for (`trash`, `garbage`,
+ * `laundry`) and nothing has been named yet.
+ *
+ * After [consumeTaskNamePrefix] has read `take out`, `take out the trash` still
+ * has to get `trash` into the name: a signal word is not a stray, and the
+ * fallback to `unparsedTokens` would leave the name `take out` with its subject
+ * missing. It is consumed before that fallback for the same reason.
+ */
+private fun isTaskNoun(state: ParserState, token: String): Boolean =
+    state.kind == ReminderKind.Task && state.name.trim() == "" && isTaskSignal(token) && !isTaskVerb(token)
+
+/**
+ * Reads the start of a chore's name as one phrase — a verb, the noise words
+ * after it, then a particle — and returns how many tokens it took.
+ *
+ * The pieces are read separately elsewhere, which leaves a hole: the verb
+ * belongs in a chore's name, the noise words never do, and the particle is only
+ * kept once a name exists. `take out the trash` therefore named itself `trash`.
+ * Reading the verb, the noise words after it and the particle as one phrase
+ * keeps `take out` and leaves `trash` as the noun that follows.
+ *
+ * Returns 0 when [token] is not a chore's opening verb, or a name already
+ * exists (`take atorvastatin` is a dose, and its verb is dropped).
+ */
+private fun consumeTaskNamePrefix(state: ParserState, token: String, tokens: List<String>, index: Int): Int {
+    if (state.kind != ReminderKind.Task || state.name.trim() != "" || !isNamePrefixVerb(token)) return 0
+
+    appendName(state, token)
+
+    var nextIndex = index + 1
+    while (true) {
+        val candidate = tokenAt(tokens, nextIndex) ?: return nextIndex - index
+        when {
+            isNamePrefixParticle(candidate) -> {
+                appendName(state, candidate)
+                return nextIndex - index + 1
+            }
+            isNoiseWord(candidate) -> nextIndex += 1
+            else -> return nextIndex - index
+        }
+    }
+}
+
+/**
+ * Reads a date or a time into the `monthly` schedule, and returns how many tokens
+ * it took — or null when [token] is neither.
+ *
+ * Dates are kept apart from clock times by a rule the parser already knows: an
+ * ordinal (`15th`) is a date and nothing else, a bare number is a date only while
+ * no bare number has been read yet as a date, and a clock time needs an hour, a
+ * minute or a designator — `9am`, `9:00`, or a bare hour behind `at`. A bare `9`
+ * in `monthly on the 9th at 9` is the date; with a date already in hand it is the
+ * time, so `monthly the 1st at 9` reads both.
+ *
+ * A date does not close the name; a time does, as it does everywhere else.
+ */
+private fun mergeMonthly(
+    state: ParserState,
+    schedule: MonthlyTimes,
+    token: String,
+    tokens: List<String>,
+    index: Int,
+): Int? {
+    if (mergeMonthlyDate(state, schedule, token)) return 1
+
+    // `9` on its own is no clock time (it is a date above), so a bare number is a time
+    // only behind an `at`: `monthly on the 9th at 9`.
+    val hour = if (equalsIgnoreCase(token, "at")) tryParseBareHour(tokenAt(tokens, index + 1)) else null
+    val time =
+        tryParseAtTime(token, tokens, index)
+            ?: tryParseNamedTime(token)?.let { Match(it, 1) }
+            ?: if (hour == null) null else Match(hour, 2)
+    if (time == null) return null
+
+    state.schedule = monthlyTimes(schedule.daysOfMonth, (schedule.times + time.value).distinct().sorted())
+    closeNameIfSet(state)
+    return time.consumed
+}
+
+/**
+ * Reads [token] as a date of the month into [state], or returns false.
+ *
+ * A bare number is a date only while none has been read, so `at 9` is the time after
+ * `the 15th`; an ordinal is a date wherever it appears.
+ */
+private fun mergeMonthlyDate(state: ParserState, schedule: MonthlyTimes, token: String): Boolean {
+    val day = tryParseOrdinalDay(token) ?: if (state.monthDays.isEmpty()) tryParseMonthDay(token) else null
+    if (day == null) return false
+
+    state.monthDays.add(day)
+    state.schedule = monthlyTimes(state.monthDays.distinct().sorted(), schedule.times)
+    return true
 }
 
 /**
@@ -148,6 +258,26 @@ private fun consumeToken(state: ParserState, token: String, index: Int): Int {
         state.priority = priority.value
         closeNameIfSet(state)
         return priority.consumed
+    }
+
+    // `every month` and `monthly`. The month wins over the words around it: `the` in `the 1st of
+    // every month` is a noise word, and `9am` in `monthly at 9am` is a time that belongs to the
+    // dates this file cannot see. So it is read first, and it takes the schedule whatever else
+    // has claimed it — `Jan 15 monthly` has a `15` for a clock time before the month word arrives.
+    val monthly = tryParseMonthly(token, tokens, index)
+    if (monthly != null) {
+        state.schedule = monthly.value
+        state.monthlyNamed = true
+        closeNameIfSet(state)
+        return monthly.consumed
+    }
+
+    // While the phrase has said `monthly`, a date and a time are the month's: `the 1st and the
+    // 15th at 9am` would otherwise close the name at the first date and leave the second one
+    // unparsed.
+    val monthlySchedule = state.schedule
+    if (state.monthlyNamed && monthlySchedule is MonthlyTimes) {
+        mergeMonthly(state, monthlySchedule, token, tokens, index)?.let { return it }
     }
 
     val every = tryParseEvery(token, tokens, index, state.now)
@@ -214,11 +344,21 @@ private fun consumeToken(state: ParserState, token: String, index: Int): Int {
         return refill
     }
 
-    if (isNoiseWord(token)) {
-        // `take out trash` keeps its verb; `take atorvastatin` does not.
-        if (state.kind == ReminderKind.Task && isTaskVerb(token)) {
-            appendName(state, token)
-        }
+    // A kicker is `every` that read nothing: the rest of the interval was not
+    // understood, so the word introduced nothing and must not become a stray
+    // token the surface then blames on the person's phrase.
+    if (equalsIgnoreCase(token, "every")) {
+        closeNameIfSet(state)
+        return 1
+    }
+
+    val prefix = consumeTaskNamePrefix(state, token, tokens, index)
+    if (prefix > 0) return prefix
+
+    if (isNoiseWord(token)) return 1
+
+    if (isTaskNoun(state, token)) {
+        appendName(state, token)
         return 1
     }
 
@@ -248,6 +388,12 @@ private fun extractFields(state: ParserState) {
     val schedule = state.schedule
     if (schedule is WeeklyTimes) {
         state.schedule = weeklyTimes(state.days.distinct().sorted(), schedule.times)
+    }
+    // The month word wins over a weekday or a `twice`, so its schedule is the one that
+    // survives, rebuilt from the dates read along the way.
+    if (state.monthlyNamed) {
+        val times = (state.schedule as? MonthlyTimes)?.times.orEmpty()
+        state.schedule = monthlyTimes(state.monthDays.distinct().sorted(), times)
     }
 }
 

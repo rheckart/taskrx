@@ -2,6 +2,7 @@ package com.taskrx.mobile.format
 
 import com.taskrx.core.domain.dailyTimes
 import com.taskrx.core.domain.intervalTimes
+import com.taskrx.core.domain.monthlyTimes
 import com.taskrx.core.domain.asNeededTimes
 import com.taskrx.core.domain.noneTimes
 import com.taskrx.core.domain.onceTimes
@@ -63,6 +64,37 @@ class ScheduleFormatTest {
     @Test
     fun `says so when a weekly schedule names no time`() {
         assertEquals("Weekly (not fully set)", describeSchedule(weeklyTimes(listOf(2), emptyList()), utc))
+    }
+
+    @Test
+    fun `names the dates of the month and the times they apply at`() {
+        assertEquals(
+            "1st, 15th of the month at 09:00",
+            describeSchedule(monthlyTimes(listOf(1, 15), listOf("09:00")), utc),
+        )
+        assertEquals("31st of the month at 08:00, 20:00", describeSchedule(monthlyTimes(listOf(31), listOf("08:00", "20:00")), utc))
+    }
+
+    @Test
+    fun `says so when a monthly schedule is not fully set`() {
+        assertEquals("Monthly (not fully set)", describeSchedule(monthlyTimes(emptyList(), listOf("09:00")), utc))
+        assertEquals("Monthly (not fully set)", describeSchedule(monthlyTimes(listOf(2), emptyList()), utc))
+    }
+
+    // The teens are the suffixes the naive rule gets wrong: 11st, 12nd, 13rd.
+    @Test
+    fun `a date of the month is said with the suffix a person would use`() {
+        assertEquals("1st", ordinalOf(1))
+        assertEquals("2nd", ordinalOf(2))
+        assertEquals("3rd", ordinalOf(3))
+        assertEquals("4th", ordinalOf(4))
+        assertEquals("11th", ordinalOf(11))
+        assertEquals("12th", ordinalOf(12))
+        assertEquals("13th", ordinalOf(13))
+        assertEquals("21st", ordinalOf(21))
+        assertEquals("22nd", ordinalOf(22))
+        assertEquals("23rd", ordinalOf(23))
+        assertEquals("31st", ordinalOf(31))
     }
 
     @Test

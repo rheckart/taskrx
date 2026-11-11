@@ -224,6 +224,35 @@ describe("reminders.create and the schedule variants", () => {
     });
   });
 
+  it("stores a monthly schedule on the dates it names", async () => {
+    const t = deployment();
+    const id = await t.mutation(api.reminders.create, {
+      ...DEVICE_PUSH,
+      schedule: { type: "monthly", daysOfMonth: [1, 15], times: ["09:00"] },
+    });
+
+    expect(await t.query(api.reminders.get, { id })).toMatchObject({
+      schedule: { type: "monthly", daysOfMonth: [1, 15], times: ["09:00"] },
+    });
+  });
+
+  it("rejects a monthly schedule with a date no month has", async () => {
+    const t = deployment();
+
+    await expect(
+      t.mutation(api.reminders.create, {
+        ...DEVICE_PUSH,
+        schedule: {
+          type: "monthly",
+          daysOfMonth: [32],
+          times: ["09:00"],
+        } as unknown as {
+          type: "none";
+        },
+      })
+    ).rejects.toThrow();
+  });
+
   it("rejects a schedule variant that is not in the union", async () => {
     const t = deployment();
 
@@ -232,7 +261,7 @@ describe("reminders.create and the schedule variants", () => {
         ...DEVICE_PUSH,
         // The point of spelling the union out: a malformed schedule fails at the
         // boundary instead of round-tripping and only breaking on the device.
-        schedule: { type: "monthly", dayOfMonth: 1 } as unknown as {
+        schedule: { type: "yearly", dayOfMonth: 1 } as unknown as {
           type: "none";
         },
       })

@@ -8,6 +8,7 @@ import com.taskrx.core.domain.createReminder
 import com.taskrx.core.domain.asNeededTimes
 import com.taskrx.core.domain.dailyTimes
 import com.taskrx.core.domain.intervalTimes
+import com.taskrx.core.domain.monthlyTimes
 import com.taskrx.core.domain.noneTimes
 import com.taskrx.core.domain.onceTimes
 import com.taskrx.core.domain.weeklyTimes
@@ -307,6 +308,143 @@ class NextOccurrencesWeeklyTest {
         assertEquals(8, occ.size)
         val last = LocalDate.of(2026, 7, 6).plusDays(49)
         assertEquals(local(last.year, last.monthValue, last.dayOfMonth, 7), occ[7].fireAt)
+    }
+}
+
+class NextOccurrencesMonthlyTest {
+    @Test
+    fun `emits on the dates it names, one month apart`() {
+        val r = reminder(monthlyTimes(listOf(15), listOf("09:00")))
+
+        val occ = nextOccurrences(r, local(2026, 1, 1), 4)
+
+        assertEquals(
+            listOf(
+                local(2026, 1, 15, 9),
+                local(2026, 2, 15, 9),
+                local(2026, 3, 15, 9),
+                local(2026, 4, 15, 9),
+            ),
+            fireTimes(occ),
+        )
+    }
+
+    // The decision in ADR 0012: a missing date clamps to the month's last day
+    // rather than skipping the month, so February never disappears silently.
+    @Test
+    fun `the 31st lands on a short month's last day rather than skipping it`() {
+        val r = reminder(monthlyTimes(listOf(31), listOf("09:00")))
+
+        val occ = nextOccurrences(r, local(2026, 1, 1), 6)
+
+        assertEquals(
+            listOf(
+                local(2026, 1, 31, 9),
+                local(2026, 2, 28, 9),
+                local(2026, 3, 31, 9),
+                local(2026, 4, 30, 9),
+                local(2026, 5, 31, 9),
+                local(2026, 6, 30, 9),
+            ),
+            fireTimes(occ),
+        )
+    }
+
+    @Test
+    fun `the 31st lands on February 29 in a leap year`() {
+        val r = reminder(monthlyTimes(listOf(31), listOf("09:00")))
+
+        val occ = nextOccurrences(r, local(2028, 2, 1), 1)
+
+        assertEquals(listOf(local(2028, 2, 29, 9)), fireTimes(occ))
+    }
+
+    @Test
+    fun `a 30th and a 31st collapse onto one date in February instead of firing twice`() {
+        val r = reminder(monthlyTimes(listOf(30, 31), listOf("09:00")))
+
+        val occ = nextOccurrences(r, local(2026, 2, 1), 2)
+
+        assertEquals(listOf(local(2026, 2, 28, 9), local(2026, 3, 30, 9)), fireTimes(occ))
+    }
+
+    @Test
+    fun `orders several dates within a month chronologically, whatever order they were picked in`() {
+        val r = reminder(monthlyTimes(listOf(10, 1), listOf("20:00", "08:00")))
+
+        val occ = nextOccurrences(r, local(2026, 1, 1), 4)
+
+        assertEquals(
+            listOf(
+                local(2026, 1, 1, 8),
+                local(2026, 1, 1, 20),
+                local(2026, 1, 10, 8),
+                local(2026, 1, 10, 20),
+            ),
+            fireTimes(occ),
+        )
+    }
+
+    @Test
+    fun `returns nothing when either the date set or the time list is empty`() {
+        val from = local(2026, 1, 1)
+
+        assertEquals(emptyList(), nextOccurrences(reminder(monthlyTimes(emptyList(), listOf("09:00"))), from, 5))
+        assertEquals(emptyList(), nextOccurrences(reminder(monthlyTimes(listOf(1), emptyList())), from, 5))
+        // A date no month has is dropped, and a list of only those names no date at all.
+        assertEquals(emptyList(), nextOccurrences(reminder(monthlyTimes(listOf(0, 32), listOf("09:00"))), from, 5))
+    }
+
+    @Test
+    fun `excludes an occurrence landing exactly on from`() {
+        val r = reminder(monthlyTimes(listOf(15), listOf("09:00")))
+
+        val occ = nextOccurrences(r, local(2026, 1, 15, 9), 1)
+
+        assertEquals(listOf(local(2026, 2, 15, 9)), fireTimes(occ))
+    }
+
+    @Test
+    fun `a date later this month still comes due this month`() {
+        val r = reminder(monthlyTimes(listOf(31), listOf("09:00")))
+
+        val occ = nextOccurrences(r, local(2026, 1, 2), 1)
+
+        assertEquals(listOf(local(2026, 1, 31, 9)), fireTimes(occ))
+    }
+
+    @Test
+    fun `the 29th skips a non-leap February`() {
+        val r = reminder(monthlyTimes(listOf(29), listOf("09:00")))
+
+        val occ = nextOccurrences(r, local(2026, 2, 1), 1)
+
+        assertEquals(listOf(local(2026, 2, 28, 9)), fireTimes(occ))
+    }
+
+    @Test
+    fun `keeps its local time across a daylight-saving change`() {
+        val r = reminder(monthlyTimes(listOf(15), listOf("09:00")))
+        val from = local(2026, 2, 1, 0, 0, NEW_YORK)
+
+        val occ = nextOccurrences(r, from, 2, NEW_YORK)
+
+        assertEquals(listOf("09:00", "09:00"), occ.map { localTime(it.fireAt, NEW_YORK) })
+        // March 15 is after the change and February 15 before it, so the wall clock
+        // stays at 09:00 while the UTC instants are 23 and 22 hours apart.
+        assertEquals(9, zoned(occ[1].fireAt, NEW_YORK).hour)
+    }
+
+    @Test
+    fun `stops at the 400-day horizon rather than filling count`() {
+        val r = reminder(monthlyTimes(listOf(15), listOf("09:00")))
+
+        val occ = nextOccurrences(r, local(2026, 1, 1), 100)
+
+        // Day offsets 0..399 from January 1 of 2026: the 15th of every month through
+        // January of 2027, ending 15 days short of a full horizon.
+        assertEquals(13, occ.size)
+        assertEquals(local(2027, 1, 15, 9), occ.last().fireAt)
     }
 }
 

@@ -8,6 +8,7 @@ import com.taskrx.core.domain.createReminder
 import com.taskrx.core.domain.dailyTimes
 import com.taskrx.core.domain.intervalTimes
 import com.taskrx.core.domain.asNeededTimes
+import com.taskrx.core.domain.monthlyTimes
 import com.taskrx.core.domain.noneTimes
 import com.taskrx.core.domain.onceTimes
 import com.taskrx.core.domain.weeklyTimes
@@ -98,6 +99,7 @@ class PlanBacklogCompletionTest {
                 dailyTimes(listOf("09:00")) to "daily",
                 intervalTimes(8, 0L) to "interval",
                 weeklyTimes(listOf(1), listOf("09:00")) to "weekly",
+                monthlyTimes(listOf(1), listOf("09:00")) to "monthly",
                 onceTimes(ACTED_AT) to "once",
             )
         for ((schedule, type) in cases) {

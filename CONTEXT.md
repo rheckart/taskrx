@@ -31,7 +31,7 @@ _Avoid_: Todo, Chore, Activity
 
 **Schedule**:
 The rule that determines when a Reminder comes due. Either recurring (daily,
-weekly, or every N hours), a single moment, or absent.
+weekly, monthly, or every N hours), a single moment, or absent.
 _Avoid_: Recurrence, Frequency, Timing
 
 **Occurrence**:

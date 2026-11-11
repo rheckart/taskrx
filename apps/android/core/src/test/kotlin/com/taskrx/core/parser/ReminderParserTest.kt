@@ -5,6 +5,7 @@ import com.taskrx.core.domain.Reminder
 import com.taskrx.core.domain.ReminderKind
 import com.taskrx.core.domain.dailyTimes
 import com.taskrx.core.domain.intervalTimes
+import com.taskrx.core.domain.monthlyTimes
 import com.taskrx.core.domain.parseScheduleTimes
 import com.taskrx.core.domain.serializeScheduleTimes
 import com.taskrx.core.domain.weeklyTimes
@@ -12,6 +13,7 @@ import java.time.Instant
 import kotlin.test.Test
 import kotlin.test.assertContains
 import kotlin.test.assertEquals
+import kotlin.test.assertFalse
 import kotlin.test.assertNotEquals
 import kotlin.test.assertNotNull
 import kotlin.test.assertNull
@@ -270,10 +272,10 @@ class ParseReminderKindDetectionTest {
 
     @Test
     fun `treats a long phrase with no drug signal as a medication`() {
-        val reminder = expectReminder(parse("water the plants downstairs today"))
+        val reminder = expectReminder(parse("check the boiler pressure tomorrow"))
 
         assertEquals(ReminderKind.Medication, reminder.kind)
-        assertEquals("water plants downstairs today", reminder.name)
+        assertEquals("check boiler pressure tomorrow", reminder.name)
     }
 
     @Test
@@ -298,6 +300,68 @@ class ParseReminderKindDetectionTest {
 
         assertEquals(ReminderKind.Task, reminder.kind)
         assertEquals("call dentist", reminder.name)
+    }
+
+    // Length alone called chores of four words or more a medication, which opened
+    // the review form on the wrong Kind with a Dosage field for a chore.
+    @Test
+    fun `a long phrase built from chore words is still a task`() {
+        assertEquals(ReminderKind.Task, expectReminder(parse("take out the trash every two weeks")).kind)
+        assertEquals(ReminderKind.Task, expectReminder(parse("water the plants downstairs")).kind)
+        assertEquals(ReminderKind.Task, expectReminder(parse("pick up the recycling bins")).kind)
+        assertEquals(ReminderKind.Task, expectReminder(parse("put the bins out")).kind)
+    }
+
+    @Test
+    fun `takes out is not a drug name just because it is long`() {
+        assertEquals("Water plants downstairs", expectReminder(parse("Water the plants downstairs")).name)
+    }
+
+    // The verb, the noise words after it and the particle are one phrase. Read
+    // apart, the verb and the particle were dropped and the name was `trash`.
+    @Test
+    fun `keeps a chore's verb together with its particle`() {
+        val result = parse("take out the trash")
+        val reminder = expectReminder(result)
+
+        assertEquals(ReminderKind.Task, reminder.kind)
+        assertEquals("take out trash", reminder.name)
+        assertEquals(emptyList(), result.unparsedTokens)
+    }
+
+    @Test
+    fun `keeps a particle that has no noise word in front of it`() {
+        assertEquals("put bins out", expectReminder(parse("put the bins out")).name)
+        assertEquals("pick up bins", expectReminder(parse("pick the up bins")).name)
+    }
+
+    @Test
+    fun `a chore verb with nothing after it is the whole name`() {
+        assertEquals("take", expectReminder(parse("take the")).name)
+    }
+
+    @Test
+    fun `a chore noun with no verb before it is the whole name`() {
+        assertEquals("trash", expectReminder(parse("the trash")).name)
+    }
+
+    @Test
+    fun `keeps a chore's words when the schedule comes first`() {
+        val reminder = expectReminder(parse("take laundry at 9am"))
+
+        assertEquals(ReminderKind.Task, reminder.kind)
+        assertEquals("take laundry", reminder.name)
+        assertEquals(dailyTimes(listOf("09:00")), reminder.schedule)
+    }
+
+    // A drug beats a chore word: `take` leads doses and chores both.
+    @Test
+    fun `a dose phrased with take is still a medication named without the verb`() {
+        val reminder = expectReminder(parse("take ibuprofen 200mg every 8 hours"))
+
+        assertEquals(ReminderKind.Medication, reminder.kind)
+        assertEquals("ibuprofen", reminder.name)
+        assertEquals(intervalTimes(8, NOW), reminder.schedule)
     }
 }
 
@@ -338,6 +402,86 @@ class ParseReminderEveryPhrasesTest {
         val reminder = expectReminder(parse("vitamin d 1000units every 3 days"))
 
         assertEquals(intervalTimes(72, NOW), reminder.schedule)
+    }
+
+    @Test
+    fun `parses every N weeks as an N times 168 hour interval`() {
+        val reminder = expectReminder(parse("water the plants every 2 weeks"))
+
+        assertEquals(intervalTimes(336, NOW), reminder.schedule)
+    }
+
+    // A phrase spelled out is as common as one with a digit, and misreading it is
+    // worse than any other failure: the leftover words land in the name and the
+    // interval falls back to daily, so the reminder looks right and fires 14 times
+    // as often.
+    @Test
+    fun `reads a spoken count in every N units`() {
+        val result = parse("Take out the trash every two weeks")
+        val reminder = expectReminder(result)
+
+        assertEquals(ReminderKind.Task, reminder.kind)
+        assertEquals("Take out trash", reminder.name)
+        assertEquals(emptyList(), result.unparsedTokens)
+        assertEquals(intervalTimes(336, NOW), reminder.schedule)
+    }
+
+    @Test
+    fun `reads a spoken count in hours and days`() {
+        assertEquals(intervalTimes(8, NOW), expectReminder(parse("aspirin 81mg every eight hours")).schedule)
+        assertEquals(intervalTimes(72, NOW), expectReminder(parse("vitamin d 1000units every three days")).schedule)
+    }
+
+    @Test
+    fun `reads every a minute as one hour and every one week as 168 hours`() {
+        assertEquals(intervalTimes(1, NOW), expectReminder(parse("aspirin 81mg every a minute")).schedule)
+        assertEquals(intervalTimes(168, NOW), expectReminder(parse("aspirin 81mg every one week")).schedule)
+    }
+
+    // Minutes are the one unit IntervalTimes cannot hold, and an interval of zero
+    // hours is not a schedule at all. Rounding up gives the shortest reminder the
+    // domain can express; the draft shows the result before anything is saved.
+    @Test
+    fun `rounds a minutes interval up to the shortest one the domain can hold`() {
+        assertEquals(
+            intervalTimes(1, NOW),
+            expectReminder(parse("aspirin 81mg every thirty minutes")).schedule,
+        )
+        assertEquals(intervalTimes(1, NOW), expectReminder(parse("aspirin 81mg every 15 mins")).schedule)
+        assertEquals(intervalTimes(2, NOW), expectReminder(parse("aspirin 81mg every ninety minutes")).schedule)
+    }
+
+    @Test
+    fun `reads the abbreviated and plural unit spellings`() {
+        assertEquals(intervalTimes(2, NOW), expectReminder(parse("aspirin 81mg every 2 hrs")).schedule)
+        assertEquals(intervalTimes(336, NOW), expectReminder(parse("water the plants every fortnight")).schedule)
+        assertEquals(intervalTimes(336, NOW), expectReminder(parse("water the plants every one fortnight")).schedule)
+        assertEquals(intervalTimes(672, NOW), expectReminder(parse("water the plants every two fortnights")).schedule)
+        assertEquals(intervalTimes(336, NOW), expectReminder(parse("water the plants every 2 wks")).schedule)
+        assertEquals(intervalTimes(96, NOW), expectReminder(parse("aspirin 81mg every 4 days")).schedule)
+    }
+
+    @Test
+    fun `ignores a count of zero rather than writing an unusable interval`() {
+        val result = parse("aspirin 81mg every 0 hours")
+
+        assertEquals(dailyTimes(listOf("09:00")), expectReminder(result).schedule)
+        assertEquals(listOf("0", "hours"), result.unparsedTokens)
+    }
+
+    @Test
+    fun `keeps a spoken week interval that fits`() {
+        assertEquals(intervalTimes(2016, NOW), expectReminder(parse("aspirin 81mg every twelve weeks")).schedule)
+    }
+
+    // `N * 168` overflows a Long at about 5.5e16, which is eight digits wider
+    // than any Int, so it can only be reached with a count no phrase holds. The
+    // guard is exercised directly instead.
+    @Test
+    fun `caps a week interval whose arithmetic overflows rather than wrapping to a negative`() {
+        assertEquals(Int.MAX_VALUE, intervalHours(Long.MAX_VALUE, 168))
+        assertNull(intervalHours(0, 168))
+        assertNull(intervalHours(-3, 168))
     }
 
     // Not in the vitest suite: `IntervalTimes.hours` is an Int here, where the
@@ -388,6 +532,162 @@ class ParseReminderEveryPhrasesTest {
 
         assertEquals(dailyTimes(listOf("09:00")), expectReminder(result).schedule)
         assertEquals(emptyList(), result.unparsedTokens)
+    }
+}
+
+/**
+ * `monthly` is read in two halves: the parser sees the word and makes an empty
+ * `monthly` schedule, and [readPhrase] fills in the dates and times from the one
+ * phrase whose own words said `monthly`. Both halves are pinned here.
+ */
+class ParseReminderMonthlyTest {
+    /** The phrase as the review form first shows it, which is where the `monthly` dates are read. */
+    private fun read(phrase: String): ReminderDraft = readPhrase(phrase, ReadPhraseOptions(now = NOW)).draft
+
+    @Test
+    fun `the parser reads a date and a time once the month word is behind them`() {
+        val result = parse("pay rent monthly on the 15th at 9am")
+        val reminder = expectReminder(result)
+
+        assertEquals(monthlyTimes(listOf(15), listOf("09:00")), reminder.schedule)
+        assertEquals("pay rent", reminder.name)
+        assertEquals(emptyList(), result.unparsedTokens)
+    }
+
+    @Test
+    fun `the parser reads the month word with nothing after it as an empty monthly`() {
+        assertEquals(monthlyTimes(emptyList(), emptyList()), expectReminder(parse("call landlord monthly")).schedule)
+        assertEquals(monthlyTimes(emptyList(), emptyList()), expectReminder(parse("pay rent every month")).schedule)
+    }
+
+    @Test
+    fun `a bare month is not a monthly schedule`() {
+        // `this month's rent` is a reminder about a month, and the tokenizer splits `month's`.
+        val reminder = expectReminder(parse("pay this month's rent"))
+
+        assertEquals("pay this month s rent", reminder.name)
+    }
+
+    // A bare number is a day only while one has not been read: `monthly on the 9th at 9`
+    // has a date before its clock time, and `monthly at 9` has none.
+    @Test
+    fun `the parser takes a bare number for a date before a clock time`() {
+        assertEquals(monthlyTimes(listOf(9), listOf("09:00")), expectReminder(parse("pay rent monthly on the 9th at 9")).schedule)
+        assertEquals(monthlyTimes(listOf(9), listOf("09:00")), expectReminder(parse("pay rent monthly 9 at 09:00")).schedule)
+        assertEquals(monthlyTimes(emptyList(), listOf("09:00")), expectReminder(parse("pay rent monthly at 9")).schedule)
+        // A number that is no date is still a stray, as it would be anywhere else.
+        assertEquals(listOf("99th"), parse("pay rent monthly on the 99th").unparsedTokens)
+    }
+
+    @Test
+    fun `the parser reads ordinals and keeps several dates and times apart`() {
+        assertEquals(
+            monthlyTimes(listOf(1, 15), listOf("09:00", "20:00")),
+            expectReminder(parse("pay rent every month on the 15th and the 1st at 9am and 8pm")).schedule,
+        )
+    }
+
+    @Test
+    fun `a month word wins over a time read before it`() {
+        // `15` is a clock time to the words before it; once `monthly` arrives the schedule is the
+        // month's, and the `15` is left where it was: in the name.
+        val reminder = expectReminder(parse("pay rent at 15 monthly on the 1st"))
+
+        assertEquals(monthlyTimes(listOf(1), emptyList()), reminder.schedule)
+    }
+
+    @Test
+    fun `a month word survives a schedule word that replaces it, and the month wins at the end`() {
+        // `twice` replaces the schedule outright; the month word is restored once the walk is
+        // over, so the phrase is still monthly rather than twice daily.
+        assertEquals(monthlyTimes(emptyList(), emptyList()), expectReminder(parse("pay rent monthly twice daily")).schedule)
+    }
+
+    @Test
+    fun `a month word wins over a weekday read after it, which leaves its day out`() {
+        assertEquals(
+            monthlyTimes(listOf(15), emptyList()),
+            expectReminder(parse("pay rent monthly on the 15th Monday")).schedule,
+        )
+        // A clock time moves with it: the monthly times are what survive.
+        assertEquals(
+            monthlyTimes(listOf(15), listOf("09:00")),
+            expectReminder(parse("pay rent monthly on the 15th at 9am Monday")).schedule,
+        )
+    }
+
+    @Test
+    fun `reads named times and hours behind an at`() {
+        assertEquals(monthlyTimes(emptyList(), listOf("09:00")), expectReminder(parse("pay rent monthly at 9")).schedule)
+        assertEquals(monthlyTimes(emptyList(), listOf("12:00")), expectReminder(parse("pay rent monthly at noon")).schedule)
+        assertEquals(monthlyTimes(emptyList(), listOf("20:00")), expectReminder(parse("pay rent monthly at 8pm")).schedule)
+        // After the one bare number a month can spend on a date, `24` is no time either.
+        assertEquals(listOf("24"), parse("pay rent monthly the 1st at 24").unparsedTokens)
+        assertEquals(emptyList(), parse("pay rent monthly at 12:30").unparsedTokens)
+    }
+
+    @Test
+    fun `an ordinal is a date wherever it appears, so a word that is neither a date nor a time is no match`() {
+        assertNull(tryParseOrdinalDay("0th"))
+        assertNull(tryParseOrdinalDay("32nd"))
+        assertNull(tryParseOrdinalDay("5"))
+        assertEquals(31, tryParseOrdinalDay("31st"))
+        assertEquals(21, tryParseOrdinalDay("21ST"))
+    }
+
+    @Test
+    fun `treats a month word as part of the schedule rather than the name`() {
+        assertEquals("pay rent", expectReminder(parse("pay rent every month")).name)
+    }
+
+    @Test
+    fun `reads a date and a time with the month word after them`() {
+        val draft = read("take out the trash the 1st at 9am monthly")
+
+        assertEquals(ReminderKind.Task, draft.kind)
+        assertEquals(monthlyTimes(listOf(1), listOf("09:00")), draft.schedule)
+        assertEquals(emptyList(), draft.unparsedTokens)
+    }
+
+    @Test
+    fun `reads the month word before the dates, in any order, with ordinals or not`() {
+        assertEquals(
+            monthlyTimes(listOf(1, 15), listOf("09:00")),
+            read("pay rent every month on the 15th and the 1st at 09:00").schedule,
+        )
+        assertEquals(
+            monthlyTimes(listOf(3), listOf("09:00")),
+            read("pay rent monthly 3 at 9am").schedule,
+        )
+        assertEquals(
+            monthlyTimes(listOf(21), listOf("09:00")),
+            read("pay rent monthly the 21st at 9am").schedule,
+        )
+    }
+
+    @Test
+    fun `keeps several times written after the dates`() {
+        assertEquals(
+            monthlyTimes(listOf(1), listOf("08:00", "20:00")),
+            read("pay rent monthly on the 1st at 8am and 8pm").schedule,
+        )
+    }
+
+    @Test
+    fun `a date out of range is no date, and the day of the month is the number in front of its suffix`() {
+        assertNull(tryParseMonthDay("0"))
+        assertNull(tryParseMonthDay("32"))
+        assertNull(tryParseMonthDay("2nd2nd"))
+        assertEquals(2, tryParseMonthDay("2ND"))
+        assertEquals(23, tryParseMonthDay("23rd"))
+    }
+
+    @Test
+    fun `a month word with no date is not savable, so the form asks for one`() {
+        val draft = read("pay rent monthly")
+
+        assertEquals(monthlyTimes(emptyList(), emptyList()), draft.schedule)
+        assertFalse(isSavableDraft(draft))
     }
 }
 
@@ -696,6 +996,10 @@ class ParserPatternHelpersTest {
         assertEquals("08:00", lookupNamedTime("Morning"))
         assertTrue(isNoiseWord("THE"))
         assertTrue(isTaskVerb("Call"))
+        assertTrue(isTaskSignal("TRASH"))
+        assertFalse(isTaskSignal("atorvastatin"))
+        assertEquals(2, lookupNumberWord("Two"))
+        assertNull(lookupNumberWord("21"))
         assertTrue(isDoseUnit("Pills"))
         assertNotNull(DRUG_SUFFIXES.firstOrNull { it == "statin" })
     }

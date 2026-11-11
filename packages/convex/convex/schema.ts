@@ -65,6 +65,46 @@ const weekdayValidator = v.union(
 );
 
 /**
+ * `daysOfMonth` — the 1st to the 31st, spelled as literals for the same reason
+ * as `weekdayValidator`: a 0 or a 32 is rejected at the boundary rather than
+ * stored and only failing on the device. Not every month has every date; the
+ * device clamps a missing one to the month's last day (ADR 0012).
+ */
+const dayOfMonthValidator = v.union(
+  v.literal(1),
+  v.literal(2),
+  v.literal(3),
+  v.literal(4),
+  v.literal(5),
+  v.literal(6),
+  v.literal(7),
+  v.literal(8),
+  v.literal(9),
+  v.literal(10),
+  v.literal(11),
+  v.literal(12),
+  v.literal(13),
+  v.literal(14),
+  v.literal(15),
+  v.literal(16),
+  v.literal(17),
+  v.literal(18),
+  v.literal(19),
+  v.literal(20),
+  v.literal(21),
+  v.literal(22),
+  v.literal(23),
+  v.literal(24),
+  v.literal(25),
+  v.literal(26),
+  v.literal(27),
+  v.literal(28),
+  v.literal(29),
+  v.literal(30),
+  v.literal(31)
+);
+
+/**
  * `ScheduleTimes` as a discriminated union on the `type` tag.
  *
  * This replaces the POC's `scheduleTimes: v.any()`, which accepted any payload
@@ -75,10 +115,10 @@ const weekdayValidator = v.union(
  *
  * Times are `"HH:MM"` local wall-clock strings; `startAt` and `at` are unix ms.
  *
- * `once` and `none` widen the union with the domain one in `@taskrx/shared` (on archive/expo-rn)
- * (issue #12); both are closed unions and the spec requires them to move
- * together, so a schedule this validator admits is one the device can express
- * and vice versa. `once` carries an instant rather than an optional date — see
+ * `once`, `none`, `asNeeded` and `monthly` widen the union with the domain one
+ * in `@taskrx/shared` (on archive/expo-rn) and `:core`; all are closed unions and
+ * the spec requires them to move together, so a schedule this validator admits
+ * is one the device can express and vice versa. `once` carries an instant rather than an optional date — see
  * ADR 0006 — and `none` is the Backlog: a Reminder that produces no Occurrences
  * at all, which until now was only expressible by accident as a `daily`
  * schedule with no times.
@@ -96,6 +136,11 @@ export const scheduleTimesValidator = v.union(
   v.object({
     type: v.literal("weekly"),
     daysOfWeek: v.array(weekdayValidator),
+    times: v.array(v.string()),
+  }),
+  v.object({
+    type: v.literal("monthly"),
+    daysOfMonth: v.array(dayOfMonthValidator),
     times: v.array(v.string()),
   }),
   v.object({

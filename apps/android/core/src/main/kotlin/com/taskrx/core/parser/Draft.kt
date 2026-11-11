@@ -1,11 +1,13 @@
 package com.taskrx.core.parser
 
 import com.taskrx.core.domain.AsNeededTimes
+import com.taskrx.core.domain.MonthlyTimes
 import com.taskrx.core.domain.NoneTimes
 import com.taskrx.core.domain.Priority
 import com.taskrx.core.domain.ReminderKind
 import com.taskrx.core.domain.ScheduleTimes
 import com.taskrx.core.domain.isWellFormedSchedule
+import com.taskrx.core.domain.monthlyTimes
 import com.taskrx.core.domain.noneTimes
 
 /*
@@ -104,6 +106,55 @@ private const val UNASSIGNED = ""
  * the same phrase and the same `now` always give the same reading.
  */
 fun readPhrase(phrase: String, options: ReadPhraseOptions): PhraseReading {
+    val reading = readWithParser(phrase, options)
+    return reading.copy(draft = withMonthlyDates(phrase, reading.draft))
+}
+
+/**
+ * Reads a `monthly` draft's dates and times, which the token-by-token parser
+ * cannot.
+ *
+ * `mon wed fri` is a schedule because every word in it is a weekday; `the 15th
+ * and the 1st` is the same sentence with a sheet of numbers in the middle, and
+ * there the parser's context-free token test gives up — three dates look exactly
+ * like the name of a drug. So the dates, and the times after them, are read here,
+ * from the one phrase whose own words have said `monthly`.
+ *
+ * Nothing happens to any other draft: a number is a date only in a phrase that
+ * said so. Of the parser's own reading, only the schedule is replaced — the name
+ * is the letters it kept, and the times before the first date are the parser's
+ * and are kept beside the ones read after it. A phrase that said `monthly` but
+ * named no date keeps the empty schedule the parser built, which
+ * [isSavableDraft] refuses until a date is picked.
+ */
+private fun withMonthlyDates(phrase: String, draft: ReminderDraft): ReminderDraft {
+    val schedule = draft.schedule as? MonthlyTimes ?: return draft
+
+    val tokens = MONTHLY_TOKEN.findAll(phrase).map { it.value }.toList()
+
+    // Read from the first date, or from the start when the phrase named none — a
+    // number in front of one belongs to whatever the parser made of the words
+    // before it (`every 15 minutes monthly`). A phrase with no date reads nothing
+    // here and keeps the parser's empty `monthly`, which the form asks a date for.
+    val firstDate = tokens.indexOfFirst { tryParseMonthDay(it) != null }
+    val from = if (firstDate == -1) 0 else firstDate
+    val afterDates = tokens.subList(from, tokens.size)
+    val dates = afterDates.mapNotNull(::tryParseMonthDay).distinct().sorted()
+    val times =
+        (schedule.times + afterDates.mapNotNull(::parseClockIfAny))
+            .distinct()
+            .sorted()
+
+    return draft.copy(schedule = monthlyTimes(dates, times), unparsedTokens = emptyList())
+}
+
+/** The same runs of letters, digits, dots and colons the parser's tokenizer keeps. */
+private val MONTHLY_TOKEN = Regex("""[a-zA-Z0-9.:]+""")
+
+/** An `"HH:MM"` for a clock time written after `at` or as-is, or null. */
+private fun parseClockIfAny(token: String): String? = tryParseAtTime(token, emptyList(), 0)?.value
+
+private fun readWithParser(phrase: String, options: ReadPhraseOptions): PhraseReading {
     val result = parseReminder(phrase, ParseReminderOptions(id = UNASSIGNED, userId = UNASSIGNED, now = options.now))
     val reminder = result.reminder
 

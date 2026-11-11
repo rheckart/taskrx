@@ -8,6 +8,42 @@ for commit discipline (POC tags use `0.x.x`).
 
 ## [Unreleased]
 
+### 2026-11-10 — Monthly is a Schedule
+
+A reminder that comes due on a date of the month — rent on the 1st, a boiler check on the
+15th — had no schedule to say it. `monthly` is a new variant: `daysOfMonth` (any of the 1st
+to the 31st) and the local times each comes due at, pickable in every reminder form and
+beside the other types in Add and Edit.
+
+A date a month does not have lands on that month's last day, so the 31st fires on February
+28 rather than skipping February entirely (ADR 0012). A 30th and a 31st chosen together
+fire once in February, not twice.
+
+Typed in natural language — "pay rent monthly on the 1st", "every month on the 15th at
+9am", "take out the trash the 1st monthly" — the dates are read the way they are written.
+
+The variant is stored as `{"$type":"MonthlyTimes","DaysOfMonth":[…],"Times":[…]}` in the
+column, `{type: "monthly", daysOfMonth, times}` in Convex, which rejects a date no month
+has, and it round-trips through both.
+
+### 2026-11-10 — "Every two weeks" is a fortnight, not a daily reminder
+
+Typing **Take out the trash every two weeks** produced a daily 09:00 reminder named
+"Take out trash two weeks". The parser only read a digit after `every`, so a spelled-out
+count was left in the name and the schedule fell back to the default — the worst shape a
+misread can take, because the reminder looks set up and fires fourteen times as often.
+
+- **Spelled-out counts** (`one` … `twenty`, the tens, `a`/`an`) are read after `every`, and
+  `every N weeks` / `every N minutes` / `every fortnight` are now units. Minutes round up to
+  the shortest interval `IntervalTimes` can hold rather than becoming zero.
+- **A long chore is a chore.** Kind detection counted words, so any chore of four words or
+  more was called a medication and the review form offered a Dosage field for it. Chore
+  words (`take out the trash`, `water the plants`) now settle the Kind before length does.
+- **A chore keeps its own words.** `take out the trash` named itself `trash`, because the
+  verb and particle were dropped separately. The opening verb, its noise words and its
+  particle are read as one phrase, so the name is `take out trash`.
+- An `every` that introduced nothing is no longer reported as an unused word.
+
 ### 2026-11-10 — Lifecycles are written down
 
 The rules about what a Reminder Instance or a Reminder may become were spread across the

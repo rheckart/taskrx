@@ -102,7 +102,7 @@ Room entities in `apps/android/app/src/main/kotlin/com/taskrx/mobile/data/db/Ent
 | `rxcui` | TEXT | Optional RxNorm CUI. Storage-only; not on the domain type |
 | `dosage` | TEXT | Optional free text |
 | `instructions` | TEXT | Optional free text |
-| `schedule` | TEXT | JSON `ScheduleTimes` — `daily`, `interval`, `weekly`, `once` or `none` |
+| `schedule` | TEXT | JSON `ScheduleTimes` — `daily`, `interval`, `weekly`, `monthly`, `once` or `none` |
 | `priority` | TEXT | `critical`, `high`, `normal`, `low`. Read by no scheduling decision |
 | `tags` | TEXT | JSON string array |
 | `pills_remaining` | INTEGER | Refill tracking, nullable |
@@ -163,7 +163,7 @@ See `packages/convex/convex/schema.ts`.
 - `reminders` mirrors the local `reminders` rows, keyed by `userId`. `pauses` is an optional array of `{from, until?}` windows. `schedule` is a union, one member of which is `{type: "asNeeded", minGapMinutes, maxPer24h?}` (ADR 0010).
 - `reminderInstances` mirrors the local instance rows, with the parent named by its Convex document id.
 - Soft deletes use `deletedAt` on Convex; local rows are marked inactive or hard-deleted depending on the flow.
-- The `schedule` validator accepts the five variants (`daily`, `interval`, `weekly`, `once`, `none`) and rejects malformed payloads.
+- The `schedule` validator accepts every variant the device can express — `daily`, `interval`, `weekly`, `monthly` (`daysOfMonth`, 1 to 31), `once`, `none` and `asNeeded` — and rejects malformed payloads.
 
 The functions are TypeScript, the only TypeScript product code in the repo. They are tested with `convex-test` against an in-memory deployment (`npm test`) and deployed to the self-hosted backend with `infra/convex/deploy.sh`.
 

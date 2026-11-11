@@ -25,6 +25,11 @@ import kotlinx.serialization.json.putJsonArray
  * interface: `when` over it is exhaustively checked by the compiler, so an
  * unhandled variant is a build error rather than a silent runtime fallback.
  *
+ * The union has since grown past the three the C# knew: [OnceTimes] and
+ * [NoneTimes] (ADR 0006 and the Backlog), [AsNeededTimes] (ADR 0010), and
+ * [MonthlyTimes]. They are the parts of this file this repository owns rather
+ * than ports.
+ *
  * Two representations are deliberately kept apart:
  *
  * - the **domain** shape ([ScheduleTimes]), which uses the conventions the rest
@@ -57,6 +62,33 @@ data class WeeklyTimes(
     /** Day indices, Sunday = 0 … Saturday = 6, as in C#'s `DayOfWeek` and JS `Date.getDay()`. */
     val daysOfWeek: List<Int>,
     /** Local wall-clock times as `"HH:MM"`, applied on each selected day. */
+    val times: List<String>,
+) : ScheduleTimes
+
+/**
+ * `MonthlyTimes(DaysOfMonth, Times)` — fixed days of the month, at fixed local
+ * times.
+ *
+ * The same shape as [WeeklyTimes] one calendar step out: [daysOfMonth] is a set
+ * of dates (1..31) rather than weekdays, and [times] are the risks taken on each
+ * one.
+ *
+ * **A date the month does not have lands on its last day.** Someone who picks
+ * the 31st expects one reminder every month, not seven a year with February, April,
+ * June, September and November silently skipped — a missed reminder is invisible,
+ * while one firing a day or two early is not. So the 31st fires on Feb 28 or 29,
+ * Apr 30, and so on. This is the one place a calendar schedule differs from the
+ * wall-clock rule elsewhere in this file: a 09:00 dose stays at 09:00 even across
+ * a clock change, but a "31st" is a day of the month and February has none.
+ *
+ * It has no C# counterpart: `ScheduleTimes.cs` had three subrecords and the
+ * archive is frozen, so this variant is part of the union this repository owns
+ * outright, alongside [OnceTimes] and [NoneTimes].
+ */
+data class MonthlyTimes(
+    /** Dates of the month, 1..31, inclusive. */
+    val daysOfMonth: List<Int>,
+    /** Local wall-clock times as `"HH:MM"`, applied on each selected date. */
     val times: List<String>,
 ) : ScheduleTimes
 
@@ -115,6 +147,12 @@ fun intervalTimes(hours: Int, startAt: Long): IntervalTimes = IntervalTimes(hour
 fun weeklyTimes(daysOfWeek: List<Int>, times: List<String>): WeeklyTimes =
     WeeklyTimes(daysOfWeek.toList(), times.toList())
 
+fun monthlyTimes(daysOfMonth: List<Int>, times: List<String>): MonthlyTimes =
+    MonthlyTimes(daysOfMonth.toList(), times.toList())
+
+/** The month dates a schedule may name: the 1st to the 31st, not all of which every month has. */
+val DAYS_OF_MONTH: IntRange = 1..31
+
 fun onceTimes(at: Long): OnceTimes = OnceTimes(at)
 
 fun noneTimes(): NoneTimes = NoneTimes
@@ -148,6 +186,7 @@ fun isWellFormedSchedule(schedule: ScheduleTimes): Boolean =
     when (schedule) {
         is DailyTimes -> schedule.times.any(::isUsableTime)
         is WeeklyTimes -> schedule.daysOfWeek.isNotEmpty() && schedule.times.any(::isUsableTime)
+        is MonthlyTimes -> schedule.daysOfMonth.isNotEmpty() && schedule.times.any(::isUsableTime)
         is IntervalTimes -> schedule.hours > 0 && isMoment(schedule.startAt)
         is OnceTimes -> isMoment(schedule.at)
         NoneTimes -> true
@@ -217,6 +256,25 @@ private fun parseWeekdays(value: JsonElement?): List<Int>? {
     if (value !is JsonArray) return null
 
     return value.map { parseWeekday(it) ?: return null }
+}
+
+/**
+ * A `daysOfMonth` entry: a whole number in 1..31.
+ *
+ * Read through the same float64 test as [parseHours], because a Convex document
+ * reaches the device as `{ "daysOfMonth": [1, 15] }` either way, and a string or
+ * a fraction is a payload that cannot be trusted rather than a day.
+ */
+private fun parseDayOfMonth(value: JsonElement): Int? {
+    val number = value.number() ?: return null
+    if (number % 1.0 != 0.0 || number < DAYS_OF_MONTH.first || number > DAYS_OF_MONTH.last) return null
+    return number.toInt()
+}
+
+private fun parseDaysOfMonth(value: JsonElement?): List<Int>? {
+    if (value !is JsonArray) return null
+
+    return value.map { parseDayOfMonth(it) ?: return null }
 }
 
 private fun parseHours(value: JsonElement?): Int? {
@@ -298,6 +356,12 @@ fun serializeScheduleTimes(schedule: ScheduleTimes): JsonObject =
                 putJsonArray("DaysOfWeek") { schedule.daysOfWeek.forEach { add(it) } }
                 putJsonArray("Times") { schedule.times.forEach { add(toTimeOnly(it)) } }
             }
+        is MonthlyTimes ->
+            buildJsonObject {
+                put("\$type", "MonthlyTimes")
+                putJsonArray("DaysOfMonth") { schedule.daysOfMonth.forEach { add(it) } }
+                putJsonArray("Times") { schedule.times.forEach { add(toTimeOnly(it)) } }
+            }
         is OnceTimes ->
             buildJsonObject {
                 put("\$type", "OnceTimes")
@@ -335,6 +399,11 @@ fun parseScheduleTimes(value: JsonElement?): ScheduleTimes? {
             val daysOfWeek = parseWeekdays(value["DaysOfWeek"])
             val times = parseTimes(value["Times"])
             if (daysOfWeek == null || times == null) null else weeklyTimes(daysOfWeek, times)
+        }
+        "MonthlyTimes" -> {
+            val daysOfMonth = parseDaysOfMonth(value["DaysOfMonth"])
+            val times = parseTimes(value["Times"])
+            if (daysOfMonth == null || times == null) null else monthlyTimes(daysOfMonth, times)
         }
         "OnceTimes" -> parseInstant(value["AtUtc"])?.let(::onceTimes)
         "NoneTimes" -> noneTimes()

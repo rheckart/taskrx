@@ -3,6 +3,7 @@ package com.taskrx.mobile.format
 import com.taskrx.core.domain.AsNeededTimes
 import com.taskrx.core.domain.DailyTimes
 import com.taskrx.core.domain.IntervalTimes
+import com.taskrx.core.domain.MonthlyTimes
 import com.taskrx.core.domain.NoneTimes
 import com.taskrx.core.domain.OnceTimes
 import com.taskrx.core.domain.ScheduleTimes
@@ -35,6 +36,12 @@ fun describeSchedule(
             } else {
                 "${schedule.daysOfWeek.joinToString(", ") { DAY_NAMES[it] }} at ${schedule.times.joinToString(", ")}"
             }
+        is MonthlyTimes ->
+            if (schedule.daysOfMonth.isEmpty() || schedule.times.isEmpty()) {
+                "Monthly (not fully set)"
+            } else {
+                "${schedule.daysOfMonth.joinToString(", ") { ordinalOf(it) }} of the month at ${schedule.times.joinToString(", ")}"
+            }
         is IntervalTimes -> {
             val start = Instant.ofEpochMilli(schedule.startAt).atZone(zone)
             "Every ${describeInterval(schedule.hours)} starting %02d:%02d".format(Locale.ROOT, start.hour, start.minute)
@@ -43,6 +50,25 @@ fun describeSchedule(
         NoneTimes -> "In your backlog — no time set"
         is AsNeededTimes -> describeAsNeeded(schedule)
     }
+
+/**
+ * "1st", "2nd", "3rd", "21st", "11th", "31st": the way a date of the month is said
+ * out loud, which the plain number is not ("31 of the month").
+ *
+ * The teens are the exception the suffix rule has: 11, 12 and 13 end in 1, 2 and
+ * 3 without being first, second or third.
+ */
+fun ordinalOf(day: Int): String {
+    val suffix =
+        when {
+            day % 100 in 11..13 -> "th"
+            day % 10 == 1 -> "st"
+            day % 10 == 2 -> "nd"
+            day % 10 == 3 -> "rd"
+            else -> "th"
+        }
+    return "$day$suffix"
+}
 
 /** "As needed · at least 4 hours apart · up to 5 a day": the rule, since there are no times to read out. */
 fun describeAsNeeded(schedule: AsNeededTimes): String {
