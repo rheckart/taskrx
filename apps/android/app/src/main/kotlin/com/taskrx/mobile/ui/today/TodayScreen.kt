@@ -63,6 +63,7 @@ import com.taskrx.core.domain.ReminderKind
 import com.taskrx.core.domain.isAnswerable
 import com.taskrx.core.tasks.UpcomingDay
 import com.taskrx.core.time.localCalendarDaysBetween
+import com.taskrx.core.time.localDayBounds
 import com.taskrx.core.timeline.TimelineRow
 import com.taskrx.core.timeline.timelineRowKey
 import com.taskrx.core.undo.undoWillBeMissed
@@ -430,6 +431,7 @@ private fun TaskTimeline(
                 items(overdue, key = { "overdue-${it.reminderId}-${it.scheduledTime}" }) { row ->
                     OverdueTaskRow(
                         row = row,
+                        now = now(),
                         canUndo = row.instanceId in state.undoable,
                         onPress = { actions.onOpenAnswer(row) },
                         onDone = { actions.onAnswerTask(row, BatchAction.Take) },
@@ -506,20 +508,27 @@ private fun TaskRow(row: TimelineRow, state: TodayState, actions: TodayActions, 
 /**
  * An Overdue task. The word is the screen's, not a stored status: the row is still `pending` or
  * `missed` underneath, and Done or Skip answers it in place without a trip to the answer screen.
+ *
+ * The day is named as well as the time. Overdue reaches a week back, so "09:00" alone would read
+ * as this morning's and hide how late the task is.
  */
 @Composable
 private fun OverdueTaskRow(
     row: TimelineRow,
+    now: Long,
     canUndo: Boolean,
     onPress: () -> Unit,
     onDone: () -> Unit,
     onSkip: () -> Unit,
     onUndo: () -> Unit,
 ) {
+    val dayStart = localDayBounds(row.scheduledTime, 0).start
+    val dayText = dayHeading(localCalendarDaysBetween(now, dayStart), dayStart)
     TimelineRowView(
         row = row,
         onPress = onPress,
         statusText = "Overdue",
+        dayText = dayText,
         onUndo = if (canUndo) onUndo else null,
         actions = {
             Row(Modifier.fillMaxWidth().padding(horizontal = 8.dp), horizontalArrangement = Arrangement.End) {
@@ -603,13 +612,18 @@ fun TimelineRowView(
     onUndo: (() -> Unit)? = null,
     /** Overrides the status word, for a display-only word such as an Overdue task's. */
     statusText: String? = null,
+    /**
+     * The day, for a row that is not on the day it sits under. An Overdue row can be days
+     * back, and a bare time there reads as today's.
+     */
+    dayText: String? = null,
     /** Extra controls under the row, outside its merged description. */
     actions: (@Composable () -> Unit)? = null,
 ) {
     val answered = !isAnswerable(row.status)
     val label = statusText ?: statusLabel(row)
     val kindColor = if (row.kind == ReminderKind.Medication) TaskRxColors.Medication else TaskRxColors.Task
-    val description = rowDescription(row, statusText = statusText)
+    val description = rowDescription(row, statusText = statusText, dayText = dayText)
 
     val press =
         if (answered) {
@@ -642,6 +656,14 @@ fun TimelineRowView(
             Box(Modifier.width(3.dp).fillMaxHeight().background(kindColor))
             Row(Modifier.padding(horizontal = 16.dp, vertical = 12.dp)) {
                 Column(Modifier.width(84.dp)) {
+                    if (dayText != null) {
+                        Text(
+                            dayText,
+                            color = if (answered) TaskRxColors.Muted else TaskRxColors.Secondary,
+                            fontSize = 12.sp,
+                            fontWeight = FontWeight.SemiBold,
+                        )
+                    }
                     Text(
                         formatTime(row.scheduledTime),
                         fontWeight = FontWeight.SemiBold,

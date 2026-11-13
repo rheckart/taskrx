@@ -58,10 +58,16 @@ fun rowDescription(
     locale: Locale = Locale.getDefault(),
     /** Overrides the status word, for a display-only word such as an Overdue task's. */
     statusText: String? = null,
+    /**
+     * The day, for a row whose day is not the one it sits under: an Overdue row can be days
+     * back, and the time alone would not say which day it belongs to.
+     */
+    dayText: String? = null,
 ): String {
     val status = statusText ?: statusLabel(row, zone, locale)
     val time = formatTime(row.scheduledTime, zone, locale)
-    return "${kindLabel(row.kind)}: ${row.name} at $time${if (status.isEmpty()) "" else ", $status"}"
+    val moment = if (dayText.isNullOrEmpty()) time else "$dayText, $time"
+    return "${kindLabel(row.kind)}: ${row.name} at $moment${if (status.isEmpty()) "" else ", $status"}"
 }
 
 /** The empty-day sentence under "Nothing scheduled". */

@@ -82,6 +82,13 @@ class TimelineAndAnswerFormatTest {
     }
 
     @Test
+    fun `a row off its own day is described with that day`() {
+        val late = row(ReminderKind.Task, InstanceStatus.Missed)
+        val text = rowDescription(late, utc, us, statusText = "Overdue", dayText = "Mon, Aug 3")
+        assertEquals("Task: Metformin at Mon, Aug 3, 9:00 AM, Overdue", text)
+    }
+
+    @Test
     fun `the empty day says today in the present and other days in the past`() {
         assertEquals("No medications or tasks due today.", emptyDayBody(0, "Today"))
         assertEquals("You had nothing due yesterday.", emptyDayBody(-1, "Yesterday"))

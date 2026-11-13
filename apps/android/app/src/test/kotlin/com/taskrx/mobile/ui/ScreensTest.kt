@@ -41,6 +41,7 @@ import com.taskrx.core.notifications.PermissionSeverity
 import com.taskrx.core.tasks.TaskSections
 import com.taskrx.core.tasks.sectionTasks
 import com.taskrx.core.timeline.TimelineRow
+import com.taskrx.mobile.format.formatDay
 import com.taskrx.mobile.format.rowDescription
 import com.taskrx.mobile.ui.answer.Action
 import com.taskrx.mobile.ui.answer.AnswerContent
@@ -659,6 +660,17 @@ class ScreensTest {
         compose.onNodeWithContentDescription("Skip Call the pharmacy").performClick()
 
         assertEquals(listOf("task:take:Call the pharmacy", "task:skip:Call the pharmacy"), calls.log)
+    }
+
+    @Test
+    fun `an Overdue task from a past day names that day, not just the time`() {
+        val late = row("Call the pharmacy", kind = ReminderKind.Task, at = NINE - 3 * 86_400_000L)
+        val sections = sectionTasks(listOf(late), NINE)
+        today(state(late, kind = ReminderKind.Task, sections = sections))
+
+        // Overdue reaches a week back: a bare "09:00" would read as this morning's.
+        compose.onNodeWithText(formatDay(late.scheduledTime)).assertExists()
+        compose.onNodeWithText("9:00 AM").assertExists()
     }
 
     @Test
