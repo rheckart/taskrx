@@ -248,6 +248,16 @@ implemented — see Further Notes.
 ### Surfaces
 
 - The home surface becomes the timeline. It currently has no timeline at all.
+- The home surface has two tabs, one per Kind. Medications keep a single-day
+  timeline with a day bar and a NEXT highlight. Tasks are not one day: the tab
+  is split into **Overdue**, **Due today** and **Upcoming** by `sectionTasks` in
+  `:core`. Overdue is every `missed` or past-due `pending` task within the
+  sweep's lookback, one row per task at its latest such moment, most overdue
+  first, with inline Done and Skip. Due today is the local day minus the rows
+  Overdue took. Upcoming is tomorrow through day +7, grouped by local day. The
+  Tasks tab has no day bar and no NEXT highlight, and its badge counts Overdue
+  plus the answerable rows of Due today. "Overdue" is a display word: the stored
+  status stays `pending` or `missed`. Catch up is reached from the More menu.
 - Natural-language entry becomes the primary creation surface for both Kinds,
   backed by the existing parser, which already performs Kind detection, priority
   words, weekday and clock-time extraction, and never rejects an input. It has

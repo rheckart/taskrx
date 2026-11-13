@@ -48,7 +48,6 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
-import androidx.compose.ui.semantics.disabled
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -62,6 +61,8 @@ import com.taskrx.core.domain.InstanceStatus
 import com.taskrx.core.domain.Reminder
 import com.taskrx.core.domain.ReminderKind
 import com.taskrx.core.domain.isAnswerable
+import com.taskrx.core.tasks.UpcomingDay
+import com.taskrx.core.time.localCalendarDaysBetween
 import com.taskrx.core.timeline.TimelineRow
 import com.taskrx.core.timeline.timelineRowKey
 import com.taskrx.core.undo.undoWillBeMissed
@@ -76,6 +77,7 @@ import com.taskrx.mobile.format.statusLabel
 import com.taskrx.mobile.ui.TaskRxColors
 import com.taskrx.mobile.ui.components.Centered
 import com.taskrx.mobile.ui.components.KindTabs
+import com.taskrx.mobile.ui.components.SectionHeader
 import com.taskrx.mobile.ui.components.SkeletonList
 import com.taskrx.mobile.ui.components.tabWord
 
@@ -107,6 +109,8 @@ data class TodayActions(
     val onHistory: () -> Unit,
     val onSettings: () -> Unit,
     val onCatchUp: () -> Unit = {},
+    /** Answer a task from its Overdue row: Done or Skip, without the answer screen. */
+    val onAnswerTask: (TimelineRow, BatchAction) -> Unit = { _, _ -> },
     /** Record a dose of an as-needed medication as taken now. */
     val onTakeAsNeeded: (Reminder) -> Unit = {},
 )
@@ -128,7 +132,6 @@ fun TodayContent(
     Box(modifier.fillMaxSize()) {
         Column(Modifier.fillMaxSize()) {
             banner()
-            if (state.catchUpCount > 0) CatchUpBanner(state.catchUpCount, actions.onCatchUp)
             Row(verticalAlignment = Alignment.CenterVertically) {
                 KindTabs(state.kind, state.toDoByKind, actions.onSelectKind, Modifier.weight(1f))
                 MoreMenu(actions)
@@ -198,28 +201,24 @@ private fun AsNeededCards(entries: List<AsNeededEntry>, onTake: (Reminder) -> Un
 /** A card is shown only while its window is open (`showsOnToday`). */
 private fun shows(entry: AsNeededEntry, now: Long): Boolean = showsOnToday(asNeededStatus(entry.schedule, entry.takings, now), now)
 
-/** Missed reminders (doses and tasks) from the last week that nobody answered: one tap to the screen that answers them together. */
 @Composable
-private fun CatchUpBanner(count: Int, onClick: () -> Unit) {
-    val words = if (count == 1) "1 reminder needs an answer" else "$count reminders need an answer"
-    Row(
-        Modifier
-            .fillMaxWidth()
-            .background(TaskRxColors.NextTint)
-            .clickable(role = Role.Button, onClickLabel = "Catch up", onClick = onClick)
-            .padding(horizontal = 16.dp, vertical = 12.dp)
-            .semantics { contentDescription = "$words. Open Catch up" },
-        horizontalArrangement = Arrangement.SpaceBetween,
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        Text(words, fontWeight = FontWeight.SemiBold)
-        Text("Catch up ›", color = TaskRxColors.Accent, fontWeight = FontWeight.Bold)
+private fun DayBar(state: TodayState, actions: TodayActions) {
+    // The Tasks tab has no day: Overdue is the days behind and Upcoming is the week
+    // ahead. Only Medications page by day, and only they are headed by one.
+    if (state.kind == ReminderKind.Medication) DayNav(state, actions)
+    Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp), horizontalArrangement = Arrangement.End) {
+        FilterChip(
+            selected = state.hideCompleted,
+            onClick = actions.onToggleHideCompleted,
+            // Says what a tap does: while done rows are hidden it offers to show them.
+            label = { Text(if (state.hideCompleted) "Show done" else "Hide done") },
+        )
     }
-    HorizontalDivider(color = TaskRxColors.Divider)
+    HorizontalDivider(color = TaskRxColors.Divider, modifier = Modifier.padding(top = 4.dp))
 }
 
 @Composable
-private fun DayBar(state: TodayState, actions: TodayActions) {
+private fun DayNav(state: TodayState, actions: TodayActions) {
     val heading = dayHeading(state.dayOffset, state.windowStart)
     Row(
         Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 4.dp),
@@ -241,15 +240,6 @@ private fun DayBar(state: TodayState, actions: TodayActions) {
             Text("›", fontSize = 44.sp)
         }
     }
-    Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp), horizontalArrangement = Arrangement.End) {
-        FilterChip(
-            selected = state.hideCompleted,
-            onClick = actions.onToggleHideCompleted,
-            // Says what a tap does: while done rows are hidden it offers to show them.
-            label = { Text(if (state.hideCompleted) "Show done" else "Hide done") },
-        )
-    }
-    HorizontalDivider(color = TaskRxColors.Divider, modifier = Modifier.padding(top = 4.dp))
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -290,80 +280,260 @@ private fun Timeline(state: TodayState, actions: TodayActions, now: () -> Long) 
             Centered {
                 Text("Failed to load: ${state.error}", color = TaskRxColors.Error, textAlign = TextAlign.Center)
             }
+        state.kind == ReminderKind.Task ->
+            TaskTimeline(
+                state = state,
+                actions = actions,
+                now = now,
+                onEdit = { editing = it },
+            )
         else ->
-            PullToRefreshBox(isRefreshing = state.refreshing, onRefresh = actions.onRefresh, modifier = Modifier.fillMaxSize()) {
-                val visible = state.visibleRows
-                if (visible.isEmpty()) {
-                    // Inside the refresh box so an empty day can still be pulled.
-                    val allDone = state.tabRows.isNotEmpty()
-                    LazyColumn(Modifier.fillMaxSize()) {
-                        item {
-                            Centered(Modifier.fillParentMaxSize()) {
-                                // With as-needed medications above, "no medications" would sit under a card that says
-                                // "Ready now": it is the scheduled doses there are none of.
-                                val asNeededAbove = state.kind == ReminderKind.Medication && state.dayOffset == 0 && state.asNeeded.any { shows(it, now()) }
-                                Text(
-                                    when {
-                                        allDone -> "All done"
-                                        asNeededAbove -> "No scheduled doses"
-                                        else -> "No ${tabWord(state.kind).lowercase()} scheduled"
-                                    },
-                                    style = MaterialTheme.typography.titleMedium,
-                                    fontWeight = FontWeight.SemiBold,
-                                )
-                                Text(
-                                    when {
-                                        allDone -> "Everything on this day is completed."
-                                        asNeededAbove -> "Take an as-needed medication from its card above."
-                                        else -> emptyDayBody(state.dayOffset, dayHeading(state.dayOffset, state.windowStart))
-                                    },
-                                    Modifier.padding(top = 8.dp),
-                                    color = TaskRxColors.Secondary,
-                                    textAlign = TextAlign.Center,
-                                )
-                            }
-                        }
-                    }
-                } else {
-                    // A slot's buttons sit above its first row, as a list entry of their own.
-                    val slots = batchSlots(visible)
-                    val entries = mutableListOf<Entry>()
-                    for (row in visible) {
-                        val slot = slots[row.scheduledTime]
-                        if (slot != null && entries.none { it is Entry.Slot && it.scheduledTime == row.scheduledTime }) {
-                            entries += Entry.Slot(row.scheduledTime, slot)
-                        }
-                        entries += Entry.Dose(row)
-                    }
-                    // Room under the last row for the + button to float over.
-                    LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(bottom = 88.dp)) {
-                        items(entries, key = { it.key }) { entry ->
-                            when (entry) {
-                                is Entry.Slot ->
-                                    SlotBar(
-                                        entry,
-                                        onAnswer = {
-                                            // Past its Grace Period the app can only guess; ask rather than record now.
-                                            if (it == BatchAction.Take && entry.rows.any { row -> isPastGrace(row, now()) }) {
-                                                takingAll = entry.rows
-                                            } else {
-                                                actions.onAnswerSlot(entry.rows, it, null, null)
-                                            }
-                                        },
-                                    )
-                                is Entry.Dose ->
-                                    TimelineRowView(
-                                        shownStatus(entry.row, now()),
-                                        onPress = { actions.onOpenAnswer(entry.row) },
-                                        onLongPress = if (entry.row.status == InstanceStatus.Completed) ({ editing = entry.row }) else null,
-                                        onUndo = if (entry.row.instanceId in state.undoable) ({ actions.onUndo(entry.row) }) else null,
-                                    )
-                            }
-                        }
+            MedicationTimeline(
+                state = state,
+                actions = actions,
+                now = now,
+                onTakeAll = { takingAll = it },
+                onEdit = { editing = it },
+            )
+    }
+}
+
+/** The Medications tab: one day, slot bars, and the day's empty states. Unchanged by the Tasks sections. */
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun MedicationTimeline(
+    state: TodayState,
+    actions: TodayActions,
+    now: () -> Long,
+    onTakeAll: (List<TimelineRow>) -> Unit,
+    onEdit: (TimelineRow) -> Unit,
+) {
+    PullToRefreshBox(isRefreshing = state.refreshing, onRefresh = actions.onRefresh, modifier = Modifier.fillMaxSize()) {
+        val visible = state.visibleRows
+        if (visible.isEmpty()) {
+            // Inside the refresh box so an empty day can still be pulled.
+            val allDone = state.tabRows.isNotEmpty()
+            LazyColumn(Modifier.fillMaxSize()) {
+                item {
+                    Centered(Modifier.fillParentMaxSize()) {
+                        // With as-needed medications above, "no medications" would sit under a card that says
+                        // "Ready now": it is the scheduled doses there are none of.
+                        val asNeededAbove = state.kind == ReminderKind.Medication && state.dayOffset == 0 && state.asNeeded.any { shows(it, now()) }
+                        Text(
+                            when {
+                                allDone -> "All done"
+                                asNeededAbove -> "No scheduled doses"
+                                else -> "No ${tabWord(state.kind).lowercase()} scheduled"
+                            },
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.SemiBold,
+                        )
+                        Text(
+                            when {
+                                allDone -> "Everything on this day is completed."
+                                asNeededAbove -> "Take an as-needed medication from its card above."
+                                else -> emptyDayBody(state.dayOffset, dayHeading(state.dayOffset, state.windowStart))
+                            },
+                            Modifier.padding(top = 8.dp),
+                            color = TaskRxColors.Secondary,
+                            textAlign = TextAlign.Center,
+                        )
                     }
                 }
             }
+        } else {
+            // A slot's buttons sit above its first row, as a list entry of their own.
+            val slots = batchSlots(visible)
+            val entries = mutableListOf<Entry>()
+            for (row in visible) {
+                val slot = slots[row.scheduledTime]
+                if (slot != null && entries.none { it is Entry.Slot && it.scheduledTime == row.scheduledTime }) {
+                    entries += Entry.Slot(row.scheduledTime, slot)
+                }
+                entries += Entry.Dose(row)
+            }
+            // Room under the last row for the + button to float over.
+            LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(bottom = 88.dp)) {
+                items(entries, key = { it.key }) { entry ->
+                    when (entry) {
+                        is Entry.Slot ->
+                            SlotBar(
+                                entry,
+                                onAnswer = {
+                                    // Past its Grace Period the app can only guess; ask rather than record now.
+                                    if (it == BatchAction.Take && entry.rows.any { row -> isPastGrace(row, now()) }) {
+                                        onTakeAll(entry.rows)
+                                    } else {
+                                        actions.onAnswerSlot(entry.rows, it, null, null)
+                                    }
+                                },
+                            )
+                        is Entry.Dose ->
+                            TimelineRowView(
+                                shownStatus(entry.row, now()),
+                                onPress = { actions.onOpenAnswer(entry.row) },
+                                onLongPress = if (entry.row.status == InstanceStatus.Completed) ({ onEdit(entry.row) }) else null,
+                                onUndo = if (entry.row.instanceId in state.undoable) ({ actions.onUndo(entry.row) }) else null,
+                            )
+                    }
+                }
+            }
+        }
     }
+}
+
+/**
+ * The Tasks tab: Overdue, Due today and Upcoming, each always headed. Each is filtered by
+ * Hide done on its own, and one that is empty after filtering says so rather than vanishing.
+ * When Hide done empties every section, "All done" says the person finished rather than that
+ * nothing was ever there.
+ */
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun TaskTimeline(
+    state: TodayState,
+    actions: TodayActions,
+    now: () -> Long,
+    onEdit: (TimelineRow) -> Unit,
+) {
+    PullToRefreshBox(isRefreshing = state.refreshing, onRefresh = actions.onRefresh, modifier = Modifier.fillMaxSize()) {
+        val sections = state.sections
+        val overdue = sections.overdue
+        val dueToday = shownTasks(sections.dueToday, state.hideCompleted)
+        val upcoming = shownUpcoming(sections.upcoming, state.hideCompleted)
+        val anyRow = overdue.isNotEmpty() || sections.dueToday.isNotEmpty() || sections.upcoming.any { it.rows.isNotEmpty() }
+        val anyVisible = overdue.isNotEmpty() || dueToday.isNotEmpty() || upcoming.isNotEmpty()
+
+        if (!anyVisible && anyRow) {
+            // Everything the tab has is done or skipped, and Hide done is on.
+            LazyColumn(Modifier.fillMaxSize()) {
+                item {
+                    Centered(Modifier.fillParentMaxSize()) {
+                        Text("All done", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
+                        Text(
+                            "Everything on this list is completed.",
+                            Modifier.padding(top = 8.dp),
+                            color = TaskRxColors.Secondary,
+                            textAlign = TextAlign.Center,
+                        )
+                    }
+                }
+            }
+            return@PullToRefreshBox
+        }
+
+        LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(bottom = 88.dp)) {
+            item(key = "header-overdue") { SectionHeader("Overdue") }
+            if (overdue.isEmpty()) {
+                item(key = "empty-overdue") { EmptySection("Nothing overdue") }
+            } else {
+                items(overdue, key = { "overdue-${it.reminderId}-${it.scheduledTime}" }) { row ->
+                    OverdueTaskRow(
+                        row = row,
+                        canUndo = row.instanceId in state.undoable,
+                        onPress = { actions.onOpenAnswer(row) },
+                        onDone = { actions.onAnswerTask(row, BatchAction.Take) },
+                        onSkip = { actions.onAnswerTask(row, BatchAction.Skip) },
+                        onUndo = { actions.onUndo(row) },
+                    )
+                }
+            }
+
+            item(key = "header-today") { SectionHeader("Due today") }
+            if (dueToday.isEmpty()) {
+                item(key = "empty-today") { EmptySection("Nothing due today") }
+            } else {
+                items(dueToday, key = { "today-${it.reminderId}-${it.scheduledTime}" }) { row ->
+                    TaskRow(row, state, actions, onEdit)
+                }
+            }
+
+            item(key = "header-upcoming") { SectionHeader("Upcoming") }
+            if (upcoming.isEmpty()) {
+                item(key = "empty-upcoming") { EmptySection("Nothing upcoming") }
+            } else {
+                for (day in upcoming) {
+                    item(key = "upcoming-day-${day.dayStart}") { UpcomingDayHeader(day, now()) }
+                    items(day.rows, key = { "upcoming-${it.reminderId}-${it.scheduledTime}" }) { row ->
+                        TaskRow(row, state, actions, onEdit)
+                    }
+                }
+            }
+        }
+    }
+}
+
+private fun shownTasks(rows: List<TimelineRow>, hideCompleted: Boolean): List<TimelineRow> =
+    if (hideCompleted) rows.filter { it.status != InstanceStatus.Completed && it.status != InstanceStatus.Skipped } else rows
+
+private fun shownUpcoming(days: List<UpcomingDay>, hideCompleted: Boolean): List<UpcomingDay> =
+    days
+        .map { UpcomingDay(it.dayStart, shownTasks(it.rows, hideCompleted)) }
+        .filter { it.rows.isNotEmpty() }
+
+@Composable
+private fun EmptySection(text: String) {
+    Text(
+        text,
+        Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 12.dp),
+        color = TaskRxColors.Secondary,
+    )
+}
+
+@Composable
+private fun UpcomingDayHeader(day: UpcomingDay, now: Long) {
+    val offset = localCalendarDaysBetween(now, day.dayStart)
+    Text(
+        dayHeading(offset, day.dayStart),
+        Modifier.fillMaxWidth().padding(start = 16.dp, top = 10.dp, bottom = 2.dp),
+        style = MaterialTheme.typography.labelLarge,
+        fontWeight = FontWeight.Bold,
+        color = TaskRxColors.Secondary,
+    )
+}
+
+/** One task in Due today or Upcoming: the row is the way to the answer screen. */
+@Composable
+private fun TaskRow(row: TimelineRow, state: TodayState, actions: TodayActions, onEdit: (TimelineRow) -> Unit) {
+    TimelineRowView(
+        row,
+        onPress = { actions.onOpenAnswer(row) },
+        onLongPress = if (row.status == InstanceStatus.Completed) ({ onEdit(row) }) else null,
+        onUndo = if (row.instanceId in state.undoable) ({ actions.onUndo(row) }) else null,
+    )
+}
+
+/**
+ * An Overdue task. The word is the screen's, not a stored status: the row is still `pending` or
+ * `missed` underneath, and Done or Skip answers it in place without a trip to the answer screen.
+ */
+@Composable
+private fun OverdueTaskRow(
+    row: TimelineRow,
+    canUndo: Boolean,
+    onPress: () -> Unit,
+    onDone: () -> Unit,
+    onSkip: () -> Unit,
+    onUndo: () -> Unit,
+) {
+    TimelineRowView(
+        row = row,
+        onPress = onPress,
+        statusText = "Overdue",
+        onUndo = if (canUndo) onUndo else null,
+        actions = {
+            Row(Modifier.fillMaxWidth().padding(horizontal = 8.dp), horizontalArrangement = Arrangement.End) {
+                TextButton(
+                    onClick = onDone,
+                    modifier = Modifier.semantics { contentDescription = "Done ${row.name}" },
+                ) { Text("Done") }
+                TextButton(
+                    onClick = onSkip,
+                    modifier = Modifier.semantics { contentDescription = "Skip ${row.name}" },
+                ) { Text("Skip") }
+            }
+        },
+    )
 }
 
 /**
@@ -431,11 +601,15 @@ fun TimelineRowView(
     modifier: Modifier = Modifier,
     onLongPress: (() -> Unit)? = null,
     onUndo: (() -> Unit)? = null,
+    /** Overrides the status word, for a display-only word such as an Overdue task's. */
+    statusText: String? = null,
+    /** Extra controls under the row, outside its merged description. */
+    actions: (@Composable () -> Unit)? = null,
 ) {
     val answered = !isAnswerable(row.status)
-    val label = statusLabel(row)
+    val label = statusText ?: statusLabel(row)
     val kindColor = if (row.kind == ReminderKind.Medication) TaskRxColors.Medication else TaskRxColors.Task
-    val description = rowDescription(row)
+    val description = rowDescription(row, statusText = statusText)
 
     val press =
         if (answered) {
@@ -510,6 +684,7 @@ fun TimelineRowView(
                 TextButton(onClick = onUndo) { Text("Undo ${undoLabel(row.status, row.kind)}") }
             }
         }
+        actions?.invoke()
         HorizontalDivider(color = TaskRxColors.Divider)
     }
 }
@@ -573,6 +748,7 @@ private fun MoreMenu(actions: TodayActions) {
                 listOf(
                     "Reminders" to actions.onReminders,
                     "Backlog" to actions.onBacklog,
+                    "Catch up" to actions.onCatchUp,
                     "How it's going" to actions.onAdherence,
                     "Supplies" to actions.onSupplies,
                     "History" to actions.onHistory,

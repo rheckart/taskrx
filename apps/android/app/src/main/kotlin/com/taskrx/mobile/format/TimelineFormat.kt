@@ -42,7 +42,7 @@ fun statusLabel(
             row.completedAt?.let { "$word ${formatTime(it, zone, locale)}" } ?: word
         }
         InstanceStatus.Skipped -> "Skipped"
-        InstanceStatus.Missed -> "Missed"
+        InstanceStatus.Missed -> if (row.kind == ReminderKind.Task) "Overdue" else "Missed"
         InstanceStatus.Snoozed ->
             row.snoozedUntil?.let { "Snoozed until ${formatTime(it, zone, locale)}" } ?: "Snoozed"
         InstanceStatus.Pending -> ""
@@ -56,8 +56,10 @@ fun rowDescription(
     row: TimelineRow,
     zone: ZoneId = ZoneId.systemDefault(),
     locale: Locale = Locale.getDefault(),
+    /** Overrides the status word, for a display-only word such as an Overdue task's. */
+    statusText: String? = null,
 ): String {
-    val status = statusLabel(row, zone, locale)
+    val status = statusText ?: statusLabel(row, zone, locale)
     val time = formatTime(row.scheduledTime, zone, locale)
     return "${kindLabel(row.kind)}: ${row.name} at $time${if (status.isEmpty()) "" else ", $status"}"
 }

@@ -32,7 +32,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.taskrx.core.snooze.canPickATimeToday
 import com.taskrx.core.undo.undoWillBeMissed
-import com.taskrx.mobile.format.UNDO_PAST_GRACE
+import com.taskrx.mobile.format.undoPastGrace
 import com.taskrx.mobile.ui.forms.TimeDialog
 import com.taskrx.mobile.format.formatDayTime
 import com.taskrx.mobile.format.isOverdue
@@ -152,7 +152,7 @@ private fun Loaded(
                 Text(formatDayTime(state.recordedAt), Modifier.padding(top = 4.dp), color = TaskRxColors.Secondary)
                 // Once the answer is in, the moment can still be reopened: a mis-tap is not final.
                 if (undoWillBeMissed(state.scheduledTime, now)) {
-                    Text(UNDO_PAST_GRACE, Modifier.padding(top = 12.dp), color = TaskRxColors.Secondary, textAlign = TextAlign.Center)
+                    Text(undoPastGrace(reminder.kind), Modifier.padding(top = 12.dp), color = TaskRxColors.Secondary, textAlign = TextAlign.Center)
                 }
                 PrimaryButton(
                     "Undo",

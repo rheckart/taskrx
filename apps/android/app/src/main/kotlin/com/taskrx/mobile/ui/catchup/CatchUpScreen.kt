@@ -32,9 +32,10 @@ import com.taskrx.mobile.ui.components.ListScaffold
 import com.taskrx.mobile.ui.components.SectionHeader
 
 /**
- * Every Missed dose and task of the last week, by day. Each row has its own Take (Done, for a
- * task) and Skip. A day holds its medications and its tasks apart, and the shortcut above each
- * answers only that part, so one tap never answers a task and a medication together.
+ * Every dose and task of the last week that ran out of time unanswered, by day. Each row has
+ * its own Take (Done, for a task) and Skip. A day holds its medications and its tasks apart,
+ * and the shortcut above each answers only that part, so one tap never answers a task and a
+ * medication together.
  */
 @Composable
 fun CatchUpContent(
@@ -62,7 +63,7 @@ fun CatchUpContent(
             refreshing = state.refreshing,
             onRefresh = onRefresh,
             skeletonRows = 6,
-            loadingDescription = "Loading missed reminders",
+            loadingDescription = "Loading reminders past their time",
             modifier = Modifier.weight(1f),
         ) {
             if (state.days.isEmpty()) {

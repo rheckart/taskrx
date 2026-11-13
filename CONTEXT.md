@@ -99,6 +99,9 @@ The user deliberately chose not to do it. An answer, not an absence.
 The Grace Period elapsed with no answer. The only status the user does not
 choose. It is the app's guess, not a fact: a Missed Occurrence can still be
 answered, so a dose taken without opening the app is recorded as Taken.
+A task whose moment has passed is _shown_ as "Overdue" on the Tasks tab, but
+that is a display word only: the stored status stays `missed` (or `pending`
+before the sweep records it), and no rule depends on the word.
 _Avoid_: Overdue, Late, Lapsed
 
 **Snoozed**:

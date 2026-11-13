@@ -209,6 +209,14 @@ The truth table, including the safety-critical completed-instance preservation, 
 6. When a notification fires and the user taps it, `TapHandler` opens the answer screen with the reminder id and `scheduledTime` (`core/notifications/Tap.kt`). It is Kind-neutral: a task tap lands on the same answer screen, which already speaks both Kinds.
 7. Answering writes a Reminder Instance to SQLite and enqueues sync.
 
+### The Today screen
+
+Today has two tabs, one per Kind, and they answer different questions.
+
+- **Medications** keeps the single-day timeline: a day bar that pages back without limit and forward to today, the day's rows in time order, the NEXT highlight on the first moment still to come, and a slot bar for doses due together. The day is `localDayBounds(now, dayOffset)`.
+- **Tasks** is not one day. `sectionTasks` in `:core` (`core/tasks/TaskSections.kt`) splits the task rows of a wider window into **Overdue**, **Due today** and **Upcoming**. Overdue is every `missed` or past-due `pending` task within the sweep's seven-day lookback, one row per task at its latest such moment, most overdue first. Due today is the local day minus the rows Overdue took. Upcoming is tomorrow through day +7, grouped by local day. The tab has no day bar and no NEXT highlight, because neither means anything across a week. An Overdue row says "Overdue" (display-only: the stored status stays `pending` or `missed`) and carries inline Done and Skip, which answer through `BatchAnswers` with the task's own wording. The tab badge counts Overdue plus the answerable rows of Due today; Upcoming is ahead, so it is not a badge.
+- **Catch up** is reached from the More menu, not a banner. It remains the place to clear every missed occurrence of a recurring task, including the older ones Overdue hides behind its latest-miss row.
+
 ### Answering doses together
 
 Doses due at the same moment can be answered in one tap, from the Today screen or from the shade. `batchSlots` in `:core` (`core/batch/Batch.kt`) is the one rule: answerable medication rows that share a `scheduledTime`, two or more. Tasks never join; a task is not a dose.

@@ -208,6 +208,7 @@ private fun AppNavHost(container: AppContainer, navController: NavController) {
                         onToggleHideCompleted = { vm.toggleHideCompleted() },
                         onSelectKind = vm::selectKind,
                         onTakeAsNeeded = { vm.takeAsNeeded(it) },
+                        onAnswerTask = { row, action -> vm.answerTask(row, action) },
                         onAnswerSlot = { rows, action, hour, minute -> vm.answerSlot(rows, action, hour, minute) },
                         onRefresh = { vm.refresh(pulled = true) },
                         onOpenAnswer = { host.navigate(Routes.answer(it.reminderId, it.scheduledTime)) },

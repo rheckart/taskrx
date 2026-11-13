@@ -637,4 +637,82 @@ class TodayViewModelTest {
 
             assertEquals(listOf("Mine"), vm.state.value.rows.map { it.name })
         }
+
+    @Test
+    fun `the Tasks tab is sectioned into Overdue, Due today and the week ahead`() =
+        withUi(MIDNIGHT + 10 * HOUR) {
+            reminder("late", ReminderKind.Task, onceTimes(MIDNIGHT + 8 * HOUR), createdAt = MIDNIGHT - DAY, name = "Late thing")
+            reminder("today", ReminderKind.Task, onceTimes(MIDNIGHT + 12 * HOUR), createdAt = MIDNIGHT - DAY, name = "Today thing")
+            reminder("ahead", ReminderKind.Task, onceTimes(MIDNIGHT + DAY + 12 * HOUR), createdAt = MIDNIGHT - DAY, name = "Ahead thing")
+            val vm = vm()
+
+            vm.refresh().join()
+
+            val sections = vm.state.value.sections
+            assertEquals(listOf("Late thing"), sections.overdue.map { it.name })
+            assertEquals(listOf("Today thing"), sections.dueToday.map { it.name })
+            assertEquals(listOf("Ahead thing"), sections.upcoming.flatMap { it.rows }.map { it.name })
+        }
+
+    @Test
+    fun `the Tasks badge counts Overdue and today's unanswered, not the week ahead`() =
+        withUi(MIDNIGHT + 10 * HOUR) {
+            reminder("late", ReminderKind.Task, onceTimes(MIDNIGHT + 8 * HOUR), createdAt = MIDNIGHT - DAY, name = "Late thing")
+            reminder("open", ReminderKind.Task, onceTimes(MIDNIGHT + 12 * HOUR), createdAt = MIDNIGHT - DAY, name = "Open thing")
+            reminder("done", ReminderKind.Task, onceTimes(MIDNIGHT + 13 * HOUR), createdAt = MIDNIGHT - DAY, name = "Done thing")
+            reminder("ahead", ReminderKind.Task, onceTimes(MIDNIGHT + DAY + 12 * HOUR), createdAt = MIDNIGHT - DAY, name = "Ahead thing")
+            val answered = container.instances.create(CreateReminderInstanceInput(USER, "done", ReminderKind.Task, MIDNIGHT + 13 * HOUR))
+            container.instances.markCompleted(answered.id, MIDNIGHT + 9 * HOUR)
+            val vm = vm()
+
+            vm.refresh().join()
+
+            assertEquals(2, vm.state.value.toDoByKind[ReminderKind.Task])
+        }
+
+    @Test
+    fun `Done on an Overdue task records it at the moment it was due and says Done`() =
+        withUi(MIDNIGHT + 10 * HOUR) {
+            reminder("late", ReminderKind.Task, onceTimes(MIDNIGHT + 8 * HOUR), createdAt = MIDNIGHT - DAY, name = "Call pharmacy")
+            val toasts = ToastLog()
+            val vm = TodayViewModel(container, zone = { UTC }, log = { _, _ -> }, toast = toasts::add)
+            vm.refresh().join()
+
+            vm.answerTask(vm.state.value.sections.overdue.single(), BatchAction.Take).join()
+
+            assertEquals("Call pharmacy Done", toasts.shown.single().message)
+            val stored = container.instances.list(com.taskrx.mobile.data.InstanceFilter(USER)).single { it.reminderId == "late" }
+            assertEquals(InstanceStatus.Completed, stored.status)
+            assertEquals(MIDNIGHT + 8 * HOUR, stored.completedAt)
+            assertEquals(emptyList(), vm.state.value.sections.overdue)
+        }
+
+    @Test
+    fun `Skip on an Overdue task answers it as skipped and says Skipped`() =
+        withUi(MIDNIGHT + 10 * HOUR) {
+            reminder("late", ReminderKind.Task, onceTimes(MIDNIGHT + 8 * HOUR), createdAt = MIDNIGHT - DAY, name = "Call pharmacy")
+            val toasts = ToastLog()
+            val vm = TodayViewModel(container, zone = { UTC }, log = { _, _ -> }, toast = toasts::add)
+            vm.refresh().join()
+
+            vm.answerTask(vm.state.value.sections.overdue.single(), BatchAction.Skip).join()
+
+            assertEquals("Call pharmacy Skipped", toasts.shown.single().message)
+            val stored = container.instances.list(com.taskrx.mobile.data.InstanceFilter(USER)).single { it.reminderId == "late" }
+            assertEquals(InstanceStatus.Skipped, stored.status)
+        }
+
+    @Test
+    fun `a task completed early in the week ahead can still be undone`() =
+        withUi(MIDNIGHT + 10 * HOUR) {
+            reminder("ahead", ReminderKind.Task, onceTimes(MIDNIGHT + DAY + 12 * HOUR), createdAt = MIDNIGHT - DAY, name = "Ahead thing")
+            val instance = container.instances.create(CreateReminderInstanceInput(USER, "ahead", ReminderKind.Task, MIDNIGHT + DAY + 12 * HOUR))
+            container.instances.markCompleted(instance.id, MIDNIGHT + 9 * HOUR)
+            val vm = TodayViewModel(container, zone = { UTC }, log = { _, _ -> }, toast = ToastLog()::add)
+
+            vm.refresh().join()
+
+            assertEquals(listOf("Ahead thing"), vm.state.value.sections.upcoming.flatMap { it.rows }.map { it.name })
+            assertEquals(setOf(instance.id), vm.state.value.undoable)
+        }
 }

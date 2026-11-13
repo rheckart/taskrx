@@ -75,7 +75,7 @@ class AppContainer(
     val sweep = MissedSweepRunner(RoomSweepStore(reminders, instances))
     val adherence = AdherenceReader(sweep, instances, reminders)
 
-    /** The Missed rows of the last week: the Catch up screen's list and the Today banner's count. */
+    /** The Missed rows of the last week: the Catch up screen's list. */
     val catchUp = CatchUpReader(reminders, instances)
     val refills = RefillReader(reminders, newId)
 

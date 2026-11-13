@@ -39,12 +39,17 @@ class TimelineAndAnswerFormatTest {
     }
 
     @Test
-    fun `the other answers read the same for both Kinds`() {
+    fun `a skipped answer reads the same for both Kinds`() {
         for (kind in ReminderKind.entries) {
             assertEquals("Skipped", statusLabel(row(kind, InstanceStatus.Skipped), utc, us))
-            assertEquals("Missed", statusLabel(row(kind, InstanceStatus.Missed), utc, us))
             assertEquals("", statusLabel(row(kind, InstanceStatus.Pending), utc, us))
         }
+    }
+
+    @Test
+    fun `a missed dose reads Missed and a missed task reads Overdue`() {
+        assertEquals("Missed", statusLabel(row(ReminderKind.Medication, InstanceStatus.Missed), utc, us))
+        assertEquals("Overdue", statusLabel(row(ReminderKind.Task, InstanceStatus.Missed), utc, us))
     }
 
     @Test

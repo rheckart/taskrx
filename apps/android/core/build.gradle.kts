@@ -154,6 +154,10 @@ kover {
             "com.taskrx.core.sweep.PlannerKt*",
             "com.taskrx.core.sweep.MissedVerdict",
             "com.taskrx.core.sweep.PlanMissedSweepInput",
+            // tasks/task-sections: the Tasks tab's Overdue / Due today / Upcoming rule
+            "com.taskrx.core.tasks.TaskSectionsKt*",
+            "com.taskrx.core.tasks.TaskSections",
+            "com.taskrx.core.tasks.UpcomingDay",
         )
 
         filters {
