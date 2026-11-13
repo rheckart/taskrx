@@ -693,3 +693,34 @@ class ProjectTimelineFusesBothKindsTest {
         )
     }
 }
+
+class ProjectTimelineOccurrenceCapTest {
+    /**
+     * The cap is per reminder per projection, and defaults to a day's worth. A
+     * caller projecting a longer span — the Tasks tab's fortnight — has to raise
+     * it, or a tight interval schedule loses its tail silently. This pins both
+     * halves: the default still binds, and the parameter lifts it.
+     */
+    @Test
+    fun `a long window keeps every occurrence when the caller raises the cap`() {
+        val schedule = intervalTimes(2, at(0))
+        val reminder = medication("rem-often", schedule)
+        val week = TimelineWindow(DAY_START, DAY_START + 7 * MS_PER_DAY)
+
+        val defaultRows = project(listOf(reminder), window = week)
+        val widerRows =
+            projectTimeline(
+                ProjectTimelineInput(
+                    reminders = listOf(reminder),
+                    instances = emptyList(),
+                    window = week,
+                    now = DAY_START,
+                    maxOccurrencesPerReminder = 1000,
+                ),
+            )
+
+        assertEquals(64, defaultRows.size)
+        // Every two hours for seven days, both ends inclusive.
+        assertEquals(85, widerRows.size)
+    }
+}

@@ -100,7 +100,7 @@ class AuthShellTest {
         compose.onNodeWithText("Passcode").performTextInput("123456")
         compose.onNodeWithText("Verify").performClick()
 
-        awaitText("Today")
+        awaitText("TaskRx")
         assertEquals(listOf("startSignIn:me@example.com", "completeSignIn:123456"), auth.calls)
         assert(gone("Sign in to TaskRx"))
         assertEquals("user_clerk_1", c.session.userId)
@@ -133,7 +133,7 @@ class AuthShellTest {
         compose.onNodeWithText("Verification code").performTextInput("654321")
         compose.onNodeWithText("Verify").performClick()
 
-        awaitText("Today")
+        awaitText("TaskRx")
         assertEquals(listOf("startSignUp:new@example.com", "completeSignUp:654321"), auth.calls)
     }
 
@@ -142,7 +142,7 @@ class AuthShellTest {
         val c = container(initial = AuthStatus.SignedIn("user_clerk_1"))
         compose.setContent { TaskRxApp(c) }
 
-        awaitText("Today")
+        awaitText("TaskRx")
         compose.waitUntil(10_000) {
             compose.onAllNodesWithContentDescription(syncBadgeDescription(SyncBadge.Synced)).fetchSemanticsNodes().isNotEmpty()
         }
@@ -157,7 +157,7 @@ class AuthShellTest {
         val c = container(configured = false)
         compose.setContent { TaskRxApp(c) }
 
-        awaitText("Today")
+        awaitText("TaskRx")
         assert(gone("Sign in to TaskRx"))
         assert(gone("Sign out"))
         assertEquals(0, compose.onAllNodesWithContentDescription(syncBadgeDescription(SyncBadge.Offline)).fetchSemanticsNodes().size)

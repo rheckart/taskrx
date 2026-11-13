@@ -111,6 +111,14 @@ data class ProjectTimelineInput(
     val now: Long,
     /** The zone the Schedules' wall-clock times are read in. */
     val zone: ZoneId = ZoneId.systemDefault(),
+    /**
+     * The most moments one Reminder may contribute. Defaults to a day's worth
+     * ([DEFAULT_MAX_OCCURRENCES_PER_REMINDER]); a caller projecting a longer
+     * span, such as the Tasks tab's fortnight, passes a larger number so a
+     * tight interval schedule is not silently truncated. See the default's
+     * comment for why the bound exists at all.
+     */
+    val maxOccurrencesPerReminder: Int = DEFAULT_MAX_OCCURRENCES_PER_REMINDER,
 )
 
 /**
@@ -126,8 +134,11 @@ data class ProjectTimelineInput(
  * that one is "how many to return when the caller does not say", this one is
  * "how many can fit in a day". They answer different questions and should be
  * free to diverge.
+ *
+ * It is a default, not a rule: `ProjectTimelineInput.maxOccurrencesPerReminder`
+ * overrides it for a caller whose window is longer than a day.
  */
-private const val MAX_OCCURRENCES_PER_REMINDER = 64
+private const val DEFAULT_MAX_OCCURRENCES_PER_REMINDER = 64
 
 /**
  * Reminder and scheduled time together — the deduplication key, and the same
@@ -168,6 +179,7 @@ private fun preferredInstance(a: ReminderInstance, b: ReminderInstance): Reminde
 
 fun projectTimeline(input: ProjectTimelineInput): List<TimelineRow> {
     val (reminders, instances, window, now, zone) = input
+    val maxOccurrences = input.maxOccurrencesPerReminder
 
     val byId = reminders.associateBy { it.id }
 
@@ -212,7 +224,7 @@ fun projectTimeline(input: ProjectTimelineInput): List<TimelineRow> {
         // `nextOccurrences` excludes a moment landing exactly on `fromMs`, so the
         // anchor sits one millisecond before the window to keep `start` inclusive.
         val occurrences =
-            nextOccurrences(reminder, window.start - 1, MAX_OCCURRENCES_PER_REMINDER, zone)
+            nextOccurrences(reminder, window.start - 1, maxOccurrences, zone)
 
         for (occurrence in occurrences) {
             if (occurrence.fireAt > window.end) break

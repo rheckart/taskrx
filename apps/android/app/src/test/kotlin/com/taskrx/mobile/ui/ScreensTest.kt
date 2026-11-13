@@ -17,6 +17,7 @@ import androidx.compose.ui.test.hasClickAction
 import androidx.compose.ui.test.hasContentDescription
 import androidx.compose.ui.test.hasSetTextAction
 import androidx.compose.ui.test.junit4.createComposeRule
+import androidx.compose.ui.test.onAllNodesWithContentDescription
 import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
@@ -37,6 +38,8 @@ import com.taskrx.core.domain.weeklyTimes
 import com.taskrx.core.notifications.PermissionGap
 import com.taskrx.core.notifications.PermissionRemedy
 import com.taskrx.core.notifications.PermissionSeverity
+import com.taskrx.core.tasks.TaskSections
+import com.taskrx.core.tasks.sectionTasks
 import com.taskrx.core.timeline.TimelineRow
 import com.taskrx.mobile.format.rowDescription
 import com.taskrx.mobile.ui.answer.Action
@@ -57,6 +60,7 @@ import kotlin.test.assertTrue
 import org.junit.Rule
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
+import org.robolectric.annotation.Config
 
 private const val NINE = 9 * 3_600_000L
 
@@ -76,13 +80,14 @@ class ScreensTest {
         dosage: String? = null,
         completedAt: Long? = null,
         answeredAs: String? = null,
+        at: Long = NINE,
     ) = TimelineRow(
         "r-$name",
         answeredAs ?: if (completedAt == null) null else "i-$name",
         name,
         dosage,
         kind,
-        NINE,
+        at,
         status,
         null,
         isNext,
@@ -109,11 +114,13 @@ class ScreensTest {
                 onAddDose = { log += "dose" },
                 onReminders = { log += "reminders" },
                 onBacklog = { log += "backlog" },
+                onCatchUp = { log += "catchup" },
                 onAdherence = { log += "adherence" },
                 onSupplies = { log += "supplies" },
                 onHistory = { log += "history" },
                 onSettings = { log += "settings" },
                 onTakeAsNeeded = { log += "take:${it.name}" },
+                onAnswerTask = { r, a -> log += "task:${a.wire}:${r.name}" },
             )
     }
 
@@ -134,7 +141,18 @@ class ScreensTest {
         undoable: Set<String> = emptySet(),
         kind: ReminderKind = ReminderKind.Medication,
         hideCompleted: Boolean = false,
-    ) = TodayState(dayOffset = offset, windowStart = 0, rows = rows.toList(), loading = loading, error = error, undoable = undoable, kind = kind, hideCompleted = hideCompleted)
+        sections: TaskSections = sectionTasks(rows.toList(), NINE),
+    ) = TodayState(
+        dayOffset = offset,
+        windowStart = 0,
+        rows = rows.toList(),
+        loading = loading,
+        error = error,
+        undoable = undoable,
+        kind = kind,
+        hideCompleted = hideCompleted,
+        sections = sections,
+    )
 
     @Test
     fun `a taken row offers Undo take`() {
@@ -148,6 +166,7 @@ class ScreensTest {
     }
 
     @Test
+    @Config(qualifiers = "w411dp-h891dp")
     fun `a done task offers Undo done, not Undo take`() {
         val calls = Calls()
         val done = row("Call", kind = ReminderKind.Task, status = InstanceStatus.Completed, completedAt = NINE + 5 * 60_000)
@@ -612,9 +631,68 @@ class ScreensTest {
     @Test
     fun `the Tasks tab hides the medications`() {
         today(state(row("Metformin"), row("Call", kind = ReminderKind.Task), kind = ReminderKind.Task))
-
         compose.onNodeWithText("Call").assertExists()
         compose.onAllNodesWithText("Metformin").assertCountEquals(0)
+    }
+
+    @Test
+    fun `the Tasks tab always heads its three sections, even when one is empty`() {
+        today(state(row("Call", kind = ReminderKind.Task), kind = ReminderKind.Task))
+
+        compose.onNodeWithText("OVERDUE").assertExists()
+        compose.onNodeWithText("DUE TODAY").assertExists()
+        compose.onNodeWithText("UPCOMING").assertExists()
+        compose.onNodeWithText("Nothing overdue").assertExists()
+        compose.onNodeWithText("Nothing upcoming").assertExists()
+    }
+
+    @Test
+    fun `an Overdue task reads Overdue and answers in place with Done or Skip`() {
+        val calls = Calls()
+        val late = row("Call the pharmacy", kind = ReminderKind.Task, at = NINE - 3 * 3_600_000L)
+        today(state(late, kind = ReminderKind.Task), calls)
+
+        compose.onAllNodesWithText("Overdue").assertCountEquals(1)
+        compose.onAllNodesWithText("Missed").assertCountEquals(0)
+
+        compose.onNodeWithContentDescription("Done Call the pharmacy").performClick()
+        compose.onNodeWithContentDescription("Skip Call the pharmacy").performClick()
+
+        assertEquals(listOf("task:take:Call the pharmacy", "task:skip:Call the pharmacy"), calls.log)
+    }
+
+    @Test
+    fun `Upcoming groups the week ahead by day, starting Tomorrow`() {
+        val tomorrow = row("Return the form", kind = ReminderKind.Task, at = NINE + 24 * 3_600_000L)
+        val week = row("Renew the pass", kind = ReminderKind.Task, at = NINE + 3 * 24 * 3_600_000L)
+        val sections = sectionTasks(listOf(tomorrow, week), NINE)
+        today(state(tomorrow, week, kind = ReminderKind.Task, sections = sections))
+
+        compose.onNodeWithText("UPCOMING").assertExists()
+        compose.onNode(hasScrollAction()).performScrollToIndex(6)
+        compose.onNodeWithText("Tomorrow").assertExists()
+        compose.onNodeWithText("Return the form").assertExists()
+    }
+
+    @Test
+    fun `when Hide done empties every section the Tasks tab says All done`() {
+        val done = row("Bins", kind = ReminderKind.Task, status = InstanceStatus.Completed, completedAt = NINE)
+        val sections = sectionTasks(listOf(done), NINE)
+        today(state(done, kind = ReminderKind.Task, hideCompleted = true, sections = sections))
+
+        compose.onNodeWithText("All done").assertExists()
+        compose.onAllNodesWithText("Overdue").assertCountEquals(0)
+    }
+
+    @Test
+    fun `Catch up is in the More menu`() {
+        val calls = Calls()
+        today(state(row()), calls)
+
+        compose.onNodeWithContentDescription("More").performClick()
+        compose.onNodeWithText("Catch up").performClick()
+
+        assertEquals(listOf("catchup"), calls.log)
     }
 
     @Test
@@ -721,13 +799,14 @@ class ScreensTest {
     }
 
     @Test
-    fun `on Tasks the next arrow is live from today, and on a day ahead`() {
+    fun `the Tasks tab has no day bar, because it is not one day`() {
         val calls = Calls()
         today(state(offset = 2, kind = ReminderKind.Task), calls)
 
-        compose.onNodeWithContentDescription("Next day").assertIsEnabled().performClick()
-
-        assertEquals(listOf("next"), calls.log)
+        compose.onAllNodesWithContentDescription("Next day").assertCountEquals(0)
+        compose.onAllNodesWithContentDescription("Previous day").assertCountEquals(0)
+        compose.onAllNodesWithContentDescription("Back to today").assertCountEquals(0)
+        assertEquals(emptyList(), calls.log)
     }
 
     @Test

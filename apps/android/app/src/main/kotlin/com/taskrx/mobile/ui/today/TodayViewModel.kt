@@ -16,6 +16,8 @@ import com.taskrx.core.undo.isScheduledOccurrence
 import com.taskrx.mobile.format.undoToast
 import com.taskrx.mobile.undo.UndoResult
 import com.taskrx.core.time.localDayBounds
+import com.taskrx.core.tasks.TaskSections
+import com.taskrx.core.tasks.sectionTasks
 import com.taskrx.core.timeline.ProjectTimelineInput
 import com.taskrx.core.timeline.TimelineRow
 import com.taskrx.core.timeline.TimelineWindow
@@ -49,8 +51,8 @@ data class TodayState(
     val hideCompleted: Boolean = true,
     /** The Instances whose answer can be taken back from the row (see [TodayViewModel.undo]). */
     val undoable: Set<String> = emptySet(),
-    /** How many doses and tasks of the last week are Missed and unanswered: the banner to Catch up. */
-    val catchUpCount: Int = 0,
+    /** The Tasks tab's Overdue, Due today and Upcoming, over the sweep's lookback and the week ahead. */
+    val sections: TaskSections = TaskSections(emptyList(), emptyList(), emptyList()),
     /** The tab open: the day is split by Kind, medications first. The projection stays Kind-neutral; only the screen filters. */
     val kind: ReminderKind = ReminderKind.Medication,
     /** Whether the person picked a tab. Until they do, the tab follows [defaultKind]. */
@@ -75,10 +77,27 @@ data class TodayState(
 
     /** How many rows of each Kind still want an answer, for the badge on its tab. */
     val toDoByKind: Map<ReminderKind, Int>
-        get() = rows.filter { isAnswerable(it.status) }.groupingBy { it.kind }.eachCount()
+        get() =
+            mapOf(
+                // Medications keep the day view, so their count is the day's answerable rows.
+                ReminderKind.Medication to rows.count { it.kind == ReminderKind.Medication && isAnswerable(it.status) },
+                // Tasks count what the Tasks tab shows as waiting: every Overdue row, and the
+                // answerable rows of today. Upcoming is ahead, so it is not a badge.
+                ReminderKind.Task to sections.overdue.size + sections.dueToday.count { isAnswerable(it.status) },
+            )
 }
 
 private const val DAY_MS = 24 * 60 * 60_000L
+
+/**
+ * The most moments one Reminder may contribute to the Tasks tab's window.
+ *
+ * The window is the sweep's seven-day lookback through day +7, so a task on the
+ * tightest interval the app can create (one hour) has at most 360 moments. 512
+ * leaves room for a daylight-saving day and keeps the projection from silently
+ * dropping the tail of a busy schedule.
+ */
+private const val TASK_WINDOW_MAX_OCCURRENCES = 512
 
 /**
  * The Today timeline. Mirrors archive/expo-rn:apps/mobile/app/(app)/index.tsx.
@@ -228,6 +247,35 @@ class TodayViewModel(
             loads.withLock { load() }
         }
 
+    /**
+     * Answers one task from its row, without the answer screen: Done or Skip on an Overdue row.
+     *
+     * A late Done is stamped with the moment the task was due, as Catch up does, so clearing
+     * up after the fact reads consistently however it was reached. Done and Skipped are the
+     * words here — a task is not a dose, so the slot path's "doses taken" would be wrong.
+     */
+    fun answerTask(row: TimelineRow, action: BatchAction): Job =
+        viewModelScope.launch {
+            try {
+                val takenAt = if (action == BatchAction.Take) row.scheduledTime else null
+                val result = app.batch.answer(action, row.scheduledTime, listOf(row.reminderId), takenAt)
+                toast(
+                    if (result.failed > 0) {
+                        ToastRequest("Couldn't answer ${row.name}", ToastKind.Error)
+                    } else {
+                        val word = if (action == BatchAction.Take) "Done" else "Skipped"
+                        ToastRequest("${row.name} $word", ToastKind.Success)
+                    },
+                )
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                log("answering a task from its row failed", e)
+                toast(ToastRequest("Couldn't answer ${row.name}", ToastKind.Error))
+            }
+            loads.withLock { load() }
+        }
+
     private fun moveTo(requested: Int): Job {
         val offset = if (mutable.value.canGoForward) requested else minOf(0, requested)
         if (offset == mutable.value.dayOffset) return Job().also { it.complete() }
@@ -260,12 +308,37 @@ class TodayViewModel(
             // On a day ahead every row is ahead of now, so the first would be badged NEXT: "do this now"
             // about something not due for a day.
             val rows = if (offset > 0) projected.map { it.copy(isNext = false) } else projected
+
+            // The Tasks tab is not one day: Overdue reaches back as far as the sweep
+            // (SWEEP_LOOKBACK_MS, so it and Catch up agree), and Upcoming covers the week
+            // ahead. A projection over the fortnight rather than seven day reads, and a
+            // larger occurrence cap so an interval task is not truncated.
+            val taskWindow =
+                TimelineWindow(
+                    localDayBounds(now, -7, zone()).start,
+                    localDayBounds(now, 7, zone()).end,
+                )
+            val taskInstances = app.instances.list(InstanceFilter(userId, since = taskWindow.start, until = taskWindow.end))
+            val taskRows =
+                projectTimeline(
+                    ProjectTimelineInput(
+                        reminders = reminders,
+                        instances = taskInstances,
+                        window = taskWindow,
+                        now = now,
+                        zone = zone(),
+                        maxOccurrencesPerReminder = TASK_WINDOW_MAX_OCCURRENCES,
+                    ),
+                ).filter { it.kind == ReminderKind.Task }
+            val sections = sectionTasks(taskRows, now, zone())
+
             // A different day was asked for while this one was reading; its load follows.
             // Which answered rows offer Undo: an answer on a moment the Schedule predicts. An extra
             // dose or a Backlog completion would reopen into a miss that never was (`undoVerdict`).
+            // Read over the day and the sections together, so an early-completed task can be undone.
             val byId = reminders.associateBy { it.id }
             val undoable =
-                rows.mapNotNullTo(HashSet()) { row ->
+                (rows + sections.overdue + sections.dueToday + sections.upcoming.flatMap { it.rows }).mapNotNullTo(HashSet()) { row ->
                     val id = row.instanceId ?: return@mapNotNullTo null
                     val reminder = byId[row.reminderId] ?: return@mapNotNullTo null
                     id.takeIf { row.status in UNDOABLE_STATUSES && isScheduledOccurrence(reminder, row.scheduledTime, zone()) }
@@ -288,7 +361,14 @@ class TodayViewModel(
                 }
             if (mutable.value.dayOffset == offset) {
                 mutable.update {
-                    it.copy(rows = rows, undoable = undoable, asNeeded = asNeeded, error = null, kind = if (it.kindChosen) it.kind else opensOn)
+                    it.copy(
+                        rows = rows,
+                        sections = sections,
+                        undoable = undoable,
+                        asNeeded = asNeeded,
+                        error = null,
+                        kind = if (it.kindChosen) it.kind else opensOn,
+                    )
                 }
             }
         }
@@ -308,8 +388,6 @@ class TodayViewModel(
         // After the day is on screen, and the day is re-projected only if it recorded something.
         try {
             if (sweep(userId, now) > 0) project()
-            val missed = app.catchUp.read(userId, now).size
-            mutable.update { it.copy(catchUpCount = missed) }
         } catch (e: CancellationException) {
             throw e
         } catch (e: Exception) {

@@ -121,7 +121,7 @@ class AppShellTest {
         awaitText("Call pharmacy")
 
         compose.onNodeWithText("TaskRx").assertExists()
-        compose.onNodeWithText("Today").assertExists()
+        compose.onNodeWithText("DUE TODAY").assertExists()
     }
 
     @Test
@@ -190,7 +190,7 @@ class AppShellTest {
     @Test
     fun `a tap for a reminder this device lacks says so`() {
         show()
-        awaitText("No tasks scheduled")
+        awaitText("Nothing due today")
 
         tap("gone", NINE)
         awaitText("Could not load this reminder")
@@ -236,20 +236,20 @@ class AppShellTest {
     @Test
     fun `the back arrow returns from a form to the day, and the day has none`() {
         show()
-        awaitText("No tasks scheduled")
+        awaitText("Nothing due today")
         compose.onAllNodesWithText("←").assertCountEquals(0)
 
         addMenu("New task")
         compose.onNodeWithText("New Task").assertExists()
         compose.onNodeWithContentDescription("Back").performClick()
 
-        awaitText("No tasks scheduled")
+        awaitText("Nothing due today")
     }
 
     @Test
     fun `adding by phrase reads it, shows what was understood, saves, and lands on the day`() {
         show()
-        awaitText("No tasks scheduled")
+        awaitText("Nothing due today")
 
         addMenu("Add by typing")
         compose.onNodeWithText("Add a reminder").assertExists()
@@ -262,7 +262,7 @@ class AppShellTest {
         compose.onNodeWithText("Save task").performScrollTo().performClick()
 
         awaitGone("Save task")
-        awaitText("Today")
+        awaitText("call pharmacy")
         runBlocking {
             assertEquals(listOf("call pharmacy"), fx.container.reminders.list(USER).map { it.name })
         }
@@ -271,7 +271,7 @@ class AppShellTest {
     @Test
     fun `a kind correction swaps the form without retyping the phrase`() {
         show()
-        awaitText("No tasks scheduled")
+        awaitText("Nothing due today")
         addMenu("Add by typing")
         compose.onNodeWithText("e.g. atorvastatin 20mg every morning with food").performTextInput("metformin 500mg twice daily")
         compose.onNodeWithText("Review").performClick()
@@ -286,7 +286,7 @@ class AppShellTest {
     @Test
     fun `a phrase that cannot be read says so and still opens a form`() {
         show()
-        awaitText("No tasks scheduled")
+        awaitText("Nothing due today")
         addMenu("Add by typing")
         compose.onNodeWithText("e.g. atorvastatin 20mg every morning with food").performTextInput("9am")
         compose.onNodeWithText("Review").performClick()
@@ -298,7 +298,7 @@ class AppShellTest {
     @Test
     fun `the manual medication form saves and lands on the day`() {
         show()
-        awaitText("No tasks scheduled")
+        awaitText("Nothing due today")
 
         addMenu("New medication")
         compose.onNodeWithText("New Medication").assertExists()
@@ -315,7 +315,7 @@ class AppShellTest {
     @Test
     fun `a toast confirms for a moment then goes`() {
         show()
-        awaitText("No tasks scheduled")
+        awaitText("Nothing due today")
 
         fx.container.toaster.show("Task added", com.taskrx.mobile.ui.components.ToastKind.Success)
         awaitText("Task added")
@@ -353,7 +353,7 @@ class AppShellTest {
     fun `completing a Backlog item records it where it was`() {
         runBlocking { fx.reminder("garage", ReminderKind.Task, noneTimes(), name = "Sort the garage") }
         show()
-        awaitText("No tasks scheduled")
+        awaitText("Nothing due today")
 
         openMenu("Backlog")
         awaitText("Sort the garage")
@@ -451,7 +451,7 @@ class AppShellTest {
     @Test
     fun `drug search offline says so`() {
         show()
-        awaitText("No tasks scheduled")
+        awaitText("Nothing due today")
         openMenu("Reminders")
         compose.onNodeWithText("+ Find a medication").performClick()
         awaitText("Type a drug name to search RxNorm.")
@@ -470,7 +470,7 @@ class AppShellTest {
         tearDown()
         setUp()
         show()
-        awaitText("No tasks scheduled")
+        awaitText("Nothing due today")
         openMenu("Reminders")
         compose.onNodeWithText("+ Find a medication").performClick()
         compose.onNodeWithText("Drug name").performTextInput("met")

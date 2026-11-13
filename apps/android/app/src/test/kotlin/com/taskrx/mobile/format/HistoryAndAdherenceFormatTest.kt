@@ -32,6 +32,7 @@ class HistoryAndAdherenceFormatTest {
         assertEquals("Snoozed", historyStatusLabel(InstanceStatus.Snoozed, ReminderKind.Medication))
         assertEquals("Skipped", historyStatusLabel(InstanceStatus.Skipped, ReminderKind.Task))
         assertEquals("Missed", historyStatusLabel(InstanceStatus.Missed, ReminderKind.Medication))
+        assertEquals("Overdue", historyStatusLabel(InstanceStatus.Missed, ReminderKind.Task))
         assertEquals("Pending", historyStatusLabel(InstanceStatus.Pending, ReminderKind.Task))
         assertEquals("Taken", completedAtLabel(ReminderKind.Medication))
         assertEquals("Done", completedAtLabel(ReminderKind.Task))

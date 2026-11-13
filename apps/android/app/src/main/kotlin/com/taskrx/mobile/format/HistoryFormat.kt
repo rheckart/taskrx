@@ -26,7 +26,7 @@ fun historyStatusLabel(status: InstanceStatus, kind: ReminderKind): String =
         InstanceStatus.Completed -> if (kind == ReminderKind.Medication) "Taken" else "Done"
         InstanceStatus.Snoozed -> "Snoozed"
         InstanceStatus.Skipped -> "Skipped"
-        InstanceStatus.Missed -> "Missed"
+        InstanceStatus.Missed -> if (kind == ReminderKind.Task) "Overdue" else "Missed"
         InstanceStatus.Pending -> "Pending"
     }
 

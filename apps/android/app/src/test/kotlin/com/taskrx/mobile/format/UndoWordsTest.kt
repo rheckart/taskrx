@@ -15,6 +15,7 @@ import com.taskrx.core.domain.ReminderKind
 @RunWith(RobolectricTestRunner::class)
 class UndoWordsTest {
     private val instance = createReminderInstance("i", "r", "u", ReminderKind.Medication, 0, 0, 0)
+    private val taskInstance = createReminderInstance("i", "r", "u", ReminderKind.Task, 0, 0, 0)
 
     @Test
     fun `an undo inside the grace period just says the answer is taken back`() {
@@ -26,6 +27,14 @@ class UndoWordsTest {
         assertEquals(
             ToastRequest("Answer taken back. This one is past its grace period and will count as missed.", ToastKind.Info),
             undoToast(UndoResult.Reopened(instance, willBeMissed = true)),
+        )
+    }
+
+    @Test
+    fun `a task past its grace period says overdue, not missed`() {
+        assertEquals(
+            ToastRequest("Answer taken back. This one is past its grace period and will count as overdue.", ToastKind.Info),
+            undoToast(UndoResult.Reopened(taskInstance, willBeMissed = true)),
         )
     }
 
