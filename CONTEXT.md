@@ -60,6 +60,13 @@ before. It starts now or on a later day and ends on a day the person names, or w
 resume. Nothing inside it is Missed. Not Stop: a stopped Reminder is gone for good.
 _Avoid_: Suspend, Hold, Snooze (a snooze defers one Occurrence)
 
+**Occurrence override**:
+One Occurrence moved to another moment, leaving the Schedule that produced it alone. A fact
+about a single moment, kept on the Reminder beside its Pauses, and tasks only: a medication
+Schedule is a clinical instruction. An override whose source the Schedule no longer produces
+is inert, not wrong.
+_Avoid_: Reschedule, Skip, Defer (a snooze defers one Occurrence without moving it)
+
 **Stop**:
 Ending a Reminder for good, e.g. a course of treatment that is over. The history is kept;
 the Reminder no longer reminds, is no longer listed, and cannot be brought back.
@@ -141,3 +148,19 @@ A person other than the owner who is told about the owner's missed medications.
 Distinct from anyone who might share a task: a Caregiver receives health
 information, and that relationship is always opt-in and never symmetric.
 _Avoid_: Collaborator, Contact, Family member
+
+## Scope
+
+**TaskRx is a reminder app that logs. It is not a health record.**
+
+A feature belongs if it helps a commitment happen on time, or records honestly that it did
+or did not. Two classes are out on principle, not for want of time:
+
+- **Adjudication.** Interaction checking, dose advice, "is this safe" — the app reports what
+  happened; it does not decide what should. A log that warns is making a clinical claim.
+- **Clinical measurement.** Vitals, symptoms, mood, side effects — accumulating readings
+  turns the store into a record and the product into someone else's category.
+
+The log is the feature: what was due, what was answered, when. Never a score, a grade or a
+compliance percentage presented as a judgement — Adherence is a count of what happened, not
+an assessment of the person.
