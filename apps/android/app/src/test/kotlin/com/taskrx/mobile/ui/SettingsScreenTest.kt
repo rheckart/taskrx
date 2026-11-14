@@ -4,6 +4,7 @@ import androidx.compose.ui.test.assertIsSelected
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performScrollTo
 import com.taskrx.mobile.ui.settings.SettingsContent
 import com.taskrx.mobile.ui.settings.snoozeLabel
 import kotlin.test.Test
@@ -43,5 +44,38 @@ class SettingsScreenTest {
     fun `an hour is called an hour and the rest are minutes`() {
         assertEquals("1 hour", snoozeLabel(60))
         assertEquals("5 minutes", snoozeLabel(5))
+    }
+
+    @Test
+    fun `the listener section says whether access is on and offers to change it`() {
+        var opened = 0
+        compose.setContent {
+            TaskRxTheme { SettingsContent(10, onSnoozeMinutes = {}, listenerAllowed = false, onOpenListenerSettings = { opened++ }) }
+        }
+
+        compose.onNodeWithText("TaskRx cannot read app notifications yet.").assertExists()
+        compose.onNodeWithText("Turn on").performScrollTo().performClick()
+
+        assertEquals(1, opened)
+    }
+
+    @Test
+    fun `seen apps are offered for approval`() {
+        val approved = mutableListOf<String>()
+        compose.setContent {
+            TaskRxTheme {
+                SettingsContent(
+                    10,
+                    onSnoozeMinutes = {},
+                    seenApps = listOf("com.example.waste"),
+                    onApproveSeenApp = { approved += it },
+                )
+            }
+        }
+
+        compose.onNodeWithText("com.example.waste").assertExists()
+        compose.onNodeWithText("Watch").performScrollTo().performClick()
+
+        assertEquals(listOf("com.example.waste"), approved)
     }
 }

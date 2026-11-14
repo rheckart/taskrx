@@ -22,7 +22,7 @@ class HarnessSpecTest {
             listOf(
                 "schedule", "schedule-weekly", "schedule-task", "schedule-task-flood", "cancel-all", "pending-count", "pending-ids",
                 "exact-alarm-status", "notification-status", "db-probe", "auth-status", "seed-due-reminder", "instance-at",
-                "queue-count", "sync-status", "cleanup-seeded", "purge-seeded",
+                "queue-count", "sync-status", "cleanup-seeded", "purge-seeded", "notice",
             )
         assertEquals(sent.sorted(), HarnessAction.entries.map { it.wire }.sorted())
         for (word in sent) assertEquals(word, parse(word).action.wire)

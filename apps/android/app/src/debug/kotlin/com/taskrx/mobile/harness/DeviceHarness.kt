@@ -121,6 +121,8 @@ object DeviceHarness {
             cancelPosted = { context.getSystemService(NotificationManager::class.java).cancelAll() },
             // No sync worker until phase 5, which replaces this with the worker's own status.
             syncStatus = { "not_started" },
+            watchSources = container.watchSources,
+            noticeIntake = container.noticeIntake,
         )
 
     /** Forgets the previous link, so a test can send the same one twice. */

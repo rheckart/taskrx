@@ -52,6 +52,10 @@ private class FakePlatform : PermissionPlatform {
     override fun openAlarmSettings() {
         alarmSettingsOpened++
     }
+
+    override fun notificationListenerAllowed(): Boolean = false
+
+    override fun openNotificationListenerSettings() = Unit
 }
 
 /*

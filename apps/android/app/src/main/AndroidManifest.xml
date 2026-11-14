@@ -68,5 +68,21 @@
                 <action android:name="android.app.action.SCHEDULE_EXACT_ALARM_PERMISSION_STATE_CHANGED" />
             </intent-filter>
         </receiver>
+
+        <!--
+            The notification-listener road. User-granted special access
+            (ACTION_NOTIFICATION_LISTENER_SETTINGS); the service receives every notification,
+            records the package name of each for the seen list, and reads title/text only from
+            a package the person has approved as a watched source.
+        -->
+        <service
+            android:name=".notices.NotificationListener"
+            android:exported="false"
+            android:label="@string/notification_listener_label"
+            android:permission="android.permission.BIND_NOTIFICATION_LISTENER_SERVICE">
+            <intent-filter>
+                <action android:name="android.service.notification.NotificationListenerService" />
+            </intent-filter>
+        </service>
     </application>
 </manifest>

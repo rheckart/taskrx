@@ -83,8 +83,40 @@ class SettingsViewModelTest {
             vm.refresh().join()
 
             vm.remove(created).join()
+            vm.refresh().join()
 
             assertTrue(container.watchSources.list(USER).isEmpty())
             assertTrue(vm.state.value.sources.isEmpty())
+        }
+
+    @Test
+    fun `refresh offers the seen apps that are not watched yet`() =
+        withUi(NOW) {
+            container.seenApps.record("com.example.waste")
+            container.seenApps.record("com.example.news")
+            container.watchSources.create(
+                com.taskrx.mobile.data.CreateWatchedSourceInput(USER, SourceKind.App, "com.example.news", "News"),
+            )
+            val vm = SettingsViewModel(container)
+
+            vm.refresh().join()
+
+            assertEquals(listOf("com.example.waste"), vm.state.value.seenApps)
+        }
+
+    @Test
+    fun `approving a seen app watches it as an App source`() =
+        withUi(NOW) {
+            container.seenApps.record("com.example.waste")
+            val vm = SettingsViewModel(container)
+            vm.refresh().join()
+
+            vm.approveSeenApp("com.example.waste").join()
+            vm.refresh().join()
+
+            val source = container.watchSources.list(USER).single()
+            assertEquals(SourceKind.App, source.kind)
+            assertEquals("com.example.waste", source.value)
+            assertTrue(vm.state.value.seenApps.isEmpty())
         }
 }

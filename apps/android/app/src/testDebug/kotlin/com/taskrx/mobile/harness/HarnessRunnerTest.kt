@@ -43,6 +43,10 @@ private class FakePlatform(var auth: Int = NOTIFICATION_AUTH_AUTHORIZED, var ala
     override fun openNotificationSettings() = Unit
 
     override fun openAlarmSettings() = Unit
+
+    override fun notificationListenerAllowed() = false
+
+    override fun openNotificationListenerSettings() = Unit
 }
 
 private class Rig(val n: NotifFixture, val signedIn: String? = null, val platform: FakePlatform = FakePlatform()) {
@@ -66,6 +70,8 @@ private class Rig(val n: NotifFixture, val signedIn: String? = null, val platfor
                 zone = { ZoneOffset.UTC },
                 cancelPosted = { postedCancelled++ },
                 syncStatus = { "idle" },
+                watchSources = fx.container.watchSources,
+                noticeIntake = fx.container.noticeIntake,
             ),
         )
 
@@ -426,4 +432,62 @@ class HarnessRunnerTest {
             run("seed-due-reminder", "t", 120_000)
             assertEquals(dailyTimes(listOf("12:03")), fx.container.reminders.list(USER).single().schedule)
         }
+
+    @Test
+    fun `notice injects a message through the real intake and watches the source`() =
+        withRig(signedIn = USER) {
+            val payload = base64("Bins moved\nCollection moves to Wednesday 18 November.")
+            val reply = notice("com.example.waste", "app", payload, nonce = "key-1")
+
+            assertEquals("stored", field(reply, "notice_result"))
+            val stored = fx.container.notices.list(USER).single()
+            assertEquals("Bins moved", stored.title)
+            assertEquals("Collection moves to Wednesday 18 November.", stored.sentence)
+            assertEquals("com.example.waste", stored.sourceValue)
+            // The source was watched by the action, so the admit path was the production one.
+            assertEquals(1, fx.container.watchSources.list(USER).size)
+        }
+
+    @Test
+    fun `notice reports a duplicate for the same message`() =
+        withRig(signedIn = USER) {
+            val payload = base64("Bins moved\nCollection moves to Wednesday 18 November.")
+            notice("com.example.waste", "app", payload, nonce = "n1")
+
+            val second = notice("com.example.waste", "app", payload, nonce = "n2")
+
+            assertEquals("duplicate", field(second, "notice_result"))
+            assertEquals(1, fx.container.notices.list(USER).size)
+        }
+
+    @Test
+    fun `notice stores a different message from the same source`() =
+        withRig(signedIn = USER) {
+            notice("com.example.waste", "app", base64("Bins moved\nCollection moves to Wednesday 18 November."), nonce = "n1")
+
+            val second =
+                notice("com.example.waste", "app", base64("Recycling\nRecycling moves to Thursday 19 November."), nonce = "n2")
+
+            assertEquals("stored", field(second, "notice_result"))
+            assertEquals(2, fx.container.notices.list(USER).size)
+        }
+
+    @Test
+    fun `notice refuses a message with no text`() =
+        withRig(signedIn = USER) {
+            val reply = notice("com.example.waste", "app", "\n", nonce = "n-empty")
+
+            assertEquals("empty", field(reply, "notice_result"))
+            assertTrue(fx.container.notices.list(USER).isEmpty())
+        }
+
+    /** The notice link packs its source, kind and base64 body as path segments. */
+    private suspend fun Rig.notice(source: String, kind: String, payload: String, nonce: String): String =
+        runner.run(parseHarnessSpec(listOf("notice", source, kind, payload, nonce), fx.now))
+
+    private fun base64(text: String) =
+        android.util.Base64.encodeToString(
+            text.toByteArray(),
+            android.util.Base64.URL_SAFE or android.util.Base64.NO_WRAP or android.util.Base64.NO_PADDING,
+        )
 }

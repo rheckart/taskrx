@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!--
+        Shown in the system's notification-access list. Plain about what it does, because the
+        permission is broad: it receives every notification, and keeps only a package name until
+        the person approves that app.
+    -->
+    <string name="notification_listener_label">TaskRx notices</string>
+</resources>

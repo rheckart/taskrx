@@ -20,9 +20,11 @@ import com.taskrx.mobile.data.SyncQueueRepository
 import com.taskrx.mobile.data.SystemClock
 import com.taskrx.mobile.data.WatchSourcesRepository
 import com.taskrx.mobile.data.db.TaskRxDatabase
+import com.taskrx.mobile.notices.NoticeIntake
 import com.taskrx.mobile.notifications.NoticePings
 import com.taskrx.mobile.notifications.NotificationsModule
 import com.taskrx.mobile.settings.AppSettings
+import com.taskrx.mobile.settings.SeenApps
 import com.taskrx.mobile.refill.RefillReader
 import com.taskrx.mobile.sync.AndroidConnectivity
 import com.taskrx.mobile.sync.Connectivity
@@ -45,6 +47,7 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.flow.StateFlow
+import java.time.ZoneId
 
 /**
  * Manual dependency injection: one object that builds the graph once.
@@ -77,6 +80,9 @@ class AppContainer(
     val notices = NoticesRepository(database, syncQueue, clock, newId)
     val watchSources = WatchSourcesRepository(database, syncQueue, clock, newId)
 
+    /** The one funnel every notice road feeds: watched check, de-duplication, keep, write. */
+    val noticeIntake = NoticeIntake(notices, watchSources, zone = { ZoneId.systemDefault() })
+
     val sweep = MissedSweepRunner(RoomSweepStore(reminders, instances))
     val adherence = AdherenceReader(sweep, instances, reminders)
 
@@ -91,6 +97,9 @@ class AppContainer(
 
     /** The person's choices from Settings, on this phone only. */
     val settings = AppSettings(context)
+
+    /** The packages this phone has seen notifications from: the approval list's source. */
+    val seenApps = SeenApps(context)
 
     /** Whose data this is: the Clerk user when signed in, else the local user (see [Session]). */
     val session = Session(notifications.currentUser, auth) { from, to -> LocalAdoption(database).adopt(from, to) }

@@ -55,6 +55,10 @@ fun SettingsContent(
     canSaveSource: Boolean = false,
     onSaveSource: () -> Unit = {},
     onRemoveSource: (WatchedSource) -> Unit = {},
+    listenerAllowed: Boolean = false,
+    onOpenListenerSettings: () -> Unit = {},
+    seenApps: List<String> = emptyList(),
+    onApproveSeenApp: (String) -> Unit = {},
 ) {
     Column(modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp)) {
         Text("Snooze length", fontWeight = FontWeight.SemiBold)
@@ -121,6 +125,32 @@ fun SettingsContent(
             TextButton(onClick = onCancelAdd, modifier = Modifier.padding(top = 8.dp)) { Text("Cancel") }
         } else {
             TextButton(onClick = onStartAdd, Modifier.padding(top = 8.dp)) { Text("+ Add a sender or app") }
+        }
+
+        FieldLabel("Notifications", Modifier.padding(top = 32.dp))
+        HintText(
+            "With notification access, TaskRx sees every notification and keeps a package name from each. " +
+                "It reads the text only of an app you watch below.",
+        )
+        Row(Modifier.fillMaxWidth().padding(top = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+            Column(Modifier.weight(1f)) {
+                Text(if (listenerAllowed) "On" else "Off", fontWeight = FontWeight.SemiBold)
+                Text(
+                    if (listenerAllowed) "TaskRx can read app notifications." else "TaskRx cannot read app notifications yet.",
+                    color = TaskRxColors.Secondary,
+                )
+            }
+            TextButton(onClick = onOpenListenerSettings) { Text(if (listenerAllowed) "Change" else "Turn on") }
+        }
+        if (seenApps.isNotEmpty()) {
+            FieldLabel("Apps seen recently", Modifier.padding(top = 16.dp))
+            HintText("Approve one to keep its notices. Until you do, TaskRx has kept only the package name.")
+            for (app in seenApps) {
+                Row(Modifier.fillMaxWidth().padding(top = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Text(app, Modifier.weight(1f))
+                    TextButton(onClick = { onApproveSeenApp(app) }) { Text("Watch") }
+                }
+            }
         }
     }
 }

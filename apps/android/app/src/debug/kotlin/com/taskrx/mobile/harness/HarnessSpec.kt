@@ -30,6 +30,8 @@ enum class HarnessAction(val wire: String) {
     SyncStatus("sync-status"),
     CleanupSeeded("cleanup-seeded"),
     PurgeSeeded("purge-seeded"),
+    /** Injects one outside message through the real intake: `notice/<source>/<kind>/<base64(title\\nbody)>`. */
+    Notice("notice"),
 }
 
 data class HarnessSpec(
@@ -40,6 +42,9 @@ data class HarnessSpec(
     /** The same segment unclamped: `instance-at` reads it as an absolute epoch, where the floor is meaningless. */
     val value: Long,
     val nonce: String,
+    /** For [HarnessAction.Notice]: the source kind wire word, and the base64 title/body. */
+    val kind: String = "",
+    val payload: String = "",
 )
 
 private const val DEFAULT_VALUE_MS = 90_000L
@@ -56,5 +61,18 @@ fun parseHarnessSpec(segments: List<String>, nowMs: Long): HarnessSpec {
     val action = HarnessAction.entries.firstOrNull { it.wire == segments.getOrNull(0) } ?: HarnessAction.PendingCount
     val id = segments.getOrNull(1) ?: "harness-$nowMs"
     val value = segments.getOrNull(2)?.let { LEADING_INTEGER.find(it)?.value?.trim()?.toLongOrNull() } ?: DEFAULT_VALUE_MS
+    if (action == HarnessAction.Notice) {
+        // `notice/<source>/<kind>/<base64(title\nbody)>`: the packed body is one segment because
+        // the transport is a URL path, and base64 survives it where raw text would not.
+        return HarnessSpec(
+            action = action,
+            id = id,
+            delayMs = maxOf(MIN_DELAY_MS, value),
+            value = value,
+            nonce = segments.getOrNull(4) ?: "",
+            kind = segments.getOrNull(2) ?: "app",
+            payload = segments.getOrNull(3) ?: "",
+        )
+    }
     return HarnessSpec(action, id, maxOf(MIN_DELAY_MS, value), value, segments.getOrNull(3) ?: "")
 }

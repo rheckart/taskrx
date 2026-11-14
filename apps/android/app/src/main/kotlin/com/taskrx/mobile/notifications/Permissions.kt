@@ -8,6 +8,7 @@ import android.content.pm.PackageManager
 import android.net.Uri
 import android.os.Build
 import android.provider.Settings
+import androidx.core.app.NotificationManagerCompat
 import com.taskrx.core.notifications.PermissionGap
 import com.taskrx.core.notifications.PermissionGateInput
 import com.taskrx.core.notifications.PermissionRemedy
@@ -39,6 +40,12 @@ interface PermissionPlatform {
     fun openNotificationSettings()
 
     fun openAlarmSettings()
+
+    /** Whether the person has granted this app notification access (the listener road's permission). */
+    fun notificationListenerAllowed(): Boolean
+
+    /** Opens the system's notification-access list so the person can grant it. */
+    fun openNotificationListenerSettings()
 }
 
 /** Hosts the OS permission dialog; the activity registers itself here. */
@@ -80,6 +87,18 @@ class AndroidPermissionPlatform(
 
     override fun openAlarmSettings() {
         val intent = Intent(Settings.ACTION_REQUEST_SCHEDULE_EXACT_ALARM, Uri.parse("package:${context.packageName}"))
+        context.startActivity(intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+    }
+
+    /**
+     * Notification access is a special access, not a runtime permission: there is no check
+     * API, only the enabled-listeners string. Read it fresh every time; nothing here caches.
+     */
+    override fun notificationListenerAllowed(): Boolean =
+        NotificationManagerCompat.getEnabledListenerPackages(context).contains(context.packageName)
+
+    override fun openNotificationListenerSettings() {
+        val intent = Intent(Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS)
         context.startActivity(intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
     }
 }

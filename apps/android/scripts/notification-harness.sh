@@ -434,6 +434,25 @@ harness() {
 # tunnel is separate (`ensure_convex_reverse`).
 ensure_reverse() { :; }
 
+# The notice action packs FIVE path segments — notice/<source>/<kind>/<base64>/<nonce>
+# — where `harness_once` sends four, so this builds the link itself and reads the
+# same `[harness] result:` line. The body is base64url so a title or sentence with
+# spaces, punctuation or a newline survives the URL path unchanged.
+harness_notice() {
+  local source="$1" kind="$2" title="$3" body="$4" nonce out payload
+  if ! device_attached; then
+    return 0
+  fi
+  nonce="$(next_nonce)"
+  payload="$(printf '%s\n%s' "$title" "$body" | base64 -w0 | tr '+/' '-_' | tr -d '=')"
+  adb_run logcat -c >/dev/null 2>&1
+  adb_shell am start -a android.intent.action.VIEW \
+    -d "taskrx://harness/notice/${source}/${kind}/${payload}/${nonce}" >/dev/null 2>&1
+  sleep "$HARNESS_SETTLE_S"
+  out="$(adb_run logcat -d 2>/dev/null | grep -oE "\[harness\] (result|error):.{0,160}" | tail -1)"
+  printf '%s\n' "$out"
+}
+
 launch_app() {
   # Wake first. Between cases the screen times out on its own, and `am start`
   # against a sleeping display does not reliably resume the activity — which
@@ -2237,6 +2256,53 @@ case13_db_after_notification() {
   fi
 }
 
+case14_notice_intake() {
+  if ! device_attached; then
+    add_unevaluated 14 notice_intake no_device \
+      "NO DEVICE (instrument, not product): no device is attached (adb get-state is not \"device\"), so this case was never run. Nothing here is a statement about the notice intake."
+    return
+  fi
+  require_reachable 14 notice_intake || return
+  require_signed_in 14 notice_intake || return
+
+  local source="com.example.waste" title="Bins moved" body="Collection moves to Wednesday 18 November."
+  local first second third
+
+  # The first send watches the source (the action creates it) and admits through
+  # the real funnel: watched check, sentence choice, write.
+  first="$(harness_notice "$source" app "$title" "$body")"
+  if [[ -z "$first" ]]; then
+    add_unevaluated 14 notice_intake setup_failed \
+      "SETUP FAILED (not a product failure): the app did not answer the notice action, so nothing was measured."
+    return
+  fi
+  if ! printf '%s' "$first" | grep -q "notice_result=stored"; then
+    add_result 14 notice_intake false \
+      "the notice was not stored. The app answered: ${first}"
+    return
+  fi
+
+  # The same message again is a duplicate, not a second notice: the funnel's
+  # de-duplication is the thing this half proves.
+  second="$(harness_notice "$source" app "$title" "$body")"
+  if ! printf '%s' "$second" | grep -q "notice_result=duplicate"; then
+    add_result 14 notice_intake false \
+      "the same notice was not recognised as a duplicate. first=[${first}] second=[${second:-<nothing>}]"
+    return
+  fi
+
+  # A different message from the same watched source is a new notice.
+  third="$(harness_notice "$source" app "Recycling" "Recycling moves to Thursday 19 November.")"
+  if ! printf '%s' "$third" | grep -q "notice_result=stored"; then
+    add_result 14 notice_intake false \
+      "a different notice from the same source was not stored. third=[${third:-<nothing>}]"
+    return
+  fi
+
+  add_result 14 notice_intake true \
+    "a notice was stored, the same one was a duplicate, and a different one was stored. first=[${first}] second=[${second}] third=[${third}]"
+}
+
 run_case() {
   case "$1" in
     1) case1_killed_app ;;
@@ -2252,6 +2318,7 @@ run_case() {
     11) case11_task_flood_preserves_doses ;;
     12) case12_fresh_install_asks_to_notify ;;
     13) case13_db_after_notification ;;
+    14) case14_notice_intake ;;
     *) echo "unknown case: $1" >&2; return 2 ;;
   esac
 }
@@ -2262,7 +2329,7 @@ notification-harness.sh — adb-driven notification test harness
 
   --list          List cases
   --purge         Hard-delete every row cases 8 and 9 seeded (Convex, then device)
-  --case N        Run case N (1..13)
+  --case N        Run case N (1..14)
   --all           Run cases 1-7, 10-11: the local-only delivery baseline
   --auth          Run cases 8-9: need a signed-in app and a reachable Convex.
                   Prefer `--case 8` then `--case 9` as separate invocations —
@@ -2375,6 +2442,7 @@ list_cases() {
 11 task_flood_preserves_doses  A full task budget still leaves the dose armed and holding the alarm clock
 12 fresh_install_asks_to_notify [signed in] POST_NOTIFICATIONS revoked and never asked: the app asks, and then DELIVERS
 13 db_after_notification    [signed in] Issue #23 repro: is SQLite still writable after a notification fired? Expected to FAIL until fixed
+14 notice_intake            [signed in] A notice is stored, the same one is a duplicate, a different one is stored
 EOF
 }
 

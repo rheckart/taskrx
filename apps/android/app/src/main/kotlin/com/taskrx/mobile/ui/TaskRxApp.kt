@@ -300,6 +300,10 @@ private fun AppNavHost(container: AppContainer, navController: NavController) {
                 canSaveSource = state.canSave,
                 onSaveSource = vm::saveSource,
                 onRemoveSource = vm::remove,
+                listenerAllowed = state.listenerAllowed,
+                onOpenListenerSettings = vm::openListenerSettings,
+                seenApps = state.seenApps,
+                onApproveSeenApp = { vm.approveSeenApp(it) },
             )
         }
 

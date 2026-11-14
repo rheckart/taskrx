@@ -21,9 +21,15 @@ import com.taskrx.mobile.data.InstanceFilter
 import com.taskrx.mobile.data.ReminderInstancesRepository
 import com.taskrx.mobile.data.RemindersRepository
 import com.taskrx.mobile.data.SyncQueueRepository
+import com.taskrx.mobile.data.WatchSourcesRepository
+import com.taskrx.mobile.data.CreateWatchedSourceInput
 import com.taskrx.mobile.data.db.ReminderEntity
 import com.taskrx.mobile.data.db.SyncStatus
 import com.taskrx.mobile.data.db.TaskRxDatabase
+import com.taskrx.mobile.notices.IntakeMessage
+import com.taskrx.mobile.notices.IntakeResult
+import com.taskrx.mobile.notices.NoticeIntake
+import com.taskrx.core.domain.SourceKind
 import com.taskrx.mobile.notifications.NotificationScheduler
 import com.taskrx.mobile.notifications.PermissionPlatform
 import com.taskrx.mobile.notifications.TierGateway
@@ -49,6 +55,8 @@ class HarnessDeps(
     /** Removes notifications already in the shade. */
     val cancelPosted: () -> Unit,
     val syncStatus: () -> String,
+    val watchSources: WatchSourcesRepository,
+    val noticeIntake: NoticeIntake,
 )
 
 /** Name prefix for reminders the harness creates, and the only thing `cleanup-seeded` matches on. */
@@ -131,6 +139,7 @@ class HarnessRunner(private val deps: HarnessDeps) {
             HarnessAction.SyncStatus -> "sync_status=${deps.syncStatus()}"
             HarnessAction.CleanupSeeded -> signedIn { cleanupSeeded(it) }
             HarnessAction.PurgeSeeded -> signedIn { purgeSeeded(it) }
+            HarnessAction.Notice -> signedIn { notice(spec, it) }
         }
 
     private suspend fun queueCount(user: String): String {
@@ -319,6 +328,60 @@ class HarnessRunner(private val deps: HarnessDeps) {
         return "instance_at=${first?.id ?: "none"} status=${first?.status?.wire ?: "none"} count=${found.size} " +
             "completed=${completed?.id ?: "none"} statuses=${statuses.ifEmpty { "none" }}"
     }
+
+    /**
+     * Injects one outside message through the REAL intake, as the listener road would: the
+     * watched check, the de-duplication and the sentence choice are all the production ones.
+     *
+     * `notice/<source>/<kind>/<base64(title\nbody)>`. A watched source is created first when
+     * one does not already match, so the case drives the admit path rather than a no-op. The
+     * reply names the result and, when a notice was stored, its id.
+     */
+    private suspend fun notice(spec: HarnessSpec, userId: String): String {
+        val source = spec.id
+        val kind = SourceKind.fromWire(spec.kind) ?: SourceKind.App
+        val decoded = decodePayload(spec.payload)
+        val newline = decoded.indexOf('\n')
+        val title = if (newline >= 0) decoded.substring(0, newline) else decoded
+        val body = if (newline >= 0) decoded.substring(newline + 1) else ""
+
+        val watched = deps.watchSources.list(userId).any { it.kind == kind && it.value == source }
+        if (!watched) {
+            deps.watchSources.create(CreateWatchedSourceInput(userId = userId, kind = kind, value = source, label = source))
+        }
+
+        val result =
+            deps.noticeIntake.admit(
+                userId,
+                IntakeMessage(
+                    sourceKind = kind,
+                    sourceValue = source,
+                    title = title,
+                    body = body,
+                    receivedAt = deps.clock(),
+                    // Deterministic, so sending the same notice twice is a duplicate: the
+                    // path nonce must stay unique per link (the harness ignores a repeated
+                    // path), so it cannot be the de-duplication id.
+                    externalId = "harness:${kind.wire}:$source:${spec.payload}",
+                ),
+            )
+        val outcome =
+            when (result) {
+                is IntakeResult.Stored -> "stored notice_id=${result.notice.id}"
+                IntakeResult.NotWatched -> "not_watched"
+                IntakeResult.Duplicate -> "duplicate"
+                IntakeResult.Empty -> "empty"
+            }
+        return "notice_result=$outcome source=$source kind=${kind.wire}"
+    }
+
+    /** Base64 the URL path carries; anything undecodable reads as empty rather than throwing. */
+    private fun decodePayload(payload: String): String =
+        try {
+            String(android.util.Base64.decode(payload, android.util.Base64.URL_SAFE or android.util.Base64.NO_WRAP or android.util.Base64.NO_PADDING))
+        } catch (e: IllegalArgumentException) {
+            ""
+        }
 
     /**
      * Soft-deletes what the seeding made, then re-arms what is left. The reschedule is not

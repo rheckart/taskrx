@@ -25,6 +25,10 @@ data class SettingsState(
     val kind: SourceKind = SourceKind.Email,
     val value: String = "",
     val label: String = "",
+    /** Packages the listener has seen that are not watched yet: the approval list. */
+    val seenApps: List<String> = emptyList(),
+    /** Whether the person has granted notification access; the listener road is inert without it. */
+    val listenerAllowed: Boolean = false,
 ) {
     /** The canonical spelling of the address or package, or null when it is not one. */
     val normalizedValue: String? get() = normalizeSourceValue(kind, value)
@@ -37,6 +41,10 @@ data class SettingsState(
  * A watched source alone moves nothing. It is the gate on storage; matching words live on a
  * reminder's "Notices about this", and only they can make a proposal. A share is never added
  * here: sharing something is its own approval.
+ *
+ * The seen list ([seenApps]) is the apps the notification listener has heard from. Approving
+ * one is what turns a package name into a watched source; until then the listener has kept
+ * nothing from it but the name.
  */
 class SettingsViewModel(
     private val app: AppContainer,
@@ -50,7 +58,16 @@ class SettingsViewModel(
         viewModelScope.launch {
             try {
                 val sources = app.watchSources.list(app.session.userId)
-                mutable.update { it.copy(sources = sources, error = null) }
+                val watchedPackages = sources.filter { it.kind == SourceKind.App }.map { it.value }.toSet()
+                val seen = app.seenApps.seen().filterNot { it in watchedPackages }.sorted()
+                mutable.update {
+                    it.copy(
+                        sources = sources,
+                        seenApps = seen,
+                        listenerAllowed = app.notifications.platform.notificationListenerAllowed(),
+                        error = null,
+                    )
+                }
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
@@ -58,6 +75,33 @@ class SettingsViewModel(
             } finally {
                 mutable.update { it.copy(loading = false) }
             }
+        }
+
+    /** Sends the person to the system's notification-access list. */
+    fun openListenerSettings() {
+        app.notifications.platform.openNotificationListenerSettings()
+    }
+
+    /** Approves a seen package as a watched source, using the package name as its label. */
+    fun approveSeenApp(packageName: String): Job =
+        viewModelScope.launch {
+            try {
+                app.watchSources.create(
+                    CreateWatchedSourceInput(
+                        userId = app.session.userId,
+                        kind = SourceKind.App,
+                        value = packageName,
+                        label = packageName,
+                    ),
+                )
+                toast(ToastRequest("Watching that app now", ToastKind.Success))
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                log("approving a seen app failed", e)
+                toast(ToastRequest("Couldn't approve that", ToastKind.Error))
+            }
+            refresh()
         }
 
     fun startAdd() = mutable.update { it.copy(adding = true, kind = SourceKind.Email, value = "", label = "") }
