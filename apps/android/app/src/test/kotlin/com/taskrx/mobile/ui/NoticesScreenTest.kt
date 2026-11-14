@@ -5,14 +5,28 @@ import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
+import com.taskrx.core.domain.MoveRefusal
 import com.taskrx.core.domain.Notice
 import com.taskrx.core.domain.NoticeResolution
+import com.taskrx.core.domain.Reminder
+import com.taskrx.core.domain.ReminderKind
 import com.taskrx.core.domain.SourceKind
+import com.taskrx.core.domain.createReminder
+import com.taskrx.core.domain.weeklyTimes
+import com.taskrx.core.notices.Proposal
+import com.taskrx.core.notices.ProposalRefusal
+import com.taskrx.mobile.format.formatFullDayTime
+import com.taskrx.mobile.ui.notices.NoticeOccurrencePick
 import com.taskrx.mobile.ui.notices.NoticeTaskDraft
+import com.taskrx.mobile.ui.notices.NoticeTaskPick
 import com.taskrx.mobile.ui.notices.NoticesContent
 import com.taskrx.mobile.ui.notices.NoticesState
 import com.taskrx.mobile.ui.notices.ShareContent
 import com.taskrx.mobile.ui.notices.ShareState
+import java.time.LocalDate
+import java.time.ZoneId
+import java.time.ZoneOffset
+import java.time.ZonedDateTime
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import org.junit.Rule
@@ -20,6 +34,36 @@ import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 
 private const val NOW = 1_780_000_000_000L
+private val ZONE: ZoneId = ZoneOffset.UTC
+
+private fun at(year: Int, month: Int, day: Int, hour: Int = 0): Long =
+    ZonedDateTime.of(year, month, day, hour, 0, 0, 0, ZONE).toInstant().toEpochMilli()
+
+private fun task(name: String = "Put the bins out"): Reminder =
+    createReminder(
+        id = "task-1",
+        userId = "user-1",
+        kind = ReminderKind.Task,
+        name = name,
+        schedule = weeklyTimes(listOf(1), listOf("07:00")),
+        createdAt = NOW,
+        updatedAt = NOW,
+    )
+
+private fun proposal(
+    reminder: Reminder = task(),
+    from: Long? = at(2026, 11, 16, 7),
+    to: Long = at(2026, 11, 18, 7),
+    refusal: ProposalRefusal? = null,
+) = Proposal(
+    reminder = reminder,
+    from = from,
+    to = to,
+    date = LocalDate.of(2026, 11, 18),
+    time = null,
+    matchedText = "18 November",
+    refusal = refusal,
+)
 
 private fun notice(
     id: String = "n1",
@@ -50,6 +94,13 @@ class NoticesScreenTest {
         onDismiss: (Notice) -> Unit = {},
         onSaveTask: () -> Unit = {},
         onCancelTask: () -> Unit = {},
+        onApply: (Notice, Proposal) -> Unit = { _, _ -> },
+        onBeginPick: (Notice) -> Unit = {},
+        onPickTask: (Reminder) -> Unit = {},
+        onCancelPick: () -> Unit = {},
+        onBeginOccurrence: (Notice, Proposal) -> Unit = { _, _ -> },
+        onChooseOccurrence: (Long) -> Unit = {},
+        onCancelOccurrence: () -> Unit = {},
     ) {
         compose.setContent {
             TaskRxTheme {
@@ -61,7 +112,15 @@ class NoticesScreenTest {
                     onDraftAt = {},
                     onSaveTask = onSaveTask,
                     onCancelTask = onCancelTask,
+                    onApply = onApply,
+                    onBeginPick = onBeginPick,
+                    onPickTask = onPickTask,
+                    onCancelPick = onCancelPick,
+                    onBeginOccurrence = onBeginOccurrence,
+                    onChooseOccurrence = onChooseOccurrence,
+                    onCancelOccurrence = onCancelOccurrence,
                     now = { NOW },
+                    zone = ZONE,
                 )
             }
         }
@@ -127,6 +186,67 @@ class NoticesScreenTest {
 
         assertEquals(1, saved)
         assertEquals(1, cancelled)
+    }
+
+    @Test
+    fun `a proposal shows both moments and applies or picks another occurrence`() {
+        val applied = mutableListOf<Proposal>()
+        val other = mutableListOf<Proposal>()
+        val p = proposal()
+        content(
+            NoticesState(notices = listOf(notice()), loading = false, proposals = mapOf("n1" to listOf(p))),
+            onApply = { _, proposal -> applied += proposal },
+            onBeginOccurrence = { _, proposal -> other += proposal },
+        )
+
+        compose.onNodeWithText("Put the bins out").assertIsDisplayed()
+        compose.onNodeWithText("“18 November”").assertIsDisplayed()
+        compose.onNodeWithContentDescription("Apply Put the bins out").performClick()
+        compose.onNodeWithText("Different occurrence").performClick()
+
+        assertEquals(listOf(p), applied)
+        assertEquals(listOf(p), other)
+    }
+
+    @Test
+    fun `a refused proposal says why and offers no apply`() {
+        val p = proposal(refusal = ProposalRefusal.Move(MoveRefusal.AlreadyAnswered))
+        content(NoticesState(notices = listOf(notice()), loading = false, proposals = mapOf("n1" to listOf(p))))
+
+        compose.onNodeWithText("That moment is already answered.").assertIsDisplayed()
+        compose.onNodeWithText("Apply").assertDoesNotExist()
+        compose.onNodeWithText("Different occurrence").assertIsDisplayed()
+    }
+
+    @Test
+    fun `the task picker lists tasks and picks one`() {
+        val picked = mutableListOf<Reminder>()
+        val t = task()
+        content(
+            NoticesState(notices = listOf(notice()), loading = false, pick = NoticeTaskPick(notice(), listOf(t))),
+            onPickTask = { picked += it },
+        )
+
+        compose.onNodeWithText("Apply this notice to").assertIsDisplayed()
+        compose.onNodeWithText("Put the bins out").performClick()
+
+        assertEquals(listOf(t), picked)
+    }
+
+    @Test
+    fun `the occurrence picker lists moments and chooses one`() {
+        val chosen = mutableListOf<Long>()
+        val p = proposal()
+        val options = listOf(at(2026, 11, 17, 7), at(2026, 11, 18, 7))
+        content(
+            NoticesState(notices = listOf(notice()), loading = false, occurrencePick = NoticeOccurrencePick(notice(), p, options)),
+            onChooseOccurrence = { chosen += it },
+        )
+
+        compose.onNodeWithText("Move which occurrence?").assertIsDisplayed()
+        compose.onNodeWithText(formatFullDayTime(at(2026, 11, 17, 7), ZONE)).performClick()
+
+        assertEquals(listOf(at(2026, 11, 17, 7)), chosen)
     }
 
     @Test

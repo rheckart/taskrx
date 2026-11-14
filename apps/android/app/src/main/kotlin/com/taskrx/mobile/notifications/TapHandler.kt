@@ -19,6 +19,11 @@ class TapHandler(private val log: (String) -> Unit = { Log.i("tap", it) }) {
     val route: StateFlow<String?> = pending
 
     fun handle(intent: Intent?): TapOutcome {
+        if (intent?.action == ACTION_NOTICES) {
+            pending.value = NOTICES_ROUTE
+            log("[tap] opening $NOTICES_ROUTE")
+            return TapOutcome.Open(NOTICES_ROUTE)
+        }
         val outcome =
             resolveTap(
                 isPress = intent?.action == ACTION_TAP,
@@ -38,6 +43,10 @@ class TapHandler(private val log: (String) -> Unit = { Log.i("tap", it) }) {
 
     companion object {
         const val ACTION_TAP = "com.taskrx.mobile.action.NOTIFICATION_TAP"
+
+        /** A notice ping opens the Notices list, which has no Occurrence behind it. */
+        const val ACTION_NOTICES = "com.taskrx.mobile.action.NOTICES"
+        const val NOTICES_ROUTE = "notices"
         const val EXTRA_REMINDER_ID = "reminderId"
         const val EXTRA_LEGACY_MEDICATION_ID = "medicationId"
         const val EXTRA_SCHEDULED_TIME = "scheduledTime"

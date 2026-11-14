@@ -48,6 +48,13 @@ class TapTest {
     }
 
     @Test
+    fun `a screen with no occurrence behind it opens by route`() {
+        val outcome = TapOutcome.Open("notices")
+        assertEquals("[tap] opening notices", outcome.logLine)
+        assertEquals("notices", outcome.route)
+    }
+
+    @Test
     fun `a non-press is ignored and says what it was`() {
         val outcome = resolveTap(false, "android.intent.action.MAIN", "r", null, "1")
         assertEquals(TapOutcome.Ignored("android.intent.action.MAIN"), outcome)

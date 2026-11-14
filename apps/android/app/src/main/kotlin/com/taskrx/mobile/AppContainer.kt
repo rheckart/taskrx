@@ -20,6 +20,7 @@ import com.taskrx.mobile.data.SyncQueueRepository
 import com.taskrx.mobile.data.SystemClock
 import com.taskrx.mobile.data.WatchSourcesRepository
 import com.taskrx.mobile.data.db.TaskRxDatabase
+import com.taskrx.mobile.notifications.NoticePings
 import com.taskrx.mobile.notifications.NotificationsModule
 import com.taskrx.mobile.settings.AppSettings
 import com.taskrx.mobile.refill.RefillReader
@@ -85,6 +86,9 @@ class AppContainer(
 
     val notifications = NotificationsModule(context, reminders, instances, clock)
 
+    /** The one heads-up a newly pulled notice gets when a rule produced a move to confirm. */
+    val noticePings = NoticePings(context, reminders, instances, clock)
+
     /** The person's choices from Settings, on this phone only. */
     val settings = AppSettings(context)
 
@@ -138,7 +142,18 @@ class AppContainer(
     val sync: SyncCoordinator? =
         remote?.let { r ->
             val worker = PushWorker(syncQueue, reminders, instances, notices, watchSources, r.gateway, r.connectivity, userId = { session.signedInUserId })
-            SyncCoordinator(scope, auth, r.ready, worker, stuckChanges, PullSync(r.gateway, PullApplier(reminders, instances, notices, watchSources) { notifications.rescheduleAfterWrite(session.userId) }), r.connectivity)
+            SyncCoordinator(
+                scope,
+                auth,
+                r.ready,
+                worker,
+                stuckChanges,
+                PullSync(
+                    r.gateway,
+                    PullApplier(reminders, instances, notices, watchSources, noticePings::ping, { notifications.rescheduleAfterWrite(session.userId) }),
+                ),
+                r.connectivity,
+            )
         }
 
     init {

@@ -315,6 +315,13 @@ private fun AppNavHost(container: AppContainer, navController: NavController) {
                 onDraftAt = vm::setDraftAt,
                 onSaveTask = vm::saveTask,
                 onCancelTask = vm::cancelTask,
+                onApply = vm::applyProposal,
+                onBeginPick = vm::beginPick,
+                onPickTask = vm::pickTask,
+                onCancelPick = vm::cancelPick,
+                onBeginOccurrence = vm::beginOccurrence,
+                onChooseOccurrence = vm::chooseOccurrence,
+                onCancelOccurrence = vm::cancelOccurrence,
                 now = container.clock::invoke,
             )
         }

@@ -115,6 +115,37 @@ object NotificationPoster {
         manager.notify(spec.id, 0, builder.build())
     }
 
+    /**
+     * One heads-up that a Notice may move a task. It rides the existing task channel (the
+     * channel ids are frozen) and opens the Notices list; no action applies anything from the
+     * shade, because every move is confirmed with both moments in front of the person (D10).
+     */
+    fun postNotice(context: Context, noticeId: String, title: String, body: String) {
+        Channels.ensure(context)
+        val manager = context.getSystemService(NotificationManager::class.java)
+        val builder =
+            NotificationCompat.Builder(context, deliveryFor(Tier.Task).channelId)
+                .setSmallIcon(android.R.drawable.ic_popup_reminder)
+                .setContentTitle(title)
+                .setContentText(body)
+                .setStyle(NotificationCompat.BigTextStyle().bigText(body))
+                .setPriority(NotificationCompat.PRIORITY_HIGH)
+                .setCategory(NotificationCompat.CATEGORY_REMINDER)
+                .setAutoCancel(true)
+                .setContentIntent(
+                    PendingIntent.getActivity(
+                        context,
+                        0,
+                        Intent(context, MainActivity::class.java)
+                            .setAction(TapHandler.ACTION_NOTICES)
+                            .setData(Uri.parse("taskrx://notices/${Uri.encode(noticeId)}"))
+                            .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP),
+                        PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
+                    ),
+                )
+        manager.notify("notice-$noticeId", 0, builder.build())
+    }
+
     /** `(reminderId, name)` of each dose in the shade for [scheduledTime]. */
     private fun doseEntries(manager: NotificationManager, scheduledTime: Long): List<Pair<String, String>> =
         doses(manager, scheduledTime).mapNotNull { sbn ->

@@ -34,6 +34,11 @@ sealed interface TapOutcome {
     data class Navigate(val target: TapTarget, val route: String) : TapOutcome {
         override val logLine: String get() = "[tap] navigating to $route"
     }
+
+    /** A press that opens a screen with no Occurrence behind it, such as the Notices list. */
+    data class Open(val route: String) : TapOutcome {
+        override val logLine: String get() = "[tap] opening $route"
+    }
 }
 
 private fun encode(value: String): String = URLEncoder.encode(value, "UTF-8").replace("+", "%20")

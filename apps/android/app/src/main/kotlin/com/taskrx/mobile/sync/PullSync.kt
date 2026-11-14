@@ -1,6 +1,7 @@
 package com.taskrx.mobile.sync
 
 import android.util.Log
+import com.taskrx.core.domain.Notice
 import com.taskrx.core.sync.ConvexFunctions
 import com.taskrx.core.sync.backoffMillis
 import com.taskrx.core.sync.shouldApplyRemoteReminder
@@ -40,6 +41,11 @@ class PullApplier(
     private val instances: ReminderInstancesRepository,
     private val notices: NoticesRepository,
     private val watchSources: WatchSourcesRepository,
+    /**
+     * Called with the notices this pass wrote (a new one, or one that changed). The heads-up
+     * ping is posted here, where a notice's arrival is known, rather than from a screen.
+     */
+    private val onNoticesApplied: suspend (List<Notice>) -> Unit = {},
     /**
      * Called after Reminders were written. A Reminder created or edited on another device (or
      * restored on first sign-in) must be armed now, not at the next foreground: the foreground
@@ -108,6 +114,15 @@ class PullApplier(
             if (shouldApplyRemoteReminder(notices.get(candidate.notice.id), candidate.notice)) appliedNotices += candidate
         }
         notices.upsertMany(appliedNotices)
+        if (appliedNotices.isNotEmpty()) {
+            try {
+                onNoticesApplied(appliedNotices.map { it.notice })
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                Log.e(TAG, "pinging a pulled notice failed", e)
+            }
+        }
     }
 
     /** One pass over the four lists as the gateway delivered them. */

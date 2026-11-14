@@ -550,6 +550,28 @@ class PullTest {
         }
 
     @Test
+    fun `a written notice is handed to the ping callback, and nothing else is`() =
+        withFixture(T0) {
+            val pinged = mutableListOf<List<String>>()
+            val applier =
+                PullApplier(container.reminders, container.instances, container.notices, container.watchSources, onNoticesApplied = { pinged += it.map { notice -> notice.id } })
+            applier.applyJson(
+                json("[]"),
+                json("[]"),
+                json("[]"),
+                json(
+                    """[{"_id":"cn1","localId":"n1","userId":"$USER","sourceKind":"email","sourceValue":"waste@city.example",
+                    "title":"Bins moved","receivedAt":1780000000000.0,"resolution":"none","createdAt":1780000000000.0,"updatedAt":1780000000000.0}]""",
+                ),
+            )
+
+            assertEquals(listOf(listOf("n1")), pinged)
+
+            applier.applyJson(json("[]"), json("[]"), json("[]"), json("[]"))
+            assertEquals(1, pinged.size, "a pass that writes no notice posts no ping")
+        }
+
+    @Test
     fun `a notice this build does not understand is skipped, not guessed at`() =
         withFixture(T0) {
             pull(this).applyJson(
