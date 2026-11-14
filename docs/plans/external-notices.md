@@ -1,6 +1,6 @@
 # External notices: letting outside events move and create tasks
 
-Status: planned (not started). Written 2026-11-13 from a planning conversation.
+Status: complete (2026-11-14). Written 2026-11-13 from a planning conversation.
 
 Two pains, one mechanism:
 
@@ -19,7 +19,7 @@ outside sentence into the app, proposing what it means, and letting the person d
 - [x] Date extraction and proposals in `:core`, apply path, heads-up notification, count
 - [x] Notification listener: service, seen list, approval, intake
 - [x] Mailbox: JMAP action, cron, cursor, sentence selection, tests
-- [ ] Docs: ADR 0014, `architecture.md`, competitor document amendment (ADR 0013 and the `CONTEXT.md` terms are done)
+- [x] Docs: ADR 0014, `architecture.md`, competitor document amendment (ADR 0013 and the `CONTEXT.md` terms are done)
 
 ## Scope check
 

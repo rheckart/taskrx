@@ -196,6 +196,10 @@ one place where being told is the entire product.
    (`crons.ts`, every 5 minutes) queries `reminderInstances` where `status = "missed"`
    and `alertedAt` is null, then for each parent reminder's caregiver links writes an
    `alerts` row and calls an FCM send action. Set `alertedAt` in the same mutation.
+   **The first cron now exists**: `mailbox.poll` (every five minutes) was built with the
+   external-notices work, so cron scheduling and the self-hosted backend are already proven.
+   It is the shape to copy: an `internalAction` in `crons.ts`, an `internalMutation` for the
+   write, a cursor row, and `convex-test` cases for idempotence.
 5. **FCM**: add `firebase-messaging` to `:app`, a `FirebaseMessagingService` that only
    registers a token with Convex, and `POST_NOTIFICATIONS` handling that already exists.
    Caregiver-side push uses its own channel (`caregiver_alerts`, HIGH) — do **not** reuse
@@ -530,7 +534,11 @@ Still open:
   the copy, the review process and the wording all matter more than the layout.
 - **Is a server cron acceptable at all?** Caregiver alerts are the first feature that cannot
   be local-only, and `docs/architecture.md` lists push notifications as deferred *by
-  choice*. That choice needs an explicit yes before item 1 starts.
+  choice*. That choice needs an explicit yes before item 1 starts. **Partly answered since:**
+  external notices already run a server cron (`mailbox.poll`) and store notice sentences in
+  the backend, so a cron on this deployment is no longer hypothetical (ADR 0014). The
+  question that remains is whether *push* — a phone being woken by the server — is
+  acceptable, which is still a yes/no.
 - **How much does a caregiver see?** "Your mother missed her 09:00 dose" is a log. "Your
   mother is at 62% adherence" is monitoring. The first is the feature; the second is the
   drift the thesis rules out.

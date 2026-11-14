@@ -12,19 +12,22 @@ TaskRx is a native Kotlin Android app that keeps its data in SQLite on the devic
 │  │ Room / SQLite (source of     │  │         │ Schema:                      │
 │  │  truth on device)            │  │         │  - reminders                 │
 │  │  - reminders                 │  │         │  - reminderInstances         │
-│  │  - reminder_instances        │  │         │                              │
-│  │  - sync_queue + dead_letter  │  │         │ Functions (packages/convex): │
-│  └──────────────────────────────┘  │         │  - reminders.{list,create..} │
-│           │                        │         │  - reminderInstances.{...}   │
-│           ▼                        │         │  - rxnorm.search (Action)    │
-│  ┌──────────────────────────────┐  │         │                              │
-│  │ :core (pure Kotlin/JVM)      │  │         │ Clerk JWT verifier:          │
-│  │  - schedule + horizons       │  │         │  - enforces userId on all    │
-│  │    (64 doses, 32 tasks)      │  │         │    reads/writes              │
-│  │  - timeline, sweep planner   │  │         └──────────────┬───────────────┘
-│  │  - adherence, refill, parser │  │                        │
-│  │  - conflict rules, retry     │  │                        │
-│  │  - permission-state          │  │                        │
+│  │  - reminder_instances        │  │         │  - notices                   │
+│  │  - notices                   │  │         │  - watchSources              │
+│  │  - watch_sources             │  │         │  - mailboxState              │
+│  │  - sync_queue + dead_letter  │  │         │                              │
+│  └──────────────────────────────┘  │         │ Functions (packages/convex): │
+│           │                        │         │  - reminders.{list,create..} │
+│           ▼                        │         │  - reminderInstances.{...}   │
+│  ┌──────────────────────────────┐  │         │  - notices / watchSources    │
+│  │ :core (pure Kotlin/JVM)      │  │         │  - rxnorm.search (Action)    │
+│  │  - schedule + horizons       │  │         │  - mailbox.poll (cron, JMAP) │
+│  │    (64 doses, 32 tasks)      │  │         │                              │
+│  │  - timeline, sweep planner   │  │         │ Clerk JWT verifier:          │
+│  │  - adherence, refill, parser │  │         │  - enforces userId on all    │
+│  │  - conflict rules, retry     │  │         │    reads/writes              │
+│  │  - permission-state          │  │         └──────────────┬───────────────┘
+│  │  - notice dates + proposals  │  │                        │
 │  └──────────────────────────────┘  │                        │
 │           │                        │                        │
 │           ▼                        │                        │
@@ -45,9 +48,17 @@ TaskRx is a native Kotlin Android app that keeps its data in SQLite on the devic
 │  │  - live subscriptions        │  │                        │
 │  └──────────────────────────────┘  │                        │
 │                                    │                        │
+│  ┌──────────────────────────────┐  │                        │  ┌──────────────────────────────┐
+│  │ Notice roads (:app)          │  │                        ├──│ Mailbox poll (Convex cron)   │
+│  │  - share sheet               │  │                        │  │ JMAP → watched senders only  │
+│  │  - notification listener     │  │                        │  └──────────────────────────────┘
+│  │  - NoticeIntake funnel       │  │                        │
+│  └──────────────────────────────┘  │                        │
+│                                    │                        │
 │  Clerk (auth) ─────────────────────┼───────────────────────▶│
 │  (JWT attached to Convex requests) │                        │
-└────────────────────────────────────┘
+└────────────────────────────────────┘                        │
+                                                 Fastmail (api.fastmail.com)
 ```
 
 The app is split into two Gradle modules. `:core` is pure Kotlin/JVM with no Android imports and holds every domain rule; Kover gates it at 100% line and branch coverage. `:app` is the Android application: Room storage, notifications, Compose screens, sign-in and sync. A rule never lives in `:app`.
@@ -111,6 +122,8 @@ Room entities in `apps/android/app/src/main/kotlin/com/taskrx/mobile/data/db/Ent
 | `caregiver_ids` | TEXT | JSON string array |
 | `active` | INTEGER | 1 = active |
 | `pauses` | TEXT | JSON array of `{from, until?}` windows (ADR 0009). `[]` when never paused. Added in database version 2 |
+| `overrides` | TEXT | JSON array of `{from, to, noticeId?}`: one occurrence moved off the moment its Schedule produced (ADR 0013). `[]` when never moved. Added in database version 3 |
+| `notice_rules` | TEXT | JSON array of `{sourceKind, sourceValue, terms}`: which notices may be proposed against this reminder. `[]` when none |
 | `created_at` | INTEGER | Unix ms |
 | `updated_at` | INTEGER | Unix ms |
 | `sync_status` | TEXT | `pending`, `synced`, or `error` |
@@ -147,7 +160,7 @@ table, and a task is never taken — see ADR 0001. The UI still *displays*
 | Column | Type | Notes |
 |---|---|---|
 | `id` | INTEGER PK AUTOINCREMENT | |
-| `entity_type` | TEXT | `reminder` or `reminder_instance` |
+| `entity_type` | TEXT | `reminder`, `reminder_instance`, `watch_source` or `notice` |
 | `entity_id` | TEXT | Local entity ID |
 | `operation` | TEXT | `create`, `update`, or `delete` |
 | `payload` | TEXT | JSON snapshot at enqueue time |
@@ -156,12 +169,52 @@ table, and a task is never taken — see ADR 0001. The UI still *displays*
 | `created_at` | INTEGER | Unix ms |
 | `dead_letter` | INTEGER | 0 = pending; 1 = terminally failed after MAX_ATTEMPTS. Filtered out of `pending()`; retained for inspection and requeue. |
 
+### `notices`
+
+One row per outside message a watched source admitted.
+
+| Column | Type | Notes |
+|---|---|---|
+| `id` | TEXT PK | UUID v4 on device, or derived from the email id for the mailbox road |
+| `user_id` | TEXT | Clerk user ID |
+| `source_kind` | TEXT | `email`, `app` or `share` |
+| `source_value` | TEXT | Sender address, package name, or the share's own id |
+| `title` | TEXT | The subject line, or the notification's title |
+| `sentence` | TEXT | The kept sentence(s); nullable. The body itself is never stored |
+| `received_at` | INTEGER | Unix ms |
+| `external_id` | TEXT | De-duplication key: JMAP email id, `notification:<pkg>:<key>:<postTime>`, share hash. Nullable |
+| `resolution` | TEXT | `none`, `applied` or `dismissed` |
+| `resolved_at` | INTEGER | Unix ms, nullable |
+| `created_at` | INTEGER | Unix ms |
+| `updated_at` | INTEGER | Unix ms |
+| `sync_status` | TEXT | `pending`, `synced`, or `error` |
+| `convex_id` | TEXT | Local↔Convex ID bridge |
+
+### `watch_sources`
+
+The senders and apps whose notices may be kept at all. A share is never one.
+
+| Column | Type | Notes |
+|---|---|---|
+| `id` | TEXT PK | UUID v4 on device |
+| `user_id` | TEXT | Clerk user ID |
+| `kind` | TEXT | `email` or `app` |
+| `value` | TEXT | Sender address (lower-cased) or package name |
+| `label` | TEXT | Display name |
+| `created_at` | INTEGER | Unix ms |
+| `updated_at` | INTEGER | Unix ms |
+| `sync_status` | TEXT | `pending`, `synced`, or `error` |
+| `convex_id` | TEXT | Local↔Convex ID bridge |
+
 ## Convex schema
 
 See `packages/convex/convex/schema.ts`.
 
-- `reminders` mirrors the local `reminders` rows, keyed by `userId`. `pauses` is an optional array of `{from, until?}` windows. `schedule` is a union, one member of which is `{type: "asNeeded", minGapMinutes, maxPer24h?}` (ADR 0010).
+- `reminders` mirrors the local `reminders` rows, keyed by `userId`. `pauses` is an optional array of `{from, until?}` windows. `overrides` is an optional array of `{from, to, noticeId?}` (ADR 0013). `noticeRules` is an optional array of `{sourceKind, sourceValue, terms}`. `schedule` is a union, one member of which is `{type: "asNeeded", minGapMinutes, maxPer24h?}` (ADR 0010).
 - `reminderInstances` mirrors the local instance rows, with the parent named by its Convex document id.
+- `notices` holds a notice's narrow retention — source, subject, one to two sentences, received time, de-duplication id, resolution. `by_user_external_id` is the de-duplication lookup, which is why the mailbox poll and the device's intake can share one key.
+- `watchSources` is the gate on what is kept at all, and it syncs *because* the server-side mailbox poll filters by it.
+- `mailboxState` is a single row holding the mailbox poll's cursor. One mailbox for the deployment (D15), so one cursor.
 - Soft deletes use `deletedAt` on Convex; local rows are marked inactive or hard-deleted depending on the flow.
 - The `schedule` validator accepts every variant the device can express — `daily`, `interval`, `weekly`, `monthly` (`daysOfMonth`, 1 to 31), `once`, `none` and `asNeeded` — and rejects malformed payloads.
 
@@ -192,6 +245,45 @@ Two pure functions consumed by both repository upsert paths:
 - `shouldApplyRemoteReminderInstance(local, remote, localHasUnpushedChange)`: false when the local row has a change not yet pushed; false when local is `completed` unless the remote is a newer `pending` (an undo, ADR 0008); true when remote is `completed`; otherwise last-write-wins with local winning ties.
 
 The truth table, including the safety-critical completed-instance preservation, is covered by `:core` tests and sits under the Kover gate.
+
+## External notices
+
+Outside messages — a share, an app notification, an email — can *propose* a move or a new
+task. Nothing applies itself; ADR 0014 has the full reasoning and the retention decision.
+
+```
+   share sheet ─────┐
+   app notification ─┼──▶ NoticeIntake (device) ──▶ notices (Room) ──▶ sync ──▶ notices (Convex)
+   mailbox (JMAP) ───┘            │                                              │
+                                  │ watched? → dedup? → keep a sentence           │ pull
+                                  ▼                                              ▼
+                          Notice + Proposal ──▶ person answers ──▶ OccurrenceOverride
+```
+
+**The device funnel** (`app/notices/NoticeIntake.kt`) is the one place every road ends. In
+order: normalise the source value and check it against `watch_sources`; de-duplicate on
+`external_id`; trim title and body; choose the kept sentence with `core/notices/Intake.kt`;
+write the notice and enqueue a push. It never parses a date — the extractor runs when the
+Proposals screen reads the row, so there is one implementation.
+
+**The notification listener** (`app/notices/NotificationListener.kt`) records the package
+name of *every* posted notification in a device-only seen list (`app/settings/SeenApps.kt`,
+capped at 200, never synced) and reads title and text only for a package that is already a
+watched app source. That is the whole reason for the two-step design: an unapproved app's
+notification leaves nothing behind but its name. Android may withhold text, so a notice with a
+title and no date is a normal state.
+
+**The mailbox** (`packages/convex/convex/mailbox.ts`, on a five-minute cron in `crons.ts`) is
+the only road that runs with no phone. It reads `JMAP_TOKEN` from the environment; absent, it
+returns `no_token` and writes nothing. It asks Fastmail for messages received after the
+`mailboxState` cursor (minus a ten-minute overlap), keeps only those from a watched sender,
+and writes one notice per watching person, de-duplicated on the email id. **The server keeps
+at most two spans containing a month name or a digit and does no date parsing** — the Kotlin
+reader stays the only implementation. The body is discarded after the spans are chosen.
+
+Proposals and the refusals live in `core/notices/Proposal.kt`: a notice may be applied to a
+task by hand or by a rule, a move is an `OccurrenceOverride` (ADR 0013), medications never
+move, and an answered, opened or past-grace occurrence never moves.
 
 ## Notification flow
 
@@ -247,6 +339,10 @@ Permissions declared in `apps/android/app/src/main/AndroidManifest.xml`:
 - `SCHEDULE_EXACT_ALARM` (user-granted special app access, following the documented Android 14+ lifecycle: declare, check `canScheduleExactAlarms()`, send the user to `ACTION_REQUEST_SCHEDULE_EXACT_ALARM`, recheck, reschedule, degrade if denied).
 - `RECEIVE_BOOT_COMPLETED` (the boot receiver re-arms both Tiers).
 - `WAKE_LOCK`, `INTERNET`, `ACCESS_NETWORK_STATE`.
+- **Notification access** (`BIND_NOTIFICATION_LISTENER_SERVICE`, granted through
+  `ACTION_NOTIFICATION_LISTENER_SETTINGS`) for the notification-listener road. It is a
+  user-granted special access with no runtime check API; `PermissionPlatform.notificationListenerAllowed()`
+  reads the enabled-listeners list fresh every time. Without it the listener road is inert.
 
 **Deliberately NOT declared: `USE_EXACT_ALARM`.** Google Play restricts it to apps whose core function is an alarm clock or calendar; medication reminders are not a verifiably approved category, and declaring it is a Play-review liability. `setAlarmClock` works with `SCHEDULE_EXACT_ALARM` alone.
 
@@ -258,8 +354,8 @@ Neither half is allowed to be silent. A `blocking` gap (POST_NOTIFICATIONS refus
 
 - `apps/android/core`: JUnit 5 tests run at `TZ=UTC`, with Kover enforcing 100% line and branch coverage on the gated classes (`./gradlew :core:test :core:koverVerify`). They include the DST cases for `core/time/LocalDay.kt`.
 - `apps/android/app`: JVM unit tests with Robolectric and in-memory Room (`./gradlew :app:testDebugUnitTest`). They cover the reschedule diff and which Tier each Kind is armed through, the push worker, the missed sweep's persistence pass, the Adherence and Refill reads, and the permission gate. They never load the Convex native library.
-- `packages/convex`: `convex-test` cases run against an in-memory deployment (`npm test`), including the schedule validator's variants and the malformed payloads it must reject.
-- `apps/android/scripts/notification-harness.sh`: an adb-driven bash script. `--all` runs the nine local-only cases (killed-app, `setAlarmClock` primitive in use, Doze, exact-alarm-denied fallback, boot reschedule, 30-med stress, weekly schedule, task-Tier delivery, task flood vs dose), `--auth` the signed-in ones, and case 12 is signed-in and excluded from `--all` because it revokes the POST_NOTIFICATIONS grant every other delivery case depends on. It emits JSON to `.omo/evidence/`. See `docs/poc-results.md` for the verdicts and the rig preconditions (the app must be signed out, and cases 3 and 5 need separate invocations because each leaves the keyguard up).
+- `packages/convex`: `convex-test` cases run against an in-memory deployment (`npm test`), including the schedule validator's variants and the malformed payloads it must reject, and the mailbox poll end to end against a stubbed JMAP endpoint (watched sender stored, unwatched dropped, replayed poll not stored twice, sentence spans chosen without parsing).
+- `apps/android/scripts/notification-harness.sh`: an adb-driven bash script. `--all` runs the nine local-only cases (killed-app, `setAlarmClock` primitive in use, Doze, exact-alarm-denied fallback, boot reschedule, 30-med stress, weekly schedule, task-Tier delivery, task flood vs dose), `--auth` the signed-in ones, and case 12 is signed-in and excluded from `--all` because it revokes the POST_NOTIFICATIONS grant every other delivery case depends on. Case 14 (`notice_intake`) is signed-in and drives a notice through the real intake: stored, then a duplicate, then a different one stored. It emits JSON to `.omo/evidence/`. See `docs/poc-results.md` for the verdicts and the rig preconditions (the app must be signed out, and cases 3 and 5 need separate invocations because each leaves the keyguard up).
 - The harness deep link `taskrx:///harness/<action>/<id>/<delayMs>/<nonce>` and the code behind it exist only in debug builds (`app/src/debug`). Notifications are local, so the harness works on a fresh install without signing in.
 
 The gate commands are in the README.
@@ -270,6 +366,9 @@ The gate commands are in the README.
 - No secrets are committed. Backend secrets live in the server's environment (see `infra/convex`); the app's `CONVEX_URL` and `CLERK_PUBLISHABLE_KEY` come from the ignored `apps/android/local.properties`.
 - Release builds refuse cleartext HTTP; only the debug manifest allows it.
 - The harness deep link exists only in debug builds, so it is not in a release APK.
+- **Notices put outside sentences in the backend.** A notice's kept sentence syncs like a reminder, so the Convex database and its offsite backups hold it (ADR 0014). The retention is narrow — source, subject, one to two sentences — and the body is discarded before the write.
+- **Notification access is a broad permission.** The listener receives every notification; it stores a package name from each, and reads text only from an app the person approved. The Settings copy says so.
+- **The mailbox token** (`JMAP_TOKEN`) is a deployment-wide environment variable, never in the database, and the poll is a no-op without it. One mailbox serves the whole deployment (D15), which the UI states.
 
 ## Deferred
 
@@ -277,6 +376,8 @@ The gate commands are in the README.
 - A web client.
 - Drug interaction checking.
 - Push notifications (currently local-only; caregiver alerts via FCM deferred).
+- A forward-to-TaskRx email address for notices; the three intake roads cover where notices
+  arrive (ADR 0014). A per-user mailbox, too — this deployment has one mailbox (D15).
 
 ### Taking a medication as needed
 
