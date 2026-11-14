@@ -3,6 +3,7 @@ import { v } from "convex/values";
 import { mutation, query } from "./_generated/server.js";
 import { getCurrentUserId } from "./auth.js";
 import {
+  occurrenceOverrideValidator,
   pauseWindowValidator,
   priorityValidator,
   reminderFields,
@@ -101,6 +102,7 @@ export const create = mutation({
     caregiverIds: v.optional(v.array(v.string())),
     active: v.optional(v.boolean()),
     pauses: v.optional(v.array(pauseWindowValidator)),
+    overrides: v.optional(v.array(occurrenceOverrideValidator)),
     createdAt: v.number(),
     updatedAt: v.number(),
   },
@@ -109,6 +111,11 @@ export const create = mutation({
     const currentUserId = await getCurrentUserId(ctx);
     if (args.userId !== currentUserId) {
       throw new Error("Cannot create reminder for another user");
+    }
+    // The engine refuses this on the device too (`MoveRefusal.NotATask`); a
+    // medication's moments are its doses, and a Notice never moves one.
+    if (args.kind !== "task" && (args.overrides?.length ?? 0) > 0) {
+      throw new Error("A medication cannot have occurrence overrides");
     }
 
     const existing = await ctx.db
@@ -176,6 +183,7 @@ export const create = mutation({
           ? { refillReminderDays: args.refillReminderDays }
           : {}),
         ...(args.pauses !== undefined ? { pauses: args.pauses } : {}),
+        ...(args.overrides !== undefined ? { overrides: args.overrides } : {}),
       });
 
       return existing._id;
@@ -208,6 +216,7 @@ export const create = mutation({
         ? { refillReminderDays: args.refillReminderDays }
         : {}),
       ...(args.pauses !== undefined ? { pauses: args.pauses } : {}),
+      ...(args.overrides !== undefined ? { overrides: args.overrides } : {}),
     });
   },
 });
@@ -228,6 +237,7 @@ export const update = mutation({
     caregiverIds: v.optional(v.array(v.string())),
     active: v.optional(v.boolean()),
     pauses: v.optional(v.array(pauseWindowValidator)),
+    overrides: v.optional(v.array(occurrenceOverrideValidator)),
     updatedAt: v.optional(v.number()),
   },
   returns: v.id("reminders"),
@@ -236,6 +246,11 @@ export const update = mutation({
     const existing = await ctx.db.get(args.id);
     if (existing?.userId !== userId) {
       throw new Error("Reminder not found");
+    }
+    // The Kind is a property of the stored row, not of this patch: a medication
+    // that a client tries to move would take every check the device skipped.
+    if (existing.kind !== "task" && (args.overrides?.length ?? 0) > 0) {
+      throw new Error("A medication cannot have occurrence overrides");
     }
 
     const now = Date.now();
@@ -264,6 +279,7 @@ export const update = mutation({
         : {}),
       ...(args.active !== undefined ? { active: args.active } : {}),
       ...(args.pauses !== undefined ? { pauses: args.pauses } : {}),
+      ...(args.overrides !== undefined ? { overrides: args.overrides } : {}),
     });
 
     return args.id;

@@ -81,7 +81,8 @@ fun pausesToJson(windows: List<PauseWindow>): JsonArray =
         }
     }
 
-private fun JsonElement?.whole(): Long? {
+/** A JSON number that is a whole millisecond count, or null. Shared with `OccurrenceOverride.kt`. */
+internal fun JsonElement?.whole(): Long? {
     val primitive = this as? JsonPrimitive ?: return null
     if (primitive.isString) return null
     val number = primitive.content.toDoubleOrNull() ?: return null

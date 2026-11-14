@@ -455,3 +455,182 @@ describe("reminders pauses on update", () => {
     });
   });
 });
+
+/**
+ * Occurrence overrides. One moment of a task moved off the moment its Schedule
+ * produced, with `noticeId` naming the Notice that caused it when one did.
+ *
+ * Only a task can carry one, and a validator cannot make a field depend on
+ * `kind`, so both mutations check it. `overrides` follows `pauses` in every
+ * other respect: optional at the top level, and `[]` means "clear".
+ */
+const MOVED = {
+  from: NOW + 86_400_000,
+  to: NOW + 2 * 86_400_000,
+  noticeId: "notice_taxes",
+};
+const MOVED_BY_HAND = { from: NOW + 86_400_000, to: NOW + 2 * 86_400_000 };
+
+const TASK_PUSH = {
+  ...DEVICE_PUSH,
+  localId: "local-taxes",
+  kind: "task" as const,
+  name: "File taxes",
+  schedule: { type: "once" as const, at: NOW + 86_400_000 },
+};
+
+describe("reminders overrides on create", () => {
+  it("stores a move, with the notice that caused it", async () => {
+    const t = deployment();
+    const id = await t.mutation(api.reminders.create, {
+      ...TASK_PUSH,
+      overrides: [MOVED],
+    });
+
+    expect((await t.query(api.reminders.get, { id }))?.overrides).toEqual([
+      MOVED,
+    ]);
+  });
+
+  it("stores a move made by hand, with no notice", async () => {
+    const t = deployment();
+    const id = await t.mutation(api.reminders.create, {
+      ...TASK_PUSH,
+      overrides: [MOVED_BY_HAND],
+    });
+
+    const stored = (await t.query(api.reminders.get, { id }))?.overrides;
+    expect(stored).toEqual([MOVED_BY_HAND]);
+    expect(stored?.[0]).not.toHaveProperty("noticeId");
+  });
+
+  it("leaves the field undefined when none are sent", async () => {
+    const t = deployment();
+    const id = await t.mutation(api.reminders.create, TASK_PUSH);
+
+    expect(
+      (await t.query(api.reminders.get, { id }))?.overrides
+    ).toBeUndefined();
+  });
+
+  it("refuses a medication carrying a move", async () => {
+    const t = deployment();
+
+    await expect(
+      t.mutation(api.reminders.create, {
+        ...DEVICE_PUSH,
+        overrides: [MOVED],
+      })
+    ).rejects.toThrow(/cannot have occurrence overrides/);
+  });
+
+  it("accepts an empty array on a medication, which is how it is cleared", async () => {
+    const t = deployment();
+    const id = await t.mutation(api.reminders.create, {
+      ...DEVICE_PUSH,
+      overrides: [],
+    });
+
+    expect((await t.query(api.reminders.get, { id }))?.overrides).toEqual([]);
+  });
+
+  it("rejects a move with no target", async () => {
+    const t = deployment();
+
+    await expect(
+      t.mutation(api.reminders.create, {
+        ...TASK_PUSH,
+        overrides: [{ from: NOW } as unknown as { from: number; to: number }],
+      })
+    ).rejects.toThrow();
+  });
+});
+
+describe("reminders overrides on a create replayed for the same localId", () => {
+  it("applies the moves it carries", async () => {
+    const t = deployment();
+    const id = await t.mutation(api.reminders.create, TASK_PUSH);
+
+    await t.mutation(api.reminders.create, {
+      ...TASK_PUSH,
+      overrides: [MOVED],
+      updatedAt: NOW + 60_000,
+    });
+
+    expect((await t.query(api.reminders.get, { id }))?.overrides).toEqual([
+      MOVED,
+    ]);
+  });
+
+  it("leaves existing moves alone when it carries none", async () => {
+    const t = deployment();
+    const id = await t.mutation(api.reminders.create, {
+      ...TASK_PUSH,
+      overrides: [MOVED],
+    });
+
+    await t.mutation(api.reminders.create, {
+      ...TASK_PUSH,
+      name: "File taxes and receipts",
+      updatedAt: NOW + 60_000,
+    });
+
+    expect(await t.query(api.reminders.get, { id })).toMatchObject({
+      name: "File taxes and receipts",
+      overrides: [MOVED],
+    });
+  });
+});
+
+describe("reminders overrides on update", () => {
+  it("sets them", async () => {
+    const t = deployment();
+    const id = await t.mutation(api.reminders.create, TASK_PUSH);
+
+    await t.mutation(api.reminders.update, { id, overrides: [MOVED] });
+
+    expect((await t.query(api.reminders.get, { id }))?.overrides).toEqual([
+      MOVED,
+    ]);
+  });
+
+  it("stores an empty array, which is how a client clears them", async () => {
+    const t = deployment();
+    const id = await t.mutation(api.reminders.create, {
+      ...TASK_PUSH,
+      overrides: [MOVED],
+    });
+
+    await t.mutation(api.reminders.update, { id, overrides: [] });
+
+    expect((await t.query(api.reminders.get, { id }))?.overrides).toEqual([]);
+  });
+
+  it("leaves existing moves untouched when the update omits them", async () => {
+    const t = deployment();
+    const id = await t.mutation(api.reminders.create, {
+      ...TASK_PUSH,
+      overrides: [MOVED, MOVED_BY_HAND],
+    });
+
+    await t.mutation(api.reminders.update, {
+      id,
+      name: "File taxes and receipts",
+      updatedAt: NOW + 60_000,
+    });
+
+    expect(await t.query(api.reminders.get, { id })).toMatchObject({
+      name: "File taxes and receipts",
+      overrides: [MOVED, MOVED_BY_HAND],
+    });
+  });
+
+  it("refuses to move a moment on a medication", async () => {
+    const t = deployment();
+    const id = await t.mutation(api.reminders.create, DEVICE_PUSH);
+
+    await expect(
+      t.mutation(api.reminders.update, { id, overrides: [MOVED] })
+    ).rejects.toThrow(/cannot have occurrence overrides/);
+  });
+});

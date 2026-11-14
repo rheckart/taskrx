@@ -1,6 +1,7 @@
 package com.taskrx.mobile.ui.today
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -114,6 +115,11 @@ data class TodayActions(
     val onAnswerTask: (TimelineRow, BatchAction) -> Unit = { _, _ -> },
     /** Record a dose of an as-needed medication as taken now. */
     val onTakeAsNeeded: (Reminder) -> Unit = {},
+    /** Open the move dialog for one task occurrence. */
+    val onMoveTask: (TimelineRow) -> Unit = {},
+    /** Move the occurrence the open dialog is showing to this moment. */
+    val onConfirmMove: (Long) -> Unit = {},
+    val onCancelMove: () -> Unit = {},
 )
 
 /**
@@ -147,6 +153,15 @@ fun TodayContent(
             }
         }
         AddButton(actions, Modifier.align(Alignment.BottomEnd).padding(16.dp))
+    }
+
+    state.move?.let { draft ->
+        MoveOccurrenceDialog(
+            draft = draft,
+            now = now(),
+            onConfirm = actions.onConfirmMove,
+            onDismiss = actions.onCancelMove,
+        )
     }
 }
 
@@ -437,6 +452,7 @@ private fun TaskTimeline(
                         onDone = { actions.onAnswerTask(row, BatchAction.Take) },
                         onSkip = { actions.onAnswerTask(row, BatchAction.Skip) },
                         onUndo = { actions.onUndo(row) },
+                        onMove = { actions.onMoveTask(row) },
                     )
                 }
             }
@@ -500,7 +516,16 @@ private fun TaskRow(row: TimelineRow, state: TodayState, actions: TodayActions, 
     TimelineRowView(
         row,
         onPress = { actions.onOpenAnswer(row) },
-        onLongPress = if (row.status == InstanceStatus.Completed) ({ onEdit(row) }) else null,
+        // Held: an answered task opens its edit form, an open one offers to move this occurrence.
+        // The move is here rather than on the answer screen because opening that mints a
+        // `pending` Instance, and a moment with a row on the server cannot be moved.
+        onLongPress =
+            if (row.status == InstanceStatus.Completed) {
+                { onEdit(row) }
+            } else {
+                { actions.onMoveTask(row) }
+            },
+        longPressLabel = if (row.status == InstanceStatus.Completed) "Edit this task" else "Move this occurrence",
         onUndo = if (row.instanceId in state.undoable) ({ actions.onUndo(row) }) else null,
     )
 }
@@ -521,6 +546,7 @@ private fun OverdueTaskRow(
     onDone: () -> Unit,
     onSkip: () -> Unit,
     onUndo: () -> Unit,
+    onMove: () -> Unit,
 ) {
     val dayStart = localDayBounds(row.scheduledTime, 0).start
     val dayText = dayHeading(localCalendarDaysBetween(now, dayStart), dayStart)
@@ -529,6 +555,8 @@ private fun OverdueTaskRow(
         onPress = onPress,
         statusText = "Overdue",
         dayText = dayText,
+        onLongPress = onMove,
+        longPressLabel = "Move this occurrence",
         onUndo = if (canUndo) onUndo else null,
         actions = {
             Row(Modifier.fillMaxWidth().padding(horizontal = 8.dp), horizontalArrangement = Arrangement.End) {
@@ -609,6 +637,8 @@ fun TimelineRowView(
     onPress: () -> Unit,
     modifier: Modifier = Modifier,
     onLongPress: (() -> Unit)? = null,
+    /** What a screen reader says the hold does. */
+    longPressLabel: String = "Change the time taken",
     onUndo: (() -> Unit)? = null,
     /** Overrides the status word, for a display-only word such as an Overdue task's. */
     statusText: String? = null,
@@ -629,18 +659,26 @@ fun TimelineRowView(
         if (answered) {
             Modifier
         } else {
-            Modifier.clickable(role = Role.Button, onClickLabel = "Answer", onClick = onPress)
+            // One gesture detector for both, so a tap is not swallowed by the long-press
+            // detector: `detectTapGestures` consumes the down event and the click never fires.
+            Modifier.combinedClickable(
+                role = Role.Button,
+                onClickLabel = "Answer",
+                onLongClickLabel = onLongPress?.let { longPressLabel },
+                onLongClick = onLongPress,
+                onClick = onPress,
+            )
         }
     // Held, not tapped, and not a click: an answered row still offers nothing to press, but
     // a held one can have the time it was taken changed. The same action is on the row's
     // semantics so a screen reader can reach it.
     val hold =
-        if (onLongPress == null) {
+        if (onLongPress == null || !answered) {
             Modifier
         } else {
             Modifier
                 .pointerInput(row.instanceId) { detectTapGestures(onLongPress = { onLongPress() }) }
-                .semantics { onLongClick(label = "Change the time taken") { onLongPress(); true } }
+                .semantics { onLongClick(label = longPressLabel) { onLongPress(); true } }
         }
 
     Column(modifier) {

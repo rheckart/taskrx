@@ -6,6 +6,7 @@ import com.taskrx.core.domain.Reminder
 import com.taskrx.core.domain.ReminderKind
 import com.taskrx.core.domain.ScheduleTimes
 import com.taskrx.core.domain.isWellFormedSchedule
+import com.taskrx.core.domain.withoutOverride
 import com.taskrx.mobile.AppContainer
 import com.taskrx.mobile.data.Change
 import com.taskrx.mobile.data.UpdateReminderPatch
@@ -75,6 +76,32 @@ class EditReminderViewModel(private val app: AppContainer) : ViewModel() {
     fun setDetail(detail: String) = edit { it.copy(detail = detail) }
 
     fun setSchedule(schedule: ScheduleTimes) = edit { it.copy(schedule = schedule) }
+
+    /**
+     * Removes one moved occurrence.
+     *
+     * Kept apart from [save] because a move is not part of the form's subject: the form is about
+     * the Schedule, and a move is a fact about one moment of it. Removing one is the escape hatch
+     * for an override that a Schedule edit made inert, or one the person no longer wants.
+     */
+    fun removeOverride(from: Long): Job =
+        viewModelScope.launch {
+            val current = mutable.value as? EditState.Editing ?: return@launch
+            try {
+                val updated =
+                    app.reminders.update(
+                        current.reminder.id,
+                        UpdateReminderPatch(overrides = current.reminder.overrides.withoutOverride(from)),
+                    )
+                app.notifications.rescheduleAfterWrite(app.session.userId)
+                edit { it.copy(reminder = updated) }
+                app.toaster.show(ToastRequest("Move removed", ToastKind.Success))
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                app.toaster.show(ToastRequest("Couldn't remove that move", ToastKind.Error))
+            }
+        }
 
     fun save(): Job =
         viewModelScope.launch {

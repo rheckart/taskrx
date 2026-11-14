@@ -2,6 +2,7 @@ package com.taskrx.mobile.ui
 
 import com.taskrx.core.batch.BatchAction
 import com.taskrx.core.domain.InstanceStatus
+import com.taskrx.core.domain.OccurrenceOverride
 import com.taskrx.core.domain.ReminderKind
 import com.taskrx.core.domain.asNeededTimes
 import com.taskrx.core.domain.dailyTimes
@@ -703,8 +704,63 @@ class TodayViewModelTest {
         }
 
     @Test
-    fun `a task completed early in the week ahead can still be undone`() =
+    fun `moving a task occurrence writes an override and the row comes back at its new moment`() =
         withUi(MIDNIGHT + 10 * HOUR) {
+            reminder("task", ReminderKind.Task, onceTimes(MIDNIGHT + 12 * HOUR), createdAt = MIDNIGHT - DAY, name = "Call pharmacy")
+            val toasts = ToastLog()
+            val vm = TodayViewModel(container, zone = { UTC }, log = { _, _ -> }, toast = toasts::add)
+            vm.refresh().join()
+            val row = vm.state.value.sections.dueToday.single()
+
+            vm.beginMove(row).join()
+            assertEquals(row, vm.state.value.move?.row)
+
+            val target = MIDNIGHT + DAY + 12 * HOUR
+            vm.confirmMove(target).join()
+
+            assertNull(vm.state.value.move)
+            assertEquals("Call pharmacy moved", toasts.shown.single().message)
+            val stored = container.reminders.get("task")!!
+            assertEquals(listOf(OccurrenceOverride(MIDNIGHT + 12 * HOUR, target)), stored.overrides)
+            // The schedule is untouched: the next occurrence is still the one it produced.
+            assertEquals(onceTimes(MIDNIGHT + 12 * HOUR), stored.schedule)
+            assertEquals(listOf(target), vm.state.value.sections.upcoming.flatMap { it.rows }.map { it.scheduledTime })
+        }
+
+    @Test
+    fun `a move to the moment it is already on is refused and writes nothing`() =
+        withUi(MIDNIGHT + 10 * HOUR) {
+            reminder("task", ReminderKind.Task, onceTimes(MIDNIGHT + 12 * HOUR), createdAt = MIDNIGHT - DAY, name = "Call pharmacy")
+            val toasts = ToastLog()
+            val vm = TodayViewModel(container, zone = { UTC }, log = { _, _ -> }, toast = toasts::add)
+            vm.refresh().join()
+
+            vm.beginMove(vm.state.value.sections.dueToday.single()).join()
+            vm.confirmMove(MIDNIGHT + 12 * HOUR).join()
+
+            assertEquals("That one can't be moved", toasts.shown.single().message)
+            assertEquals(emptyList(), container.reminders.get("task")!!.overrides)
+        }
+
+    @Test
+    fun `a task already answered cannot be moved`() =
+        withUi(MIDNIGHT + 10 * HOUR) {
+            reminder("task", ReminderKind.Task, onceTimes(MIDNIGHT + 12 * HOUR), createdAt = MIDNIGHT - DAY, name = "Call pharmacy")
+            val instance = container.instances.create(CreateReminderInstanceInput(USER, "task", ReminderKind.Task, MIDNIGHT + 12 * HOUR))
+            container.instances.markCompleted(instance.id, MIDNIGHT + 9 * HOUR)
+            val toasts = ToastLog()
+            val vm = TodayViewModel(container, zone = { UTC }, log = { _, _ -> }, toast = toasts::add)
+            vm.refresh().join()
+
+            vm.beginMove(vm.state.value.sections.dueToday.single()).join()
+            vm.confirmMove(MIDNIGHT + DAY + 12 * HOUR).join()
+
+            assertEquals("That one can't be moved", toasts.shown.single().message)
+            assertEquals(emptyList(), container.reminders.get("task")!!.overrides)
+        }
+
+    @Test
+    fun `a task completed early in the week ahead can still be undone`() =        withUi(MIDNIGHT + 10 * HOUR) {
             reminder("ahead", ReminderKind.Task, onceTimes(MIDNIGHT + DAY + 12 * HOUR), createdAt = MIDNIGHT - DAY, name = "Ahead thing")
             val instance = container.instances.create(CreateReminderInstanceInput(USER, "ahead", ReminderKind.Task, MIDNIGHT + DAY + 12 * HOUR))
             container.instances.markCompleted(instance.id, MIDNIGHT + 9 * HOUR)

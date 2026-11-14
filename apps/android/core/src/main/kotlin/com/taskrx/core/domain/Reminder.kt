@@ -42,6 +42,11 @@ data class Reminder(
     override val updatedAt: Long,
     /** Stretches in which this Reminder is paused; see `Pause.kt`. Empty for almost every Reminder. */
     val pauses: List<PauseWindow> = emptyList(),
+    /**
+     * Occurrences of this Reminder that moved off the moment its Schedule produces; see
+     * `OccurrenceOverride.kt`. Empty for every Reminder that has never had one.
+     */
+    val overrides: List<OccurrenceOverride> = emptyList(),
 ) : Timestamped
 
 /**
@@ -70,6 +75,7 @@ fun createReminder(
     caregiverIds: List<String> = emptyList(),
     active: Boolean = true,
     pauses: List<PauseWindow> = emptyList(),
+    overrides: List<OccurrenceOverride> = emptyList(),
 ): Reminder =
     Reminder(
         id = id,
@@ -89,6 +95,7 @@ fun createReminder(
         createdAt = createdAt,
         updatedAt = updatedAt,
         pauses = pauses.toList(),
+        overrides = overrides.toList(),
     )
 
 data class ReminderInstance(

@@ -7,9 +7,12 @@ import com.taskrx.core.batch.BatchAction
 import com.taskrx.core.asneeded.takings
 import com.taskrx.core.domain.AsNeededTimes
 import com.taskrx.core.domain.InstanceStatus
+import com.taskrx.core.domain.OccurrenceOverride
 import com.taskrx.core.domain.Reminder
 import com.taskrx.core.domain.ReminderKind
 import com.taskrx.core.domain.isAnswerable
+import com.taskrx.core.domain.moveRefusal
+import com.taskrx.core.domain.withOverride
 import com.taskrx.core.time.takenAtOrNull
 import com.taskrx.core.undo.UNDOABLE_STATUSES
 import com.taskrx.core.undo.isScheduledOccurrence
@@ -25,6 +28,7 @@ import com.taskrx.core.timeline.projectTimeline
 import com.taskrx.mobile.AppContainer
 import com.taskrx.mobile.asneeded.AsNeededEntry
 import com.taskrx.mobile.data.InstanceFilter
+import com.taskrx.mobile.data.UpdateReminderPatch
 import com.taskrx.mobile.dose.RecordResult
 import com.taskrx.mobile.ui.components.ToastKind
 import com.taskrx.mobile.ui.components.ToastRequest
@@ -59,6 +63,8 @@ data class TodayState(
     val kindChosen: Boolean = false,
     /** Medications taken as needed, for the card at the top of the Medications tab. Not part of any day's rows. */
     val asNeeded: List<AsNeededEntry> = emptyList(),
+    /** The move dialog, when one is open: the occurrence, its Reminder and the rows already minted for it. */
+    val move: MoveDraft? = null,
 ) {
     /** The rows of the open tab, done or not. */
     val tabRows: List<TimelineRow>
@@ -276,8 +282,72 @@ class TodayViewModel(
             loads.withLock { load() }
         }
 
-    private fun moveTo(requested: Int): Job {
-        val offset = if (mutable.value.canGoForward) requested else minOf(0, requested)
+    /**
+     * Opens the move dialog for one task row.
+     *
+     * The Instances already minted for that moment are read here, not in the dialog, because
+     * whether a move is allowed depends on them: an answered row is history, and an open one
+     * has its time written to the server with no path to update it. Reading them is also why
+     * this is not done from the answer screen - opening that mints a `pending` row, which
+     * would refuse the very move the person came to make.
+     */
+    fun beginMove(row: TimelineRow): Job =
+        viewModelScope.launch {
+            try {
+                val reminder = app.reminders.get(row.reminderId) ?: return@launch
+                val instances = app.instances.allForOccurrence(app.session.userId, row.reminderId, row.scheduledTime)
+                mutable.update { it.copy(move = MoveDraft(row, reminder, instances)) }
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                log("opening a move failed", e)
+                toast(ToastRequest("Couldn't open that task", ToastKind.Error))
+            }
+        }
+
+    fun cancelMove() = mutable.update { it.copy(move = null) }
+
+    /**
+     * Moves the occurrence the dialog is showing to [to], as an override on the Reminder.
+     *
+     * The refusal is checked again here rather than trusted from the dialog: the clock moved
+     * while the dialog was open, and the check is the rule, not the button's state.
+     */
+    fun confirmMove(to: Long): Job =
+        viewModelScope.launch {
+            val draft = mutable.value.move ?: return@launch
+            val now = app.clock()
+            val refusal = moveRefusal(draft.reminder, draft.row.scheduledTime, to, now, draft.instances)
+            if (refusal != null) {
+                toast(ToastRequest("That one can't be moved", ToastKind.Error))
+                return@launch
+            }
+
+            try {
+                app.reminders.update(
+                    draft.reminder.id,
+                    UpdateReminderPatch(
+                        overrides =
+                            draft.reminder.overrides.withOverride(
+                                OccurrenceOverride(from = draft.row.scheduledTime, to = to),
+                            ),
+                    ),
+                )
+                // The armed notifications now differ: the old moment is gone and the new one
+                // needs an alarm.
+                app.notifications.rescheduleAfterWrite(app.session.userId)
+                mutable.update { it.copy(move = null) }
+                toast(ToastRequest("${draft.row.name} moved", ToastKind.Success))
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                log("moving a task failed", e)
+                toast(ToastRequest("Couldn't move ${draft.row.name}", ToastKind.Error))
+            }
+            loads.withLock { load() }
+        }
+
+    private fun moveTo(requested: Int): Job {        val offset = if (mutable.value.canGoForward) requested else minOf(0, requested)
         if (offset == mutable.value.dayOffset) return Job().also { it.complete() }
         mutable.update { it.copy(dayOffset = offset, loading = true) }
         return refresh()

@@ -5,6 +5,7 @@ import com.taskrx.core.domain.DailyTimes
 import com.taskrx.core.domain.IntervalTimes
 import com.taskrx.core.domain.MonthlyTimes
 import com.taskrx.core.domain.NoneTimes
+import com.taskrx.core.domain.OccurrenceOverride
 import com.taskrx.core.domain.OnceTimes
 import com.taskrx.core.domain.PauseWindow
 import com.taskrx.core.domain.Priority
@@ -12,6 +13,7 @@ import com.taskrx.core.domain.ReminderKind
 import com.taskrx.core.domain.InstanceStatus
 import com.taskrx.core.domain.ScheduleTimes
 import com.taskrx.core.domain.WeeklyTimes
+import com.taskrx.core.domain.overridesToJson
 import com.taskrx.core.domain.pausesToJson
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonNull
@@ -95,6 +97,7 @@ internal object SyncPayloads {
         createdAt: Long,
         updatedAt: Long,
         pauses: List<PauseWindow>? = null,
+        overrides: List<OccurrenceOverride>? = null,
     ): JsonObject =
         buildJsonObject {
             put("localId", localId)
@@ -116,6 +119,8 @@ internal object SyncPayloads {
             put("updatedAt", updatedAt)
             // Null leaves the server's windows alone; an empty list clears them.
             put("pauses", pauses?.let(::pausesToJson) ?: JsonNull)
+            // Same rule for moved occurrences.
+            put("overrides", overrides?.let(::overridesToJson) ?: JsonNull)
         }
 
     fun reminderDelete(localId: String, userId: String, deletedAt: Long): JsonObject =

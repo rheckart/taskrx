@@ -6,6 +6,7 @@ import com.taskrx.core.domain.DailyTimes
 import com.taskrx.core.domain.IntervalTimes
 import com.taskrx.core.domain.MonthlyTimes
 import com.taskrx.core.domain.NoneTimes
+import com.taskrx.core.domain.OccurrenceOverride
 import com.taskrx.core.domain.OnceTimes
 import com.taskrx.core.domain.Reminder
 import com.taskrx.core.domain.ScheduleTimes
@@ -265,6 +266,11 @@ private fun monthlyOccurrences(
  * horizon and always returns exactly [count]. `once` returns at most one and
  * `none` always returns nothing, whatever [count] says.
  *
+ * A moment the Reminder has moved ([OccurrenceOverride]) comes back at the moment it moved
+ * to, because that is where the alarm, the timeline, the Missed sweep and the answer all
+ * look. The Schedule is never consulted about the move, so every caller gets the same
+ * answer without knowing overrides exist.
+ *
  * The `when` over [ScheduleTimes] is exhaustive, so the C#
  * `InvalidOperationException` for an unknown variant has no arm here: an
  * unknown variant is a compile error, and JSON that names one never gets past
@@ -280,14 +286,59 @@ fun nextOccurrences(
 ): List<ScheduledOccurrence> {
     require(count >= 0) { "count must be a non-negative integer, received $count." }
     if (count == 0) return emptyList()
-    if (reminder.pauses.isEmpty()) return scheduledOccurrences(reminder, fromMs, count, zone)
 
-    return unpausedOccurrences(reminder, fromMs, count, zone)
+    val moved = liveOverrides(reminder, fromMs, zone)
+    if (moved.isEmpty()) return upcomingOccurrences(reminder, fromMs, count, zone)
+
+    // Asked for with room to spare: every applied move drops its own source from the batch,
+    // and a move must not shorten the answer. Asking for a source before `fromMs` costs
+    // nothing, which is why the size of the list is an upper bound rather than the count.
+    val upcoming = upcomingOccurrences(reminder, fromMs, count + moved.size, zone)
+    val sources = moved.map { it.from }.toSet()
+
+    // Sorted and de-duplicated afterwards because a move can reorder the batch, and two
+    // occurrences of one Reminder can land on the same moment: the answerable row is the
+    // pairing, so one row is all either of them could produce.
+    return (upcoming.filterNot { it.fireAt in sources } + moved.map { occurrenceAt(reminder, it.to) })
+        .distinctBy { it.fireAt }
+        .sortedBy { it.fireAt }
+        .take(count)
 }
 
 /**
- * [nextOccurrences] for a Reminder with pauses: the same moments minus the paused ones, still
- * [count] of them when the Schedule has that many.
+ * The overrides that still move something as of [fromMs]: a target still ahead, a source the
+ * current Schedule still produces, and neither end covered by a pause.
+ *
+ * The Schedule check is what leaves an override inert after the person edits the rule - the
+ * entry stays on the Reminder and explains itself, but it no longer moves anything. The pause
+ * check is the other way round: a pause is about the time the person will not be reminded,
+ * so it wins over a move across it, and the occurrence stays where the Schedule put it.
+ */
+private fun liveOverrides(reminder: Reminder, fromMs: Long, zone: ZoneId): List<OccurrenceOverride> =
+    reminder.overrides.filter { override ->
+        override.to > fromMs &&
+            !isPausedAt(reminder.pauses, override.from) &&
+            !isPausedAt(reminder.pauses, override.to) &&
+            isScheduledMoment(reminder, override.from, zone)
+    }
+
+/** Whether the Schedule still produces [moment] exactly. Pauses are not consulted here. */
+private fun isScheduledMoment(reminder: Reminder, moment: Long, zone: ZoneId): Boolean =
+    scheduledOccurrences(reminder, moment - 1, 1, zone).firstOrNull()?.fireAt == moment
+
+/** The moments the Schedule itself produces, before any move is applied. */
+private fun upcomingOccurrences(
+    reminder: Reminder,
+    fromMs: Long,
+    count: Int,
+    zone: ZoneId,
+): List<ScheduledOccurrence> =
+    if (reminder.pauses.isEmpty()) scheduledOccurrences(reminder, fromMs, count, zone)
+    else unpausedOccurrences(reminder, fromMs, count, zone)
+
+/**
+ * The Schedule's moments, minus the paused ones, still [count] of them when the Schedule has
+ * that many.
  *
  * Filtering a counted batch would hand back fewer than asked for, and a pause that spans the
  * whole batch would hand back none even though doses resume a week later. So each round asks the

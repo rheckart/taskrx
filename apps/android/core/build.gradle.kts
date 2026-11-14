@@ -52,6 +52,10 @@ kover {
             "com.taskrx.core.domain.ReminderKt*",
             "com.taskrx.core.domain.PauseKt*",
             "com.taskrx.core.domain.PauseWindow",
+            // One occurrence moved off its scheduled moment (occurrence-override.ts).
+            "com.taskrx.core.domain.OccurrenceOverrideKt*",
+            "com.taskrx.core.domain.OccurrenceOverride",
+            "com.taskrx.core.domain.MoveRefusal*",
             "com.taskrx.core.domain.Reminder",
             "com.taskrx.core.domain.ReminderInstance",
             "com.taskrx.core.domain.Caregiver",

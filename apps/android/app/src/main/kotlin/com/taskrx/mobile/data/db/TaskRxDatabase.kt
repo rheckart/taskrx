@@ -16,7 +16,7 @@ import androidx.sqlite.db.SupportSQLiteDatabase
  */
 @Database(
     entities = [ReminderEntity::class, ReminderInstanceEntity::class, SyncQueueEntity::class],
-    version = 2,
+    version = 3,
     exportSchema = false,
 )
 abstract class TaskRxDatabase : RoomDatabase() {
@@ -37,9 +37,17 @@ abstract class TaskRxDatabase : RoomDatabase() {
                 }
             }
 
+        /** 2 to 3: one Occurrence can be moved (`overrides`, a JSON array of moves). */
+        val MIGRATION_2_3: Migration =
+            object : Migration(2, 3) {
+                override fun migrate(db: SupportSQLiteDatabase) {
+                    db.execSQL("ALTER TABLE reminders ADD COLUMN overrides TEXT NOT NULL DEFAULT '[]'")
+                }
+            }
+
         fun open(context: Context): TaskRxDatabase =
             Room.databaseBuilder(context.applicationContext, TaskRxDatabase::class.java, FILE_NAME)
-                .addMigrations(MIGRATION_1_2)
+                .addMigrations(MIGRATION_1_2, MIGRATION_2_3)
                 .build()
     }
 }

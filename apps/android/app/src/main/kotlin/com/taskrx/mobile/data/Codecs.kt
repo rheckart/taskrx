@@ -6,8 +6,11 @@ import com.taskrx.core.domain.ReminderInstance
 import com.taskrx.core.domain.ReminderKind
 import com.taskrx.core.domain.InstanceStatus
 import com.taskrx.core.domain.NoneTimes
+import com.taskrx.core.domain.OccurrenceOverride
 import com.taskrx.core.domain.PauseWindow
 import com.taskrx.core.domain.ScheduleTimes
+import com.taskrx.core.domain.overridesFromJson
+import com.taskrx.core.domain.overridesToJson
 import com.taskrx.core.domain.parseScheduleTimes
 import com.taskrx.core.domain.pausesFromJson
 import com.taskrx.core.domain.pausesToJson
@@ -64,6 +67,16 @@ internal object Codecs {
             emptyList()
         }
 
+    fun overridesToColumn(overrides: List<OccurrenceOverride>): String = overridesToJson(overrides).toString()
+
+    /** An unreadable column reads as not moved: every Occurrence stays where the schedule put it. */
+    fun overridesFromColumn(text: String): List<OccurrenceOverride> =
+        try {
+            overridesFromJson(Json.parseToJsonElement(text))
+        } catch (_: IllegalArgumentException) {
+            emptyList()
+        }
+
     fun stringsToColumn(values: List<String>): String =
         buildJsonArray { values.forEach { add(JsonPrimitive(it)) } }.toString()
 
@@ -95,6 +108,7 @@ internal object Codecs {
             createdAt = row.createdAt,
             updatedAt = row.updatedAt,
             pauses = pausesFromColumn(row.pauses),
+            overrides = overridesFromColumn(row.overrides),
         )
 
     fun toInstance(row: ReminderInstanceEntity): ReminderInstance =

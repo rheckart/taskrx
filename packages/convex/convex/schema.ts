@@ -170,6 +170,19 @@ export const pauseWindowValidator = v.object({
 });
 
 /**
+ * One Occurrence of a task, moved off the moment its Schedule produced.
+ *
+ * `from` is that moment and `to` is where it now falls, both unix ms; the
+ * Schedule itself is unchanged. `noticeId` records why the move happened, when
+ * a Notice proposed it and the person agreed.
+ */
+export const occurrenceOverrideValidator = v.object({
+  from: v.number(),
+  to: v.number(),
+  noticeId: v.optional(v.string()),
+});
+
+/**
  * Stored fields of a `reminders` document.
  *
  * `userId` is the Clerk subject; `localId` is the stable UUID the device
@@ -206,6 +219,9 @@ export const reminderFields = {
   // Optional at the top level so documents written before pauses existed stay
   // valid. An empty array is a real value: it is how a client clears them.
   pauses: v.optional(v.array(pauseWindowValidator)),
+  // Same rule for moved occurrences. Only a task can carry one, which the
+  // mutations check: a validator cannot make a field depend on `kind`.
+  overrides: v.optional(v.array(occurrenceOverrideValidator)),
 };
 
 /**
