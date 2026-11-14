@@ -18,7 +18,7 @@ outside sentence into the app, proposing what it means, and letting the person d
 - [x] Notices and watched sources as data: Convex tables, Room migration 3, sync, Notices screen, share intake
 - [x] Date extraction and proposals in `:core`, apply path, heads-up notification, count
 - [x] Notification listener: service, seen list, approval, intake
-- [ ] Mailbox: JMAP action, cron, cursor, sentence selection, tests
+- [x] Mailbox: JMAP action, cron, cursor, sentence selection, tests
 - [ ] Docs: ADR 0014, `architecture.md`, competitor document amendment (ADR 0013 and the `CONTEXT.md` terms are done)
 
 ## Scope check

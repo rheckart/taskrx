@@ -240,6 +240,19 @@ export const watchSourceFields = {
 };
 
 /**
+ * The mailbox poll's cursor. One row per deployment (D15: one mailbox), so the poll reads
+ * the single document rather than a per-user one.
+ *
+ * `cursor` is the unix ms the last successful poll started at. The next poll asks JMAP for
+ * messages received after it, minus a small overlap; a replayed message is harmless because
+ * `notices` de-duplicates on the email id.
+ */
+export const mailboxStateFields = {
+  cursor: v.number(),
+  updatedAt: v.number(),
+};
+
+/**
  * Stored fields of a `reminders` document.
  *
  * `userId` is the Clerk subject; `localId` is the stable UUID the device
@@ -340,4 +353,8 @@ export default defineSchema({
   watchSources: defineTable(watchSourceFields)
     .index("by_user", ["userId"])
     .index("by_local_id", ["localId"]),
+
+  // The mailbox poll's cursor. One row for the whole deployment: there is one mailbox
+  // (D15), so there is one place to remember how far it has been read.
+  mailboxState: defineTable(mailboxStateFields),
 });

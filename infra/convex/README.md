@@ -22,6 +22,19 @@ Docker. Host ports: backend `3220`, HTTP actions `3221`, dashboard `6791`
 `deploy.sh` hands the CLI a temporary `--env-file`, which replaces
 `packages/convex/.env.local`; that file is never edited.
 
+## The mailbox (optional)
+
+The server polls one Fastmail mailbox every five minutes (`convex/crons.ts` →
+`mailbox.poll`) and keeps a notice when the sender is a watched source. It is off until a
+token is set, and a deployment without one stores nothing:
+
+    CONVEX_TARGET=vps ./deploy.sh env set JMAP_TOKEN '<fastmail app password>'
+
+The token is a Fastmail API token with the `urn:ietf:params:jmap:mail` scope. One mailbox
+per deployment (D15 in `docs/plans/external-notices.md`): a second person on the same
+backend sees the first person's notices. The poll's cursor is the single `mailboxState`
+row; deleting it makes the next poll look back a week.
+
 ## Backup / restore
 
     ./backup.sh                       # -> backups/taskrx-<timestamp>.dump (pg_dump -Fc)

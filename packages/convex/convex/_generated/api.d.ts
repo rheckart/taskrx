@@ -9,7 +9,9 @@
  */
 
 import type * as auth from "../auth.js";
+import type * as crons from "../crons.js";
 import type * as harnessData from "../harnessData.js";
+import type * as mailbox from "../mailbox.js";
 import type * as notices from "../notices.js";
 import type * as reminderInstances from "../reminderInstances.js";
 import type * as reminders from "../reminders.js";
@@ -24,7 +26,9 @@ import type {
 
 declare const fullApi: ApiFromModules<{
   auth: typeof auth;
+  crons: typeof crons;
   harnessData: typeof harnessData;
+  mailbox: typeof mailbox;
   notices: typeof notices;
   reminderInstances: typeof reminderInstances;
   reminders: typeof reminders;
