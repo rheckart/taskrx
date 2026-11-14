@@ -153,14 +153,29 @@ class NoticesScreenTest {
     fun `a settled notice says what became of it and offers nothing`() {
         content(
             NoticesState(
-                notices = listOf(notice(id = "a", title = "Applied", resolution = NoticeResolution.Applied), notice(id = "b", title = "Put aside", resolution = NoticeResolution.Dismissed)),
+                notices = listOf(
+                    notice(id = "a", title = "Moved", resolution = NoticeResolution.Applied),
+                    notice(id = "b", title = "Put aside", resolution = NoticeResolution.Dismissed),
+                ),
+                loading = false,
+            ),
+        )
+
+        compose.onNodeWithText("Moved a task").assertIsDisplayed()
+        compose.onNodeWithText("Dismissed").assertExists()
+        compose.onNodeWithText("0 waiting for you").assertIsDisplayed()
+    }
+
+    @Test
+    fun `a notice turned into a task says that, not that a task moved`() {
+        content(
+            NoticesState(
+                notices = listOf(notice(id = "c", title = "Added", resolution = NoticeResolution.NewTask)),
                 loading = false,
             ),
         )
 
         compose.onNodeWithText("Turned into a task").assertIsDisplayed()
-        compose.onNodeWithText("Dismissed").assertExists()
-        compose.onNodeWithText("0 waiting for you").assertIsDisplayed()
     }
 
     @Test

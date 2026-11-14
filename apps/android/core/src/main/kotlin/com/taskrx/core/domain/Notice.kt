@@ -30,10 +30,17 @@ enum class SourceKind(val wire: String) {
     }
 }
 
-/** What became of a Notice: still waiting for a decision, applied to a task, or put aside. */
+/**
+ * What became of a Notice: still waiting for a decision, applied as a move to an existing
+ * task, turned into a new task, or put aside.
+ *
+ * The two task outcomes are separate values because they say different things on screen: a
+ * move leaves the task that was already there, and a new task did not exist before.
+ */
 enum class NoticeResolution(val wire: String) {
     None("none"),
     Applied("applied"),
+    NewTask("newTask"),
     Dismissed("dismissed"),
     ;
 

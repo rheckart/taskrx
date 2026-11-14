@@ -204,7 +204,8 @@ private fun NoticeRow(
                         modifier = Modifier.semantics { contentDescription = "Dismiss ${notice.title}" },
                     ) { Text("Dismiss") }
                 }
-            NoticeResolution.Applied -> StatusLine("Turned into a task")
+            NoticeResolution.Applied -> StatusLine("Moved a task")
+            NoticeResolution.NewTask -> StatusLine("Turned into a task")
             NoticeResolution.Dismissed -> StatusLine("Dismissed")
         }
         HorizontalDivider(Modifier.padding(top = 12.dp), color = TaskRxColors.Divider)

@@ -193,6 +193,7 @@ export const sourceKindValidator = v.union(
 export const noticeResolutionValidator = v.union(
   v.literal("none"),
   v.literal("applied"),
+  v.literal("newTask"),
   v.literal("dismissed")
 );
 

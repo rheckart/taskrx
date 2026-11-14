@@ -132,7 +132,7 @@ class NoticesViewModel(
                         instructions = draft.notice.sentence,
                     ),
                 )
-                app.notices.resolve(draft.notice.id, NoticeResolution.Applied)
+                app.notices.resolve(draft.notice.id, NoticeResolution.NewTask)
                 app.notifications.rescheduleAfterWrite(app.session.userId)
                 mutable.update { it.copy(draft = null) }
                 toast(ToastRequest("Task added", ToastKind.Success))

@@ -120,7 +120,7 @@ class NoticesViewModelTest {
             assertEquals("Bins moved", task.name)
             assertEquals(OnceTimes(at), task.schedule)
             assertEquals("Collection moves to Thursday.", task.instructions)
-            assertEquals(NoticeResolution.Applied, container.notices.get(created.id)!!.resolution)
+            assertEquals(NoticeResolution.NewTask, container.notices.get(created.id)!!.resolution)
         }
 
     @Test
