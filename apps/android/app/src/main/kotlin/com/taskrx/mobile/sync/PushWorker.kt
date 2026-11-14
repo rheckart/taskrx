@@ -10,15 +10,23 @@ import com.taskrx.core.sync.afterFailure
 import com.taskrx.core.sync.backoffMillis
 import com.taskrx.core.sync.instanceCreateCall
 import com.taskrx.core.sync.instanceUpdateCall
+import com.taskrx.core.sync.noticeCreateCall
+import com.taskrx.core.sync.noticeDeleteCall
+import com.taskrx.core.sync.noticeUpdateCall
 import com.taskrx.core.sync.reminderCreateCall
 import com.taskrx.core.sync.reminderDeleteCall
 import com.taskrx.core.sync.reminderUpdateCall
+import com.taskrx.core.sync.watchSourceCreateCall
+import com.taskrx.core.sync.watchSourceDeleteCall
+import com.taskrx.core.sync.watchSourceUpdateCall
+import com.taskrx.mobile.data.NoticesRepository
 import com.taskrx.mobile.data.ReminderInstancesRepository
 import com.taskrx.mobile.data.RemindersRepository
 import com.taskrx.mobile.data.SyncEntityType
 import com.taskrx.mobile.data.SyncOperation
 import com.taskrx.mobile.data.SyncQueueEntry
 import com.taskrx.mobile.data.SyncQueueRepository
+import com.taskrx.mobile.data.WatchSourcesRepository
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.TimeoutCancellationException
 import kotlinx.coroutines.withTimeout
@@ -56,6 +64,8 @@ class PushWorker(
     private val queue: SyncQueueRepository,
     private val reminders: RemindersRepository,
     private val instances: ReminderInstancesRepository,
+    private val notices: NoticesRepository,
+    private val watchSources: WatchSourcesRepository,
     private val gateway: ConvexGateway,
     private val connectivity: Connectivity,
     private val userId: () -> String?,
@@ -137,6 +147,20 @@ class PushWorker(
         } catch (e: Exception) {
             Log.e(TAG, "instance reconciliation failed", e)
         }
+        try {
+            notices.reconcilePending()
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            Log.e(TAG, "notice reconciliation failed", e)
+        }
+        try {
+            watchSources.reconcilePending()
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            Log.e(TAG, "watched source reconciliation failed", e)
+        }
 
         var failed = false
         for (entry in queue.pending()) {
@@ -195,6 +219,8 @@ class PushWorker(
         when (entry.entityType) {
             SyncEntityType.Reminder -> pushReminder(entry, payload)
             SyncEntityType.ReminderInstance -> pushInstance(entry, payload)
+            SyncEntityType.Notice -> pushNotice(entry, payload)
+            SyncEntityType.WatchSource -> pushWatchSource(entry, payload)
         }
     }
 
@@ -226,6 +252,28 @@ class PushWorker(
 
     private suspend fun send(call: PushCall): JsonElement = gateway.mutation(call.function, call.args)
 
+    private suspend fun pushNotice(entry: SyncQueueEntry, payload: JsonObject) {
+        when (entry.operation) {
+            SyncOperation.Create -> {
+                val id = idOf(send(noticeCreateCall(payload)))
+                notices.setConvexId(entry.entityId, id)
+            }
+            SyncOperation.Update -> send(noticeUpdateCall(payload, resolveNoticeId(entry.entityId)))
+            SyncOperation.Delete -> send(noticeDeleteCall(payload.optionalString("convexId") ?: resolveNoticeId(entry.entityId)))
+        }
+    }
+
+    private suspend fun pushWatchSource(entry: SyncQueueEntry, payload: JsonObject) {
+        when (entry.operation) {
+            SyncOperation.Create -> {
+                val id = idOf(send(watchSourceCreateCall(payload)))
+                watchSources.setConvexId(entry.entityId, id)
+            }
+            SyncOperation.Update -> send(watchSourceUpdateCall(payload, resolveWatchSourceId(entry.entityId)))
+            SyncOperation.Delete -> send(watchSourceDeleteCall(payload.optionalString("convexId") ?: resolveWatchSourceId(entry.entityId)))
+        }
+    }
+
     /**
      * A local reminder id as the server's. The cache is `reminders.convex_id`, written only
      * from ids a mutation or query returned; a miss asks the server by `localId`.
@@ -244,6 +292,20 @@ class PushWorker(
         return documentId(remote).also { instances.setConvexId(localId, it) }
     }
 
+    private suspend fun resolveNoticeId(localId: String): String {
+        notices.getConvexId(localId)?.let { return it }
+        val remote = gateway.query(ConvexFunctions.NOTICES_GET_BY_LOCAL_ID, mapOf("localId" to localId))
+        if (remote is JsonNull) throw IllegalStateException("Notice $localId not found on Convex")
+        return documentId(remote).also { notices.setConvexId(localId, it) }
+    }
+
+    private suspend fun resolveWatchSourceId(localId: String): String {
+        watchSources.getConvexId(localId)?.let { return it }
+        val remote = gateway.query(ConvexFunctions.WATCH_SOURCES_GET_BY_LOCAL_ID, mapOf("localId" to localId))
+        if (remote is JsonNull) throw IllegalStateException("Watched source $localId not found on Convex")
+        return documentId(remote).also { watchSources.setConvexId(localId, it) }
+    }
+
     // Switches, not an if/else: the next entity type added must not fall into the wrong repo,
     // whose UPDATE would match no row and leave sync_status stuck at `pending`.
     private suspend fun markSourceSynced(entry: SyncQueueEntry) {
@@ -251,6 +313,8 @@ class PushWorker(
             when (entry.entityType) {
                 SyncEntityType.Reminder -> reminders.markSynced(entry.entityId)
                 SyncEntityType.ReminderInstance -> instances.markSynced(entry.entityId)
+                SyncEntityType.Notice -> notices.markSynced(entry.entityId)
+                SyncEntityType.WatchSource -> watchSources.markSynced(entry.entityId)
             }
         } catch (e: CancellationException) {
             throw e
@@ -264,6 +328,8 @@ class PushWorker(
             when (entry.entityType) {
                 SyncEntityType.Reminder -> reminders.markError(entry.entityId, error)
                 SyncEntityType.ReminderInstance -> instances.markError(entry.entityId, error)
+                SyncEntityType.Notice -> notices.markError(entry.entityId, error)
+                SyncEntityType.WatchSource -> watchSources.markError(entry.entityId, error)
             }
         } catch (e: CancellationException) {
             throw e
@@ -274,6 +340,9 @@ class PushWorker(
 
     private fun JsonObject.string(key: String): String =
         (this[key] as? JsonPrimitive)?.takeIf { it.isString }?.content ?: throw PushRejected("Payload is missing $key")
+
+    private fun JsonObject.optionalString(key: String): String? =
+        (this[key] as? JsonPrimitive)?.takeIf { it.isString }?.content
 
     private fun idOf(response: JsonElement): String =
         (response as? JsonPrimitive)?.takeIf { it.isString }?.content ?: throw IllegalStateException("Expected an id from the server, got $response")

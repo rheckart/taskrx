@@ -20,8 +20,8 @@ private const val T0 = 1_780_000_000_000L
 class StuckChangesTest {
     private class Rig(val fx: Fixture) {
         val gateway = FakeGateway()
-        val worker = PushWorker(fx.container.syncQueue, fx.container.reminders, fx.container.instances, gateway, FakeConnectivity(), { USER }, { })
-        val stuck = StuckChanges(fx.container.syncQueue, fx.container.reminders, fx.container.instances) { USER }
+        val worker = PushWorker(fx.container.syncQueue, fx.container.reminders, fx.container.instances, fx.container.notices, fx.container.watchSources, gateway, FakeConnectivity(), { USER }, { })
+        val stuck = StuckChanges(fx.container.syncQueue, fx.container.reminders, fx.container.instances, fx.container.notices, fx.container.watchSources) { USER }
 
         /** Five failed drains: the push worker gives up and sets the change aside. */
         suspend fun failFiveTimes() {
@@ -79,11 +79,41 @@ class StuckChangesTest {
         rig {
             fx.reminder("m1")
             failFiveTimes()
-            val other = StuckChanges(fx.container.syncQueue, fx.container.reminders, fx.container.instances) { "someone-else" }
+            val other = StuckChanges(fx.container.syncQueue, fx.container.reminders, fx.container.instances, fx.container.notices, fx.container.watchSources) { "someone-else" }
 
             assertEquals(0, other.count())
             assertEquals(0, other.retryAll())
             assertTrue(stuck.count() > 0)
+        }
+
+    @Test
+    fun `a notice and a watched source that failed for good are listed in words`() =
+        rig {
+            fx.container.watchSources.create(
+                com.taskrx.mobile.data.CreateWatchedSourceInput(USER, com.taskrx.core.domain.SourceKind.Email, "waste@city.example", "Waste"),
+            )
+            fx.container.notices.create(
+                com.taskrx.mobile.data.CreateNoticeInput(
+                    userId = USER,
+                    sourceKind = com.taskrx.core.domain.SourceKind.Share,
+                    sourceValue = "share",
+                    title = "Bins moved",
+                    receivedAt = T0,
+                ),
+            )
+            failFiveTimes()
+
+            val listed = stuck.list()
+            assertTrue(listed.any { it.what == "Watched source: Waste" }, listed.toString())
+            assertTrue(listed.any { it.what == "Notice: Bins moved" }, listed.toString())
+
+            gateway.calls.clear()
+            gateway.onMutation = { _, args -> JsonPrimitive("cid-" + args["localId"]) }
+            assertEquals(2, stuck.retryAll())
+            worker.drain()
+
+            assertEquals(0, stuck.count())
+            assertTrue(fx.container.syncQueue.pending().isEmpty())
         }
 
     @Test
@@ -92,6 +122,6 @@ class StuckChangesTest {
             fx.reminder("m1")
             failFiveTimes()
 
-            assertEquals(0, StuckChanges(fx.container.syncQueue, fx.container.reminders, fx.container.instances) { null }.count())
+            assertEquals(0, StuckChanges(fx.container.syncQueue, fx.container.reminders, fx.container.instances, fx.container.notices, fx.container.watchSources) { null }.count())
         }
 }

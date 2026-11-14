@@ -2,6 +2,7 @@ package com.taskrx.mobile.data
 
 import androidx.room.withTransaction
 import com.taskrx.core.domain.OccurrenceOverride
+import com.taskrx.core.domain.NoticeRule
 import com.taskrx.core.domain.PauseWindow
 import com.taskrx.core.domain.Priority
 import com.taskrx.core.domain.Reminder
@@ -63,6 +64,8 @@ data class UpdateReminderPatch(
     val pauses: List<PauseWindow>? = null,
     /** The whole list of moved occurrences, replacing the stored one. Null leaves it. */
     val overrides: List<OccurrenceOverride>? = null,
+    /** The whole list of notice rules, replacing the stored one. Null leaves it. */
+    val noticeRules: List<NoticeRule>? = null,
 )
 
 /** A reminder as it arrives from a remote pull: the domain shape plus the two columns it does not carry. */
@@ -197,6 +200,7 @@ class RemindersRepository(
                     active = patch.active ?: existing.active,
                     pauses = patch.pauses ?: existing.pauses,
                     overrides = patch.overrides ?: existing.overrides,
+                    noticeRules = patch.noticeRules ?: existing.noticeRules,
                     updatedAt = now,
                 )
 
@@ -216,6 +220,7 @@ class RemindersRepository(
                     active = next.active,
                     pauses = Codecs.pausesToColumn(next.pauses),
                     overrides = Codecs.overridesToColumn(next.overrides),
+                    noticeRules = Codecs.noticeRulesToColumn(next.noticeRules),
                     updatedAt = now,
                     syncStatus = SyncStatus.PENDING,
                 ),
@@ -251,6 +256,7 @@ class RemindersRepository(
                     // unrelated edit must not overwrite windows set on another device.
                     pauses = patch.pauses,
                     overrides = patch.overrides,
+                    noticeRules = patch.noticeRules,
                 ),
             )
 
@@ -333,6 +339,7 @@ class RemindersRepository(
                 updatedAt = existing.updatedAt,
                 pauses = existing.pauses.takeIf { it.isNotEmpty() },
                 overrides = existing.overrides.takeIf { it.isNotEmpty() },
+                noticeRules = existing.noticeRules.takeIf { it.isNotEmpty() },
             ),
         )
     }
@@ -403,6 +410,7 @@ class RemindersRepository(
                         syncStatus = SyncStatus.SYNCED,
                         pauses = Codecs.pausesToColumn(reminder.pauses),
                         overrides = Codecs.overridesToColumn(reminder.overrides),
+                        noticeRules = Codecs.noticeRulesToColumn(reminder.noticeRules),
                     ),
                 )
             }

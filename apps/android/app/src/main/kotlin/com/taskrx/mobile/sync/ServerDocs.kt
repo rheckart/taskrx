@@ -2,15 +2,22 @@ package com.taskrx.mobile.sync
 
 import com.taskrx.core.domain.InstanceStatus
 import com.taskrx.core.domain.NoneTimes
+import com.taskrx.core.domain.Notice
+import com.taskrx.core.domain.NoticeResolution
 import com.taskrx.core.domain.Priority
 import com.taskrx.core.domain.Reminder
 import com.taskrx.core.domain.pausesFromJson
+import com.taskrx.core.domain.noticeRulesFromJson
 import com.taskrx.core.domain.overridesFromJson
 import com.taskrx.core.domain.ReminderInstance
 import com.taskrx.core.domain.ReminderKind
+import com.taskrx.core.domain.SourceKind
+import com.taskrx.core.domain.WatchedSource
 import com.taskrx.core.sync.scheduleFromServer
+import com.taskrx.mobile.data.PulledNotice
 import com.taskrx.mobile.data.PulledReminder
 import com.taskrx.mobile.data.PulledReminderInstance
+import com.taskrx.mobile.data.PulledWatchedSource
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
@@ -56,6 +63,8 @@ internal data class ServerReminder(
     val pauses: JsonElement? = null,
     /** Absent on a document written before occurrences could be moved. */
     val overrides: JsonElement? = null,
+    /** Absent on a document written before notices could be proposed against it. */
+    val noticeRules: JsonElement? = null,
 )
 
 @Serializable
@@ -77,12 +86,45 @@ internal data class ServerInstance(
     val updatedAt: Double,
 )
 
+@Serializable
+internal data class ServerNotice(
+    @SerialName("_id") val id: String,
+    val localId: String,
+    val userId: String,
+    val sourceKind: String,
+    val sourceValue: String,
+    val title: String,
+    val sentence: String? = null,
+    val receivedAt: Double,
+    val externalId: String? = null,
+    val resolution: String,
+    val resolvedAt: Double? = null,
+    val createdAt: Double,
+    val updatedAt: Double,
+)
+
+@Serializable
+internal data class ServerWatchedSource(
+    @SerialName("_id") val id: String,
+    val localId: String,
+    val userId: String,
+    val kind: String,
+    val value: String,
+    val label: String,
+    val createdAt: Double,
+    val updatedAt: Double,
+)
+
 internal object ServerDocs {
     private val json = Json { ignoreUnknownKeys = true }
 
     fun reminders(list: JsonElement): List<ServerReminder> = json.decodeFromJsonElement(list)
 
     fun instances(list: JsonElement): List<ServerInstance> = json.decodeFromJsonElement(list)
+
+    fun notices(list: JsonElement): List<ServerNotice> = json.decodeFromJsonElement(list)
+
+    fun watchSources(list: JsonElement): List<ServerWatchedSource> = json.decodeFromJsonElement(list)
 
     /**
      * The row to write locally, or null if the document names a Kind this build does not know
@@ -114,6 +156,7 @@ internal object ServerDocs {
                     updatedAt = doc.updatedAt.toLong(),
                     pauses = pausesFromJson(doc.pauses),
                     overrides = overridesFromJson(doc.overrides),
+                    noticeRules = noticeRulesFromJson(doc.noticeRules),
                 ),
             convexId = doc.id,
             rxcui = doc.rxcui,
@@ -139,6 +182,47 @@ internal object ServerDocs {
                     snoozedUntil = doc.snoozedUntil?.toLong(),
                     snoozeCount = doc.snoozeCount.toInt(),
                     notes = doc.notes,
+                    createdAt = doc.createdAt.toLong(),
+                    updatedAt = doc.updatedAt.toLong(),
+                ),
+            convexId = doc.id,
+        )
+    }
+
+    /** The row to write locally, or null if the document names a source kind or resolution this build does not know. */
+    fun toPulled(doc: ServerNotice): PulledNotice? {
+        val kind = SourceKind.fromWire(doc.sourceKind) ?: return null
+        val resolution = NoticeResolution.fromWire(doc.resolution) ?: return null
+        return PulledNotice(
+            notice =
+                Notice(
+                    id = doc.localId,
+                    userId = doc.userId,
+                    sourceKind = kind,
+                    sourceValue = doc.sourceValue,
+                    title = doc.title,
+                    sentence = doc.sentence,
+                    receivedAt = doc.receivedAt.toLong(),
+                    externalId = doc.externalId,
+                    resolution = resolution,
+                    resolvedAt = doc.resolvedAt?.toLong(),
+                    createdAt = doc.createdAt.toLong(),
+                    updatedAt = doc.updatedAt.toLong(),
+                ),
+            convexId = doc.id,
+        )
+    }
+
+    fun toPulled(doc: ServerWatchedSource): PulledWatchedSource? {
+        val kind = SourceKind.fromWire(doc.kind) ?: return null
+        return PulledWatchedSource(
+            source =
+                WatchedSource(
+                    id = doc.localId,
+                    userId = doc.userId,
+                    kind = kind,
+                    value = doc.value,
+                    label = doc.label,
                     createdAt = doc.createdAt.toLong(),
                     updatedAt = doc.updatedAt.toLong(),
                 ),

@@ -1,10 +1,12 @@
 package com.taskrx.mobile.sync
 
+import com.taskrx.mobile.data.NoticesRepository
 import com.taskrx.mobile.data.ReminderInstancesRepository
 import com.taskrx.mobile.data.RemindersRepository
 import com.taskrx.mobile.data.SyncEntityType
 import com.taskrx.mobile.data.SyncQueueEntry
 import com.taskrx.mobile.data.SyncQueueRepository
+import com.taskrx.mobile.data.WatchSourcesRepository
 import com.taskrx.mobile.format.formatDayTime
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonObject
@@ -27,6 +29,8 @@ class StuckChanges(
     private val queue: SyncQueueRepository,
     private val reminders: RemindersRepository,
     private val instances: ReminderInstancesRepository,
+    private val notices: NoticesRepository,
+    private val watchSources: WatchSourcesRepository,
     private val userId: () -> String?,
 ) {
     private suspend fun mine(): List<SyncQueueEntry> {
@@ -45,6 +49,8 @@ class StuckChanges(
             when (entry.entityType) {
                 SyncEntityType.Reminder -> reminders.markPending(entry.entityId)
                 SyncEntityType.ReminderInstance -> instances.markPending(entry.entityId)
+                SyncEntityType.Notice -> notices.markPending(entry.entityId)
+                SyncEntityType.WatchSource -> watchSources.markPending(entry.entityId)
             }
             queue.requeue(entry.id)
         }
@@ -62,6 +68,14 @@ class StuckChanges(
                 val name = payload.text("reminderId")?.let { reminders.get(it)?.name } ?: "a reminder"
                 val time = (payload?.get("scheduledTime") as? JsonPrimitive)?.longOrNull
                 if (time == null) "Answer to $name" else "Answer to $name, due ${formatDayTime(time)}"
+            }
+            SyncEntityType.Notice -> {
+                val title = payload.text("title") ?: notices.get(entry.entityId)?.title ?: "a notice"
+                "Notice: $title"
+            }
+            SyncEntityType.WatchSource -> {
+                val label = payload.text("label") ?: watchSources.get(entry.entityId)?.label ?: "a watched source"
+                "Watched source: $label"
             }
         }
     }

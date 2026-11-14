@@ -54,6 +54,61 @@ data class ReminderEntity(
     @ColumnInfo(name = "pauses", defaultValue = "[]") val pauses: String = "[]",
     /** JSON array of moved occurrences (`overridesToJson`). Added in version 3; `[]` for every older row. */
     @ColumnInfo(name = "overrides", defaultValue = "[]") val overrides: String = "[]",
+    /** JSON array of notice rules (`noticeRulesToJson`). Added in version 4; `[]` for every older row. */
+    @ColumnInfo(name = "notice_rules", defaultValue = "[]") val noticeRules: String = "[]",
+)
+
+/**
+ * Table `notices`: outside messages a watched source admitted. Evidence, not a commitment.
+ *
+ * The body is not stored: [sentence] is the part the person is shown, and the rest is
+ * discarded once the notice is written. `external_id` is what de-duplication keys on.
+ */
+@Entity(
+    tableName = "notices",
+    indices = [
+        Index(value = ["user_id", "received_at"]),
+        Index(value = ["user_id", "external_id"]),
+        Index(value = ["convex_id"]),
+        Index(value = ["sync_status"]),
+    ],
+)
+data class NoticeEntity(
+    @PrimaryKey val id: String,
+    @ColumnInfo(name = "user_id") val userId: String,
+    @ColumnInfo(name = "convex_id") val convexId: String?,
+    @ColumnInfo(name = "source_kind") val sourceKind: String,
+    @ColumnInfo(name = "source_value") val sourceValue: String,
+    val title: String,
+    val sentence: String?,
+    @ColumnInfo(name = "received_at") val receivedAt: Long,
+    @ColumnInfo(name = "external_id") val externalId: String?,
+    val resolution: String,
+    @ColumnInfo(name = "resolved_at") val resolvedAt: Long?,
+    @ColumnInfo(name = "created_at") val createdAt: Long,
+    @ColumnInfo(name = "updated_at") val updatedAt: Long,
+    @ColumnInfo(name = "sync_status") val syncStatus: String,
+)
+
+/** Table `watch_sources`: the senders and apps whose notices may be kept at all. */
+@Entity(
+    tableName = "watch_sources",
+    indices = [
+        Index(value = ["user_id"]),
+        Index(value = ["convex_id"]),
+        Index(value = ["sync_status"]),
+    ],
+)
+data class WatchedSourceEntity(
+    @PrimaryKey val id: String,
+    @ColumnInfo(name = "user_id") val userId: String,
+    @ColumnInfo(name = "convex_id") val convexId: String?,
+    val kind: String,
+    val value: String,
+    val label: String,
+    @ColumnInfo(name = "created_at") val createdAt: Long,
+    @ColumnInfo(name = "updated_at") val updatedAt: Long,
+    @ColumnInfo(name = "sync_status") val syncStatus: String,
 )
 
 /**

@@ -12,11 +12,13 @@ import com.taskrx.mobile.data.Clock
 import com.taskrx.mobile.data.IdGenerator
 import com.taskrx.mobile.data.LocalAdoption
 import com.taskrx.mobile.dose.DoseRecorder
+import com.taskrx.mobile.data.NoticesRepository
 import com.taskrx.mobile.data.RandomUuid
 import com.taskrx.mobile.data.ReminderInstancesRepository
 import com.taskrx.mobile.data.RemindersRepository
 import com.taskrx.mobile.data.SyncQueueRepository
 import com.taskrx.mobile.data.SystemClock
+import com.taskrx.mobile.data.WatchSourcesRepository
 import com.taskrx.mobile.data.db.TaskRxDatabase
 import com.taskrx.mobile.notifications.NotificationsModule
 import com.taskrx.mobile.settings.AppSettings
@@ -71,6 +73,8 @@ class AppContainer(
     val syncQueue = SyncQueueRepository(database.syncQueueDao(), clock)
     val reminders = RemindersRepository(database, syncQueue, clock, newId)
     val instances = ReminderInstancesRepository(database, syncQueue, reminders, clock, newId)
+    val notices = NoticesRepository(database, syncQueue, clock, newId)
+    val watchSources = WatchSourcesRepository(database, syncQueue, clock, newId)
 
     val sweep = MissedSweepRunner(RoomSweepStore(reminders, instances))
     val adherence = AdherenceReader(sweep, instances, reminders)
@@ -128,13 +132,13 @@ class AppContainer(
             ?: OfflineDrugSearch
 
     /** The changes the push worker gave up on, and the way to try them again. */
-    val stuckChanges = StuckChanges(syncQueue, reminders, instances) { session.signedInUserId }
+    val stuckChanges = StuckChanges(syncQueue, reminders, instances, notices, watchSources) { session.signedInUserId }
 
     /** Push and pull, running while signed in. Null in a local-only build. */
     val sync: SyncCoordinator? =
         remote?.let { r ->
-            val worker = PushWorker(syncQueue, reminders, instances, r.gateway, r.connectivity, userId = { session.signedInUserId })
-            SyncCoordinator(scope, auth, r.ready, worker, stuckChanges, PullSync(r.gateway, PullApplier(reminders, instances) { notifications.rescheduleAfterWrite(session.userId) }), r.connectivity)
+            val worker = PushWorker(syncQueue, reminders, instances, notices, watchSources, r.gateway, r.connectivity, userId = { session.signedInUserId })
+            SyncCoordinator(scope, auth, r.ready, worker, stuckChanges, PullSync(r.gateway, PullApplier(reminders, instances, notices, watchSources) { notifications.rescheduleAfterWrite(session.userId) }), r.connectivity)
         }
 
     init {

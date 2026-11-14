@@ -5,6 +5,8 @@ import com.taskrx.core.domain.DailyTimes
 import com.taskrx.core.domain.IntervalTimes
 import com.taskrx.core.domain.MonthlyTimes
 import com.taskrx.core.domain.NoneTimes
+import com.taskrx.core.domain.NoticeResolution
+import com.taskrx.core.domain.NoticeRule
 import com.taskrx.core.domain.OccurrenceOverride
 import com.taskrx.core.domain.OnceTimes
 import com.taskrx.core.domain.PauseWindow
@@ -12,7 +14,9 @@ import com.taskrx.core.domain.Priority
 import com.taskrx.core.domain.ReminderKind
 import com.taskrx.core.domain.InstanceStatus
 import com.taskrx.core.domain.ScheduleTimes
+import com.taskrx.core.domain.SourceKind
 import com.taskrx.core.domain.WeeklyTimes
+import com.taskrx.core.domain.noticeRulesToJson
 import com.taskrx.core.domain.overridesToJson
 import com.taskrx.core.domain.pausesToJson
 import kotlinx.serialization.json.JsonArray
@@ -98,6 +102,7 @@ internal object SyncPayloads {
         updatedAt: Long,
         pauses: List<PauseWindow>? = null,
         overrides: List<OccurrenceOverride>? = null,
+        noticeRules: List<NoticeRule>? = null,
     ): JsonObject =
         buildJsonObject {
             put("localId", localId)
@@ -121,6 +126,8 @@ internal object SyncPayloads {
             put("pauses", pauses?.let(::pausesToJson) ?: JsonNull)
             // Same rule for moved occurrences.
             put("overrides", overrides?.let(::overridesToJson) ?: JsonNull)
+            // And for the rules that let a notice be proposed against this Reminder.
+            put("noticeRules", noticeRules?.let(::noticeRulesToJson) ?: JsonNull)
         }
 
     fun reminderDelete(localId: String, userId: String, deletedAt: Long): JsonObject =
@@ -128,6 +135,72 @@ internal object SyncPayloads {
             put("localId", localId)
             put("userId", userId)
             put("deletedAt", deletedAt)
+        }
+
+    /** One notice, as `notices.create` takes it. */
+    fun notice(
+        localId: String,
+        userId: String,
+        sourceKind: SourceKind,
+        sourceValue: String,
+        title: String,
+        sentence: String?,
+        receivedAt: Long,
+        externalId: String?,
+        resolution: NoticeResolution,
+        resolvedAt: Long?,
+        createdAt: Long,
+        updatedAt: Long,
+    ): JsonObject =
+        buildJsonObject {
+            put("localId", localId)
+            put("userId", userId)
+            put("sourceKind", sourceKind.wire)
+            put("sourceValue", sourceValue)
+            put("title", title)
+            put("sentence", sentence)
+            put("receivedAt", receivedAt)
+            put("externalId", externalId)
+            put("resolution", resolution.wire)
+            put("resolvedAt", resolvedAt)
+            put("createdAt", createdAt)
+            put("updatedAt", updatedAt)
+        }
+
+    /** One watched source, as `watchSources.create` takes it. */
+    fun watchSource(
+        localId: String,
+        userId: String,
+        kind: SourceKind,
+        value: String,
+        label: String,
+        createdAt: Long,
+        updatedAt: Long,
+    ): JsonObject =
+        buildJsonObject {
+            put("localId", localId)
+            put("userId", userId)
+            put("kind", kind.wire)
+            put("value", value)
+            put("label", label)
+            put("createdAt", createdAt)
+            put("updatedAt", updatedAt)
+        }
+
+    /** A notice removal, as `notices.remove` takes it. [convexId] is carried because the local row is gone by then. */
+    fun noticeDelete(userId: String, deletedAt: Long, convexId: String? = null): JsonObject =
+        buildJsonObject {
+            put("userId", userId)
+            put("deletedAt", deletedAt)
+            convexId?.let { put("convexId", it) }
+        }
+
+    /** A watched-source removal, as `watchSources.remove` takes it. */
+    fun watchSourceDelete(userId: String, deletedAt: Long, convexId: String? = null): JsonObject =
+        buildJsonObject {
+            put("userId", userId)
+            put("deletedAt", deletedAt)
+            convexId?.let { put("convexId", it) }
         }
 
     @Suppress("LongParameterList")

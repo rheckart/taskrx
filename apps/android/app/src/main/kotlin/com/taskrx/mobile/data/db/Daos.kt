@@ -169,8 +169,112 @@ interface ReminderInstanceDao {
 }
 
 @Dao
-interface SyncQueueDao {
-    @Insert
+interface NoticeDao {
+    @Insert(onConflict = OnConflictStrategy.ABORT)
+    suspend fun insert(row: NoticeEntity)
+
+    @Update
+    suspend fun update(row: NoticeEntity)
+
+    @Upsert
+    suspend fun upsert(row: NoticeEntity)
+
+    @Query("SELECT * FROM notices WHERE id = :id")
+    suspend fun get(id: String): NoticeEntity?
+
+    @Query("DELETE FROM notices WHERE id = :id")
+    suspend fun delete(id: String)
+
+    /** Newest received first. [resolution] null means every notice. */
+    @Query(
+        """
+        SELECT * FROM notices
+        WHERE user_id = :userId
+          AND (:resolution IS NULL OR resolution = :resolution)
+        ORDER BY received_at DESC, id ASC
+        """,
+    )
+    suspend fun list(userId: String, resolution: String?): List<NoticeEntity>
+
+    @Query("SELECT COUNT(*) FROM notices WHERE user_id = :userId AND resolution = 'none'")
+    suspend fun unresolvedCount(userId: String): Int
+
+    /** The row already holding this external id, for de-duplication at intake. */
+    @Query("SELECT * FROM notices WHERE user_id = :userId AND external_id = :externalId LIMIT 1")
+    suspend fun findByExternalId(userId: String, externalId: String): NoticeEntity?
+
+    @Query("SELECT id FROM notices WHERE convex_id = :convexId")
+    suspend fun localIdForConvexId(convexId: String): String?
+
+    @Query("UPDATE notices SET sync_status = :status WHERE id = :id")
+    suspend fun setSyncStatus(id: String, status: String)
+
+    @Query("UPDATE notices SET convex_id = :convexId WHERE id = :id")
+    suspend fun setConvexId(id: String, convexId: String)
+
+    @Query("UPDATE notices SET user_id = :to WHERE user_id = :from")
+    suspend fun reassignUser(from: String, to: String): Int
+
+    @Query(
+        """
+        SELECT n.id FROM notices n
+        WHERE n.sync_status = 'pending'
+          AND NOT EXISTS (
+            SELECT 1 FROM sync_queue q
+            WHERE q.entity_type = 'notice' AND q.entity_id = n.id AND q.dead_letter = 0
+          )
+        """,
+    )
+    suspend fun pendingWithoutQueueEntry(): List<String>
+}
+
+@Dao
+interface WatchedSourceDao {
+    @Insert(onConflict = OnConflictStrategy.ABORT)
+    suspend fun insert(row: WatchedSourceEntity)
+
+    @Update
+    suspend fun update(row: WatchedSourceEntity)
+
+    @Upsert
+    suspend fun upsert(row: WatchedSourceEntity)
+
+    @Query("SELECT * FROM watch_sources WHERE id = :id")
+    suspend fun get(id: String): WatchedSourceEntity?
+
+    @Query("DELETE FROM watch_sources WHERE id = :id")
+    suspend fun delete(id: String)
+
+    @Query("SELECT * FROM watch_sources WHERE user_id = :userId ORDER BY created_at ASC, id ASC")
+    suspend fun list(userId: String): List<WatchedSourceEntity>
+
+    @Query("SELECT id FROM watch_sources WHERE convex_id = :convexId")
+    suspend fun localIdForConvexId(convexId: String): String?
+
+    @Query("UPDATE watch_sources SET sync_status = :status WHERE id = :id")
+    suspend fun setSyncStatus(id: String, status: String)
+
+    @Query("UPDATE watch_sources SET convex_id = :convexId WHERE id = :id")
+    suspend fun setConvexId(id: String, convexId: String)
+
+    @Query("UPDATE watch_sources SET user_id = :to WHERE user_id = :from")
+    suspend fun reassignUser(from: String, to: String): Int
+
+    @Query(
+        """
+        SELECT w.id FROM watch_sources w
+        WHERE w.sync_status = 'pending'
+          AND NOT EXISTS (
+            SELECT 1 FROM sync_queue q
+            WHERE q.entity_type = 'watch_source' AND q.entity_id = w.id AND q.dead_letter = 0
+          )
+        """,
+    )
+    suspend fun pendingWithoutQueueEntry(): List<String>
+}
+
+@Dao
+interface SyncQueueDao {    @Insert
     suspend fun insert(row: SyncQueueEntity): Long
 
     @Query("SELECT * FROM sync_queue WHERE dead_letter = 0 ORDER BY created_at ASC, id ASC")
@@ -181,6 +285,9 @@ interface SyncQueueDao {
 
     @Query("DELETE FROM sync_queue WHERE id = :id")
     suspend fun remove(id: Long)
+
+    @Query("DELETE FROM sync_queue WHERE entity_type = :entityType AND entity_id = :entityId")
+    suspend fun removeFor(entityType: String, entityId: String)
 
     @Query("UPDATE sync_queue SET attempts = attempts + 1, last_error = :error WHERE id = :id")
     suspend fun markFailed(id: Long, error: String)

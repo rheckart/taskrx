@@ -15,7 +15,7 @@ outside sentence into the app, proposing what it means, and letting the person d
 
 - [x] Verify the ground: self-hosted Convex cron runs, VPS reaches Fastmail JMAP, token answers `Email/query`
 - [x] Occurrence overrides in `:core` (type, engine, tests) and "Move this occurrence" on a task row
-- [ ] Notices and watched sources as data: Convex tables, Room migration 3, sync, Notices screen, share intake
+- [x] Notices and watched sources as data: Convex tables, Room migration 3, sync, Notices screen, share intake
 - [ ] Date extraction and proposals in `:core`, apply path, heads-up notification, count
 - [ ] Notification listener: service, seen list, approval, intake
 - [ ] Mailbox: JMAP action, cron, cursor, sentence selection, tests

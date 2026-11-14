@@ -6,17 +6,26 @@ import com.taskrx.core.domain.ReminderInstance
 import com.taskrx.core.domain.ReminderKind
 import com.taskrx.core.domain.InstanceStatus
 import com.taskrx.core.domain.NoneTimes
+import com.taskrx.core.domain.Notice
+import com.taskrx.core.domain.NoticeResolution
+import com.taskrx.core.domain.NoticeRule
 import com.taskrx.core.domain.OccurrenceOverride
 import com.taskrx.core.domain.PauseWindow
 import com.taskrx.core.domain.ScheduleTimes
+import com.taskrx.core.domain.SourceKind
+import com.taskrx.core.domain.WatchedSource
+import com.taskrx.core.domain.noticeRulesFromJson
+import com.taskrx.core.domain.noticeRulesToJson
 import com.taskrx.core.domain.overridesFromJson
 import com.taskrx.core.domain.overridesToJson
 import com.taskrx.core.domain.parseScheduleTimes
 import com.taskrx.core.domain.pausesFromJson
 import com.taskrx.core.domain.pausesToJson
 import com.taskrx.core.domain.serializeScheduleTimes
+import com.taskrx.mobile.data.db.NoticeEntity
 import com.taskrx.mobile.data.db.ReminderEntity
 import com.taskrx.mobile.data.db.ReminderInstanceEntity
+import com.taskrx.mobile.data.db.WatchedSourceEntity
 import java.util.UUID
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonArray
@@ -77,6 +86,16 @@ internal object Codecs {
             emptyList()
         }
 
+    fun noticeRulesToColumn(rules: List<NoticeRule>): String = noticeRulesToJson(rules).toString()
+
+    /** An unreadable column reads as no rules: nothing is proposed until the person authors one. */
+    fun noticeRulesFromColumn(text: String): List<NoticeRule> =
+        try {
+            noticeRulesFromJson(Json.parseToJsonElement(text))
+        } catch (_: IllegalArgumentException) {
+            emptyList()
+        }
+
     fun stringsToColumn(values: List<String>): String =
         buildJsonArray { values.forEach { add(JsonPrimitive(it)) } }.toString()
 
@@ -109,6 +128,34 @@ internal object Codecs {
             updatedAt = row.updatedAt,
             pauses = pausesFromColumn(row.pauses),
             overrides = overridesFromColumn(row.overrides),
+            noticeRules = noticeRulesFromColumn(row.noticeRules),
+        )
+
+    fun toNotice(row: NoticeEntity): Notice =
+        Notice(
+            id = row.id,
+            userId = row.userId,
+            sourceKind = SourceKind.fromWire(row.sourceKind) ?: SourceKind.Share,
+            sourceValue = row.sourceValue,
+            title = row.title,
+            sentence = row.sentence,
+            receivedAt = row.receivedAt,
+            externalId = row.externalId,
+            resolution = NoticeResolution.fromWire(row.resolution) ?: NoticeResolution.None,
+            resolvedAt = row.resolvedAt,
+            createdAt = row.createdAt,
+            updatedAt = row.updatedAt,
+        )
+
+    fun toWatchedSource(row: WatchedSourceEntity): WatchedSource =
+        WatchedSource(
+            id = row.id,
+            userId = row.userId,
+            kind = SourceKind.fromWire(row.kind) ?: SourceKind.Email,
+            value = row.value,
+            label = row.label,
+            createdAt = row.createdAt,
+            updatedAt = row.updatedAt,
         )
 
     fun toInstance(row: ReminderInstanceEntity): ReminderInstance =

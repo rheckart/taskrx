@@ -19,7 +19,7 @@ private fun doc(localId: String, extra: String) =
 @RunWith(RobolectricTestRunner::class)
 class PausePullTest {
     private suspend fun com.taskrx.mobile.Fixture.pull(vararg docs: String) =
-        PullApplier(container.reminders, container.instances)
+        PullApplier(container.reminders, container.instances, container.notices, container.watchSources)
             .applyJson(Json.parseToJsonElement(docs.joinToString(prefix = "[", postfix = "]")), Json.parseToJsonElement("[]"))
 
     @Test

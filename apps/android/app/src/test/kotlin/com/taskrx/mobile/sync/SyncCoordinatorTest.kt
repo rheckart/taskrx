@@ -34,15 +34,15 @@ class SyncCoordinatorTest {
         val ready = MutableStateFlow(true)
         val gateway = FakeGateway()
         val connectivity = FakeConnectivity()
-        val worker = PushWorker(fx.container.syncQueue, fx.container.reminders, fx.container.instances, gateway, connectivity, { USER }, { })
+        val worker = PushWorker(fx.container.syncQueue, fx.container.reminders, fx.container.instances, fx.container.notices, fx.container.watchSources, gateway, connectivity, { USER }, { })
         val coordinator =
             SyncCoordinator(
                 CoroutineScope(job + Dispatchers.Default),
                 auth,
                 ready,
                 worker,
-                StuckChanges(fx.container.syncQueue, fx.container.reminders, fx.container.instances) { USER },
-                PullSync(gateway, PullApplier(fx.container.reminders, fx.container.instances)) { },
+                StuckChanges(fx.container.syncQueue, fx.container.reminders, fx.container.instances, fx.container.notices, fx.container.watchSources) { USER },
+                PullSync(gateway, PullApplier(fx.container.reminders, fx.container.instances, fx.container.notices, fx.container.watchSources)) { },
                 connectivity,
                 pendingPollMs = 20,
             )
@@ -121,7 +121,7 @@ class SyncCoordinatorTest {
             assertEquals(SyncBadge.Error, coordinator.badge.value)
 
             gateway.onMutation = { _, args -> Json.parseToJsonElement("\"cid-${args["localId"]}\"") }
-            StuckChanges(fx.container.syncQueue, fx.container.reminders, fx.container.instances) { USER }.retryAll()
+            StuckChanges(fx.container.syncQueue, fx.container.reminders, fx.container.instances, fx.container.notices, fx.container.watchSources) { USER }.retryAll()
 
             until("synced again") { coordinator.badge.value == SyncBadge.Synced }
         }
@@ -205,15 +205,15 @@ class SyncCoordinatorTest {
             inner.feeds[ConvexFunctions.INSTANCES_LIST] = flowOf(Json.parseToJsonElement("[]"))
             val gateway = ReauthenticatingGateway(inner, onRefused = { loggedIn = true })
             val connectivity = FakeConnectivity()
-            val worker = PushWorker(container.syncQueue, container.reminders, container.instances, gateway, connectivity, { USER }, { })
+            val worker = PushWorker(container.syncQueue, container.reminders, container.instances, container.notices, container.watchSources, gateway, connectivity, { USER }, { })
             val coordinator =
                 SyncCoordinator(
                     CoroutineScope(job + Dispatchers.Default),
                     FakeAuth(initial = AuthStatus.SignedIn(USER)),
                     MutableStateFlow(true),
                     worker,
-                    StuckChanges(container.syncQueue, container.reminders, container.instances) { USER },
-                    PullSync(gateway, PullApplier(container.reminders, container.instances)) { },
+                    StuckChanges(container.syncQueue, container.reminders, container.instances, container.notices, container.watchSources) { USER },
+                    PullSync(gateway, PullApplier(container.reminders, container.instances, container.notices, container.watchSources)) { },
                     connectivity,
                     pendingPollMs = 20,
                 )

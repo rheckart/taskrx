@@ -182,6 +182,63 @@ export const occurrenceOverrideValidator = v.object({
   noticeId: v.optional(v.string()),
 });
 
+/** Where a Notice came from. A watched source is only ever an email or an app. */
+export const sourceKindValidator = v.union(
+  v.literal("email"),
+  v.literal("app"),
+  v.literal("share")
+);
+
+/** What became of a Notice: still waiting, applied to a task, or put aside. */
+export const noticeResolutionValidator = v.union(
+  v.literal("none"),
+  v.literal("applied"),
+  v.literal("dismissed")
+);
+
+/**
+ * A rule on a Reminder: notices from `sourceValue` mentioning one of `terms` may be
+ * proposed against it. An empty `terms` means any notice from that source.
+ */
+export const noticeRuleValidator = v.object({
+  sourceKind: sourceKindValidator,
+  sourceValue: v.string(),
+  terms: v.array(v.string()),
+});
+
+/**
+ * Stored fields of a `notices` document.
+ *
+ * Retention is deliberately narrow: the source, the subject, the sentence the date came
+ * from, and when it arrived. The body is not stored, and the server never parses a date -
+ * the Kotlin extractor is the only implementation of that rule.
+ */
+export const noticeFields = {
+  userId: v.string(),
+  localId: v.string(),
+  sourceKind: sourceKindValidator,
+  sourceValue: v.string(),
+  title: v.string(),
+  sentence: v.optional(v.string()),
+  receivedAt: v.number(),
+  externalId: v.optional(v.string()),
+  resolution: noticeResolutionValidator,
+  resolvedAt: v.optional(v.number()),
+  createdAt: v.number(),
+  updatedAt: v.number(),
+};
+
+/** Stored fields of a `watchSources` document: the gate on what is kept at all. */
+export const watchSourceFields = {
+  userId: v.string(),
+  localId: v.string(),
+  kind: sourceKindValidator,
+  value: v.string(),
+  label: v.string(),
+  createdAt: v.number(),
+  updatedAt: v.number(),
+};
+
 /**
  * Stored fields of a `reminders` document.
  *
@@ -222,6 +279,8 @@ export const reminderFields = {
   // Same rule for moved occurrences. Only a task can carry one, which the
   // mutations check: a validator cannot make a field depend on `kind`.
   overrides: v.optional(v.array(occurrenceOverrideValidator)),
+  // And for the rules that let a Notice be proposed against this Reminder.
+  noticeRules: v.optional(v.array(noticeRuleValidator)),
 };
 
 /**
@@ -266,5 +325,19 @@ export default defineSchema({
     .index("by_reminder", ["reminderId"])
     .index("by_user_time", ["userId", "scheduledTime"])
     .index("by_user_status_time", ["userId", "status", "scheduledTime"])
+    .index("by_local_id", ["localId"]),
+
+  // Outside messages a watched source admitted. `by_user_received` is the
+  // Notices screen's order; `by_user_external_id` is the de-duplication lookup
+  // for a road that supplies an id (a JMAP email id, a notification key).
+  notices: defineTable(noticeFields)
+    .index("by_user", ["userId"])
+    .index("by_user_received", ["userId", "receivedAt"])
+    .index("by_user_external_id", ["userId", "externalId"])
+    .index("by_local_id", ["localId"]),
+
+  // The senders and apps whose notices may be kept at all.
+  watchSources: defineTable(watchSourceFields)
+    .index("by_user", ["userId"])
     .index("by_local_id", ["localId"]),
 });

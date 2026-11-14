@@ -5,6 +5,7 @@ import com.taskrx.core.domain.InstanceStatus
 import com.taskrx.core.domain.NoneTimes
 import com.taskrx.core.domain.PauseWindow
 import com.taskrx.core.domain.ReminderKind
+import com.taskrx.core.domain.SourceKind
 import com.taskrx.core.domain.dailyTimes
 import com.taskrx.core.domain.noneTimes
 import com.taskrx.core.domain.onceTimes
@@ -329,6 +330,60 @@ class RemindersViewModelTest {
             assertFalse(state.saved)
             assertTrue(state.canSave)
             assertEquals(ToastKind.Error, container.toaster.current.value?.kind)
+        }
+
+    // ---- notices about this ----
+
+    @Test
+    fun `the form offers the watched sources a rule can name`() =
+        withUi(NOW) {
+            reminder("task", ReminderKind.Task, noneTimes(), name = "Bins")
+            container.watchSources.create(
+                com.taskrx.mobile.data.CreateWatchedSourceInput(USER, SourceKind.Email, "waste@city.example", "Waste"),
+            )
+
+            val (_, state) = editing("task")
+
+            assertEquals(listOf("Waste"), state.watchedSources.map { it.label })
+        }
+
+    @Test
+    fun `adding a rule records it on the task and removes it again`() =
+        withUi(NOW) {
+            reminder("task", ReminderKind.Task, noneTimes(), name = "Bins")
+            val source =
+                container.watchSources.create(
+                    com.taskrx.mobile.data.CreateWatchedSourceInput(USER, SourceKind.Email, "waste@city.example", "Waste"),
+                )
+            val (vm, _) = editing("task")
+
+            vm.addNoticeRule(source, " collection , bins ").join()
+
+            val rule = container.reminders.get("task")!!.noticeRules.single()
+            assertEquals(SourceKind.Email, rule.sourceKind)
+            assertEquals("waste@city.example", rule.sourceValue)
+            assertEquals(listOf("collection", "bins"), rule.terms)
+            assertEquals(listOf(rule), (vm.state.value as EditState.Editing).reminder.noticeRules)
+
+            vm.removeNoticeRule(0).join()
+
+            assertTrue(container.reminders.get("task")!!.noticeRules.isEmpty())
+            assertTrue((vm.state.value as EditState.Editing).reminder.noticeRules.isEmpty())
+        }
+
+    @Test
+    fun `a rule with no words matches any notice from its source`() =
+        withUi(NOW) {
+            reminder("task", ReminderKind.Task, noneTimes(), name = "Bins")
+            val source =
+                container.watchSources.create(
+                    com.taskrx.mobile.data.CreateWatchedSourceInput(USER, SourceKind.App, "com.example.app", "Example"),
+                )
+            val (vm, _) = editing("task")
+
+            vm.addNoticeRule(source, "  , ").join()
+
+            assertEquals(emptyList(), container.reminders.get("task")!!.noticeRules.single().terms)
         }
 
     @Test

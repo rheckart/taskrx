@@ -3,6 +3,7 @@ import { v } from "convex/values";
 import { mutation, query } from "./_generated/server.js";
 import { getCurrentUserId } from "./auth.js";
 import {
+  noticeRuleValidator,
   occurrenceOverrideValidator,
   pauseWindowValidator,
   priorityValidator,
@@ -103,6 +104,7 @@ export const create = mutation({
     active: v.optional(v.boolean()),
     pauses: v.optional(v.array(pauseWindowValidator)),
     overrides: v.optional(v.array(occurrenceOverrideValidator)),
+    noticeRules: v.optional(v.array(noticeRuleValidator)),
     createdAt: v.number(),
     updatedAt: v.number(),
   },
@@ -184,6 +186,9 @@ export const create = mutation({
           : {}),
         ...(args.pauses !== undefined ? { pauses: args.pauses } : {}),
         ...(args.overrides !== undefined ? { overrides: args.overrides } : {}),
+        ...(args.noticeRules !== undefined
+          ? { noticeRules: args.noticeRules }
+          : {}),
       });
 
       return existing._id;
@@ -217,6 +222,9 @@ export const create = mutation({
         : {}),
       ...(args.pauses !== undefined ? { pauses: args.pauses } : {}),
       ...(args.overrides !== undefined ? { overrides: args.overrides } : {}),
+      ...(args.noticeRules !== undefined
+        ? { noticeRules: args.noticeRules }
+        : {}),
     });
   },
 });
@@ -238,6 +246,7 @@ export const update = mutation({
     active: v.optional(v.boolean()),
     pauses: v.optional(v.array(pauseWindowValidator)),
     overrides: v.optional(v.array(occurrenceOverrideValidator)),
+    noticeRules: v.optional(v.array(noticeRuleValidator)),
     updatedAt: v.optional(v.number()),
   },
   returns: v.id("reminders"),
@@ -280,6 +289,9 @@ export const update = mutation({
       ...(args.active !== undefined ? { active: args.active } : {}),
       ...(args.pauses !== undefined ? { pauses: args.pauses } : {}),
       ...(args.overrides !== undefined ? { overrides: args.overrides } : {}),
+      ...(args.noticeRules !== undefined
+        ? { noticeRules: args.noticeRules }
+        : {}),
     });
 
     return args.id;

@@ -50,6 +50,11 @@ import com.taskrx.mobile.ui.backlog.BacklogContent
 import com.taskrx.mobile.ui.backlog.BacklogViewModel
 import com.taskrx.mobile.ui.history.HistoryContent
 import com.taskrx.mobile.ui.history.HistoryViewModel
+import com.taskrx.mobile.ui.notices.NoticesContent
+import com.taskrx.mobile.ui.notices.NoticesViewModel
+import com.taskrx.mobile.ui.notices.ShareContent
+import com.taskrx.mobile.ui.notices.ShareIntake
+import com.taskrx.mobile.ui.notices.ShareViewModel
 import com.taskrx.mobile.ui.reminders.EditReminderContent
 import com.taskrx.mobile.ui.reminders.EditReminderViewModel
 import com.taskrx.mobile.ui.reminders.EditState
@@ -58,6 +63,7 @@ import com.taskrx.mobile.ui.reminders.RemindersContent
 import com.taskrx.mobile.ui.reminders.RemindersViewModel
 import com.taskrx.mobile.ui.search.DrugSearchContent
 import com.taskrx.mobile.ui.settings.SettingsContent
+import com.taskrx.mobile.ui.settings.SettingsViewModel
 import com.taskrx.mobile.ui.search.DrugSearchViewModel
 import com.taskrx.mobile.ui.sync.SyncProblemsContent
 import com.taskrx.mobile.ui.sync.SyncProblemsViewModel
@@ -127,12 +133,18 @@ private fun AppShell(container: AppContainer, signedIn: Boolean, modifier: Modif
     val navController = rememberNavController()
     val backStack by navController.currentBackStackEntryAsState()
     val tapRoute by container.notifications.taps.route.collectAsState()
+    val shareText by ShareIntake.text.collectAsState()
 
     LaunchedEffect(tapRoute) {
         val route = tapRoute ?: return@LaunchedEffect
         // On top of the day, so Back from the answer returns to it.
         navController.navigate(route) { launchSingleTop = true }
         container.notifications.taps.consume()
+    }
+
+    LaunchedEffect(shareText) {
+        if (shareText == null) return@LaunchedEffect
+        navController.navigate(Routes.SHARE) { launchSingleTop = true }
     }
 
     // Read here, where `backStack` is observed, and not inside the top bar's slot: the
@@ -227,6 +239,7 @@ private fun AppNavHost(container: AppContainer, navController: NavController) {
                         onSupplies = { host.navigate(Routes.SUPPLIES) },
                         onHistory = { host.navigate(Routes.HISTORY) },
                         onCatchUp = { host.navigate(Routes.CATCH_UP) },
+                        onNotices = { host.navigate(Routes.NOTICES) },
                         onSettings = { host.navigate(Routes.SETTINGS) },
                     ),
                 banner = {
@@ -265,8 +278,61 @@ private fun AppNavHost(container: AppContainer, navController: NavController) {
         }
 
         composable(Routes.SETTINGS) {
+            val vm = screenViewModel { SettingsViewModel(container) }
+            val state by vm.state.collectAsState()
             val snoozeMinutes by container.settings.snoozeMinutes.collectAsState()
-            SettingsContent(snoozeMinutes, container.settings::setSnoozeMinutes)
+            LifecycleEventEffect(Lifecycle.Event.ON_RESUME) { vm.refresh() }
+            SettingsContent(
+                snoozeMinutes = snoozeMinutes,
+                onSnoozeMinutes = container.settings::setSnoozeMinutes,
+                watchedSources = state.sources,
+                watchedLoading = state.loading,
+                watchedError = state.error,
+                adding = state.adding,
+                onStartAdd = vm::startAdd,
+                onCancelAdd = vm::cancelAdd,
+                newKind = state.kind,
+                onNewKind = vm::setKind,
+                newValue = state.value,
+                onNewValue = vm::setValue,
+                newLabel = state.label,
+                onNewLabel = vm::setLabel,
+                canSaveSource = state.canSave,
+                onSaveSource = vm::saveSource,
+                onRemoveSource = vm::remove,
+            )
+        }
+
+        composable(Routes.NOTICES) {
+            val vm = screenViewModel { NoticesViewModel(container) }
+            val state by vm.state.collectAsState()
+            LifecycleEventEffect(Lifecycle.Event.ON_RESUME) { vm.refresh() }
+            NoticesContent(
+                state = state,
+                onRefresh = { vm.refresh(pulled = true) },
+                onBeginTask = vm::beginTask,
+                onDismiss = vm::dismiss,
+                onDraftAt = vm::setDraftAt,
+                onSaveTask = vm::saveTask,
+                onCancelTask = vm::cancelTask,
+                now = container.clock::invoke,
+            )
+        }
+
+        composable(Routes.SHARE) {
+            val vm = screenViewModel { ShareViewModel(container) }
+            val state by vm.state.collectAsState()
+            val shared by ShareIntake.text.collectAsState()
+            LaunchedEffect(shared) {
+                vm.load(shared)
+                if (shared != null) ShareIntake.consume()
+            }
+            LaunchedEffect(state.saved) {
+                if (state.saved) {
+                    host.navigate(Routes.NOTICES) { popUpTo(Routes.SHARE) { inclusive = true } }
+                }
+            }
+            ShareContent(state, vm::setTitle, vm::save)
         }
 
         composable(Routes.ADD) {

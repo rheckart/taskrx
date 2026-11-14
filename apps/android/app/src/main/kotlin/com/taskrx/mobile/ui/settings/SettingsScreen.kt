@@ -10,16 +10,25 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.selection.selectableGroup
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import com.taskrx.core.domain.SourceKind
+import com.taskrx.core.domain.WatchedSource
 import com.taskrx.core.snooze.SNOOZE_CHOICES_MINUTES
 import com.taskrx.mobile.ui.TaskRxColors
+import com.taskrx.mobile.ui.components.ChoiceRow
+import com.taskrx.mobile.ui.components.ErrorText
+import com.taskrx.mobile.ui.components.FieldLabel
+import com.taskrx.mobile.ui.components.HintText
+import com.taskrx.mobile.ui.components.PrimaryButton
 
 /**
  * Settings: one choice so far, how long a snooze lasts. It applies to the answer screen and
@@ -27,7 +36,26 @@ import com.taskrx.mobile.ui.TaskRxColors
  * snooze already set keeps the time it was set for.
  */
 @Composable
-fun SettingsContent(snoozeMinutes: Int, onSnoozeMinutes: (Int) -> Unit, modifier: Modifier = Modifier) {
+fun SettingsContent(
+    snoozeMinutes: Int,
+    onSnoozeMinutes: (Int) -> Unit,
+    modifier: Modifier = Modifier,
+    watchedSources: List<WatchedSource> = emptyList(),
+    watchedLoading: Boolean = false,
+    watchedError: String? = null,
+    adding: Boolean = false,
+    onStartAdd: () -> Unit = {},
+    onCancelAdd: () -> Unit = {},
+    newKind: SourceKind = SourceKind.Email,
+    onNewKind: (SourceKind) -> Unit = {},
+    newValue: String = "",
+    onNewValue: (String) -> Unit = {},
+    newLabel: String = "",
+    onNewLabel: (String) -> Unit = {},
+    canSaveSource: Boolean = false,
+    onSaveSource: () -> Unit = {},
+    onRemoveSource: (WatchedSource) -> Unit = {},
+) {
     Column(modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp)) {
         Text("Snooze length", fontWeight = FontWeight.SemiBold)
         Text(
@@ -48,6 +76,51 @@ fun SettingsContent(snoozeMinutes: Int, onSnoozeMinutes: (Int) -> Unit, modifier
                     Text(snoozeLabel(minutes), Modifier.padding(start = 12.dp, top = 12.dp, bottom = 12.dp))
                 }
             }
+        }
+
+        FieldLabel("Watched senders and apps", Modifier.padding(top = 32.dp))
+        HintText("Only notices from these are kept. Watching one moves nothing: a reminder's own “Notices about this” decides what may be proposed.")
+        watchedError?.let { ErrorText("Couldn't load them: $it") }
+        if (watchedLoading) {
+            Text("Loading…", Modifier.padding(top = 8.dp), color = TaskRxColors.Secondary)
+        }
+        for (source in watchedSources) {
+            Row(Modifier.fillMaxWidth().padding(top = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+                Column(Modifier.weight(1f)) {
+                    Text(source.label, fontWeight = FontWeight.SemiBold)
+                    Text(
+                        if (source.kind == SourceKind.Email) source.value else "App · ${source.value}",
+                        color = TaskRxColors.Secondary,
+                    )
+                }
+                TextButton(onClick = { onRemoveSource(source) }) { Text("Remove", color = TaskRxColors.Error) }
+            }
+        }
+        if (adding) {
+            FieldLabel("What to watch")
+            ChoiceRow(
+                listOf(SourceKind.Email to "Email sender", SourceKind.App to "App"),
+                newKind,
+                onNewKind,
+            )
+            OutlinedTextField(
+                value = newValue,
+                onValueChange = onNewValue,
+                modifier = Modifier.fillMaxWidth().padding(top = 8.dp),
+                singleLine = true,
+                placeholder = { Text(if (newKind == SourceKind.Email) "waste@city.example" else "com.example.app") },
+            )
+            OutlinedTextField(
+                value = newLabel,
+                onValueChange = onNewLabel,
+                modifier = Modifier.fillMaxWidth().padding(top = 8.dp),
+                singleLine = true,
+                placeholder = { Text("A name you'll recognise") },
+            )
+            PrimaryButton("Watch it", onSaveSource, Modifier.padding(top = 16.dp), enabled = canSaveSource)
+            TextButton(onClick = onCancelAdd, modifier = Modifier.padding(top = 8.dp)) { Text("Cancel") }
+        } else {
+            TextButton(onClick = onStartAdd, Modifier.padding(top = 8.dp)) { Text("+ Add a sender or app") }
         }
     }
 }

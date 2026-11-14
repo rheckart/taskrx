@@ -2,10 +2,13 @@ package com.taskrx.mobile.ui.reminders
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.taskrx.core.domain.NoticeRule
 import com.taskrx.core.domain.Reminder
 import com.taskrx.core.domain.ReminderKind
 import com.taskrx.core.domain.ScheduleTimes
+import com.taskrx.core.domain.WatchedSource
 import com.taskrx.core.domain.isWellFormedSchedule
+import com.taskrx.core.domain.parseNoticeTerms
 import com.taskrx.core.domain.withoutOverride
 import com.taskrx.mobile.AppContainer
 import com.taskrx.mobile.data.Change
@@ -31,6 +34,8 @@ sealed interface EditState {
         /** A medication's dosage, or a task's notes: one text field, named by the Kind. */
         val detail: String,
         val schedule: ScheduleTimes,
+        /** The sources a notice may be proposed from, for the "Notices about this" section. */
+        val watchedSources: List<WatchedSource> = emptyList(),
         val saving: Boolean = false,
         val saved: Boolean = false,
         val error: String? = null,
@@ -64,6 +69,7 @@ class EditReminderViewModel(private val app: AppContainer) : ViewModel() {
                         name = reminder.name,
                         detail = (if (reminder.kind == ReminderKind.Medication) reminder.dosage else reminder.instructions).orEmpty(),
                         schedule = reminder.schedule,
+                        watchedSources = runCatching { app.watchSources.list(app.session.userId) }.getOrDefault(emptyList()),
                     )
                 }
         }
@@ -100,6 +106,50 @@ class EditReminderViewModel(private val app: AppContainer) : ViewModel() {
                 throw e
             } catch (e: Exception) {
                 app.toaster.show(ToastRequest("Couldn't remove that move", ToastKind.Error))
+            }
+        }
+
+    /**
+     * Adds a rule: notices from [source] whose text mentions one of [termsText]'s words may be
+     * proposed against this reminder. Persisted immediately, like removing a move, because it
+     * is a fact about the reminder rather than a field of the form.
+     */
+    fun addNoticeRule(source: WatchedSource, termsText: String): Job =
+        viewModelScope.launch {
+            val current = mutable.value as? EditState.Editing ?: return@launch
+            val rule = NoticeRule(source.kind, source.value, parseNoticeTerms(termsText))
+            try {
+                val updated =
+                    app.reminders.update(
+                        current.reminder.id,
+                        UpdateReminderPatch(noticeRules = current.reminder.noticeRules + rule),
+                    )
+                edit { it.copy(reminder = updated) }
+                app.toaster.show(ToastRequest("Notices rule added", ToastKind.Success))
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                app.toaster.show(ToastRequest("Couldn't add that rule", ToastKind.Error))
+            }
+        }
+
+    /** Removes the rule at [index]. */
+    fun removeNoticeRule(index: Int): Job =
+        viewModelScope.launch {
+            val current = mutable.value as? EditState.Editing ?: return@launch
+            val remaining = current.reminder.noticeRules.filterIndexed { i, _ -> i != index }
+            try {
+                val updated =
+                    app.reminders.update(
+                        current.reminder.id,
+                        UpdateReminderPatch(noticeRules = remaining),
+                    )
+                edit { it.copy(reminder = updated) }
+                app.toaster.show(ToastRequest("Rule removed", ToastKind.Success))
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                app.toaster.show(ToastRequest("Couldn't remove that rule", ToastKind.Error))
             }
         }
 

@@ -47,6 +47,11 @@ data class Reminder(
      * `OccurrenceOverride.kt`. Empty for every Reminder that has never had one.
      */
     val overrides: List<OccurrenceOverride> = emptyList(),
+    /**
+     * Which Notices may be proposed against this Reminder; see `Notice.kt`. Empty means
+     * nothing is proposed, and the person can still apply a notice by hand.
+     */
+    val noticeRules: List<NoticeRule> = emptyList(),
 ) : Timestamped
 
 /**
@@ -76,6 +81,7 @@ fun createReminder(
     active: Boolean = true,
     pauses: List<PauseWindow> = emptyList(),
     overrides: List<OccurrenceOverride> = emptyList(),
+    noticeRules: List<NoticeRule> = emptyList(),
 ): Reminder =
     Reminder(
         id = id,
@@ -96,6 +102,7 @@ fun createReminder(
         updatedAt = updatedAt,
         pauses = pauses.toList(),
         overrides = overrides.toList(),
+        noticeRules = noticeRules.toList(),
     )
 
 data class ReminderInstance(

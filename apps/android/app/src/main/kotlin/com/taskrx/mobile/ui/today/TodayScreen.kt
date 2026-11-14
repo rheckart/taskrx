@@ -111,6 +111,7 @@ data class TodayActions(
     val onHistory: () -> Unit,
     val onSettings: () -> Unit,
     val onCatchUp: () -> Unit = {},
+    val onNotices: () -> Unit = {},
     /** Answer a task from its Overdue row: Done or Skip, without the answer screen. */
     val onAnswerTask: (TimelineRow, BatchAction) -> Unit = { _, _ -> },
     /** Record a dose of an as-needed medication as taken now. */
@@ -141,7 +142,7 @@ fun TodayContent(
             banner()
             Row(verticalAlignment = Alignment.CenterVertically) {
                 KindTabs(state.kind, state.toDoByKind, actions.onSelectKind, Modifier.weight(1f))
-                MoreMenu(actions)
+                MoreMenu(actions, state.noticeCount)
             }
             DayBar(state, actions)
             // Outside the list, so an as-needed medication on its own does not read as "no medications scheduled".
@@ -797,7 +798,7 @@ private fun AddButton(actions: TodayActions, modifier: Modifier = Modifier) {
 
 /** The screens that are not today: the rest of what the footer used to hold. */
 @Composable
-private fun MoreMenu(actions: TodayActions) {
+private fun MoreMenu(actions: TodayActions, noticeCount: Int) {
     var open by remember { mutableStateOf(false) }
     Box {
         TextButton(onClick = { open = true }, modifier = Modifier.semantics { contentDescription = "More" }) {
@@ -806,6 +807,7 @@ private fun MoreMenu(actions: TodayActions) {
         DropdownMenu(expanded = open, onDismissRequest = { open = false }) {
             for ((label, go) in
                 listOf(
+                    (if (noticeCount > 0) "Notices ($noticeCount)" else "Notices") to actions.onNotices,
                     "Reminders" to actions.onReminders,
                     "Backlog" to actions.onBacklog,
                     "Catch up" to actions.onCatchUp,

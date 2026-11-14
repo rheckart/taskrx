@@ -122,6 +122,112 @@ class ReminderPushTest {
     }
 }
 
+class NoticePushTest {
+    private fun notice(extra: String = "") =
+        obj(
+            """{"localId":"n1","userId":"u1","sourceKind":"email","sourceValue":"waste@city.example",
+            "title":"Bins moved","sentence":null,"receivedAt":5000,"externalId":null,"resolution":"none",
+            "resolvedAt":null,"createdAt":10,"updatedAt":20 $extra}""",
+        )
+
+    @Test
+    fun `create sends the required fields and omits the optional ones it has no value for`() {
+        val call = noticeCreateCall(notice())
+        assertEquals("notices:create", call.function)
+        assertEquals(
+            mapOf(
+                "localId" to "n1",
+                "userId" to "u1",
+                "sourceKind" to "email",
+                "sourceValue" to "waste@city.example",
+                "title" to "Bins moved",
+                "receivedAt" to 5000.0,
+                "resolution" to "none",
+                "createdAt" to 10.0,
+                "updatedAt" to 20.0,
+            ),
+            call.args,
+        )
+    }
+
+    @Test
+    fun `create carries the sentence, external id and resolved time when it has them`() {
+        val payload =
+            obj(
+                notice().toString()
+                    .replace(""""sentence":null""", """"sentence":"Collection moves to Thursday."""")
+                    .replace(""""externalId":null""", """"externalId":"email-1"""")
+                    .replace(""""resolvedAt":null""", """"resolvedAt":99"""),
+            )
+        val args = noticeCreateCall(payload).args
+        assertEquals("Collection moves to Thursday.", args["sentence"])
+        assertEquals("email-1", args["externalId"])
+        assertEquals(99.0, args["resolvedAt"])
+    }
+
+    @Test
+    fun `create refuses a payload missing a required field`() {
+        val error = assertFailsWith<PushRejected> { noticeCreateCall(obj(notice().toString().replace(""""title":"Bins moved",""", ""))) }
+        assertEquals("Payload is missing title", error.message)
+    }
+
+    @Test
+    fun `update addresses the server id and carries only the resolution`() {
+        val call = noticeUpdateCall(obj(notice().toString().replace(""""resolution":"none"""", """"resolution":"dismissed"""").replace(""""resolvedAt":null""", """"resolvedAt":99""")), "cid")
+        assertEquals("notices:update", call.function)
+        assertEquals(mapOf("id" to "cid", "resolution" to "dismissed", "updatedAt" to 20.0, "resolvedAt" to 99.0), call.args)
+        assertFailsWith<PushRejected> { noticeUpdateCall(obj("{}"), "cid") }
+    }
+
+    @Test
+    fun `delete names the server id`() {
+        assertEquals(PushCall("notices:remove", mapOf("id" to "cid")), noticeDeleteCall("cid"))
+    }
+}
+
+class WatchSourcePushTest {
+    private fun source() =
+        obj("""{"localId":"w1","userId":"u1","kind":"email","value":"waste@city.example","label":"Waste","createdAt":10,"updatedAt":20}""")
+
+    @Test
+    fun `create sends every field`() {
+        val call = watchSourceCreateCall(source())
+        assertEquals("watchSources:create", call.function)
+        assertEquals(
+            mapOf(
+                "localId" to "w1",
+                "userId" to "u1",
+                "kind" to "email",
+                "value" to "waste@city.example",
+                "label" to "Waste",
+                "createdAt" to 10.0,
+                "updatedAt" to 20.0,
+            ),
+            call.args,
+        )
+    }
+
+    @Test
+    fun `create refuses a payload missing a required field`() {
+        val error = assertFailsWith<PushRejected> { watchSourceCreateCall(obj(source().toString().replace(""""label":"Waste",""", ""))) }
+        assertEquals("Payload is missing label", error.message)
+    }
+
+    @Test
+    fun `update addresses the server id and carries the label`() {
+        assertEquals(
+            PushCall("watchSources:update", mapOf("id" to "cid", "label" to "Waste", "updatedAt" to 20.0)),
+            watchSourceUpdateCall(source(), "cid"),
+        )
+        assertFailsWith<PushRejected> { watchSourceUpdateCall(obj("{}"), "cid") }
+    }
+
+    @Test
+    fun `delete names the server id`() {
+        assertEquals(PushCall("watchSources:remove", mapOf("id" to "cid")), watchSourceDeleteCall("cid"))
+    }
+}
+
 class InstancePushTest {
     private fun instance(status: String, extra: String = "") =
         obj(

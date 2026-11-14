@@ -634,3 +634,53 @@ describe("reminders overrides on update", () => {
     ).rejects.toThrow(/cannot have occurrence overrides/);
   });
 });
+
+describe("reminders.noticeRules", () => {
+  const RULE = {
+    sourceKind: "email" as const,
+    sourceValue: "waste@city.example",
+    terms: ["collection"],
+  };
+
+  it("stores rules on a new task", async () => {
+    const t = deployment();
+    const id = await t.mutation(api.reminders.create, {
+      ...TASK_PUSH,
+      noticeRules: [RULE],
+    });
+
+    expect(await t.query(api.reminders.get, { id })).toMatchObject({
+      noticeRules: [RULE],
+    });
+  });
+
+  it("stores an empty array, which is how a client clears them", async () => {
+    const t = deployment();
+    const id = await t.mutation(api.reminders.create, {
+      ...TASK_PUSH,
+      noticeRules: [RULE],
+    });
+
+    await t.mutation(api.reminders.update, { id, noticeRules: [] });
+
+    expect((await t.query(api.reminders.get, { id }))?.noticeRules).toEqual([]);
+  });
+
+  it("leaves existing rules untouched when the update omits them", async () => {
+    const t = deployment();
+    const id = await t.mutation(api.reminders.create, {
+      ...TASK_PUSH,
+      noticeRules: [RULE],
+    });
+
+    await t.mutation(api.reminders.update, {
+      id,
+      name: "Put the bins out",
+      updatedAt: NOW + 60_000,
+    });
+
+    expect(await t.query(api.reminders.get, { id })).toMatchObject({
+      noticeRules: [RULE],
+    });
+  });
+});

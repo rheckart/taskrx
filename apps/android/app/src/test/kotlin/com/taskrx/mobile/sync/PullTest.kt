@@ -68,7 +68,7 @@ private fun instanceDoc(
 
 @RunWith(RobolectricTestRunner::class)
 class PullTest {
-    private fun pull(fx: Fixture) = PullApplier(fx.container.reminders, fx.container.instances)
+    private fun pull(fx: Fixture) = PullApplier(fx.container.reminders, fx.container.instances, fx.container.notices, fx.container.watchSources)
 
     /** What a sync does to this device's rows: the queue is drained, so no change is waiting to be pushed. */
     private suspend fun Fixture.pushed() = (container.syncQueue.pending() + container.syncQueue.deadLettered()).forEach { container.syncQueue.remove(it.id) }
@@ -104,7 +104,7 @@ class PullTest {
     fun `re-arms notifications after reminders are pulled, and survives that failing`() =
         withFixture(T0) {
             var calls = 0
-            val applier = PullApplier(container.reminders, container.instances) { calls++; error("native failure") }
+            val applier = PullApplier(container.reminders, container.instances, container.notices, container.watchSources) { calls++; error("native failure") }
             applier.run(listOf(reminderDoc()))
             assertNotNull(container.reminders.get("r1"))
             assertEquals(1, calls)
@@ -501,5 +501,120 @@ class PullTest {
             }
 
             assertTrue(!paused)
+        }
+
+    // ---- notices and watched sources ----------------------------------------------------
+
+    @Test
+    fun `writes a pulled watched source under its local id`() =
+        withFixture(T0) {
+            pull(this).applyJson(
+                json("[]"),
+                json("[]"),
+                json(
+                    """[{"_id":"cw1","_creationTime":1779999999999.1,"localId":"w1","userId":"$USER","kind":"email",
+                    "value":"waste@city.example","label":"Waste","createdAt":1780000000000.0,"updatedAt":1780000000000.0}]""",
+                ),
+                json("[]"),
+            )
+
+            val local = assertNotNull(container.watchSources.get("w1"))
+            assertEquals("Waste", local.label)
+            assertEquals(com.taskrx.core.domain.SourceKind.Email, local.kind)
+            assertEquals("cw1", container.watchSources.getConvexId("w1"))
+            assertTrue(container.syncQueue.pending().isEmpty())
+        }
+
+    @Test
+    fun `writes a pulled notice under its local id and keeps its resolution`() =
+        withFixture(T0) {
+            pull(this).applyJson(
+                json("[]"),
+                json("[]"),
+                json("[]"),
+                json(
+                    """[{"_id":"cn1","_creationTime":1779999999999.1,"localId":"n1","userId":"$USER","sourceKind":"email",
+                    "sourceValue":"waste@city.example","title":"Bins moved","sentence":"Collection moves to Thursday.",
+                    "receivedAt":1780000000000.0,"externalId":"email-1","resolution":"dismissed","resolvedAt":1780000000005.0,
+                    "createdAt":1780000000000.0,"updatedAt":1780000000005.0}]""",
+                ),
+            )
+
+            val local = assertNotNull(container.notices.get("n1"))
+            assertEquals("Bins moved", local.title)
+            assertEquals("Collection moves to Thursday.", local.sentence)
+            assertEquals(com.taskrx.core.domain.NoticeResolution.Dismissed, local.resolution)
+            assertEquals("email-1", local.externalId)
+            assertEquals("cn1", container.notices.getConvexId("n1"))
+            assertTrue(container.syncQueue.pending().isEmpty())
+        }
+
+    @Test
+    fun `a notice this build does not understand is skipped, not guessed at`() =
+        withFixture(T0) {
+            pull(this).applyJson(
+                json("[]"),
+                json("[]"),
+                json("[]"),
+                json(
+                    """[{"_id":"cn1","localId":"n1","userId":"$USER","sourceKind":"sms","sourceValue":"555-0100",
+                    "title":"Text","receivedAt":1780000000000.0,"resolution":"none","createdAt":1780000000000.0,"updatedAt":1780000000000.0},
+                    {"_id":"cn2","localId":"n2","userId":"$USER","sourceKind":"email","sourceValue":"a@b",
+                    "title":"Later","receivedAt":1780000000000.0,"resolution":"maybe","createdAt":1780000000000.0,"updatedAt":1780000000000.0}]""",
+                ),
+            )
+
+            assertNull(container.notices.get("n1"))
+            assertNull(container.notices.get("n2"))
+        }
+
+    @Test
+    fun `a local notice newer than the server's copy is kept`() =
+        withFixture(T0) {
+            pull(this).applyJson(
+                json("[]"),
+                json("[]"),
+                json("[]"),
+                json(
+                    """[{"_id":"cn1","localId":"n1","userId":"$USER","sourceKind":"email","sourceValue":"a@b",
+                    "title":"Newer here","receivedAt":1780000000000.0,"resolution":"none","createdAt":1780000000000.0,"updatedAt":1780000005000.0}]""",
+                ),
+            )
+            pull(this).applyJson(
+                json("[]"),
+                json("[]"),
+                json("[]"),
+                json(
+                    """[{"_id":"cn1","localId":"n1","userId":"$USER","sourceKind":"email","sourceValue":"a@b",
+                    "title":"Older there","receivedAt":1780000000000.0,"resolution":"none","createdAt":1780000000000.0,"updatedAt":1780000000000.0}]""",
+                ),
+            )
+
+            assertEquals("Newer here", container.notices.get("n1")!!.title)
+        }
+
+    @Test
+    fun `the pull subscribes to all four lists`() =
+        withFixture(T0) {
+            val gateway = FakeGateway()
+            gateway.feeds[ConvexFunctions.REMINDERS_LIST] = flowOf(json("[]"))
+            gateway.feeds[ConvexFunctions.INSTANCES_LIST] = flowOf(json("[]"))
+            gateway.feeds[ConvexFunctions.WATCH_SOURCES_LIST] = flowOf(
+                json(
+                    """[{"_id":"cw1","localId":"w1","userId":"$USER","kind":"app","value":"com.example.app","label":"Example",
+                    "createdAt":1780000000000.0,"updatedAt":1780000000000.0}]""",
+                ),
+            )
+            gateway.feeds[ConvexFunctions.NOTICES_LIST] = flowOf(
+                json(
+                    """[{"_id":"cn1","localId":"n1","userId":"$USER","sourceKind":"app","sourceValue":"com.example.app",
+                    "title":"Bins moved","receivedAt":1780000000000.0,"resolution":"none","createdAt":1780000000000.0,"updatedAt":1780000000000.0}]""",
+                ),
+            )
+
+            PullSync(gateway, pull(this)).run()
+
+            assertNotNull(container.watchSources.get("w1"))
+            assertNotNull(container.notices.get("n1"))
         }
 }

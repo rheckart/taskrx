@@ -65,6 +65,8 @@ data class TodayState(
     val asNeeded: List<AsNeededEntry> = emptyList(),
     /** The move dialog, when one is open: the occurrence, its Reminder and the rows already minted for it. */
     val move: MoveDraft? = null,
+    /** Notices still waiting for a decision: the More menu's count. */
+    val noticeCount: Int = 0,
 ) {
     /** The rows of the open tab, done or not. */
     val tabRows: List<TimelineRow>
@@ -438,6 +440,7 @@ class TodayViewModel(
                         asNeeded = asNeeded,
                         error = null,
                         kind = if (it.kindChosen) it.kind else opensOn,
+                        noticeCount = app.notices.unresolvedCount(userId),
                     )
                 }
             }

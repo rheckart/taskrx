@@ -2,7 +2,8 @@ package com.taskrx.mobile.sync
 
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.flow.emptyFlow
+import kotlinx.coroutines.flow.flowOf
+import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonNull
 import kotlinx.serialization.json.JsonPrimitive
@@ -38,7 +39,7 @@ class FakeGateway : ConvexGateway {
         return onAction(function, args)
     }
 
-    override fun subscribe(function: String, args: Map<String, Any?>): Flow<JsonElement> = feeds[function] ?: emptyFlow()
+    override fun subscribe(function: String, args: Map<String, Any?>): Flow<JsonElement> = feeds[function] ?: flowOf(JsonArray(emptyList()))
 }
 
 class FakeConnectivity(initial: Boolean? = true) : Connectivity {

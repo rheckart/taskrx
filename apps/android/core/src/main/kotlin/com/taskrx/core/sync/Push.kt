@@ -34,6 +34,16 @@ object ConvexFunctions {
     const val INSTANCES_REOPEN = "reminderInstances:reopen"
     const val INSTANCES_GET_BY_LOCAL_ID = "reminderInstances:getByLocalId"
     const val INSTANCES_LIST = "reminderInstances:list"
+    const val NOTICES_CREATE = "notices:create"
+    const val NOTICES_UPDATE = "notices:update"
+    const val NOTICES_REMOVE = "notices:remove"
+    const val NOTICES_GET_BY_LOCAL_ID = "notices:getByLocalId"
+    const val NOTICES_LIST = "notices:list"
+    const val WATCH_SOURCES_CREATE = "watchSources:create"
+    const val WATCH_SOURCES_UPDATE = "watchSources:update"
+    const val WATCH_SOURCES_REMOVE = "watchSources:remove"
+    const val WATCH_SOURCES_GET_BY_LOCAL_ID = "watchSources:getByLocalId"
+    const val WATCH_SOURCES_LIST = "watchSources:list"
     const val RXNORM_SEARCH = "rxnorm:search"
 }
 
@@ -70,7 +80,20 @@ private fun MutableMap<String, Any?>.putIfPresent(payload: JsonObject, keys: Lis
 }
 
 private val OPTIONAL_REMINDER_FIELDS =
-    listOf("priority", "tags", "caregiverIds", "rxcui", "dosage", "instructions", "pillsRemaining", "pillsPerDose", "refillReminderDays", "pauses")
+    listOf(
+        "priority",
+        "tags",
+        "caregiverIds",
+        "rxcui",
+        "dosage",
+        "instructions",
+        "pillsRemaining",
+        "pillsPerDose",
+        "refillReminderDays",
+        "pauses",
+        "overrides",
+        "noticeRules",
+    )
 
 /**
  * `reminders.create`. A repeated create for the same `localId` is an upsert on the server,
@@ -154,3 +177,52 @@ fun instanceUpdateCall(payload: JsonObject, convexId: String): PushCall =
         "pending" -> PushCall(ConvexFunctions.INSTANCES_REOPEN, mapOf("id" to convexId))
         else -> throw PushRejected("Unknown instance status $status")
     }
+
+/**
+ * `notices.create`. A repeated create for the same `localId` is an upsert on the server, as
+ * for reminders, so a notice written while the first create was queued still lands.
+ */
+fun noticeCreateCall(payload: JsonObject): PushCall =
+    PushCall(
+        ConvexFunctions.NOTICES_CREATE,
+        buildMap {
+            for (key in listOf("localId", "userId", "sourceKind", "sourceValue", "title", "receivedAt", "resolution", "createdAt", "updatedAt")) {
+                put(key, payload.requiredWire(key))
+            }
+            putIfPresent(payload, listOf("sentence", "externalId", "resolvedAt"))
+        },
+    )
+
+/** `notices.update`: the resolution is the only thing a notice changes after it is stored. */
+fun noticeUpdateCall(payload: JsonObject, convexId: String): PushCall =
+    PushCall(
+        ConvexFunctions.NOTICES_UPDATE,
+        buildMap {
+            put("id", convexId)
+            for (key in listOf("resolution", "updatedAt")) put(key, payload.requiredWire(key))
+            putIfPresent(payload, listOf("resolvedAt"))
+        },
+    )
+
+fun noticeDeleteCall(convexId: String): PushCall = PushCall(ConvexFunctions.NOTICES_REMOVE, mapOf("id" to convexId))
+
+fun watchSourceCreateCall(payload: JsonObject): PushCall =
+    PushCall(
+        ConvexFunctions.WATCH_SOURCES_CREATE,
+        buildMap {
+            for (key in listOf("localId", "userId", "kind", "value", "label", "createdAt", "updatedAt")) {
+                put(key, payload.requiredWire(key))
+            }
+        },
+    )
+
+fun watchSourceUpdateCall(payload: JsonObject, convexId: String): PushCall =
+    PushCall(
+        ConvexFunctions.WATCH_SOURCES_UPDATE,
+        buildMap {
+            put("id", convexId)
+            for (key in listOf("label", "updatedAt")) put(key, payload.requiredWire(key))
+        },
+    )
+
+fun watchSourceDeleteCall(convexId: String): PushCall = PushCall(ConvexFunctions.WATCH_SOURCES_REMOVE, mapOf("id" to convexId))

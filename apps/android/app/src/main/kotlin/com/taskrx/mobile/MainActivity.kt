@@ -11,6 +11,7 @@ import androidx.lifecycle.lifecycleScope
 import com.taskrx.mobile.harness.DeviceHarness
 import com.taskrx.mobile.notifications.PromptHost
 import com.taskrx.mobile.ui.TaskRxApp
+import com.taskrx.mobile.ui.notices.ShareIntake
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.launch
 import android.util.Log
@@ -33,6 +34,9 @@ class MainActivity : ComponentActivity() {
         // A launch link only runs on a fresh start: a recreated activity (process death, rotation)
         // is handed the ORIGINAL intent again, and replaying a harness write would run it twice.
         if (savedInstanceState != null || !DeviceHarness.handle(this, container, intent)) container.notifications.taps.handle(intent)
+        // A share is only read on a fresh start: a recreated activity is handed the original
+        // intent again, and offering it twice would open the intake screen a second time.
+        if (savedInstanceState == null) ShareIntake.offer(intent)
         setContent { TaskRxApp(container) }
     }
 
@@ -40,6 +44,7 @@ class MainActivity : ComponentActivity() {
         super.onNewIntent(intent)
         setIntent(intent)
         if (!DeviceHarness.handle(this, container, intent)) container.notifications.taps.handle(intent)
+        ShareIntake.offer(intent)
     }
 
     override fun onStart() {

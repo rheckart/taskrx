@@ -8,6 +8,8 @@ import kotlinx.serialization.json.JsonObject
 enum class SyncEntityType(val wire: String) {
     Reminder("reminder"),
     ReminderInstance("reminder_instance"),
+    Notice("notice"),
+    WatchSource("watch_source"),
 }
 
 enum class SyncOperation(val wire: String) {
@@ -67,6 +69,9 @@ class SyncQueueRepository(
     suspend fun deadLettered(): List<SyncQueueEntry> = dao.deadLettered().map(::toEntry)
 
     suspend fun remove(id: Long) = dao.remove(id)
+
+    /** Drops every queued change for one entity: used when a row the server never saw is removed. */
+    suspend fun removeFor(entityType: SyncEntityType, entityId: String) = dao.removeFor(entityType.wire, entityId)
 
     /**
      * Whether a change to one entity is still waiting to be pushed. Dead-lettered entries count:

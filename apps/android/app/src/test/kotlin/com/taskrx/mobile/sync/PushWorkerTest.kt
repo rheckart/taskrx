@@ -42,7 +42,7 @@ class PushWorkerTest {
         val pauses = mutableListOf<Long>()
         var user: String? = user
         val worker =
-            PushWorker(fx.container.syncQueue, fx.container.reminders, fx.container.instances, gateway, connectivity, { this.user }, { pauses += it })
+            PushWorker(fx.container.syncQueue, fx.container.reminders, fx.container.instances, fx.container.notices, fx.container.watchSources, gateway, connectivity, { this.user }, { pauses += it })
     }
 
     private fun rig(block: suspend Rig.() -> Unit) = withFixture(T0) { coroutineScope { Rig(this@withFixture, this).block() } }
@@ -526,7 +526,7 @@ class PushWorkerTest {
             fx.reminder("m1")
             gateway.onMutation = { _, _ -> awaitCancellation() }
             val impatient =
-                PushWorker(fx.container.syncQueue, fx.container.reminders, fx.container.instances, gateway, connectivity, { user }, { pauses += it }, pushTimeoutMs = 50)
+                PushWorker(fx.container.syncQueue, fx.container.reminders, fx.container.instances, fx.container.notices, fx.container.watchSources, gateway, connectivity, { user }, { pauses += it }, pushTimeoutMs = 50)
             impatient.drain()
             assertEquals(SyncWorkerStatus.Error, impatient.status.value)
             val entry = fx.entries().single()
@@ -589,6 +589,158 @@ class PushWorkerTest {
             assertEquals(0, left.attempts, "not attempted, so not failed")
             assertEquals(0, worker.pendingCount(), "and not counted as this user's waiting work")
             assertNull(fx.container.syncQueue.deadLettered().firstOrNull())
+        }
+
+    // ---- notices and watched sources ----------------------------------------------------
+
+    @Test
+    fun `sends a notice create and records the id the server returned`() =
+        rig {
+            val created =
+                fx.container.notices.create(
+                    com.taskrx.mobile.data.CreateNoticeInput(
+                        userId = USER,
+                        sourceKind = com.taskrx.core.domain.SourceKind.Email,
+                        sourceValue = "waste@city.example",
+                        title = "Bins moved",
+                        sentence = "Collection moves to Thursday.",
+                        receivedAt = T0,
+                        externalId = "email-1",
+                    ),
+                )
+            worker.drain()
+
+            val call = gateway.mutations.single()
+            assertEquals("notices:create", call.function)
+            assertEquals(created.id, call.args["localId"])
+            assertEquals(USER, call.args["userId"])
+            assertEquals("email", call.args["sourceKind"])
+            assertEquals("waste@city.example", call.args["sourceValue"])
+            assertNoIntegers(call.args)
+            assertEquals("cid-${created.id}", fx.container.notices.getConvexId(created.id))
+            assertEquals("synced", fx.database.noticeDao().get(created.id)!!.syncStatus)
+        }
+
+    @Test
+    fun `a notice resolution is an update addressing the server id`() =
+        rig {
+            val created =
+                fx.container.notices.create(
+                    com.taskrx.mobile.data.CreateNoticeInput(
+                        userId = USER,
+                        sourceKind = com.taskrx.core.domain.SourceKind.Share,
+                        sourceValue = "share",
+                        title = "Bins moved",
+                        receivedAt = T0,
+                    ),
+                )
+            worker.drain()
+            gateway.calls.clear()
+            fx.now += 1000
+
+            fx.container.notices.resolve(created.id, com.taskrx.core.domain.NoticeResolution.Dismissed)
+            worker.drain()
+
+            val call = gateway.mutations.single()
+            assertEquals("notices:update", call.function)
+            assertEquals("cid-${created.id}", call.args["id"])
+            assertEquals("dismissed", call.args["resolution"])
+            assertEquals((T0 + 1000).toDouble(), call.args["resolvedAt"])
+            assertNoIntegers(call.args)
+        }
+
+    @Test
+    fun `removing a notice is a delete of the server id`() =
+        rig {
+            val created =
+                fx.container.notices.create(
+                    com.taskrx.mobile.data.CreateNoticeInput(
+                        userId = USER,
+                        sourceKind = com.taskrx.core.domain.SourceKind.Share,
+                        sourceValue = "share",
+                        title = "Bins moved",
+                        receivedAt = T0,
+                    ),
+                )
+            worker.drain()
+            gateway.calls.clear()
+
+            fx.container.notices.remove(created.id)
+            worker.drain()
+
+            assertEquals("notices:remove", gateway.mutations.single().function)
+            assertEquals(mapOf<String, Any?>("id" to "cid-${created.id}"), gateway.mutations.single().args)
+        }
+
+    @Test
+    fun `sends a watched source create and records the id the server returned`() =
+        rig {
+            val created =
+                fx.container.watchSources.create(
+                    com.taskrx.mobile.data.CreateWatchedSourceInput(
+                        userId = USER,
+                        kind = com.taskrx.core.domain.SourceKind.Email,
+                        value = "waste@city.example",
+                        label = "Waste",
+                    ),
+                )
+            worker.drain()
+
+            val call = gateway.mutations.single()
+            assertEquals("watchSources:create", call.function)
+            assertEquals(created.id, call.args["localId"])
+            assertEquals("email", call.args["kind"])
+            assertEquals("Waste", call.args["label"])
+            assertNoIntegers(call.args)
+            assertEquals("cid-${created.id}", fx.container.watchSources.getConvexId(created.id))
+            assertEquals("synced", fx.database.watchedSourceDao().get(created.id)!!.syncStatus)
+        }
+
+    @Test
+    fun `removing a watched source is a delete of the server id`() =
+        rig {
+            val created =
+                fx.container.watchSources.create(
+                    com.taskrx.mobile.data.CreateWatchedSourceInput(
+                        userId = USER,
+                        kind = com.taskrx.core.domain.SourceKind.App,
+                        value = "com.example.app",
+                        label = "Example",
+                    ),
+                )
+            worker.drain()
+            gateway.calls.clear()
+
+            fx.container.watchSources.remove(created.id)
+            worker.drain()
+
+            assertEquals("watchSources:remove", gateway.mutations.single().function)
+            assertEquals(mapOf<String, Any?>("id" to "cid-${created.id}"), gateway.mutations.single().args)
+        }
+
+    @Test
+    fun `a notice the server does not have fails the update and spends an attempt`() =
+        rig {
+            val created =
+                fx.container.notices.create(
+                    com.taskrx.mobile.data.CreateNoticeInput(
+                        userId = USER,
+                        sourceKind = com.taskrx.core.domain.SourceKind.Share,
+                        sourceValue = "share",
+                        title = "Bins moved",
+                        receivedAt = T0,
+                    ),
+                )
+            worker.drain()
+            fx.database.openHelper.writableDatabase.execSQL("UPDATE notices SET convex_id = NULL")
+            fx.container.notices.resolve(created.id, com.taskrx.core.domain.NoticeResolution.Dismissed)
+            gateway.onQuery = { _, _ -> JsonNull }
+
+            worker.drain()
+
+            val entry = fx.entries().single()
+            assertEquals(1, entry.attempts)
+            assertEquals("Notice ${created.id} not found on Convex", entry.lastError)
         }
 
     @Test

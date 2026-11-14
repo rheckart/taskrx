@@ -5,15 +5,20 @@ import com.taskrx.core.sync.ConvexFunctions
 import com.taskrx.core.sync.backoffMillis
 import com.taskrx.core.sync.shouldApplyRemoteReminder
 import com.taskrx.core.sync.shouldApplyRemoteReminderInstance
+import com.taskrx.mobile.data.NoticesRepository
+import com.taskrx.mobile.data.PulledNotice
 import com.taskrx.mobile.data.PulledReminder
 import com.taskrx.mobile.data.PulledReminderInstance
+import com.taskrx.mobile.data.PulledWatchedSource
 import com.taskrx.mobile.data.ReminderInstancesRepository
 import com.taskrx.mobile.data.RemindersRepository
+import com.taskrx.mobile.data.WatchSourcesRepository
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.conflate
 import kotlinx.coroutines.flow.retryWhen
+import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonElement
 
 /**
@@ -33,6 +38,8 @@ import kotlinx.serialization.json.JsonElement
 class PullApplier(
     private val reminders: RemindersRepository,
     private val instances: ReminderInstancesRepository,
+    private val notices: NoticesRepository,
+    private val watchSources: WatchSourcesRepository,
     /**
      * Called after Reminders were written. A Reminder created or edited on another device (or
      * restored on first sign-in) must be armed now, not at the next foreground: the foreground
@@ -40,7 +47,12 @@ class PullApplier(
      */
     private val onRemindersApplied: suspend () -> Unit = {},
 ) {
-    internal suspend fun apply(remoteReminders: List<ServerReminder>, remoteInstances: List<ServerInstance>) {
+    internal suspend fun apply(
+        remoteReminders: List<ServerReminder>,
+        remoteInstances: List<ServerInstance>,
+        remoteWatchSources: List<ServerWatchedSource> = emptyList(),
+        remoteNotices: List<ServerNotice> = emptyList(),
+    ) {
         val applicable = ArrayList<PulledReminder>()
         for (doc in remoteReminders) {
             val candidate = ServerDocs.toPulled(doc)
@@ -80,11 +92,36 @@ class PullApplier(
             if (shouldApplyRemoteReminderInstance(local, candidate.instance, instances.hasUnpushedChange(candidate.instance.id))) resolved += candidate
         }
         instances.upsertMany(resolved)
+
+        // Watched sources first: they are what admits a notice, so a phone that pulls both
+        // has the gate in place before the notices it would have let through.
+        val appliedSources = ArrayList<PulledWatchedSource>()
+        for (doc in remoteWatchSources) {
+            val candidate = ServerDocs.toPulled(doc) ?: continue
+            if (shouldApplyRemoteReminder(watchSources.get(candidate.source.id), candidate.source)) appliedSources += candidate
+        }
+        watchSources.upsertMany(appliedSources)
+
+        val appliedNotices = ArrayList<PulledNotice>()
+        for (doc in remoteNotices) {
+            val candidate = ServerDocs.toPulled(doc) ?: continue
+            if (shouldApplyRemoteReminder(notices.get(candidate.notice.id), candidate.notice)) appliedNotices += candidate
+        }
+        notices.upsertMany(appliedNotices)
     }
 
-    /** One pass over the two lists as the gateway delivered them. */
-    suspend fun applyJson(remoteReminders: JsonElement, remoteInstances: JsonElement) =
-        apply(ServerDocs.reminders(remoteReminders), ServerDocs.instances(remoteInstances))
+    /** One pass over the four lists as the gateway delivered them. */
+    suspend fun applyJson(
+        remoteReminders: JsonElement,
+        remoteInstances: JsonElement,
+        remoteWatchSources: JsonElement = Json.parseToJsonElement("[]"),
+        remoteNotices: JsonElement = Json.parseToJsonElement("[]"),
+    ) = apply(
+        ServerDocs.reminders(remoteReminders),
+        ServerDocs.instances(remoteInstances),
+        ServerDocs.watchSources(remoteWatchSources),
+        ServerDocs.notices(remoteNotices),
+    )
 
     private companion object {
         const val TAG = "pull"
@@ -108,7 +145,11 @@ class PullSync(
         combine(
             gateway.subscribe(ConvexFunctions.REMINDERS_LIST),
             gateway.subscribe(ConvexFunctions.INSTANCES_LIST),
-        ) { remoteReminders, remoteInstances -> remoteReminders to remoteInstances }
+            gateway.subscribe(ConvexFunctions.WATCH_SOURCES_LIST),
+            gateway.subscribe(ConvexFunctions.NOTICES_LIST),
+        ) { remoteReminders, remoteInstances, remoteWatchSources, remoteNotices ->
+            Quad(remoteReminders, remoteInstances, remoteWatchSources, remoteNotices)
+        }
             .conflate()
             .retryWhen { cause, attempt ->
                 if (cause is CancellationException) return@retryWhen false
@@ -116,9 +157,9 @@ class PullSync(
                 retryPause(backoffMillis(attempt.toInt() + 1))
                 true
             }
-            .collect { (remoteReminders, remoteInstances) ->
+            .collect { (remoteReminders, remoteInstances, remoteWatchSources, remoteNotices) ->
                 try {
-                    applier.applyJson(remoteReminders, remoteInstances)
+                    applier.applyJson(remoteReminders, remoteInstances, remoteWatchSources, remoteNotices)
                 } catch (e: CancellationException) {
                     throw e
                 } catch (e: Exception) {
@@ -126,6 +167,14 @@ class PullSync(
                 }
             }
     }
+
+    /** Four delivered lists, held together so the combine has one value. */
+    private data class Quad(
+        val reminders: JsonElement,
+        val instances: JsonElement,
+        val watchSources: JsonElement,
+        val notices: JsonElement,
+    )
 
     private companion object {
         const val TAG = "pull"

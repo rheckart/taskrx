@@ -355,7 +355,7 @@ private fun IntervalPicker(value: IntervalTimes, onChange: (ScheduleTimes) -> Un
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-private fun InstantField(label: String, hint: String, value: Long, onChange: (Long) -> Unit, now: () -> Long) {
+internal fun InstantField(label: String, hint: String, value: Long, onChange: (Long) -> Unit, now: () -> Long) {
     var step by remember { mutableStateOf(InstantStep.None) }
     var pickedDate by remember { mutableStateOf(0L) }
     val shown = formatFullDayTime(value)

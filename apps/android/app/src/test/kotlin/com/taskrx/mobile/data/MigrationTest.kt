@@ -68,7 +68,7 @@ class MigrationTest {
     private fun open(name: String) =
         Room.databaseBuilder(context, TaskRxDatabase::class.java, name)
             .allowMainThreadQueries()
-            .addMigrations(TaskRxDatabase.MIGRATION_1_2, TaskRxDatabase.MIGRATION_2_3)
+            .addMigrations(TaskRxDatabase.MIGRATION_1_2, TaskRxDatabase.MIGRATION_2_3, TaskRxDatabase.MIGRATION_3_4)
             .build()
 
     @Test
@@ -84,6 +84,7 @@ class MigrationTest {
         }
         before.openHelper.writableDatabase.dropColumn("overrides", version = 2)
         before.openHelper.writableDatabase.dropColumn("pauses", version = 1)
+        before.openHelper.writableDatabase.dropColumn("notice_rules", version = 1)
         before.close()
 
         val after = open(name)
@@ -118,6 +119,7 @@ class MigrationTest {
             repo.pause("m1", from = 5, until = 9)
         }
         before.openHelper.writableDatabase.dropColumn("overrides", version = 2)
+        before.openHelper.writableDatabase.dropColumn("notice_rules", version = 2)
         before.close()
 
         val after = open(name)
@@ -133,6 +135,61 @@ class MigrationTest {
                 val moved = repo.update("t1", UpdateReminderPatch(overrides = listOf(OccurrenceOverride(100, 200))))
                 assertEquals(listOf(OccurrenceOverride(100, 200)), moved.overrides)
                 assertEquals(listOf(OccurrenceOverride(100, 200)), repo.get("t1")!!.overrides)
+            }
+        } finally {
+            after.close()
+            context.deleteDatabase(name)
+        }
+    }
+
+    @Test
+    fun `upgrading from 3 keeps every Reminder and adds an empty notices table`() {
+        val name = "migration-3-4.db"
+        context.deleteDatabase(name)
+
+        val before = open(name)
+        runBlocking {
+            val repo = RemindersRepository(before, SyncQueueRepository(before.syncQueueDao()))
+            repo.create(CreateReminderInput(id = "t1", userId = USER, kind = ReminderKind.Task, name = "Bins", schedule = noneTimes()))
+            repo.update("t1", UpdateReminderPatch(overrides = listOf(OccurrenceOverride(100, 200))))
+        }
+        val db = before.openHelper.writableDatabase
+        db.dropColumn("notice_rules", version = 3)
+        db.execSQL("DROP TABLE IF EXISTS notices")
+        db.execSQL("DROP TABLE IF EXISTS watch_sources")
+        before.close()
+
+        val after = open(name)
+        try {
+            runBlocking {
+                val repo = RemindersRepository(after, SyncQueueRepository(after.syncQueueDao()))
+                assertEquals(listOf("Bins"), repo.list(USER).map { it.name })
+                assertEquals(emptyList(), repo.get("t1")!!.noticeRules)
+                assertEquals(listOf(OccurrenceOverride(100, 200)), repo.get("t1")!!.overrides)
+
+                // Both new tables exist and take a row after the upgrade.
+                val notices = NoticesRepository(after, SyncQueueRepository(after.syncQueueDao()))
+                notices.create(
+                    CreateNoticeInput(
+                        userId = USER,
+                        sourceKind = com.taskrx.core.domain.SourceKind.Share,
+                        sourceValue = "share",
+                        title = "Bins moved",
+                        receivedAt = 10,
+                    ),
+                )
+                assertEquals(1, notices.list(USER).size)
+
+                val sources = WatchSourcesRepository(after, SyncQueueRepository(after.syncQueueDao()))
+                sources.create(
+                    CreateWatchedSourceInput(
+                        userId = USER,
+                        kind = com.taskrx.core.domain.SourceKind.Email,
+                        value = "waste@city.example",
+                        label = "Waste",
+                    ),
+                )
+                assertEquals(1, sources.list(USER).size)
             }
         } finally {
             after.close()

@@ -28,7 +28,7 @@ class LocalAdoptionTest {
                 container.reminders.create(CreateReminderInput(id = "m1", userId = LOCAL, kind = ReminderKind.Medication, name = "Metformin", schedule = dailyTimes(listOf("09:00"))))
             container.instances.create(CreateReminderInstanceInput(userId = LOCAL, reminderId = reminder.id, reminderKind = ReminderKind.Medication, scheduledTime = T0, status = InstanceStatus.Completed, completedAt = T0))
             val gateway = FakeGateway()
-            val worker = PushWorker(container.syncQueue, container.reminders, container.instances, gateway, FakeConnectivity(), { USER }, { })
+            val worker = PushWorker(container.syncQueue, container.reminders, container.instances, container.notices, container.watchSources, gateway, FakeConnectivity(), { USER }, { })
 
             worker.drain()
             assertTrue(gateway.mutations.isEmpty(), "the server refuses another user's rows, so nothing goes up for them")
@@ -41,6 +41,37 @@ class LocalAdoptionTest {
             assertEquals(listOf("Metformin"), container.reminders.list(USER).map { it.name })
             assertEquals(listOf(InstanceStatus.Completed), container.instances.list(InstanceFilter(userId = USER)).map { it.status })
             assertTrue(container.reminders.list(LOCAL).isEmpty())
+        }
+
+    @Test
+    fun `notices and watched sources written signed out move with the account`() =
+        withFixture(T0) {
+            container.watchSources.create(
+                CreateWatchedSourceInput(userId = LOCAL, kind = com.taskrx.core.domain.SourceKind.Email, value = "waste@city.example", label = "Waste"),
+            )
+            container.notices.create(
+                CreateNoticeInput(
+                    userId = LOCAL,
+                    sourceKind = com.taskrx.core.domain.SourceKind.Share,
+                    sourceValue = "share",
+                    title = "Bins moved",
+                    receivedAt = T0,
+                ),
+            )
+            val gateway = FakeGateway()
+            val worker = PushWorker(container.syncQueue, container.reminders, container.instances, container.notices, container.watchSources, gateway, FakeConnectivity(), { USER }, { })
+
+            worker.drain()
+            assertTrue(gateway.mutations.isEmpty())
+
+            LocalAdoption(database).adopt(LOCAL, USER)
+            worker.drain()
+
+            assertEquals(listOf("watchSources:create", "notices:create"), gateway.mutations.map { it.function })
+            assertEquals(listOf("Waste"), container.watchSources.list(USER).map { it.label })
+            assertEquals(listOf("Bins moved"), container.notices.list(USER).map { it.title })
+            assertTrue(container.watchSources.list(LOCAL).isEmpty())
+            assertTrue(container.notices.list(LOCAL).isEmpty())
         }
 
     @Test
