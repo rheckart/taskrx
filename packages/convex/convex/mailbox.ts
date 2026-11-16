@@ -21,7 +21,8 @@ import {
  * after the spans are chosen (D14).
  *
  * A message is only kept when its sender is a watched source. That list syncs precisely
- * because this poll runs with no phone to ask.
+ * because this poll runs with no phone to ask. For a forwarded message, the original sender
+ * named in the forward's header block counts as well as the person who forwarded it.
  */
 
 const JMAP_SESSION_URL = "https://api.fastmail.com/jmap/session";
@@ -195,13 +196,17 @@ export const poll = internalAction({
 
     let stored = 0;
     for (const email of emails) {
-      const from = (email.from ?? [])
-        .map((address) => address.email?.toLowerCase())
-        .filter((address): address is string => address !== undefined);
-      const matches = senders.filter((sender) => from.includes(sender.value));
+      const forward = unwrapForward(bodyText(email));
+      const from = [
+        ...(email.from ?? []).map((address) => address.email?.toLowerCase()),
+        ...forward.originalSenders,
+      ].filter((address): address is string => address !== undefined);
+      const matches = firstPerUser(
+        senders.filter((sender) => from.includes(sender.value))
+      );
       if (matches.length === 0) continue;
 
-      const sentence = keptSentences(bodyText(email));
+      const sentence = keptSentences(forward.body);
       const receivedAt = Date.parse(email.receivedAt ?? "");
       const subject = email.subject?.trim() ?? "";
       for (const sender of matches) {
@@ -345,6 +350,91 @@ function bodyText(email: JmapEmail): string {
   return text === "" ? (email.preview ?? "").trim() : text;
 }
 
+/**
+ * One notice per person per email. Someone who watches both the forwarder and the original
+ * sender matches twice; the first watched address is the one the notice names.
+ */
+function firstPerUser<T extends { userId: string }>(matches: T[]): T[] {
+  const seen = new Set<string>();
+  return matches.filter((match) => {
+    if (seen.has(match.userId)) return false;
+    seen.add(match.userId);
+    return true;
+  });
+}
+
+/** The line a mail client writes above a forwarded message's headers. */
+const FORWARD_MARKER =
+  /^\s*(?:-{2,}\s*(?:original|forwarded)\s+message\s*-{2,}|begin forwarded message:)\s*$/i;
+
+/** A `Name: value` header line inside a forward's header block. */
+const HEADER_LINE = /^\s*[A-Za-z][A-Za-z-]*:\s/;
+
+/**
+ * A forwarded message, split into what the poll needs from it.
+ *
+ * The person forwards a notice to the mailbox, so the envelope sender is the person, and the
+ * body opens with the original's `From:`/`Date:` block. That block names the forward's own
+ * date, which is never the date the notice is about, so it is removed from the body. Its
+ * `From:` is kept as an original sender, so watching the clinic matches a forward of the
+ * clinic's email. Text above the marker is the person's own note and stays.
+ *
+ * Anyone who can mail the mailbox can write such a block, just as they can forge a `From:`
+ * header. A notice is only a proposal, so this is no new trust.
+ */
+export function unwrapForward(text: string): {
+  body: string;
+  originalSenders: string[];
+} {
+  const lines = text.split(/\r?\n/);
+  const kept: string[] = [];
+  const originalSenders: string[] = [];
+  let index = 0;
+  while (index < lines.length) {
+    const line = lines[index] ?? "";
+    index += 1;
+    if (!FORWARD_MARKER.test(line)) {
+      kept.push(line);
+      continue;
+    }
+    // Apple Mail leaves a blank line between the marker and the headers.
+    while (index < lines.length && (lines[index] ?? "").trim() === "") {
+      index += 1;
+    }
+    while (index < lines.length && HEADER_LINE.test(lines[index] ?? "")) {
+      const from = /^\s*from:\s*(.*)$/i.exec(lines[index] ?? "");
+      const address = from === null ? null : addressIn(from[1] ?? "");
+      if (address !== null) originalSenders.push(address);
+      index += 1;
+    }
+    // The block ended a paragraph; keep that break so sentences do not run together.
+    kept.push("");
+  }
+  return { body: kept.join("\n"), originalSenders };
+}
+
+/** The address in `Name <a@b>` or a bare `a@b`, lowercased. */
+function addressIn(value: string): string | null {
+  const match =
+    /<([^<>\s]+@[^<>\s]+)>/.exec(value) ?? /([^<>\s]+@[^<>\s]+)/.exec(value);
+  return match?.[1]?.toLowerCase() ?? null;
+}
+
+/**
+ * Links and phone numbers, removed before sentences are chosen. A tracking link is full of
+ * dots and digits, and a phone number is a digit run, so either would otherwise be kept as
+ * a "date-ish" span ahead of the real date.
+ */
+const NOISE = [
+  /<(?:https?|mailto|tel):[^>]*>/gi,
+  /\bhttps?:\/\/\S+/gi,
+  /(?:\(\d{3}\)\s*|\b\d{3}[\s.-])\d{3}[\s.-]\d{4}\b/g,
+];
+
+function withoutNoise(body: string): string {
+  return NOISE.reduce((text, pattern) => text.replace(pattern, ""), body);
+}
+
 const MONTH =
   /\b(jan(uary)?|feb(ruary)?|mar(ch)?|apr(il)?|may|jun(e)?|jul(y)?|aug(ust)?|sep(t(ember)?)?|oct(ober)?|nov(ember)?|dec(ember)?)\b/i;
 
@@ -389,7 +479,7 @@ export function splitSentences(body: string): string[] {
  * device's reader decides what date, if any, that text names.
  */
 export function keptSentences(body: string): string {
-  return splitSentences(body)
+  return splitSentences(withoutNoise(body))
     .filter((sentence) => MONTH.test(sentence) || /\d/.test(sentence))
     .slice(0, MAX_SENTENCES)
     .join(" ");

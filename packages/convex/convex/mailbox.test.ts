@@ -3,7 +3,7 @@ import { convexTest } from "convex-test";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { api, internal } from "./_generated/api.js";
-import { keptSentences, splitSentences } from "./mailbox.js";
+import { keptSentences, splitSentences, unwrapForward } from "./mailbox.js";
 import schema from "./schema.js";
 
 /**
@@ -76,6 +76,63 @@ describe("sentence spans", () => {
     expect(
       keptSentences("Thank you for your patience. There have been delays.")
     ).toBe("");
+  });
+});
+
+const FORWARD = [
+  "Please remind me about this.",
+  "",
+  "----- Original message -----",
+  "From: Chesapeake Animal Clinic <Notifications@PetDesk.com>",
+  "To: rob@example.com",
+  "Subject: Why Consistent Check-Ups Matter",
+  "Date: Monday, November 16, 2026 10:21 AM",
+  "",
+  " <https://links.petdesk.com/ls/click?upn=u001.OGYeGf-2BxW8.9z>",
+  "*(301) 855-5166 <tel:{{click_phone}}>*",
+  "",
+  "Faith may be due for services in the next month and a half.",
+  "",
+  "*Dec 28, 2026*",
+  "",
+  " • Vaccine Canine Rabies 3yr",
+].join("\n");
+
+describe("forwarded messages", () => {
+  it("removes the header block and names the original sender", () => {
+    const forward = unwrapForward(FORWARD);
+
+    expect(forward.originalSenders).toEqual(["notifications@petdesk.com"]);
+    expect(forward.body).not.toContain("Original message");
+    expect(forward.body).not.toContain("November 16");
+    expect(forward.body).toContain("Please remind me about this.");
+    expect(forward.body).toContain("*Dec 28, 2026*");
+  });
+
+  it("keeps the notice's date, not the forward's, links or phone numbers", () => {
+    expect(keptSentences(unwrapForward(FORWARD).body)).toBe(
+      "Faith may be due for services in the next month and a half. *Dec 28, 2026*"
+    );
+  });
+
+  it("reads Gmail's and Apple Mail's markers", () => {
+    const gmail = unwrapForward(
+      "---------- Forwarded message ---------\nFrom: <waste@city.example>\nDate: Mon, 16 Nov 2026\n\nBins move to 18 November."
+    );
+    expect(gmail.originalSenders).toEqual(["waste@city.example"]);
+    expect(keptSentences(gmail.body)).toBe("Bins move to 18 November.");
+    expect(
+      unwrapForward(
+        "Begin forwarded message:\n\nFrom: waste@city.example\nDate: 16 November 2026\n\nBins move."
+      ).originalSenders
+    ).toEqual(["waste@city.example"]);
+  });
+
+  it("leaves a message with no forward alone", () => {
+    expect(unwrapForward("Collection moves to 18 November.")).toEqual({
+      body: "Collection moves to 18 November.",
+      originalSenders: [],
+    });
   });
 });
 
@@ -290,6 +347,38 @@ describe("mailbox.poll", () => {
 
     expect(second).toEqual({ status: "polled", fetched: 1, stored: 0 });
     expect(await as(t, OWNER).query(api.notices.list, {})).toHaveLength(1);
+  });
+
+  it("matches a forward on its original sender and keeps one notice per person", async () => {
+    vi.stubEnv("JMAP_TOKEN", "token");
+    const t = deployment();
+    await watch(t, OWNER, "notifications@petdesk.com");
+    await watch(t, OWNER, "rob@example.com");
+    await watch(t, OTHER, "notifications@petdesk.com");
+    stubJmap([
+      {
+        id: "email-5",
+        subject: "Fwd: Why Consistent Check-Ups Matter",
+        receivedAt: new Date(NOW).toISOString(),
+        from: [{ email: "rob@example.com" }],
+        textBody: [{ partId: "1" }],
+        bodyValues: { "1": { value: FORWARD } },
+      },
+    ]);
+
+    expect(await t.action(internal.mailbox.poll, {})).toEqual({
+      status: "polled",
+      fetched: 1,
+      stored: 2,
+    });
+    expect(await as(t, OWNER).query(api.notices.list, {})).toMatchObject([
+      {
+        sourceValue: "notifications@petdesk.com",
+        sentence:
+          "Faith may be due for services in the next month and a half. *Dec 28, 2026*",
+      },
+    ]);
+    expect(await as(t, OTHER).query(api.notices.list, {})).toHaveLength(1);
   });
 
   it("falls back to the preview when a message has no text body", async () => {
