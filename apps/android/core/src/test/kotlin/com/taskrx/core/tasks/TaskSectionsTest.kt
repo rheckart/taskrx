@@ -63,13 +63,13 @@ class TaskSectionsTest {
     }
 
     @Test
-    fun `overdue reaches back the seven days Catch up reaches`() {
-        val atFloor = row("edge", MIDDAY - SWEEP_LOOKBACK_MS)
-        val justBefore = row("gone", MIDDAY - SWEEP_LOOKBACK_MS - 1)
+    fun `overdue reaches back as far as the rows it is given`() {
+        val atOldFloor = row("edge", MIDDAY - SWEEP_LOOKBACK_MS)
+        val longBefore = row("still-here", MIDDAY - SWEEP_LOOKBACK_MS - 1)
 
-        val result = sections(atFloor, justBefore)
+        val result = sections(atOldFloor, longBefore)
 
-        assertEquals(listOf("edge"), result.overdue.map { it.reminderId })
+        assertEquals(listOf("still-here", "edge"), result.overdue.map { it.reminderId })
     }
 
     @Test

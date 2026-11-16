@@ -251,10 +251,12 @@ implemented — see Further Notes.
 - The home surface has two tabs, one per Kind. Medications keep a single-day
   timeline with a day bar and a NEXT highlight. Tasks are not one day: the tab
   is split into **Overdue**, **Due today** and **Upcoming** by `sectionTasks` in
-  `:core`. Overdue is every `missed` or past-due `pending` task within the
-  sweep's lookback, one row per task at its latest such moment, most overdue
-  first, with inline Done and Skip. Due today is the local day minus the rows
-  Overdue took. Upcoming is tomorrow through day +7, grouped by local day. The
+  `:core`. Overdue is every `missed` or past-due `pending` task, however old —
+  an unanswered task does not expire with the sweep's seven-day lookback, which
+  exists to bound what a return materialises for doses. One row per task at its
+  latest such moment, most overdue first, with inline Done and Skip. Due today
+  is the local day minus the rows Overdue took. Upcoming is tomorrow through day
+  +7, grouped by local day. The
   Tasks tab has no day bar and no NEXT highlight, and its badge counts Overdue
   plus the answerable rows of Due today. "Overdue" is a display word: the stored
   status stays `pending` or `missed`. Catch up is reached from the More menu.

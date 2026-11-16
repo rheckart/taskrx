@@ -13,6 +13,9 @@ import com.taskrx.core.domain.ReminderKind
 import com.taskrx.core.domain.isAnswerable
 import com.taskrx.core.domain.moveRefusal
 import com.taskrx.core.domain.withOverride
+import com.taskrx.core.schedule.latestOccurrenceBefore
+import com.taskrx.core.sweep.GRACE_PERIOD_MS
+import com.taskrx.core.sweep.snoozeRanOut
 import com.taskrx.core.time.takenAtOrNull
 import com.taskrx.core.undo.UNDOABLE_STATUSES
 import com.taskrx.core.undo.isScheduledOccurrence
@@ -25,6 +28,7 @@ import com.taskrx.core.timeline.ProjectTimelineInput
 import com.taskrx.core.timeline.TimelineRow
 import com.taskrx.core.timeline.TimelineWindow
 import com.taskrx.core.timeline.projectTimeline
+import com.taskrx.core.timeline.timelineRowKey
 import com.taskrx.mobile.AppContainer
 import com.taskrx.mobile.asneeded.AsNeededEntry
 import com.taskrx.mobile.data.InstanceFilter
@@ -55,7 +59,7 @@ data class TodayState(
     val hideCompleted: Boolean = true,
     /** The Instances whose answer can be taken back from the row (see [TodayViewModel.undo]). */
     val undoable: Set<String> = emptySet(),
-    /** The Tasks tab's Overdue, Due today and Upcoming, over the sweep's lookback and the week ahead. */
+    /** The Tasks tab's Overdue, Due today and Upcoming: Overdue reaches back past the week ahead. */
     val sections: TaskSections = TaskSections(emptyList(), emptyList(), emptyList()),
     /** The tab open: the day is split by Kind, medications first. The projection stays Kind-neutral; only the screen filters. */
     val kind: ReminderKind = ReminderKind.Medication,
@@ -381,34 +385,86 @@ class TodayViewModel(
             // about something not due for a day.
             val rows = if (offset > 0) projected.map { it.copy(isNext = false) } else projected
 
-            // The Tasks tab is not one day: Overdue reaches back as far as the sweep
-            // (SWEEP_LOOKBACK_MS, so it and Catch up agree), and Upcoming covers the week
-            // ahead. A projection over the fortnight rather than seven day reads, and a
-            // larger occurrence cap so an interval task is not truncated.
+            // The Tasks tab is not one day: Upcoming covers the week ahead, and Overdue
+            // reaches back past the sweep's seven days. A projection over the fortnight
+            // rather than seven day reads, and a larger occurrence cap so an interval task
+            // is not truncated.
             val taskWindow =
                 TimelineWindow(
                     localDayBounds(now, -7, zone()).start,
                     localDayBounds(now, 7, zone()).end,
                 )
+            val byId = reminders.associateBy { it.id }
+            val taskReminders = reminders.filter { it.kind == ReminderKind.Task }
             val taskInstances = app.instances.list(InstanceFilter(userId, since = taskWindow.start, until = taskWindow.end))
-            val taskRows =
+            val projectedTaskRows =
                 projectTimeline(
                     ProjectTimelineInput(
-                        reminders = reminders,
+                        reminders = taskReminders,
                         instances = taskInstances,
                         window = taskWindow,
                         now = now,
                         zone = zone(),
                         maxOccurrencesPerReminder = TASK_WINDOW_MAX_OCCURRENCES,
                     ),
-                ).filter { it.kind == ReminderKind.Task }
-            val sections = sectionTasks(taskRows, now, zone())
+                )
+            // A task's unanswered moment does not expire with the sweep's lookback. Stored
+            // rows from before the projected window are read as they are, and a task with no
+            // stored row at all gets one row at the latest moment its Schedule produced.
+            val oldTaskRows =
+                app.instances
+                    .list(InstanceFilter(userId, reminderKind = ReminderKind.Task, until = taskWindow.start - 1))
+                    .mapNotNull { instance ->
+                        val reminder = byId[instance.reminderId] ?: return@mapNotNull null
+                        // A snooze nobody came back to is the miss it was, even beyond the
+                        // sweep's reach (ADR 0005's amendment).
+                        val status =
+                            if (instance.status == InstanceStatus.Snoozed && snoozeRanOut(instance, now, GRACE_PERIOD_MS)) {
+                                InstanceStatus.Missed
+                            } else {
+                                instance.status
+                            }
+                        TimelineRow(
+                            reminderId = reminder.id,
+                            instanceId = instance.id,
+                            name = reminder.name,
+                            dosage = reminder.dosage,
+                            kind = reminder.kind,
+                            scheduledTime = instance.scheduledTime,
+                            status = status,
+                            snoozedUntil = instance.snoozedUntil,
+                            isNext = false,
+                            completedAt = instance.completedAt.takeIf { status == InstanceStatus.Completed },
+                        )
+                    }
+            val oldTaskKeys = oldTaskRows.mapTo(HashSet()) { timelineRowKey(it.reminderId, it.scheduledTime) }
+            val oldTaskMoments =
+                taskReminders
+                    .filter { it.active }
+                    .mapNotNull { reminder ->
+                        val latest = latestOccurrenceBefore(reminder, now, zone()) ?: return@mapNotNull null
+                        if (latest.fireAt < reminder.createdAt || latest.fireAt >= taskWindow.start) return@mapNotNull null
+                        // Any stored row at that moment, answered or not, already says what
+                        // became of it; only a moment with no row at all needs one invented.
+                        if (timelineRowKey(reminder.id, latest.fireAt) in oldTaskKeys) return@mapNotNull null
+                        TimelineRow(
+                            reminderId = reminder.id,
+                            instanceId = null,
+                            name = reminder.name,
+                            dosage = reminder.dosage,
+                            kind = reminder.kind,
+                            scheduledTime = latest.fireAt,
+                            status = InstanceStatus.Pending,
+                            snoozedUntil = null,
+                            isNext = false,
+                        )
+                    }
+            val sections = sectionTasks(projectedTaskRows + oldTaskRows + oldTaskMoments, now, zone())
 
             // A different day was asked for while this one was reading; its load follows.
             // Which answered rows offer Undo: an answer on a moment the Schedule predicts. An extra
             // dose or a Backlog completion would reopen into a miss that never was (`undoVerdict`).
             // Read over the day and the sections together, so an early-completed task can be undone.
-            val byId = reminders.associateBy { it.id }
             val undoable =
                 (rows + sections.overdue + sections.dueToday + sections.upcoming.flatMap { it.rows }).mapNotNullTo(HashSet()) { row ->
                     val id = row.instanceId ?: return@mapNotNullTo null

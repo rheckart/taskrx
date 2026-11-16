@@ -656,6 +656,49 @@ class TodayViewModelTest {
         }
 
     @Test
+    fun `an overdue task older than the sweep's lookback stays on the Tasks tab`() =
+        withUi(MIDNIGHT + 10 * HOUR) {
+            reminder("older", ReminderKind.Task, onceTimes(MIDNIGHT - 30 * DAY), createdAt = MIDNIGHT - 40 * DAY, name = "Renew insurance")
+            val vm = vm()
+
+            vm.refresh().join()
+
+            val overdue = vm.state.value.sections.overdue
+            assertEquals(listOf("Renew insurance"), overdue.map { it.name })
+            assertEquals(MIDNIGHT - 30 * DAY, overdue.single().scheduledTime)
+        }
+
+    @Test
+    fun `an old task that was completed is not overdue`() =
+        withUi(MIDNIGHT + 10 * HOUR) {
+            val r = reminder("older", ReminderKind.Task, onceTimes(MIDNIGHT - 30 * DAY), createdAt = MIDNIGHT - 40 * DAY, name = "Renew insurance")
+            val done = container.instances.create(CreateReminderInstanceInput(USER, r.id, r.kind, MIDNIGHT - 30 * DAY))
+            container.instances.markCompleted(done.id, MIDNIGHT - 30 * DAY)
+            val vm = vm()
+
+            vm.refresh().join()
+
+            assertEquals(emptyList(), vm.state.value.sections.overdue)
+        }
+
+    @Test
+    fun `Done on an old Overdue task records it at the moment it was due`() =
+        withUi(MIDNIGHT + 10 * HOUR) {
+            reminder("older", ReminderKind.Task, onceTimes(MIDNIGHT - 30 * DAY), createdAt = MIDNIGHT - 40 * DAY, name = "Renew insurance")
+            val toasts = ToastLog()
+            val vm = TodayViewModel(container, zone = { UTC }, log = { _, _ -> }, toast = toasts::add)
+            vm.refresh().join()
+
+            vm.answerTask(vm.state.value.sections.overdue.single(), BatchAction.Take).join()
+
+            assertEquals("Renew insurance Done", toasts.shown.single().message)
+            val stored = container.instances.list(com.taskrx.mobile.data.InstanceFilter(USER)).single { it.reminderId == "older" }
+            assertEquals(InstanceStatus.Completed, stored.status)
+            assertEquals(MIDNIGHT - 30 * DAY, stored.completedAt)
+            assertEquals(emptyList(), vm.state.value.sections.overdue)
+        }
+
+    @Test
     fun `the Tasks badge counts Overdue and today's unanswered, not the week ahead`() =
         withUi(MIDNIGHT + 10 * HOUR) {
             reminder("late", ReminderKind.Task, onceTimes(MIDNIGHT + 8 * HOUR), createdAt = MIDNIGHT - DAY, name = "Late thing")

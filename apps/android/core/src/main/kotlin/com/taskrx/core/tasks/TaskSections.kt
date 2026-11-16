@@ -2,7 +2,6 @@ package com.taskrx.core.tasks
 
 import com.taskrx.core.domain.InstanceStatus
 import com.taskrx.core.domain.ReminderKind
-import com.taskrx.core.sweep.SWEEP_LOOKBACK_MS
 import com.taskrx.core.time.localDayBounds
 import com.taskrx.core.timeline.TimelineRow
 import com.taskrx.core.timeline.timelineRowKey
@@ -25,12 +24,17 @@ import java.time.ZoneId
  * thrown away — they stay recorded, reachable in History and answerable in
  * Catch up — they are simply not five copies of the same sentence.
  *
- * ## Why the lookback is `SWEEP_LOOKBACK_MS`
+ * ## Why Overdue has no lookback of its own
  *
- * "Overdue" and "Catch up" must agree on how far back they reach. Catch up
- * lists what the sweep has recorded as Missed, and the sweep only reaches
- * `SWEEP_LOOKBACK_MS` back, so nothing older was ever recorded to be overdue
- * for. Reading the same constant keeps the two from drifting.
+ * A dose and a task are not the same commitment. The sweep's seven-day bound
+ * (ADR 0005) exists so returning after a long absence does not materialise
+ * thousands of Missed doses in one pass; a task the person meant to finish is
+ * not history to be bounded away. So Overdue takes every past-due unanswered
+ * task row it is given, however old, and the caller supplies the older rows:
+ * stored Instances from before the projected window, plus the latest past
+ * moment of a task that has no stored row at all. Catch up keeps the sweep's
+ * bound because it lists what the sweep recorded, and the sweep still reaches
+ * only seven days back.
  *
  * ## What this deliberately does not decide
  *
@@ -54,8 +58,8 @@ data class TaskSections(
 )
 
 /**
- * The three sections for the Tasks tab, from the task rows of a window wide
- * enough to hold them (at least `now - SWEEP_LOOKBACK_MS` through day +7).
+ * The three sections for the Tasks tab, from the task rows of the day +7 window
+ * plus any older unanswered rows the caller wants Overdue to reach.
  *
  * Medication rows in [rows] are ignored: the Medications tab keeps its single
  * day view, and a task is the only thing these sections are about.
@@ -72,7 +76,6 @@ fun sectionTasks(
     val tasks = rows.filter { it.kind == ReminderKind.Task }
     val today = localDayBounds(now, 0, zone)
     val horizonEnd = localDayBounds(now, 7, zone).end
-    val floor = now - SWEEP_LOOKBACK_MS
 
     // Most overdue first: the task whose latest miss is oldest sits at the top.
     // One row per task — the latest moment it was missed or fell due — so a
@@ -81,7 +84,6 @@ fun sectionTasks(
         tasks
             .filter {
                 it.scheduledTime < now &&
-                    it.scheduledTime >= floor &&
                     (it.status == InstanceStatus.Missed || it.status == InstanceStatus.Pending)
             }
             .groupBy { it.reminderId }

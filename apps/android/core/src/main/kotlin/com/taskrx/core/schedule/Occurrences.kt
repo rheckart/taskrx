@@ -47,6 +47,7 @@ import java.time.ZonedDateTime
  */
 
 private const val MS_PER_HOUR = 3_600_000L
+private const val MS_PER_DAY = 24 * MS_PER_HOUR
 
 /** `for (int dayOffset = 0; ...; dayOffset < 60; ...)` in `NextDailyOccurrences`. */
 private const val DAILY_HORIZON_DAYS = 60
@@ -303,6 +304,58 @@ fun nextOccurrences(
         .distinctBy { it.fireAt }
         .sortedBy { it.fireAt }
         .take(count)
+}
+
+/**
+ * The most recent moment [reminder]'s Schedule produced strictly before [now], or null when
+ * there is none.
+ *
+ * This is the backward-looking counterpart to [nextOccurrences], and it exists for overdue
+ * tasks. A task's unanswered moment must stay reachable however long ago it fell due, but the
+ * timeline projection walks *forward* from a window start and its day-based horizons are
+ * measured from there: asking it for a year of history would spend the whole `daily` horizon
+ * in the first sixty days and miss the recent ones. Asking for the latest moment directly
+ * sidesteps both problems and keeps the fallback cheap.
+ *
+ * Pauses and moves are honoured exactly as [nextOccurrences] honours them: a paused moment is
+ * not a moment, and a moved one is found where it moved to. The search reaches one full cycle
+ * of the Schedule (two days for `daily`, eight for `weekly`, 32 for `monthly`, one interval
+ * for `interval`), which is the most that can separate two consecutive moments. A pause
+ * longer than a cycle can therefore leave nothing in range; that is deliberate, because a
+ * task paused across the whole cycle is not overdue for a moment the person asked not to be
+ * reminded about.
+ *
+ * [ReminderKind] is not consulted: this says when a Schedule last fired, not whether the
+ * reminder is a task. The caller decides what to do with it.
+ */
+fun latestOccurrenceBefore(
+    reminder: Reminder,
+    now: Long,
+    zone: ZoneId = ZoneId.systemDefault(),
+): ScheduledOccurrence? {
+    val (spanMs, count) =
+        when (val schedule = reminder.schedule) {
+            is OnceTimes ->
+                return nextOccurrences(reminder, schedule.at - 1, 1, zone)
+                    .lastOrNull { it.fireAt < now }
+            is IntervalTimes -> {
+                if (schedule.hours <= 0) return null
+                (schedule.hours * MS_PER_HOUR) to 2
+            }
+            is DailyTimes -> 2 * MS_PER_DAY to (schedule.times.size * 2 + 2)
+            // Eight days can hold two of each chosen weekday; 32 can hold two of each chosen
+            // date. The count is an upper bound so the walk reaches the latest moment even
+            // for a schedule with several days and several times.
+            is WeeklyTimes -> 8 * MS_PER_DAY to (schedule.daysOfWeek.size * schedule.times.size * 2 + 2)
+            is MonthlyTimes -> 32 * MS_PER_DAY to (schedule.daysOfMonth.size * schedule.times.size * 2 + 2)
+            // The Backlog has no moments, and an as-needed medication has none by design.
+            NoneTimes, is AsNeededTimes -> return null
+        }
+
+    // The anchor sits a millisecond before the span so an occurrence exactly on the boundary
+    // is included, matching the inclusive lower bound everywhere else in this engine.
+    return nextOccurrences(reminder, now - spanMs - 1, count, zone)
+        .lastOrNull { it.fireAt < now }
 }
 
 /**

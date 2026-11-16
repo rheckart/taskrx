@@ -535,8 +535,8 @@ private fun TaskRow(row: TimelineRow, state: TodayState, actions: TodayActions, 
  * An Overdue task. The word is the screen's, not a stored status: the row is still `pending` or
  * `missed` underneath, and Done or Skip answers it in place without a trip to the answer screen.
  *
- * The day is named as well as the time. Overdue reaches a week back, so "09:00" alone would read
- * as this morning's and hide how late the task is.
+ * The day is named as well as the time. Overdue can reach back arbitrarily far, so "09:00" alone
+ * would read as this morning's and hide how late the task is.
  */
 @Composable
 private fun OverdueTaskRow(
