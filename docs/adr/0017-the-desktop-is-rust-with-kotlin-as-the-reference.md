@@ -34,10 +34,13 @@ reproduce it.
   issuer and `sub` (the Clerk user id `getCurrentUserId` returns), and `aud` is the OAuth
   client id, which the second `auth.config.ts` entry (`CLERK_DESKTOP_CLIENT_ID`) checks. The
   access token (`typ: at+jwt`) has no `aud` and is not accepted. Both live 24 hours. A
-  refresh-token grant returns a new ID token, so the keyring holds only the refresh token.
-  The Rust client does not report a rejected token: it retries and never answers. So the
-  desktop decodes `exp` itself and refreshes before it, and treats a query that hangs past a
-  timeout after sign-in as signed out.
+  refresh-token grant returns a new ID token whose `exp` moves forward, and a new refresh
+  token (the old one is rotated out), so the keyring holds only the latest refresh token and
+  replaces it on every refresh.
+- **The Rust client does not report a refused token.** With a token the server refuses,
+  `set_auth` returns at once and a query has no answer after 30 seconds, with no error. So
+  the desktop decodes `exp` itself and refreshes before it, and treats a query that has no
+  answer within a timeout after sign-in as signed out.
 - **Packaging:** a PKGBUILD and a `.desktop` entry install it into the app launcher. The
   app follows the Omarchy accent from `~/.local/state/omarchy/current/theme/colors.toml`
   (watched live) and asks `hyprctl` for the rounding, as Omarchy's own apps do.
