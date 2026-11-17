@@ -266,7 +266,9 @@ task. Nothing applies itself; ADR 0014 has the full reasoning and the retention 
 **The device funnel** (`app/notices/NoticeIntake.kt`) is the one place every road ends. In
 order: normalise the source value and check it against `watch_sources`; de-duplicate on
 `external_id`; trim title and body; choose the kept sentence with `core/notices/Intake.kt`;
-write the notice and enqueue a push. It never parses a date — the extractor runs when the
+write the notice and enqueue a push. When a rule makes a move available, the same heads-up the
+pull path posts follows the write, so a notice caught on the phone announces itself exactly as
+a mailbox notice does. It never parses a date — the extractor runs when the
 Proposals screen reads the row, so there is one implementation.
 
 **The notification listener** (`app/notices/NotificationListener.kt`) records the package

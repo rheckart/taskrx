@@ -18,8 +18,8 @@ import org.robolectric.RobolectricTestRunner
 private const val NOW = 1_780_000_000_000L
 private val ZONE: ZoneId = ZoneOffset.UTC
 
-private fun fixtureIntake(fx: Fixture) =
-    NoticeIntake(fx.container.notices, fx.container.watchSources, zone = { ZONE })
+private fun fixtureIntake(fx: Fixture, onStored: suspend (com.taskrx.core.domain.Notice) -> Unit = {}) =
+    NoticeIntake(fx.container.notices, fx.container.watchSources, zone = { ZONE }, onStored = onStored)
 
 private fun message(
     sourceKind: SourceKind = SourceKind.App,
@@ -56,6 +56,31 @@ class NoticeIntakeTest {
             assertEquals("com.example.waste", result.notice.sourceValue)
             assertEquals("notification-key-1", result.notice.externalId)
             assertEquals(1, container.notices.list(USER).size)
+        }
+
+    @Test
+    fun `a stored notice is handed to the ping once, and a duplicate is not`() =
+        withFixture(NOW) {
+            watch(SourceKind.App, "com.example.waste")
+            val pinged = mutableListOf<String>()
+            val intake = fixtureIntake(this) { notice -> pinged += notice.id }
+
+            val stored = assertIs<IntakeResult.Stored>(intake.admit(USER, message()))
+            intake.admit(USER, message())
+
+            assertEquals(listOf(stored.notice.id), pinged)
+        }
+
+    @Test
+    fun `a ping that fails still keeps the notice`() =
+        withFixture(NOW) {
+            watch(SourceKind.App, "com.example.waste")
+            val intake = fixtureIntake(this) { error("no notification channel in this test") }
+
+            val result = assertIs<IntakeResult.Stored>(intake.admit(USER, message()))
+
+            assertEquals(1, container.notices.list(USER).size)
+            assertEquals(result.notice.id, container.notices.list(USER).single().id)
         }
 
     @Test

@@ -9,6 +9,7 @@ import com.taskrx.mobile.data.CreateNoticeInput
 import com.taskrx.mobile.data.NoticesRepository
 import com.taskrx.mobile.data.WatchSourcesRepository
 import java.time.ZoneId
+import kotlinx.coroutines.CancellationException
 
 /** An outside message as a road hands it over, before any decision has been made about it. */
 data class IntakeMessage(
@@ -52,6 +53,13 @@ class NoticeIntake(
     private val notices: NoticesRepository,
     private val watchSources: WatchSourcesRepository,
     private val zone: () -> ZoneId = { ZoneId.systemDefault() },
+    /**
+     * What to do with a notice that was just written. The app passes the heads-up ping, so a
+     * notice caught on the phone announces itself the way a mailbox notice does; the pull path
+     * pings the same way (D10). It runs after the write, and a failure here never loses the
+     * notice.
+     */
+    private val onStored: suspend (Notice) -> Unit = {},
     private val log: (String, Throwable?) -> Unit = { what, e -> Log.w("noticeIntake", what, e) },
 ) {
     /**
@@ -96,6 +104,13 @@ class NoticeIntake(
                     externalId = externalId,
                 ),
             )
+        try {
+            onStored(notice)
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            log("a notice was stored but its ping failed", e)
+        }
         return IntakeResult.Stored(notice)
     }
 }

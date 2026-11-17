@@ -81,7 +81,12 @@ class AppContainer(
     val watchSources = WatchSourcesRepository(database, syncQueue, clock, newId)
 
     /** The one funnel every notice road feeds: watched check, de-duplication, keep, write. */
-    val noticeIntake = NoticeIntake(notices, watchSources, zone = { ZoneId.systemDefault() })
+    val noticeIntake = NoticeIntake(
+        notices,
+        watchSources,
+        zone = { ZoneId.systemDefault() },
+        onStored = { notice -> noticePings.ping(listOf(notice)) },
+    )
 
     val sweep = MissedSweepRunner(RoomSweepStore(reminders, instances))
     val adherence = AdherenceReader(sweep, instances, reminders)
