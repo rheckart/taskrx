@@ -114,6 +114,68 @@ class PullTest {
         }
 
     @Test
+    fun `re-arms after another device's answer is pulled, so a dose answered there does not ring here`() =
+        withFixture(T0) {
+            var calls = 0
+            val applier = PullApplier(container.reminders, container.instances, container.notices, container.watchSources) { calls++ }
+            applier.run(listOf(reminderDoc()))
+            assertEquals(1, calls)
+
+            // The reminder is unchanged; only the answer is new.
+            applier.run(listOf(reminderDoc()), listOf(instanceDoc(status = "completed", extra = ""","completedAt":1780000050000.0""")))
+            assertEquals(2, calls)
+
+            applier.run(listOf(reminderDoc()), listOf(instanceDoc(status = "completed", extra = ""","completedAt":1780000050000.0""")))
+            assertEquals(2, calls, "nothing new was written, so nothing to re-arm")
+        }
+
+    @Test
+    fun `one pull reads the four lists and writes them, and is the pass a reapply runs`() =
+        withFixture(T0) {
+            val gateway = FakeGateway()
+            gateway.onQuery = { function, _ ->
+                when (function) {
+                    ConvexFunctions.REMINDERS_LIST -> json("[${reminderDoc()}]")
+                    ConvexFunctions.INSTANCES_LIST -> json("[${instanceDoc()}]")
+                    else -> json("[]")
+                }
+            }
+            val sync = PullSync(gateway, pull(this)) { }
+
+            assertTrue(sync.once())
+            assertNotNull(container.reminders.get("r1"))
+            assertNotNull(container.instances.get("i1"))
+            assertEquals(
+                setOf(ConvexFunctions.REMINDERS_LIST, ConvexFunctions.INSTANCES_LIST, ConvexFunctions.WATCH_SOURCES_LIST, ConvexFunctions.NOTICES_LIST),
+                gateway.calls.filter { it.kind == "query" }.map { it.function }.toSet(),
+            )
+
+            sync.reapply()
+            assertEquals(4, gateway.calls.size, "reapply runs the pass once() delivered, without reading again")
+        }
+
+    @Test
+    fun `one pull whose read fails writes nothing and says so`() =
+        withFixture(T0) {
+            val gateway = FakeGateway()
+            gateway.onQuery = { function, _ ->
+                if (function == ConvexFunctions.INSTANCES_LIST) error("socket closed") else json("[${reminderDoc()}]")
+            }
+
+            assertEquals(false, PullSync(gateway, pull(this)) { }.once())
+            assertNull(container.reminders.get("r1"), "a pull is all four lists or nothing")
+        }
+
+    @Test
+    fun `one pull whose pass fails says so`() =
+        withFixture(T0) {
+            val gateway = FakeGateway()
+            gateway.onQuery = { _, _ -> json("{}") }
+
+            assertEquals(false, PullSync(gateway, pull(this)) { }.once())
+        }
+
+    @Test
     fun `reads whole numbers however the library spells them`() =
         withFixture(T0) {
             // 1.78E12, 1780000000000 and 1780000000000.0 are one number to the server.

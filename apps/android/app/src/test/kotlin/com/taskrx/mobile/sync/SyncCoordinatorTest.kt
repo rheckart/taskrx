@@ -17,6 +17,7 @@ import kotlin.test.assertTrue
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.async
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.flowOf
@@ -83,6 +84,55 @@ class SyncCoordinatorTest {
             coordinator.onForeground()
             delay(100)
             assertTrue(gateway.calls.isEmpty())
+        }
+
+    // ---- the background pull (ADR 0016) ----------------------------------------------------
+
+    @Test
+    fun `a background pull while signed out touches nothing`() =
+        rig(signedIn = false) {
+            fx.reminder("m1")
+            assertEquals(BackgroundPull.SignedOut, coordinator.pullOnce(readyTimeoutMs = 50))
+            assertTrue(gateway.calls.isEmpty())
+        }
+
+    @Test
+    fun `a background pull waits for sign-in to finish starting`() =
+        rig(signedIn = false) {
+            auth.state.value = AuthStatus.Loading
+            gateway.onQuery = { _, _ -> Json.parseToJsonElement("[]") }
+            val result = CoroutineScope(Dispatchers.Default).async { coordinator.pullOnce(readyTimeoutMs = 2_000) }
+            delay(50)
+            auth.state.value = AuthStatus.SignedIn(USER)
+            assertEquals(BackgroundPull.Done, result.await())
+        }
+
+    @Test
+    fun `a background pull gives up when the server never holds a token`() =
+        rig {
+            ready.value = false
+            fx.reminder("m1")
+            assertEquals(BackgroundPull.NotReady, coordinator.pullOnce(readyTimeoutMs = 50))
+            assertTrue(gateway.calls.isEmpty())
+        }
+
+    @Test
+    fun `a background pull pushes what is waiting, then reads`() =
+        rig {
+            fx.reminder("m1")
+            gateway.onQuery = { _, _ -> Json.parseToJsonElement("[]") }
+
+            assertEquals(BackgroundPull.Done, coordinator.pullOnce(readyTimeoutMs = 50))
+            assertEquals("mutation", gateway.calls.first().kind, "the push goes before the read")
+            assertEquals(4, gateway.calls.count { it.kind == "query" })
+            assertTrue(fx.container.syncQueue.pending().isEmpty())
+        }
+
+    @Test
+    fun `a background pull whose read fails says so`() =
+        rig {
+            gateway.onQuery = { _, _ -> error("socket closed") }
+            assertEquals(BackgroundPull.Failed, coordinator.pullOnce(readyTimeoutMs = 50))
         }
 
     @Test

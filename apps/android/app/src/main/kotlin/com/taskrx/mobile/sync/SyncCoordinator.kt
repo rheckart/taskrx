@@ -14,8 +14,10 @@ import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withTimeoutOrNull
 import kotlin.coroutines.coroutineContext
 
 /**
@@ -99,6 +101,20 @@ class SyncCoordinator(
         }
     }
 
+    /**
+     * One push and one pull, for the background job (ADR 0016): desktop edits reach the phone's
+     * alarms with the app closed. Waits for sign-in to finish starting and for the server to
+     * hold a token, each within [readyTimeoutMs], since a process woken for this job starts both
+     * from cold. The pull re-arms through its applier, as a live delivery does.
+     */
+    suspend fun pullOnce(readyTimeoutMs: Long = READY_TIMEOUT_MS): BackgroundPull {
+        val status = withTimeoutOrNull(readyTimeoutMs) { auth.status.first { it !is AuthStatus.Loading } } ?: return BackgroundPull.NotReady
+        if (status !is AuthStatus.SignedIn) return BackgroundPull.SignedOut
+        withTimeoutOrNull(readyTimeoutMs) { ready.first { it } } ?: return BackgroundPull.NotReady
+        worker.drain()
+        return if (pull.once()) BackgroundPull.Done else BackgroundPull.Failed
+    }
+
     /** A drain, then the last pull pass again, so a row the push refused converges ([PullSync.reapply]). */
     private suspend fun drain() {
         worker.drain()
@@ -107,5 +123,23 @@ class SyncCoordinator(
 
     private companion object {
         const val PENDING_POLL_MS = 5_000L
+
+        /** Long enough for Clerk and the Convex client to start in a cold process. */
+        const val READY_TIMEOUT_MS = 30_000L
     }
+}
+
+/** How one background pull ended. */
+enum class BackgroundPull {
+    /** Pushed what was waiting and pulled the four lists. */
+    Done,
+
+    /** Nobody is signed in: nothing to pull, and nothing to try again. */
+    SignedOut,
+
+    /** Sign-in or the server's token did not come up in time. */
+    NotReady,
+
+    /** A read or the pass failed. */
+    Failed,
 }

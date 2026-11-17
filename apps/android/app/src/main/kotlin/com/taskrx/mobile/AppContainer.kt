@@ -1,5 +1,7 @@
 package com.taskrx.mobile
 
+import com.taskrx.mobile.sync.BackgroundPullWorker
+import androidx.work.WorkManager
 import android.content.Context
 import com.taskrx.mobile.adherence.AdherenceReader
 import com.taskrx.mobile.auth.AuthGateway
@@ -190,6 +192,9 @@ class AppContainer(
             val auth = ClerkAuthGateway(context, clerkKey, scope)
             val convex = ConvexSession(convexUrl, auth, context.applicationContext, scope)
             val remote = Remote(ReauthenticatingGateway(RealConvexGateway(convex.client), convex::reauthenticate), convex.ready, AndroidConnectivity(context))
+            // Desktop edits reach this phone's alarms with the app closed (ADR 0016). Only a
+            // build with a server has anything to pull; the job does nothing while signed out.
+            BackgroundPullWorker.schedule(WorkManager.getInstance(context))
             return AppContainer(context, TaskRxDatabase.open(context), auth = auth, remote = remote, scope = scope)
         }
     }

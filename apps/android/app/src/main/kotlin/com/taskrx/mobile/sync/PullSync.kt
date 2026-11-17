@@ -16,6 +16,8 @@ import com.taskrx.mobile.data.RemindersRepository
 import com.taskrx.mobile.data.WatchSourcesRepository
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.async
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.conflate
 import kotlinx.coroutines.flow.retryWhen
@@ -49,11 +51,13 @@ class PullApplier(
      */
     private val onNoticesApplied: suspend (List<Notice>) -> Unit = {},
     /**
-     * Called after Reminders were written. A Reminder created or edited on another device (or
-     * restored on first sign-in) must be armed now, not at the next foreground: the foreground
-     * pass at sign-in runs before the first pull has landed.
+     * Called after Reminders or Instances were written. A Reminder created or edited on another
+     * device (or restored on first sign-in) must be armed now, not at the next foreground: the
+     * foreground pass at sign-in runs before the first pull has landed. An answer from another
+     * device must disarm its moment just as soon, or a dose answered on the desktop still rings
+     * here (ADR 0016).
      */
-    private val onRemindersApplied: suspend () -> Unit = {},
+    private val onScheduleApplied: suspend () -> Unit = {},
 ) {
     internal suspend fun apply(
         remoteReminders: List<ServerReminder>,
@@ -72,15 +76,6 @@ class PullApplier(
             if (shouldApplyRemoteReminder(local, candidate.reminder, reminders.hasUnpushedChange(candidate.reminder.id))) applicable += candidate
         }
         reminders.upsertMany(applicable)
-        if (applicable.isNotEmpty()) {
-            try {
-                onRemindersApplied()
-            } catch (e: CancellationException) {
-                throw e
-            } catch (e: Exception) {
-                Log.e(TAG, "rescheduling after pull failed", e)
-            }
-        }
 
         val resolved = ArrayList<PulledReminderInstance>()
         for (doc in remoteInstances) {
@@ -100,6 +95,15 @@ class PullApplier(
             if (shouldApplyRemoteReminderInstance(local, candidate.instance, instances.hasUnpushedChange(candidate.instance.id))) resolved += candidate
         }
         instances.upsertMany(resolved)
+        if (applicable.isNotEmpty() || resolved.isNotEmpty()) {
+            try {
+                onScheduleApplied()
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                Log.e(TAG, "rescheduling after pull failed", e)
+            }
+        }
 
         // Watched sources first: they are what admits a notice, so a phone that pulls both
         // has the gate in place before the notices it would have let through.
@@ -176,13 +180,41 @@ class PullSync(
         }
     }
 
-    private suspend fun pass(quad: Quad) {
+    private suspend fun pass(quad: Quad): Boolean =
         try {
             applier.applyJson(quad.reminders, quad.instances, quad.watchSources, quad.notices)
+            true
         } catch (e: CancellationException) {
             throw e
         } catch (e: Exception) {
             Log.e(TAG, "pull failed", e)
+            false
+        }
+
+    /**
+     * One pull, for the background job (ADR 0016): the four lists read once, then the same pass a
+     * delivery runs. All four or nothing, so a phone never applies instances without the
+     * reminders they belong to. False when a read or the pass failed.
+     */
+    suspend fun once(): Boolean {
+        val quad =
+            try {
+                coroutineScope {
+                    val reminders = async { gateway.query(ConvexFunctions.REMINDERS_LIST) }
+                    val instances = async { gateway.query(ConvexFunctions.INSTANCES_LIST) }
+                    val watchSources = async { gateway.query(ConvexFunctions.WATCH_SOURCES_LIST) }
+                    val notices = async { gateway.query(ConvexFunctions.NOTICES_LIST) }
+                    Quad(reminders.await(), instances.await(), watchSources.await(), notices.await())
+                }
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                Log.e(TAG, "background pull failed to read", e)
+                return false
+            }
+        return passes.withLock {
+            last = quad
+            pass(quad)
         }
     }
 

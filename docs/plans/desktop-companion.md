@@ -58,7 +58,8 @@ because two writers are unsafe until one Occurrence can only ever be one Instanc
   - [x] `parser` (157: every phrase the parser tests read, and kind and name corrections),
         `notices` (112)
 - [ ] Phone catch-up (ADR 0016):
-  - [ ] A periodic WorkManager pull (15 min) that reschedules
+  - [x] A periodic WorkManager pull (15 min) that reschedules (`BackgroundPullWorker`; a pulled
+        answer now re-arms too. Unverified on a device until a build carrying it is installed)
   - [ ] A fire-time check before a dose posts: short timeout, fails open. Unverified until
         the new harness cases run on a device (offline posts, answered elsewhere stays
         silent, a slow server posts)
