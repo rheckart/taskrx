@@ -57,6 +57,9 @@ val goldenSets: List<GoldenSet> =
         DomainGolden,
         TodayGolden,
         AnswerGolden,
+        BacklogGolden,
+        CatchUpGolden,
+        RefillGolden,
     )
 
 // ---- input helpers ------------------------------------------------------------------------

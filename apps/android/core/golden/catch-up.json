@@ -1,0 +1,826 @@
+{
+  "rule": "catch-up",
+  "about": "needsCatchUp(rows), catchUpDays(rows, zone), catchUpSlots(rows) and CATCH_UP_WINDOW_MS",
+  "generatedBy": "apps/android/core/src/test/kotlin/com/taskrx/core/golden (./gradlew :core:test -PupdateGoldens)",
+  "cases": [
+    {
+      "name": "the catch-up window",
+      "input": {
+        "call": "constants"
+      },
+      "output": {
+        "windowMs": 604800000
+      }
+    },
+    {
+      "name": "needsCatchUp: only misses",
+      "input": {
+        "rows": [
+          {
+            "reminderId": "med-a",
+            "instanceId": "inst-med-a-1783299600000",
+            "name": "Atorvastatin",
+            "dosage": "1 tablet",
+            "kind": "medication",
+            "scheduledTime": 1783299600000,
+            "status": "missed",
+            "snoozedUntil": null,
+            "isNext": false,
+            "completedAt": null
+          },
+          {
+            "reminderId": "med-b",
+            "instanceId": "inst-med-b-1783256400000",
+            "name": "Lisinopril",
+            "dosage": "1 tablet",
+            "kind": "medication",
+            "scheduledTime": 1783256400000,
+            "status": "missed",
+            "snoozedUntil": null,
+            "isNext": false,
+            "completedAt": null
+          },
+          {
+            "reminderId": "med-a",
+            "instanceId": "inst-med-a-1783256400000",
+            "name": "Atorvastatin",
+            "dosage": "1 tablet",
+            "kind": "medication",
+            "scheduledTime": 1783256400000,
+            "status": "missed",
+            "snoozedUntil": null,
+            "isNext": false,
+            "completedAt": null
+          },
+          {
+            "reminderId": "med-a",
+            "instanceId": null,
+            "name": "Atorvastatin",
+            "dosage": "1 tablet",
+            "kind": "medication",
+            "scheduledTime": 1783342800000,
+            "status": "completed",
+            "snoozedUntil": null,
+            "isNext": false,
+            "completedAt": null
+          },
+          {
+            "reminderId": "task-w",
+            "instanceId": "inst-task-w-1783202400000",
+            "name": "Water the plants",
+            "dosage": null,
+            "kind": "task",
+            "scheduledTime": 1783202400000,
+            "status": "missed",
+            "snoozedUntil": null,
+            "isNext": false,
+            "completedAt": null
+          },
+          {
+            "reminderId": "med-b",
+            "instanceId": null,
+            "name": "Lisinopril",
+            "dosage": "1 tablet",
+            "kind": "medication",
+            "scheduledTime": 1783170000000,
+            "status": "skipped",
+            "snoozedUntil": null,
+            "isNext": false,
+            "completedAt": null
+          },
+          {
+            "reminderId": "med-c",
+            "instanceId": null,
+            "name": "Vitamin D",
+            "dosage": "1 tablet",
+            "kind": "medication",
+            "scheduledTime": 1783339200000,
+            "status": "snoozed",
+            "snoozedUntil": null,
+            "isNext": false,
+            "completedAt": null
+          },
+          {
+            "reminderId": "med-d",
+            "instanceId": "inst-med-d-1783310340000",
+            "name": "Night dose",
+            "dosage": "1 tablet",
+            "kind": "medication",
+            "scheduledTime": 1783310340000,
+            "status": "missed",
+            "snoozedUntil": null,
+            "isNext": false,
+            "completedAt": null
+          },
+          {
+            "reminderId": "med-e",
+            "instanceId": "inst-med-e-1783310400000",
+            "name": "Early dose",
+            "dosage": "1 tablet",
+            "kind": "medication",
+            "scheduledTime": 1783310400000,
+            "status": "missed",
+            "snoozedUntil": null,
+            "isNext": false,
+            "completedAt": null
+          }
+        ],
+        "zone": "America/New_York"
+      },
+      "output": [
+        {
+          "reminderId": "med-a",
+          "instanceId": "inst-med-a-1783299600000",
+          "name": "Atorvastatin",
+          "dosage": "1 tablet",
+          "kind": "medication",
+          "scheduledTime": 1783299600000,
+          "status": "missed",
+          "snoozedUntil": null,
+          "isNext": false,
+          "completedAt": null
+        },
+        {
+          "reminderId": "med-b",
+          "instanceId": "inst-med-b-1783256400000",
+          "name": "Lisinopril",
+          "dosage": "1 tablet",
+          "kind": "medication",
+          "scheduledTime": 1783256400000,
+          "status": "missed",
+          "snoozedUntil": null,
+          "isNext": false,
+          "completedAt": null
+        },
+        {
+          "reminderId": "med-a",
+          "instanceId": "inst-med-a-1783256400000",
+          "name": "Atorvastatin",
+          "dosage": "1 tablet",
+          "kind": "medication",
+          "scheduledTime": 1783256400000,
+          "status": "missed",
+          "snoozedUntil": null,
+          "isNext": false,
+          "completedAt": null
+        },
+        {
+          "reminderId": "task-w",
+          "instanceId": "inst-task-w-1783202400000",
+          "name": "Water the plants",
+          "dosage": null,
+          "kind": "task",
+          "scheduledTime": 1783202400000,
+          "status": "missed",
+          "snoozedUntil": null,
+          "isNext": false,
+          "completedAt": null
+        },
+        {
+          "reminderId": "med-d",
+          "instanceId": "inst-med-d-1783310340000",
+          "name": "Night dose",
+          "dosage": "1 tablet",
+          "kind": "medication",
+          "scheduledTime": 1783310340000,
+          "status": "missed",
+          "snoozedUntil": null,
+          "isNext": false,
+          "completedAt": null
+        },
+        {
+          "reminderId": "med-e",
+          "instanceId": "inst-med-e-1783310400000",
+          "name": "Early dose",
+          "dosage": "1 tablet",
+          "kind": "medication",
+          "scheduledTime": 1783310400000,
+          "status": "missed",
+          "snoozedUntil": null,
+          "isNext": false,
+          "completedAt": null
+        }
+      ]
+    },
+    {
+      "name": "catchUpDays: the misses by local day, newest day first",
+      "input": {
+        "rows": [
+          {
+            "reminderId": "med-a",
+            "instanceId": "inst-med-a-1783299600000",
+            "name": "Atorvastatin",
+            "dosage": "1 tablet",
+            "kind": "medication",
+            "scheduledTime": 1783299600000,
+            "status": "missed",
+            "snoozedUntil": null,
+            "isNext": false,
+            "completedAt": null
+          },
+          {
+            "reminderId": "med-b",
+            "instanceId": "inst-med-b-1783256400000",
+            "name": "Lisinopril",
+            "dosage": "1 tablet",
+            "kind": "medication",
+            "scheduledTime": 1783256400000,
+            "status": "missed",
+            "snoozedUntil": null,
+            "isNext": false,
+            "completedAt": null
+          },
+          {
+            "reminderId": "med-a",
+            "instanceId": "inst-med-a-1783256400000",
+            "name": "Atorvastatin",
+            "dosage": "1 tablet",
+            "kind": "medication",
+            "scheduledTime": 1783256400000,
+            "status": "missed",
+            "snoozedUntil": null,
+            "isNext": false,
+            "completedAt": null
+          },
+          {
+            "reminderId": "med-a",
+            "instanceId": null,
+            "name": "Atorvastatin",
+            "dosage": "1 tablet",
+            "kind": "medication",
+            "scheduledTime": 1783342800000,
+            "status": "completed",
+            "snoozedUntil": null,
+            "isNext": false,
+            "completedAt": null
+          },
+          {
+            "reminderId": "task-w",
+            "instanceId": "inst-task-w-1783202400000",
+            "name": "Water the plants",
+            "dosage": null,
+            "kind": "task",
+            "scheduledTime": 1783202400000,
+            "status": "missed",
+            "snoozedUntil": null,
+            "isNext": false,
+            "completedAt": null
+          },
+          {
+            "reminderId": "med-b",
+            "instanceId": null,
+            "name": "Lisinopril",
+            "dosage": "1 tablet",
+            "kind": "medication",
+            "scheduledTime": 1783170000000,
+            "status": "skipped",
+            "snoozedUntil": null,
+            "isNext": false,
+            "completedAt": null
+          },
+          {
+            "reminderId": "med-c",
+            "instanceId": null,
+            "name": "Vitamin D",
+            "dosage": "1 tablet",
+            "kind": "medication",
+            "scheduledTime": 1783339200000,
+            "status": "snoozed",
+            "snoozedUntil": null,
+            "isNext": false,
+            "completedAt": null
+          },
+          {
+            "reminderId": "med-d",
+            "instanceId": "inst-med-d-1783310340000",
+            "name": "Night dose",
+            "dosage": "1 tablet",
+            "kind": "medication",
+            "scheduledTime": 1783310340000,
+            "status": "missed",
+            "snoozedUntil": null,
+            "isNext": false,
+            "completedAt": null
+          },
+          {
+            "reminderId": "med-e",
+            "instanceId": "inst-med-e-1783310400000",
+            "name": "Early dose",
+            "dosage": "1 tablet",
+            "kind": "medication",
+            "scheduledTime": 1783310400000,
+            "status": "missed",
+            "snoozedUntil": null,
+            "isNext": false,
+            "completedAt": null
+          }
+        ],
+        "zone": "America/New_York"
+      },
+      "output": [
+        {
+          "dayStart": 1783310400000,
+          "rows": [
+            {
+              "reminderId": "med-e",
+              "instanceId": "inst-med-e-1783310400000",
+              "name": "Early dose",
+              "dosage": "1 tablet",
+              "kind": "medication",
+              "scheduledTime": 1783310400000,
+              "status": "missed",
+              "snoozedUntil": null,
+              "isNext": false,
+              "completedAt": null
+            }
+          ]
+        },
+        {
+          "dayStart": 1783224000000,
+          "rows": [
+            {
+              "reminderId": "med-b",
+              "instanceId": "inst-med-b-1783256400000",
+              "name": "Lisinopril",
+              "dosage": "1 tablet",
+              "kind": "medication",
+              "scheduledTime": 1783256400000,
+              "status": "missed",
+              "snoozedUntil": null,
+              "isNext": false,
+              "completedAt": null
+            },
+            {
+              "reminderId": "med-a",
+              "instanceId": "inst-med-a-1783256400000",
+              "name": "Atorvastatin",
+              "dosage": "1 tablet",
+              "kind": "medication",
+              "scheduledTime": 1783256400000,
+              "status": "missed",
+              "snoozedUntil": null,
+              "isNext": false,
+              "completedAt": null
+            },
+            {
+              "reminderId": "med-a",
+              "instanceId": "inst-med-a-1783299600000",
+              "name": "Atorvastatin",
+              "dosage": "1 tablet",
+              "kind": "medication",
+              "scheduledTime": 1783299600000,
+              "status": "missed",
+              "snoozedUntil": null,
+              "isNext": false,
+              "completedAt": null
+            },
+            {
+              "reminderId": "med-d",
+              "instanceId": "inst-med-d-1783310340000",
+              "name": "Night dose",
+              "dosage": "1 tablet",
+              "kind": "medication",
+              "scheduledTime": 1783310340000,
+              "status": "missed",
+              "snoozedUntil": null,
+              "isNext": false,
+              "completedAt": null
+            }
+          ]
+        },
+        {
+          "dayStart": 1783137600000,
+          "rows": [
+            {
+              "reminderId": "task-w",
+              "instanceId": "inst-task-w-1783202400000",
+              "name": "Water the plants",
+              "dosage": null,
+              "kind": "task",
+              "scheduledTime": 1783202400000,
+              "status": "missed",
+              "snoozedUntil": null,
+              "isNext": false,
+              "completedAt": null
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "catchUpDays: the same misses seen from Sydney",
+      "input": {
+        "rows": [
+          {
+            "reminderId": "med-a",
+            "instanceId": "inst-med-a-1783299600000",
+            "name": "Atorvastatin",
+            "dosage": "1 tablet",
+            "kind": "medication",
+            "scheduledTime": 1783299600000,
+            "status": "missed",
+            "snoozedUntil": null,
+            "isNext": false,
+            "completedAt": null
+          },
+          {
+            "reminderId": "med-b",
+            "instanceId": "inst-med-b-1783256400000",
+            "name": "Lisinopril",
+            "dosage": "1 tablet",
+            "kind": "medication",
+            "scheduledTime": 1783256400000,
+            "status": "missed",
+            "snoozedUntil": null,
+            "isNext": false,
+            "completedAt": null
+          },
+          {
+            "reminderId": "med-a",
+            "instanceId": "inst-med-a-1783256400000",
+            "name": "Atorvastatin",
+            "dosage": "1 tablet",
+            "kind": "medication",
+            "scheduledTime": 1783256400000,
+            "status": "missed",
+            "snoozedUntil": null,
+            "isNext": false,
+            "completedAt": null
+          },
+          {
+            "reminderId": "med-a",
+            "instanceId": null,
+            "name": "Atorvastatin",
+            "dosage": "1 tablet",
+            "kind": "medication",
+            "scheduledTime": 1783342800000,
+            "status": "completed",
+            "snoozedUntil": null,
+            "isNext": false,
+            "completedAt": null
+          },
+          {
+            "reminderId": "task-w",
+            "instanceId": "inst-task-w-1783202400000",
+            "name": "Water the plants",
+            "dosage": null,
+            "kind": "task",
+            "scheduledTime": 1783202400000,
+            "status": "missed",
+            "snoozedUntil": null,
+            "isNext": false,
+            "completedAt": null
+          },
+          {
+            "reminderId": "med-b",
+            "instanceId": null,
+            "name": "Lisinopril",
+            "dosage": "1 tablet",
+            "kind": "medication",
+            "scheduledTime": 1783170000000,
+            "status": "skipped",
+            "snoozedUntil": null,
+            "isNext": false,
+            "completedAt": null
+          },
+          {
+            "reminderId": "med-c",
+            "instanceId": null,
+            "name": "Vitamin D",
+            "dosage": "1 tablet",
+            "kind": "medication",
+            "scheduledTime": 1783339200000,
+            "status": "snoozed",
+            "snoozedUntil": null,
+            "isNext": false,
+            "completedAt": null
+          },
+          {
+            "reminderId": "med-d",
+            "instanceId": "inst-med-d-1783310340000",
+            "name": "Night dose",
+            "dosage": "1 tablet",
+            "kind": "medication",
+            "scheduledTime": 1783310340000,
+            "status": "missed",
+            "snoozedUntil": null,
+            "isNext": false,
+            "completedAt": null
+          },
+          {
+            "reminderId": "med-e",
+            "instanceId": "inst-med-e-1783310400000",
+            "name": "Early dose",
+            "dosage": "1 tablet",
+            "kind": "medication",
+            "scheduledTime": 1783310400000,
+            "status": "missed",
+            "snoozedUntil": null,
+            "isNext": false,
+            "completedAt": null
+          }
+        ],
+        "zone": "Australia/Sydney"
+      },
+      "output": [
+        {
+          "dayStart": 1783260000000,
+          "rows": [
+            {
+              "reminderId": "med-a",
+              "instanceId": "inst-med-a-1783299600000",
+              "name": "Atorvastatin",
+              "dosage": "1 tablet",
+              "kind": "medication",
+              "scheduledTime": 1783299600000,
+              "status": "missed",
+              "snoozedUntil": null,
+              "isNext": false,
+              "completedAt": null
+            },
+            {
+              "reminderId": "med-d",
+              "instanceId": "inst-med-d-1783310340000",
+              "name": "Night dose",
+              "dosage": "1 tablet",
+              "kind": "medication",
+              "scheduledTime": 1783310340000,
+              "status": "missed",
+              "snoozedUntil": null,
+              "isNext": false,
+              "completedAt": null
+            },
+            {
+              "reminderId": "med-e",
+              "instanceId": "inst-med-e-1783310400000",
+              "name": "Early dose",
+              "dosage": "1 tablet",
+              "kind": "medication",
+              "scheduledTime": 1783310400000,
+              "status": "missed",
+              "snoozedUntil": null,
+              "isNext": false,
+              "completedAt": null
+            }
+          ]
+        },
+        {
+          "dayStart": 1783173600000,
+          "rows": [
+            {
+              "reminderId": "task-w",
+              "instanceId": "inst-task-w-1783202400000",
+              "name": "Water the plants",
+              "dosage": null,
+              "kind": "task",
+              "scheduledTime": 1783202400000,
+              "status": "missed",
+              "snoozedUntil": null,
+              "isNext": false,
+              "completedAt": null
+            },
+            {
+              "reminderId": "med-b",
+              "instanceId": "inst-med-b-1783256400000",
+              "name": "Lisinopril",
+              "dosage": "1 tablet",
+              "kind": "medication",
+              "scheduledTime": 1783256400000,
+              "status": "missed",
+              "snoozedUntil": null,
+              "isNext": false,
+              "completedAt": null
+            },
+            {
+              "reminderId": "med-a",
+              "instanceId": "inst-med-a-1783256400000",
+              "name": "Atorvastatin",
+              "dosage": "1 tablet",
+              "kind": "medication",
+              "scheduledTime": 1783256400000,
+              "status": "missed",
+              "snoozedUntil": null,
+              "isNext": false,
+              "completedAt": null
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "catchUpSlots: the misses by moment, in first-seen order",
+      "input": {
+        "rows": [
+          {
+            "reminderId": "med-a",
+            "instanceId": "inst-med-a-1783299600000",
+            "name": "Atorvastatin",
+            "dosage": "1 tablet",
+            "kind": "medication",
+            "scheduledTime": 1783299600000,
+            "status": "missed",
+            "snoozedUntil": null,
+            "isNext": false,
+            "completedAt": null
+          },
+          {
+            "reminderId": "med-b",
+            "instanceId": "inst-med-b-1783256400000",
+            "name": "Lisinopril",
+            "dosage": "1 tablet",
+            "kind": "medication",
+            "scheduledTime": 1783256400000,
+            "status": "missed",
+            "snoozedUntil": null,
+            "isNext": false,
+            "completedAt": null
+          },
+          {
+            "reminderId": "med-a",
+            "instanceId": "inst-med-a-1783256400000",
+            "name": "Atorvastatin",
+            "dosage": "1 tablet",
+            "kind": "medication",
+            "scheduledTime": 1783256400000,
+            "status": "missed",
+            "snoozedUntil": null,
+            "isNext": false,
+            "completedAt": null
+          },
+          {
+            "reminderId": "med-a",
+            "instanceId": null,
+            "name": "Atorvastatin",
+            "dosage": "1 tablet",
+            "kind": "medication",
+            "scheduledTime": 1783342800000,
+            "status": "completed",
+            "snoozedUntil": null,
+            "isNext": false,
+            "completedAt": null
+          },
+          {
+            "reminderId": "task-w",
+            "instanceId": "inst-task-w-1783202400000",
+            "name": "Water the plants",
+            "dosage": null,
+            "kind": "task",
+            "scheduledTime": 1783202400000,
+            "status": "missed",
+            "snoozedUntil": null,
+            "isNext": false,
+            "completedAt": null
+          },
+          {
+            "reminderId": "med-b",
+            "instanceId": null,
+            "name": "Lisinopril",
+            "dosage": "1 tablet",
+            "kind": "medication",
+            "scheduledTime": 1783170000000,
+            "status": "skipped",
+            "snoozedUntil": null,
+            "isNext": false,
+            "completedAt": null
+          },
+          {
+            "reminderId": "med-c",
+            "instanceId": null,
+            "name": "Vitamin D",
+            "dosage": "1 tablet",
+            "kind": "medication",
+            "scheduledTime": 1783339200000,
+            "status": "snoozed",
+            "snoozedUntil": null,
+            "isNext": false,
+            "completedAt": null
+          },
+          {
+            "reminderId": "med-d",
+            "instanceId": "inst-med-d-1783310340000",
+            "name": "Night dose",
+            "dosage": "1 tablet",
+            "kind": "medication",
+            "scheduledTime": 1783310340000,
+            "status": "missed",
+            "snoozedUntil": null,
+            "isNext": false,
+            "completedAt": null
+          },
+          {
+            "reminderId": "med-e",
+            "instanceId": "inst-med-e-1783310400000",
+            "name": "Early dose",
+            "dosage": "1 tablet",
+            "kind": "medication",
+            "scheduledTime": 1783310400000,
+            "status": "missed",
+            "snoozedUntil": null,
+            "isNext": false,
+            "completedAt": null
+          }
+        ],
+        "zone": "America/New_York"
+      },
+      "output": [
+        {
+          "scheduledTime": 1783299600000,
+          "rows": [
+            {
+              "reminderId": "med-a",
+              "instanceId": "inst-med-a-1783299600000",
+              "name": "Atorvastatin",
+              "dosage": "1 tablet",
+              "kind": "medication",
+              "scheduledTime": 1783299600000,
+              "status": "missed",
+              "snoozedUntil": null,
+              "isNext": false,
+              "completedAt": null
+            }
+          ]
+        },
+        {
+          "scheduledTime": 1783256400000,
+          "rows": [
+            {
+              "reminderId": "med-b",
+              "instanceId": "inst-med-b-1783256400000",
+              "name": "Lisinopril",
+              "dosage": "1 tablet",
+              "kind": "medication",
+              "scheduledTime": 1783256400000,
+              "status": "missed",
+              "snoozedUntil": null,
+              "isNext": false,
+              "completedAt": null
+            },
+            {
+              "reminderId": "med-a",
+              "instanceId": "inst-med-a-1783256400000",
+              "name": "Atorvastatin",
+              "dosage": "1 tablet",
+              "kind": "medication",
+              "scheduledTime": 1783256400000,
+              "status": "missed",
+              "snoozedUntil": null,
+              "isNext": false,
+              "completedAt": null
+            }
+          ]
+        },
+        {
+          "scheduledTime": 1783202400000,
+          "rows": [
+            {
+              "reminderId": "task-w",
+              "instanceId": "inst-task-w-1783202400000",
+              "name": "Water the plants",
+              "dosage": null,
+              "kind": "task",
+              "scheduledTime": 1783202400000,
+              "status": "missed",
+              "snoozedUntil": null,
+              "isNext": false,
+              "completedAt": null
+            }
+          ]
+        },
+        {
+          "scheduledTime": 1783310340000,
+          "rows": [
+            {
+              "reminderId": "med-d",
+              "instanceId": "inst-med-d-1783310340000",
+              "name": "Night dose",
+              "dosage": "1 tablet",
+              "kind": "medication",
+              "scheduledTime": 1783310340000,
+              "status": "missed",
+              "snoozedUntil": null,
+              "isNext": false,
+              "completedAt": null
+            }
+          ]
+        },
+        {
+          "scheduledTime": 1783310400000,
+          "rows": [
+            {
+              "reminderId": "med-e",
+              "instanceId": "inst-med-e-1783310400000",
+              "name": "Early dose",
+              "dosage": "1 tablet",
+              "kind": "medication",
+              "scheduledTime": 1783310400000,
+              "status": "missed",
+              "snoozedUntil": null,
+              "isNext": false,
+              "completedAt": null
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

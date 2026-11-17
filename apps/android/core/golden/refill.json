@@ -1,0 +1,777 @@
+{
+  "rule": "refill",
+  "about": "projectRefill(medication, now, zone): when the supply runs out and whether to refill",
+  "generatedBy": "apps/android/core/src/test/kotlin/com/taskrx/core/golden (./gradlew :core:test -PupdateGoldens)",
+  "cases": [
+    {
+      "name": "thirty pills, one twice a day",
+      "input": {
+        "medication": {
+          "_id": "j97doc3f1c0a52",
+          "localId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11",
+          "userId": "user_golden",
+          "kind": "medication",
+          "name": "Atorvastatin",
+          "dosage": "20mg",
+          "schedule": {
+            "type": "daily",
+            "times": [
+              "09:00",
+              "21:00"
+            ]
+          },
+          "priority": "normal",
+          "tags": [],
+          "pillsRemaining": 30.0,
+          "pillsPerDose": 1.0,
+          "caregiverIds": [],
+          "active": true,
+          "createdAt": 1700000000000,
+          "updatedAt": 1700000000000
+        },
+        "now": 1783353600000,
+        "zone": "America/New_York"
+      },
+      "output": {
+        "occurrencesRemaining": 30,
+        "runsOutAt": 1784682000000,
+        "daysRemaining": 15,
+        "warningWindowDays": 7,
+        "needsRefill": false
+      }
+    },
+    {
+      "name": "thirty pills, two at a time",
+      "input": {
+        "medication": {
+          "_id": "j97doc3f1c0a52",
+          "localId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11",
+          "userId": "user_golden",
+          "kind": "medication",
+          "name": "Atorvastatin",
+          "dosage": "20mg",
+          "schedule": {
+            "type": "daily",
+            "times": [
+              "09:00",
+              "21:00"
+            ]
+          },
+          "priority": "normal",
+          "tags": [],
+          "pillsRemaining": 30.0,
+          "pillsPerDose": 2.0,
+          "caregiverIds": [],
+          "active": true,
+          "createdAt": 1700000000000,
+          "updatedAt": 1700000000000
+        },
+        "now": 1783353600000,
+        "zone": "America/New_York"
+      },
+      "output": {
+        "occurrencesRemaining": 15,
+        "runsOutAt": 1784034000000,
+        "daysRemaining": 8,
+        "warningWindowDays": 7,
+        "needsRefill": false
+      }
+    },
+    {
+      "name": "a fraction of a dose left over",
+      "input": {
+        "medication": {
+          "_id": "j97doc3f1c0a52",
+          "localId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11",
+          "userId": "user_golden",
+          "kind": "medication",
+          "name": "Atorvastatin",
+          "dosage": "20mg",
+          "schedule": {
+            "type": "daily",
+            "times": [
+              "09:00",
+              "21:00"
+            ]
+          },
+          "priority": "normal",
+          "tags": [],
+          "pillsRemaining": 7.5,
+          "pillsPerDose": 2.0,
+          "caregiverIds": [],
+          "active": true,
+          "createdAt": 1700000000000,
+          "updatedAt": 1700000000000
+        },
+        "now": 1783353600000,
+        "zone": "America/New_York"
+      },
+      "output": {
+        "occurrencesRemaining": 3,
+        "runsOutAt": 1783515600000,
+        "daysRemaining": 2,
+        "warningWindowDays": 7,
+        "needsRefill": true
+      }
+    },
+    {
+      "name": "a half-tablet dose",
+      "input": {
+        "medication": {
+          "_id": "j97doc3f1c0a52",
+          "localId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11",
+          "userId": "user_golden",
+          "kind": "medication",
+          "name": "Atorvastatin",
+          "dosage": "20mg",
+          "schedule": {
+            "type": "daily",
+            "times": [
+              "09:00",
+              "21:00"
+            ]
+          },
+          "priority": "normal",
+          "tags": [],
+          "pillsRemaining": 10.0,
+          "pillsPerDose": 0.5,
+          "caregiverIds": [],
+          "active": true,
+          "createdAt": 1700000000000,
+          "updatedAt": 1700000000000
+        },
+        "now": 1783353600000,
+        "zone": "America/New_York"
+      },
+      "output": {
+        "occurrencesRemaining": 20,
+        "runsOutAt": 1784250000000,
+        "daysRemaining": 10,
+        "warningWindowDays": 7,
+        "needsRefill": false
+      }
+    },
+    {
+      "name": "exactly enough for the warning window",
+      "input": {
+        "medication": {
+          "_id": "j97doc3f1c0a52",
+          "localId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11",
+          "userId": "user_golden",
+          "kind": "medication",
+          "name": "Atorvastatin",
+          "dosage": "20mg",
+          "schedule": {
+            "type": "daily",
+            "times": [
+              "09:00",
+              "21:00"
+            ]
+          },
+          "priority": "normal",
+          "tags": [],
+          "pillsRemaining": 14.0,
+          "pillsPerDose": 1.0,
+          "caregiverIds": [],
+          "active": true,
+          "createdAt": 1700000000000,
+          "updatedAt": 1700000000000
+        },
+        "now": 1783353600000,
+        "zone": "America/New_York"
+      },
+      "output": {
+        "occurrencesRemaining": 14,
+        "runsOutAt": 1783990800000,
+        "daysRemaining": 7,
+        "warningWindowDays": 7,
+        "needsRefill": true
+      }
+    },
+    {
+      "name": "one day inside the warning window",
+      "input": {
+        "medication": {
+          "_id": "j97doc3f1c0a52",
+          "localId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11",
+          "userId": "user_golden",
+          "kind": "medication",
+          "name": "Atorvastatin",
+          "dosage": "20mg",
+          "schedule": {
+            "type": "daily",
+            "times": [
+              "09:00",
+              "21:00"
+            ]
+          },
+          "priority": "normal",
+          "tags": [],
+          "pillsRemaining": 12.0,
+          "pillsPerDose": 1.0,
+          "caregiverIds": [],
+          "active": true,
+          "createdAt": 1700000000000,
+          "updatedAt": 1700000000000
+        },
+        "now": 1783353600000,
+        "zone": "America/New_York"
+      },
+      "output": {
+        "occurrencesRemaining": 12,
+        "runsOutAt": 1783904400000,
+        "daysRemaining": 6,
+        "warningWindowDays": 7,
+        "needsRefill": true
+      }
+    },
+    {
+      "name": "an empty bottle",
+      "input": {
+        "medication": {
+          "_id": "j97doc3f1c0a52",
+          "localId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11",
+          "userId": "user_golden",
+          "kind": "medication",
+          "name": "Atorvastatin",
+          "dosage": "20mg",
+          "schedule": {
+            "type": "daily",
+            "times": [
+              "09:00",
+              "21:00"
+            ]
+          },
+          "priority": "normal",
+          "tags": [],
+          "pillsRemaining": 0.0,
+          "pillsPerDose": 1.0,
+          "caregiverIds": [],
+          "active": true,
+          "createdAt": 1700000000000,
+          "updatedAt": 1700000000000
+        },
+        "now": 1783353600000,
+        "zone": "America/New_York"
+      },
+      "output": {
+        "occurrencesRemaining": 0,
+        "runsOutAt": 1783386000000,
+        "daysRemaining": 0,
+        "warningWindowDays": 7,
+        "needsRefill": true
+      }
+    },
+    {
+      "name": "a negative count reads as empty",
+      "input": {
+        "medication": {
+          "_id": "j97doc3f1c0a52",
+          "localId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11",
+          "userId": "user_golden",
+          "kind": "medication",
+          "name": "Atorvastatin",
+          "dosage": "20mg",
+          "schedule": {
+            "type": "daily",
+            "times": [
+              "09:00",
+              "21:00"
+            ]
+          },
+          "priority": "normal",
+          "tags": [],
+          "pillsRemaining": -3.0,
+          "pillsPerDose": 1.0,
+          "caregiverIds": [],
+          "active": true,
+          "createdAt": 1700000000000,
+          "updatedAt": 1700000000000
+        },
+        "now": 1783353600000,
+        "zone": "America/New_York"
+      },
+      "output": {
+        "occurrencesRemaining": 0,
+        "runsOutAt": 1783386000000,
+        "daysRemaining": 0,
+        "warningWindowDays": 7,
+        "needsRefill": true
+      }
+    },
+    {
+      "name": "a custom warning window",
+      "input": {
+        "medication": {
+          "_id": "j97doc3f1c0a52",
+          "localId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11",
+          "userId": "user_golden",
+          "kind": "medication",
+          "name": "Atorvastatin",
+          "dosage": "20mg",
+          "schedule": {
+            "type": "daily",
+            "times": [
+              "09:00",
+              "21:00"
+            ]
+          },
+          "priority": "normal",
+          "tags": [],
+          "pillsRemaining": 40.0,
+          "pillsPerDose": 1.0,
+          "caregiverIds": [],
+          "active": true,
+          "createdAt": 1700000000000,
+          "updatedAt": 1700000000000,
+          "refillReminderDays": 30
+        },
+        "now": 1783353600000,
+        "zone": "America/New_York"
+      },
+      "output": {
+        "occurrencesRemaining": 40,
+        "runsOutAt": 1785114000000,
+        "daysRemaining": 20,
+        "warningWindowDays": 30,
+        "needsRefill": true
+      }
+    },
+    {
+      "name": "a warning window of zero",
+      "input": {
+        "medication": {
+          "_id": "j97doc3f1c0a52",
+          "localId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11",
+          "userId": "user_golden",
+          "kind": "medication",
+          "name": "Atorvastatin",
+          "dosage": "20mg",
+          "schedule": {
+            "type": "daily",
+            "times": [
+              "09:00",
+              "21:00"
+            ]
+          },
+          "priority": "normal",
+          "tags": [],
+          "pillsRemaining": 1.0,
+          "pillsPerDose": 1.0,
+          "caregiverIds": [],
+          "active": true,
+          "createdAt": 1700000000000,
+          "updatedAt": 1700000000000,
+          "refillReminderDays": 0
+        },
+        "now": 1783353600000,
+        "zone": "America/New_York"
+      },
+      "output": {
+        "occurrencesRemaining": 1,
+        "runsOutAt": 1783429200000,
+        "daysRemaining": 1,
+        "warningWindowDays": 0,
+        "needsRefill": false
+      }
+    },
+    {
+      "name": "a supply that outlasts the walk",
+      "input": {
+        "medication": {
+          "_id": "j97doc3f1c0a52",
+          "localId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11",
+          "userId": "user_golden",
+          "kind": "medication",
+          "name": "Atorvastatin",
+          "dosage": "20mg",
+          "schedule": {
+            "type": "daily",
+            "times": [
+              "09:00",
+              "21:00"
+            ]
+          },
+          "priority": "normal",
+          "tags": [],
+          "pillsRemaining": 1000000.0,
+          "pillsPerDose": 1.0,
+          "caregiverIds": [],
+          "active": true,
+          "createdAt": 1700000000000,
+          "updatedAt": 1700000000000
+        },
+        "now": 1783353600000,
+        "zone": "America/New_York"
+      },
+      "output": {
+        "occurrencesRemaining": 1000000,
+        "runsOutAt": null,
+        "daysRemaining": null,
+        "warningWindowDays": 7,
+        "needsRefill": false
+      }
+    },
+    {
+      "name": "a weekly medication",
+      "input": {
+        "medication": {
+          "_id": "j97doc3f1c0a52",
+          "localId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11",
+          "userId": "user_golden",
+          "kind": "medication",
+          "name": "Atorvastatin",
+          "dosage": "20mg",
+          "schedule": {
+            "type": "weekly",
+            "daysOfWeek": [
+              1
+            ],
+            "times": [
+              "08:00"
+            ]
+          },
+          "priority": "normal",
+          "tags": [],
+          "pillsRemaining": 3.0,
+          "pillsPerDose": 1.0,
+          "caregiverIds": [],
+          "active": true,
+          "createdAt": 1700000000000,
+          "updatedAt": 1700000000000
+        },
+        "now": 1783353600000,
+        "zone": "America/New_York"
+      },
+      "output": {
+        "occurrencesRemaining": 3,
+        "runsOutAt": 1785758400000,
+        "daysRemaining": 28,
+        "warningWindowDays": 7,
+        "needsRefill": false
+      }
+    },
+    {
+      "name": "an as-needed medication never runs out by schedule",
+      "input": {
+        "medication": {
+          "_id": "j97doc3f1c0a52",
+          "localId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11",
+          "userId": "user_golden",
+          "kind": "medication",
+          "name": "Atorvastatin",
+          "dosage": "20mg",
+          "schedule": {
+            "type": "asNeeded",
+            "minGapMinutes": 240
+          },
+          "priority": "normal",
+          "tags": [],
+          "pillsRemaining": 30.0,
+          "pillsPerDose": 1.0,
+          "caregiverIds": [],
+          "active": true,
+          "createdAt": 1700000000000,
+          "updatedAt": 1700000000000
+        },
+        "now": 1783353600000,
+        "zone": "America/New_York"
+      },
+      "output": {
+        "occurrencesRemaining": 30,
+        "runsOutAt": null,
+        "daysRemaining": null,
+        "warningWindowDays": 7,
+        "needsRefill": false
+      }
+    },
+    {
+      "name": "a pause pushes the run-out later",
+      "input": {
+        "medication": {
+          "_id": "j97doc3f1c0a52",
+          "localId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11",
+          "userId": "user_golden",
+          "kind": "medication",
+          "name": "Atorvastatin",
+          "dosage": "20mg",
+          "schedule": {
+            "type": "daily",
+            "times": [
+              "09:00",
+              "21:00"
+            ]
+          },
+          "priority": "normal",
+          "tags": [],
+          "pillsRemaining": 4.0,
+          "pillsPerDose": 1.0,
+          "caregiverIds": [],
+          "active": true,
+          "createdAt": 1700000000000,
+          "updatedAt": 1700000000000,
+          "pauses": [
+            {
+              "from": 1783396800000,
+              "until": 1783656000000
+            }
+          ]
+        },
+        "now": 1783353600000,
+        "zone": "America/New_York"
+      },
+      "output": {
+        "occurrencesRemaining": 4,
+        "runsOutAt": 1783818000000,
+        "daysRemaining": 5,
+        "warningWindowDays": 7,
+        "needsRefill": true
+      }
+    },
+    {
+      "name": "across the fall-back change",
+      "input": {
+        "medication": {
+          "_id": "j97doc3f1c0a52",
+          "localId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11",
+          "userId": "user_golden",
+          "kind": "medication",
+          "name": "Atorvastatin",
+          "dosage": "20mg",
+          "schedule": {
+            "type": "daily",
+            "times": [
+              "09:00",
+              "21:00"
+            ]
+          },
+          "priority": "normal",
+          "tags": [],
+          "pillsRemaining": 10.0,
+          "pillsPerDose": 1.0,
+          "caregiverIds": [],
+          "active": true,
+          "createdAt": 1700000000000,
+          "updatedAt": 1700000000000
+        },
+        "now": 1793203200000,
+        "zone": "America/New_York"
+      },
+      "output": {
+        "occurrencesRemaining": 10,
+        "runsOutAt": 1793671200000,
+        "daysRemaining": 5,
+        "warningWindowDays": 7,
+        "needsRefill": true
+      }
+    },
+    {
+      "name": "in Sydney",
+      "input": {
+        "medication": {
+          "_id": "j97doc3f1c0a52",
+          "localId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11",
+          "userId": "user_golden",
+          "kind": "medication",
+          "name": "Atorvastatin",
+          "dosage": "20mg",
+          "schedule": {
+            "type": "daily",
+            "times": [
+              "09:00",
+              "21:00"
+            ]
+          },
+          "priority": "normal",
+          "tags": [],
+          "pillsRemaining": 6.0,
+          "pillsPerDose": 1.0,
+          "caregiverIds": [],
+          "active": true,
+          "createdAt": 1700000000000,
+          "updatedAt": 1700000000000
+        },
+        "now": 1783303200000,
+        "zone": "Australia/Sydney"
+      },
+      "output": {
+        "occurrencesRemaining": 6,
+        "runsOutAt": 1783594800000,
+        "daysRemaining": 3,
+        "warningWindowDays": 7,
+        "needsRefill": true
+      }
+    },
+    {
+      "name": "a task is not a medication",
+      "input": {
+        "medication": {
+          "_id": "j97doc3f1c0a52",
+          "localId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11",
+          "userId": "user_golden",
+          "kind": "task",
+          "name": "Atorvastatin",
+          "schedule": {
+            "type": "daily",
+            "times": [
+              "09:00",
+              "21:00"
+            ]
+          },
+          "priority": "normal",
+          "tags": [],
+          "pillsRemaining": 30.0,
+          "pillsPerDose": 1.0,
+          "caregiverIds": [],
+          "active": true,
+          "createdAt": 1700000000000,
+          "updatedAt": 1700000000000
+        },
+        "now": 1783353600000,
+        "zone": "America/New_York"
+      },
+      "output": {
+        "unprojectable": "not-a-medication"
+      }
+    },
+    {
+      "name": "a stopped medication",
+      "input": {
+        "medication": {
+          "_id": "j97doc3f1c0a52",
+          "localId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11",
+          "userId": "user_golden",
+          "kind": "medication",
+          "name": "Atorvastatin",
+          "dosage": "20mg",
+          "schedule": {
+            "type": "daily",
+            "times": [
+              "09:00",
+              "21:00"
+            ]
+          },
+          "priority": "normal",
+          "tags": [],
+          "pillsRemaining": 30.0,
+          "pillsPerDose": 1.0,
+          "caregiverIds": [],
+          "active": false,
+          "createdAt": 1700000000000,
+          "updatedAt": 1700000000000
+        },
+        "now": 1783353600000,
+        "zone": "America/New_York"
+      },
+      "output": {
+        "unprojectable": "stopped"
+      }
+    },
+    {
+      "name": "no supply recorded",
+      "input": {
+        "medication": {
+          "_id": "j97doc3f1c0a52",
+          "localId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11",
+          "userId": "user_golden",
+          "kind": "medication",
+          "name": "Atorvastatin",
+          "dosage": "20mg",
+          "schedule": {
+            "type": "daily",
+            "times": [
+              "09:00",
+              "21:00"
+            ]
+          },
+          "priority": "normal",
+          "tags": [],
+          "pillsPerDose": 1.0,
+          "caregiverIds": [],
+          "active": true,
+          "createdAt": 1700000000000,
+          "updatedAt": 1700000000000
+        },
+        "now": 1783353600000,
+        "zone": "America/New_York"
+      },
+      "output": {
+        "unprojectable": "no-supply"
+      }
+    },
+    {
+      "name": "no dose size",
+      "input": {
+        "medication": {
+          "_id": "j97doc3f1c0a52",
+          "localId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11",
+          "userId": "user_golden",
+          "kind": "medication",
+          "name": "Atorvastatin",
+          "dosage": "20mg",
+          "schedule": {
+            "type": "daily",
+            "times": [
+              "09:00",
+              "21:00"
+            ]
+          },
+          "priority": "normal",
+          "tags": [],
+          "pillsRemaining": 30.0,
+          "caregiverIds": [],
+          "active": true,
+          "createdAt": 1700000000000,
+          "updatedAt": 1700000000000
+        },
+        "now": 1783353600000,
+        "zone": "America/New_York"
+      },
+      "output": {
+        "unprojectable": "no-dose-size"
+      }
+    },
+    {
+      "name": "a zero dose size",
+      "input": {
+        "medication": {
+          "_id": "j97doc3f1c0a52",
+          "localId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11",
+          "userId": "user_golden",
+          "kind": "medication",
+          "name": "Atorvastatin",
+          "dosage": "20mg",
+          "schedule": {
+            "type": "daily",
+            "times": [
+              "09:00",
+              "21:00"
+            ]
+          },
+          "priority": "normal",
+          "tags": [],
+          "pillsRemaining": 30.0,
+          "pillsPerDose": 0.0,
+          "caregiverIds": [],
+          "active": true,
+          "createdAt": 1700000000000,
+          "updatedAt": 1700000000000
+        },
+        "now": 1783353600000,
+        "zone": "America/New_York"
+      },
+      "output": {
+        "unprojectable": "no-dose-size"
+      }
+    },
+    {
+      "name": "the default warning window",
+      "input": {
+        "call": "constants"
+      },
+      "output": {
+        "defaultRefillReminderDays": 7
+      }
+    }
+  ]
+}

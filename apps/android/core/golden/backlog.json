@@ -1,0 +1,165 @@
+{
+  "rule": "backlog",
+  "about": "isBacklog(reminder) and planBacklogCompletion(reminder, completedAt); a scheduled reminder is refused",
+  "generatedBy": "apps/android/core/src/test/kotlin/com/taskrx/core/golden (./gradlew :core:test -PupdateGoldens)",
+  "cases": [
+    {
+      "name": "a Backlog task",
+      "input": {
+        "reminder": {
+          "_id": "j97doc3f1c0a52",
+          "localId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11",
+          "userId": "user_golden",
+          "kind": "task",
+          "name": "Sort the garage",
+          "schedule": {
+            "type": "none"
+          },
+          "priority": "normal",
+          "tags": [],
+          "caregiverIds": [],
+          "active": true,
+          "createdAt": 1700000000000,
+          "updatedAt": 1700000000000
+        },
+        "completedAt": 1783361220000
+      },
+      "output": {
+        "isBacklog": true,
+        "completion": {
+          "reminderId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11",
+          "reminderKind": "task",
+          "scheduledTime": 1783361220000,
+          "status": "completed",
+          "completedAt": 1783361220000
+        }
+      }
+    },
+    {
+      "name": "a Backlog medication",
+      "input": {
+        "reminder": {
+          "_id": "j97doc3f1c0a52",
+          "localId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11",
+          "userId": "user_golden",
+          "kind": "medication",
+          "name": "Atorvastatin",
+          "dosage": "20mg",
+          "schedule": {
+            "type": "none"
+          },
+          "priority": "normal",
+          "tags": [],
+          "caregiverIds": [],
+          "active": true,
+          "createdAt": 1700000000000,
+          "updatedAt": 1700000000000
+        },
+        "completedAt": 1783361220000
+      },
+      "output": {
+        "isBacklog": true,
+        "completion": {
+          "reminderId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11",
+          "reminderKind": "medication",
+          "scheduledTime": 1783361220000,
+          "status": "completed",
+          "completedAt": 1783361220000
+        }
+      }
+    },
+    {
+      "name": "an unreadable schedule reads as the Backlog",
+      "input": {
+        "reminder": {
+          "_id": "j97doc3f1c0a52",
+          "localId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11",
+          "userId": "user_golden",
+          "kind": "task",
+          "name": "Fix the gate",
+          "schedule": {
+            "type": "fortnightly"
+          },
+          "priority": "normal",
+          "tags": [],
+          "caregiverIds": [],
+          "active": true,
+          "createdAt": 1700000000000,
+          "updatedAt": 1700000000000
+        },
+        "completedAt": 1783361220000
+      },
+      "output": {
+        "isBacklog": true,
+        "completion": {
+          "reminderId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11",
+          "reminderKind": "task",
+          "scheduledTime": 1783361220000,
+          "status": "completed",
+          "completedAt": 1783361220000
+        }
+      }
+    },
+    {
+      "name": "a daily task is refused",
+      "input": {
+        "reminder": {
+          "_id": "j97doc3f1c0a52",
+          "localId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11",
+          "userId": "user_golden",
+          "kind": "task",
+          "name": "Water the plants",
+          "schedule": {
+            "type": "daily",
+            "times": [
+              "18:00"
+            ]
+          },
+          "priority": "normal",
+          "tags": [],
+          "caregiverIds": [],
+          "active": true,
+          "createdAt": 1700000000000,
+          "updatedAt": 1700000000000
+        },
+        "completedAt": 1783361220000
+      },
+      "output": {
+        "isBacklog": false,
+        "completion": {
+          "refused": "invalidArgument"
+        }
+      }
+    },
+    {
+      "name": "an as-needed medication is refused",
+      "input": {
+        "reminder": {
+          "_id": "j97doc3f1c0a52",
+          "localId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11",
+          "userId": "user_golden",
+          "kind": "medication",
+          "name": "Atorvastatin",
+          "dosage": "20mg",
+          "schedule": {
+            "type": "asNeeded",
+            "minGapMinutes": 240
+          },
+          "priority": "normal",
+          "tags": [],
+          "caregiverIds": [],
+          "active": true,
+          "createdAt": 1700000000000,
+          "updatedAt": 1700000000000
+        },
+        "completedAt": 1783361220000
+      },
+      "output": {
+        "isBacklog": false,
+        "completion": {
+          "refused": "invalidArgument"
+        }
+      }
+    }
+  ]
+}

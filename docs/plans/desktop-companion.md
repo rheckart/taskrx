@@ -51,7 +51,7 @@ because two writers are unsafe until one Occurrence can only ever be one Instanc
         fixtures: the stored task rows older than the fortnight (a run-out snooze read as
         missed), the one invented row at a task's latest moment, and which rows offer Undo.
         Until then the desktop would port them from a view model with no reference
-  - [ ] `backlog`, `catchup`, `refill` projection
+  - [x] `backlog`, `catchup`, `refill` projection (`backlog` 5, `catch-up` 5, `refill` 22)
   - [ ] `parser`, `notices`
 - [ ] Phone catch-up (ADR 0016):
   - [ ] A periodic WorkManager pull (15 min) that reschedules
