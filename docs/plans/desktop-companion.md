@@ -32,8 +32,9 @@ because two writers are unsafe until one Occurrence can only ever be one Instanc
         the two converge
   - [x] Supply is spent by the server inside the completing mutation, not by a Reminder
         update that the last writer wins. Deploy the server before the phone build
-  - [x] Deploy `packages/convex` to the VPS (2026-11-17: `11bdb92` merged with
-        `mailbox-forwards` `8c7a4e2`, so the forwarded-notice poll stayed; same 34 functions)
+  - [x] Deploy `packages/convex` to the VPS (2026-11-17: the server code of `60ba5d4` on
+        `main`, which includes `mailbox-forwards`, so the forwarded-notice poll stayed;
+        same 34 functions)
   - [ ] Release the phone build
 - [ ] Golden fixtures: a `:core` task writes JSON cases for every rule the desktop ports
       (list in ADR 0017). The files are checked in, and the Gradle gate fails when
