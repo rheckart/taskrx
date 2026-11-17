@@ -155,6 +155,22 @@ class SuppliesViewModelTest {
         }
 
     @Test
+    fun `saving with the count left as it stood does not send the count, as doses are the server's`() =
+        withUi(sevenAm) {
+            medication(30.0)
+            val vm = SuppliesViewModel(container)
+            vm.refresh().join()
+
+            vm.saveSupply("med", SupplyDraft(30.0, 1.0, 14)).join()
+            val untouched = container.syncQueue.pending().map { kotlinx.serialization.json.Json.parseToJsonElement(it.payload) }.last()
+            assertEquals(kotlinx.serialization.json.JsonNull, (untouched as kotlinx.serialization.json.JsonObject)["pillsRemaining"])
+
+            vm.saveSupply("med", SupplyDraft(60.0, 1.0, 14)).join()
+            val typed = container.syncQueue.pending().map { kotlinx.serialization.json.Json.parseToJsonElement(it.payload) }.last()
+            assertEquals("60.0", (typed as kotlinx.serialization.json.JsonObject)["pillsRemaining"].toString())
+        }
+
+    @Test
     fun `cancelling the editor changes nothing`() =
         withUi(sevenAm) {
             medication(30.0)

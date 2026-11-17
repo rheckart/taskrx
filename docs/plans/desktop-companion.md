@@ -29,8 +29,9 @@ because two writers are unsafe until one Occurrence can only ever be one Instanc
   - [x] Server merge: a person's answer is not overwritten by a later sweep verdict, and
         the phone's conflict rule takes a remote Skip or Snooze over its own Missed so
         the two converge
-  - [ ] Supply is spent by the server inside the completing mutation, not by a Reminder
-        update that the last writer wins
+  - [x] Supply is spent by the server inside the completing mutation, not by a Reminder
+        update that the last writer wins. Deploy the server before the phone build
+  - [ ] Deploy `packages/convex` to the VPS (`infra/convex/deploy.sh`), then release the phone
 - [ ] Golden fixtures: a `:core` task writes JSON cases for every rule the desktop ports
       (list in ADR 0017). The files are checked in, and the Gradle gate fails when
       regenerated output differs from them.

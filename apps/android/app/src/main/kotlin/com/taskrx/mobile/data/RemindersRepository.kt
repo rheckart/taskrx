@@ -178,6 +178,20 @@ class RemindersRepository(
     suspend fun get(id: String): Reminder? = dao.get(id)?.let(Codecs::toReminder)
 
     /** Applies [patch], bumps `updated_at`, returns the row to `pending` and enqueues an `update`. */
+    /**
+     * This device's estimate of the supply after a dose it recorded, written to the row only.
+     *
+     * The server spends the dose itself, in the mutation that records it (ADR 0018), and the
+     * new count comes back with the Reminder on the next pull. Writing it here as well keeps
+     * the count right on screen offline and in a local-only build. It is not queued, and it
+     * leaves `updatedAt` and the sync status alone, so it neither pushes a count that would
+     * undo another device's doses nor outranks the server's when the pull arrives.
+     */
+    suspend fun spendLocally(id: String, pillsRemaining: Double) {
+        val row = dao.get(id) ?: return
+        dao.update(row.copy(pillsRemaining = pillsRemaining))
+    }
+
     suspend fun update(id: String, patch: UpdateReminderPatch): Reminder =
         database.withTransaction {
             val row = checkNotNull(dao.get(id)) { "Reminder $id not found" }
@@ -245,7 +259,10 @@ class RemindersRepository(
                     schedule = next.schedule,
                     priority = patch.priority,
                     tags = patch.tags,
-                    pillsRemaining = next.pillsRemaining,
+                    // Only a count the caller typed. A dose's spend is the server's (ADR 0018),
+                    // so the stored count is this device's estimate, and sending it with an
+                    // unrelated edit would undo doses another device recorded.
+                    pillsRemaining = (patch.pillsRemaining as? Change.To)?.value,
                     pillsPerDose = next.pillsPerDose,
                     refillReminderDays = next.refillReminderDays,
                     caregiverIds = patch.caregiverIds,

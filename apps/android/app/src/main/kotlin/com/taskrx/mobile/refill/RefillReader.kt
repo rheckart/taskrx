@@ -32,8 +32,8 @@ data class RefillReading(
  * gains and loses. This reads two tables, hands them over and writes down the answer.
  * The raise happens here and not on the screen so no second surface can forget it.
  *
- * Known gap, inherited: nothing decrements `pillsRemaining` when a dose is recorded, so
- * the projection only moves when somebody edits the count.
+ * A recorded dose draws `pillsRemaining` down: the server spends it, and this device keeps
+ * its own estimate until the pull brings the server's count (ADR 0018).
  *
  * Unlike Adherence, a failed write does not fail the read: the projection on screen is
  * correct with or without the Backlog entry, so the exception is the caller's to report.

@@ -22,7 +22,10 @@ reproduce it.
   - Backlog and Catch up: `backlog`, `catchup`.
   - Proposals: `notices`. The date reader is meant to have one implementation, so this is
     a second one, held to the first only by these fixtures.
-  - Answering a dose: `refill` (supply spending) and the Instance id derivation (ADR 0018).
+  - Answering a dose: the Instance id derivation (ADR 0018). Supply spending is not
+    ported: the server spends it (ADR 0018), so its second copy is TypeScript, and
+    `reminderInstances.test.ts` holds it to `supplyAfterDose`'s cases. `refill` is ported
+    only for the projection the screens show.
 - **Sign-in** is a browser handoff. The intended route is a Clerk OAuth application marked
   Public, which uses PKCE (Clerk's documented route for native apps), with a loopback
   redirect. Clerk issues its access tokens as JWTs. They will probably not carry the phone's

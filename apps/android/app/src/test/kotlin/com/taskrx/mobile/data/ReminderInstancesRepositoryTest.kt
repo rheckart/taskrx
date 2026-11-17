@@ -498,18 +498,23 @@ class ReminderInstancesRepositoryTest {
         reminder(id) { it.copy(pillsRemaining = remaining, pillsPerDose = perDose) }
 
     @Test
-    fun `taking a dose spends its pills, and the new count goes up as a Reminder update`() =
+    fun `taking a dose spends its pills on screen and pushes no count, as the server spends it`() =
         withFixture(T0) {
             bottle(30.0, perDose = 2.0)
             val dose = container.instances.create(open())
             container.syncQueue.pending().forEach { container.syncQueue.remove(it.id) }
+            val before = container.reminders.get("m1")!!
+            val statusBefore = database.reminderDao().get("m1")!!.syncStatus
+            now += 60_000
 
             container.instances.markCompleted(dose.id, T0)
 
             assertEquals(28.0, pills())
-            val update = queuePayloads().single { it["localId"]!!.jsonPrimitive.content == "m1" }
-            assertEquals(28.0, update["pillsRemaining"]!!.jsonPrimitive.double)
-            assertEquals(SyncOperation.Update, container.syncQueue.pending().first { it.entityId == "m1" }.operation)
+            // Only the answer goes up: a count is not mergeable, so the server spends the dose.
+            assertEquals(listOf(dose.id), container.syncQueue.pending().map { it.entityId })
+            // Neither newer than the server's count nor waiting to be pushed.
+            assertEquals(before.updatedAt, container.reminders.get("m1")!!.updatedAt)
+            assertEquals(statusBefore, database.reminderDao().get("m1")!!.syncStatus)
         }
 
     @Test

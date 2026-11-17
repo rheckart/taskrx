@@ -117,15 +117,20 @@ class SuppliesViewModel(
     /**
      * Every field is written, so clearing a box clears the column: "I no longer track this"
      * has to be sayable. The read that follows re-projects, and may raise or withdraw.
+     *
+     * Except the count when it was left as it stood. Doses are spent by the server
+     * (ADR 0018), so a count this device re-sends unchanged would undo doses another device
+     * recorded since it last pulled; only a number the person changed is theirs to set.
      */
     fun saveSupply(medicationId: String, draft: SupplyDraft): Job =
         viewModelScope.launch {
             mutable.update { it.copy(editingId = null) }
             try {
+                val current = app.reminders.get(medicationId)?.pillsRemaining
                 app.reminders.update(
                     medicationId,
                     UpdateReminderPatch(
-                        pillsRemaining = Change.To(draft.pillsRemaining),
+                        pillsRemaining = if (draft.pillsRemaining == current) Change.Keep else Change.To(draft.pillsRemaining),
                         pillsPerDose = Change.To(draft.pillsPerDose),
                         refillReminderDays = Change.To(draft.refillReminderDays),
                     ),

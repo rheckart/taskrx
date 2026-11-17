@@ -1,6 +1,7 @@
 import { v } from "convex/values";
 
-import { mutation, query } from "./_generated/server.js";
+import type { Id } from "./_generated/dataModel.js";
+import { mutation, query, type MutationCtx } from "./_generated/server.js";
 import { getCurrentUserId } from "./auth.js";
 import {
   instanceStatusValidator,
@@ -58,6 +59,49 @@ const reminderInstanceDoc = v.object({
  */
 function isCompleted(instance: { status: string }): boolean {
   return instance.status === "completed";
+}
+
+/**
+ * What an instance's move from one status to another does to its medication's supply,
+ * spent here on the server in the same transaction as the move (ADR 0018).
+ *
+ * The rule is `supplyAfterDose` in `:core` (`core/refill/Supply.kt`), which the phone
+ * still applies to its own copy for display: only a move INTO `completed` spends
+ * `pillsPerDose` (one when unset), clamped at zero; the one move OUT of `completed` (an
+ * undo, ADR 0008) puts it back; a task, or a medication with no count, is untouched; and
+ * `completed` to `completed` spends nothing, so a replay or a corrected time cannot spend
+ * twice.
+ *
+ * It is the server's, not each device's, because a count is not mergeable: two devices
+ * completing different doses before syncing would each send `remaining - 1` from the same
+ * start, and the last write would lose one dose. Spent here, both land. The reminder's
+ * `updatedAt` is stamped so every device pulls the new count.
+ */
+async function spendSupply(
+  ctx: MutationCtx,
+  reminderId: Id<"reminders">,
+  from: string | undefined,
+  to: string
+): Promise<void> {
+  const intoCompleted = to === "completed" && from !== "completed";
+  const outOfCompleted = from === "completed" && to !== "completed";
+  if (!intoCompleted && !outOfCompleted) return;
+
+  const reminder = await ctx.db.get(reminderId);
+  if (
+    reminder?.kind !== "medication" ||
+    reminder.pillsRemaining === undefined
+  ) {
+    return;
+  }
+  const perDose =
+    reminder.pillsPerDose !== undefined && reminder.pillsPerDose > 0
+      ? reminder.pillsPerDose
+      : 1;
+  const pillsRemaining = intoCompleted
+    ? Math.max(0, reminder.pillsRemaining - perDose)
+    : reminder.pillsRemaining + perDose;
+  await ctx.db.patch(reminderId, { pillsRemaining, updatedAt: Date.now() });
 }
 
 /** ADR 0005's Grace Period, as `GRACE_PERIOD_MS` in `:core`. */
@@ -273,11 +317,12 @@ export const create = mutation({
         return existing._id;
       }
 
+      const status = settled ? "completed" : (args.status ?? "pending");
       await ctx.db.patch(existing._id, {
         reminderId: args.reminderId,
         reminderKind: reminder.kind,
         scheduledTime: args.scheduledTime,
-        status: settled ? "completed" : (args.status ?? "pending"),
+        status,
         updatedAt: args.updatedAt,
         /**
          * Spread like its optional siblings, not defaulted like `status`.
@@ -304,10 +349,17 @@ export const create = mutation({
           : {}),
         ...(args.notes !== undefined ? { notes: args.notes } : {}),
       });
+      await spendSupply(ctx, args.reminderId, existing.status, status);
 
       return existing._id;
     }
 
+    await spendSupply(
+      ctx,
+      args.reminderId,
+      undefined,
+      args.status ?? "pending"
+    );
     return await ctx.db.insert("reminderInstances", {
       userId: currentUserId,
       localId: args.localId,
@@ -351,6 +403,7 @@ export const markCompleted = mutation({
       completedAt: args.completedAt ?? Date.now(),
       updatedAt: Date.now(),
     });
+    await spendSupply(ctx, instance.reminderId, instance.status, "completed");
 
     return args.id;
   },
@@ -412,6 +465,7 @@ export const reopen = mutation({
       snoozedUntil: undefined,
       updatedAt: Date.now(),
     });
+    await spendSupply(ctx, instance.reminderId, instance.status, "pending");
 
     return args.id;
   },

@@ -48,17 +48,22 @@ asleep. That is most of the reason to have a desktop.
 - The derivation is a rule, so it lives in `:core` and is in the golden fixtures
   (ADR 0017), so the Rust port derives the same id byte for byte.
 
+- **The server spends the supply.** A count is not mergeable: two devices completing
+  different doses before syncing would each send `remaining - 1` and lose one. So the
+  mutation that moves an Instance into or out of `completed` spends or refunds the dose in
+  the same transaction (`spendSupply` in `reminderInstances.ts`, the rule of `:core`'s
+  `supplyAfterDose`). The phone still applies that rule to its own row for the screen, but
+  queues nothing for it. A Reminder update carries `pillsRemaining` only when the person typed
+  a new number, and Supplies sends it only when it changed.
+- **Rollout:** the server first. An older phone build still pushes its own count after a
+  dose, which lands after the server's spend and agrees with it. A newer phone against an
+  older server would never have its doses spent.
+
 ## Open questions
 
 - Settled: the only source of two Instances at one moment was the answer screen reopening an
   answered moment (issue #21). It now opens that moment on its recorded answer. Snooze and
   undo already reused the one row. `allForOccurrence` stays for rows minted before this.
-- **Supply is a counter, and counters do not merge.** A completion spends pills through an
-  ordinary Reminder update (`spendSupply`), and Reminders are last-write-wins. Two devices
-  completing *different* doses before syncing would each write `remaining - 1` from the same
-  starting value, and one spend would be lost. One shared id prevents the double spend for
-  one dose, not this. Supply likely has to be spent by the server inside the completing
-  mutation.
 - A dose recorded with **+ Dose** and a Backlog completion carry a chosen or completion
   moment, not one the Schedule produced. Two such records at the same millisecond would
   merge, which is acceptable, but confirm it.

@@ -1127,6 +1127,159 @@ describe("a reopened instance and a replayed create", () => {
   });
 });
 
+/**
+ * The supply is spent by the server, in the transaction that moves the instance (ADR 0018),
+ * by the rule `supplyAfterDose` states in `:core`. A count is not mergeable, so devices no
+ * longer send their own idea of it after a dose.
+ */
+describe("a dose spends the supply on the server", () => {
+  interface Bottle {
+    /** `null` for a medication that tracks no supply. */
+    pillsRemaining?: number | null;
+    pillsPerDose?: number;
+    kind?: "medication" | "task";
+  }
+
+  async function bottle(
+    as: ReturnType<typeof deployment>["owner"],
+    { pillsRemaining = 30, pillsPerDose, kind = "medication" }: Bottle = {}
+  ) {
+    const reminderId = await as.mutation(api.reminders.create, {
+      localId: "local-bottle",
+      userId: OWNER,
+      kind,
+      name: "Metformin",
+      schedule: { type: "daily", times: ["08:00", "20:00"] },
+      active: true,
+      createdAt: NOW,
+      updatedAt: NOW,
+      ...(pillsRemaining !== null ? { pillsRemaining } : {}),
+      ...(pillsPerDose !== undefined ? { pillsPerDose } : {}),
+    });
+    const dose = (n: number) => ({
+      localId: `local-dose-${String(n)}`,
+      userId: OWNER,
+      reminderId,
+      scheduledTime: NOW + n * HOUR,
+      status: "pending" as const,
+      snoozeCount: 0,
+      createdAt: NOW,
+      updatedAt: NOW,
+    });
+    const remaining = async () =>
+      (await as.query(api.reminders.get, { id: reminderId }))?.pillsRemaining;
+    return { reminderId, dose, remaining };
+  }
+
+  it("spends pillsPerDose, or one when unset, and stops at zero", async () => {
+    const { owner } = deployment();
+    const two = await bottle(owner, { pillsRemaining: 3, pillsPerDose: 2 });
+    const a = await owner.mutation(api.reminderInstances.create, two.dose(1));
+    await owner.mutation(api.reminderInstances.markCompleted, { id: a });
+    expect(await two.remaining()).toBe(1);
+    const b = await owner.mutation(api.reminderInstances.create, two.dose(2));
+    await owner.mutation(api.reminderInstances.markCompleted, { id: b });
+    expect(await two.remaining()).toBe(0);
+  });
+
+  it("lands both of two devices' doses, which their own counts could not", async () => {
+    const { owner } = deployment();
+    const { dose, remaining } = await bottle(owner);
+
+    await owner.mutation(api.reminderInstances.create, {
+      ...dose(1),
+      status: "completed",
+      completedAt: NOW + HOUR,
+    });
+    const other = await owner.mutation(api.reminderInstances.create, dose(2));
+    await owner.mutation(api.reminderInstances.markCompleted, { id: other });
+
+    expect(await remaining()).toBe(28);
+  });
+
+  it("spends one dose once, however often it is completed or replayed", async () => {
+    const { owner } = deployment();
+    const { dose, remaining } = await bottle(owner);
+    const id = await owner.mutation(api.reminderInstances.create, dose(1));
+
+    await owner.mutation(api.reminderInstances.markCompleted, { id });
+    await owner.mutation(api.reminderInstances.markCompleted, {
+      id,
+      completedAt: NOW + 2 * HOUR,
+    });
+    await owner.mutation(api.reminderInstances.create, {
+      ...dose(1),
+      status: "completed",
+      completedAt: NOW + HOUR,
+      updatedAt: NOW + HOUR,
+    });
+
+    expect(await remaining()).toBe(29);
+  });
+
+  it("gives an undone dose back once, however often it is reopened", async () => {
+    const { owner } = deployment();
+    const { dose, remaining } = await bottle(owner);
+    const id = await owner.mutation(api.reminderInstances.create, dose(1));
+    await owner.mutation(api.reminderInstances.markCompleted, { id });
+
+    await owner.mutation(api.reminderInstances.reopen, { id });
+    await owner.mutation(api.reminderInstances.reopen, { id });
+
+    expect(await remaining()).toBe(30);
+  });
+
+  it("spends nothing for a skip, a snooze or a miss", async () => {
+    const { owner } = deployment();
+    const { dose, remaining } = await bottle(owner);
+    const a = await owner.mutation(api.reminderInstances.create, dose(1));
+    await owner.mutation(api.reminderInstances.markSkipped, { id: a });
+    const b = await owner.mutation(api.reminderInstances.create, dose(2));
+    await owner.mutation(api.reminderInstances.snooze, {
+      id: b,
+      snoozedUntil: NOW + 3 * HOUR,
+    });
+    await owner.mutation(api.reminderInstances.create, {
+      ...dose(3),
+      status: "missed",
+    });
+
+    expect(await remaining()).toBe(30);
+  });
+
+  it("leaves a task, and a medication with no count, alone", async () => {
+    const { owner } = deployment();
+    const task = await bottle(owner, { kind: "task" });
+    const t = await owner.mutation(api.reminderInstances.create, task.dose(1));
+    await owner.mutation(api.reminderInstances.markCompleted, { id: t });
+    expect(await task.remaining()).toBe(30);
+
+    const second = deployment().owner;
+    const uncounted = await bottle(second, { pillsRemaining: null });
+    const u = await second.mutation(
+      api.reminderInstances.create,
+      uncounted.dose(1)
+    );
+    await second.mutation(api.reminderInstances.markCompleted, { id: u });
+    expect(await uncounted.remaining()).toBeUndefined();
+  });
+
+  it("spends nothing when a fresh mint from another device is refused", async () => {
+    const { owner } = deployment();
+    const { dose, remaining } = await bottle(owner);
+    const id = await owner.mutation(api.reminderInstances.create, dose(1));
+    await owner.mutation(api.reminderInstances.markCompleted, { id });
+
+    await owner.mutation(api.reminderInstances.create, {
+      ...dose(1),
+      createdAt: NOW + 2 * HOUR,
+      updatedAt: NOW + 2 * HOUR,
+    });
+
+    expect(await remaining()).toBe(29);
+  });
+});
+
 describe("reminderInstances.snooze", () => {
   it("refuses an instance belonging to someone else", async () => {
     const { owner, other } = deployment();

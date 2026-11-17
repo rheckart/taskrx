@@ -178,16 +178,19 @@ class ReminderInstancesRepository(
         }
 
     /**
-     * A taken dose draws the bottle down, in the same transaction as the answer: either both
-     * are written or neither, so a dose can never be recorded without its pills or the other
-     * way round. Which changes spend, and how much, is `supplyAfterDose` in :core. The new
-     * count is written as an ordinary Reminder update, so it queues and syncs like any edit;
-     * the server's `consumePills` is deliberately left uncalled, or the dose would count twice.
+     * A taken dose draws the bottle down on screen, in the same transaction as the answer.
+     * Which changes spend, and how much, is `supplyAfterDose` in :core.
+     *
+     * This is only the device's estimate: the server spends the dose itself when the answer
+     * reaches it (`spendSupply` in reminderInstances.ts, ADR 0018), and its count arrives with
+     * the Reminder on the next pull. A count cannot be merged, so the device no longer pushes
+     * one after a dose; two devices doing so would lose one of two doses taken before they
+     * synced. `consumePills` stays uncalled, or the dose would count twice.
      */
     private suspend fun spendSupply(reminderId: String, from: InstanceStatus?, to: InstanceStatus) {
         val reminder = reminders.get(reminderId) ?: return
         val remaining = supplyAfterDose(reminder.kind, from, to, reminder.pillsRemaining, reminder.pillsPerDose) ?: return
-        reminders.update(reminderId, UpdateReminderPatch(pillsRemaining = Change.To(remaining)))
+        reminders.spendLocally(reminderId, remaining)
     }
 
     /**

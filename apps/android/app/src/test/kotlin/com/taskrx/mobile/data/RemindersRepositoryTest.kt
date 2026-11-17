@@ -28,6 +28,7 @@ import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.boolean
 import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
+import kotlinx.serialization.json.double
 import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.long
 import org.junit.runner.RunWith
@@ -331,6 +332,19 @@ class RemindersRepositoryTest {
             assertEquals("low", chosen["priority"]!!.jsonPrimitive.content)
             assertEquals(JsonArray(listOf(JsonPrimitive("u"))), chosen["tags"]!!.jsonArray)
             assertEquals(JsonArray(listOf(JsonPrimitive("c"))), chosen["caregiverIds"]!!.jsonArray)
+        }
+
+    @Test
+    fun `an edit sends the supply count only when the person typed one, as doses are the server's to spend`() =
+        withFixture(T0) {
+            reminder("m1") { it.copy(pillsRemaining = 30.0) }
+
+            container.reminders.update("m1", UpdateReminderPatch(name = "Renamed"))
+            // The column holds this device's estimate; sending it would undo doses taken elsewhere.
+            assertEquals(JsonNull, payloads().last()["pillsRemaining"])
+
+            container.reminders.update("m1", UpdateReminderPatch(pillsRemaining = Change.To(60.0)))
+            assertEquals(60.0, payloads().last()["pillsRemaining"]!!.jsonPrimitive.double)
         }
 
     @Test
