@@ -76,6 +76,21 @@ class AnswerViewModelTest {
         }
 
     @Test
+    fun `coming back to an answered moment shows its answer with Undo and mints no second row`() =
+        withUi(NOW) {
+            reminder("med", schedule = dailyTimes(listOf("09:00")), createdAt = NOW - 10 * DAY)
+            vm().also { it.load("med", NINE).join() }.skip().join()
+
+            val again = vm().also { it.load("med", NINE).join() }
+
+            val loaded = assertIs<AnswerState.Loaded>(again.state.value)
+            assertEquals(Action.Done, loaded.action)
+            assertEquals(InstanceStatus.Skipped, loaded.instance.status)
+            assertNotNull(loaded.recordedAt)
+            assertEquals(1, stored().size)
+        }
+
+    @Test
     fun `coming back to a snoozed moment finds its row, because a snooze is a deferral and not an answer`() =
         withUi(NOW) {
             reminder("med", schedule = dailyTimes(listOf("09:00")), createdAt = NOW - 10 * DAY)
@@ -551,8 +566,8 @@ class AnswerViewModelTest {
             val vm = vm()
             vm.load("med", NINE).join()
             vm.skip().join()
-            // The same moment is opened again elsewhere (issue #21).
-            container.instances.create(CreateReminderInstanceInput(USER, "med", ReminderKind.Medication, NINE))
+            // A pre-ADR-0018 second row is open at the same moment (issue #21).
+            legacyInstance("med", NINE)
 
             vm.undo().join()
 

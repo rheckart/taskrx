@@ -88,5 +88,15 @@ fun shouldApplyRemoteReminderInstance(
     if (remote.status == InstanceStatus.Completed) {
         return true
     }
+    // Likewise a sweep verdict yields to an answer: the server refuses `missed` over a
+    // `skipped` row or a snooze still running (`sweepMayMark` in reminderInstances.ts), so a
+    // Skip or Snooze made on another device (the desktop Companion, ADR 0016) while this one
+    // swept is the truth, whichever was stamped later. Without this, this device's Missed
+    // would win last-write-wins and never converge (ADR 0018).
+    if (local.status == InstanceStatus.Missed &&
+        (remote.status == InstanceStatus.Skipped || remote.status == InstanceStatus.Snoozed)
+    ) {
+        return true
+    }
     return remote.updatedAt > local.updatedAt
 }

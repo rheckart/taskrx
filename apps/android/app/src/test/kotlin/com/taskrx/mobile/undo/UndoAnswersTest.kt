@@ -140,7 +140,7 @@ class UndoAnswersTest {
             medication()
             val answered = openRow(NINE)
             container.instances.markSkipped(answered.id)
-            openRow(NINE) // the answer screen reopened the same moment (issue #21)
+            legacyInstance("med", NINE) // a pre-ADR-0018 second row at the same moment (issue #21)
 
             val result = container.undo.undo(answered.id)
 
@@ -154,8 +154,7 @@ class UndoAnswersTest {
             medication()
             val answered = openRow(NINE)
             container.instances.markSkipped(answered.id)
-            val other = openRow(NINE)
-            container.instances.markMissed(other.id)
+            legacyInstance("med", NINE, status = InstanceStatus.Missed)
 
             assertEquals(UndoResult.Refused(UndoVerdict.MomentOpenAgain), container.undo.undo(answered.id))
         }

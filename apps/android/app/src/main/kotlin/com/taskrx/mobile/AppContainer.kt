@@ -76,7 +76,7 @@ class AppContainer(
 
     val syncQueue = SyncQueueRepository(database.syncQueueDao(), clock)
     val reminders = RemindersRepository(database, syncQueue, clock, newId)
-    val instances = ReminderInstancesRepository(database, syncQueue, reminders, clock, newId)
+    val instances = ReminderInstancesRepository(database, syncQueue, reminders, clock)
     val notices = NoticesRepository(database, syncQueue, clock, newId)
     val watchSources = WatchSourcesRepository(database, syncQueue, clock, newId)
 

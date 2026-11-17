@@ -11,20 +11,24 @@ because two writers are unsafe until one Occurrence can only ever be one Instanc
 
 - [ ] Verify the ground. Each check can change ADR 0017, so nothing desktop-side is built
       before all three pass:
-  - [ ] The Convex Rust client runs one query against the self-hosted deployment
+  - [x] The Convex Rust client runs one query against the self-hosted deployment (`convex`
+        0.10.4: a query and a subscription reach `reminders:list` and return the server's
+        "Not authenticated". Real data waits on the Clerk token)
   - [ ] A Clerk Public OAuth app (PKCE) issues a token that Convex accepts with a second
         `auth.config.ts` entry, and whose subject is the same Clerk user id
   - [ ] Rune opens a window on Hyprland, takes typed text (and IME), and reads and writes the
         Wayland clipboard
 - [ ] One Instance per Occurrence (ADR 0018):
-  - [ ] `instanceIdFor(reminderLocalId, scheduledTime)` in `:core`: UUID v5 (SHA-1) under a
+  - [x] `instanceIdFor(reminderLocalId, scheduledTime)` in `:core`: UUID v5 (SHA-1) under a
         fixed namespace, gated by Kover. `java.util.UUID.nameUUIDFromBytes` is v3 (MD5), so
         it is not used
-  - [ ] Every mint on the phone uses it: the answer screen, batch answers, + Dose, the
+  - [x] Every mint on the phone uses it: the answer screen, batch answers, + Dose, the
         sweep and Backlog
-  - [ ] The answer screen loads the Instance already at the moment, whatever its status,
+  - [x] The answer screen loads the Instance already at the moment, whatever its status,
         instead of minting a second pending one (issue #21)
-  - [ ] Server merge: a person's answer is not overwritten by a later sweep verdict
+  - [x] Server merge: a person's answer is not overwritten by a later sweep verdict, and
+        the phone's conflict rule takes a remote Skip or Snooze over its own Missed so
+        the two converge
   - [ ] Supply is spent by the server inside the completing mutation, not by a Reminder
         update that the last writer wins
 - [ ] Golden fixtures: a `:core` task writes JSON cases for every rule the desktop ports

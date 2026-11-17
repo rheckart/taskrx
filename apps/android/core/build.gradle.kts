@@ -50,6 +50,8 @@ kover {
             "com.taskrx.core.domain.ReminderPhase*",
             "com.taskrx.core.domain.ReminderAction",
             "com.taskrx.core.domain.ReminderKt*",
+            // One Occurrence, one Instance id, on every device (ADR 0018).
+            "com.taskrx.core.domain.InstanceIdKt*",
             "com.taskrx.core.domain.PauseKt*",
             "com.taskrx.core.domain.PauseWindow",
             // One occurrence moved off its scheduled moment (occurrence-override.ts).

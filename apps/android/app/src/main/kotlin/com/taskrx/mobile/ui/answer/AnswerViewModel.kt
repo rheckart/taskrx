@@ -3,6 +3,7 @@ package com.taskrx.mobile.ui.answer
 import android.util.Log
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.taskrx.core.domain.ANSWERABLE_STATUSES
 import com.taskrx.core.domain.Reminder
 import com.taskrx.core.domain.ReminderInstance
 import com.taskrx.mobile.AppContainer
@@ -102,12 +103,24 @@ class AnswerViewModel(
         // record of what the person did and not a materialized copy of the schedule.
         //
         // "Unanswered" includes Snoozed: a snooze is a deferral, so coming back to the
-        // same moment must find the row it already made. Reopening a moment already
-        // Completed or Skipped mints a second, pending Instance beside the answered one
-        // (issue #21, carried over from the Expo app); the timeline deduplicates on the
-        // same pairing so it does not render twice.
-        val instance =
+        // same moment must find the row it already made. A moment already Completed or
+        // Skipped opens on its recorded answer, with Undo, rather than minting a second
+        // pending Instance beside it (issue #21): one Occurrence is one Instance on every
+        // device (ADR 0018).
+        val answered =
             app.instances.findAnswerableForOccurrence(userId, reminderId, scheduledTime)
+                ?: app.instances.findAnyForOccurrence(userId, reminderId, scheduledTime)
+        if (answered != null && answered.status !in ANSWERABLE_STATUSES) {
+            return AnswerState.Loaded(
+                reminder,
+                scheduledTime,
+                answered,
+                action = Action.Done,
+                recordedAt = answered.completedAt ?: answered.updatedAt,
+            )
+        }
+        val instance =
+            answered
                 ?: app.instances.create(
                     CreateReminderInstanceInput(
                         userId = userId,

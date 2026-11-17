@@ -1,6 +1,6 @@
 /// <reference types="vite/client" />
 import { convexTest } from "convex-test";
-import { describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { api } from "./_generated/api.js";
 import schema from "./schema.js";
@@ -641,6 +641,122 @@ describe("reminderInstances.markMissed", () => {
       status: "missed",
       snoozeCount: 1,
       snoozedUntil: NOW + HOUR,
+    });
+  });
+});
+
+/**
+ * A person's answer beats the app's guess (ADR 0018). With the desktop Companion answering
+ * too, the phone's sweep can reach the server after a Skip or a fresh Snooze made on the
+ * other device, by either road: `markMissed` on a row it had, or a replayed `create` of a
+ * row it minted Missed under the same derived id.
+ */
+describe("a sweep verdict never overwrites an answer", () => {
+  beforeEach(() => {
+    vi.useFakeTimers({ toFake: ["Date"] });
+    vi.setSystemTime(NOW + 3 * HOUR);
+  });
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  async function stored(
+    owner: ReturnType<typeof deployment>["owner"],
+    localId: string
+  ) {
+    return await owner.query(api.reminderInstances.getByLocalId, { localId });
+  }
+
+  it("leaves a skipped instance skipped, by markMissed and by a replayed create", async () => {
+    const { owner } = deployment();
+    const { instance } = await seed(owner, OWNER);
+    const id = await owner.mutation(api.reminderInstances.create, instance);
+    await owner.mutation(api.reminderInstances.markSkipped, { id });
+
+    await owner.mutation(api.reminderInstances.markMissed, { id });
+    await owner.mutation(api.reminderInstances.create, {
+      ...instance,
+      status: "missed",
+    });
+
+    expect(await stored(owner, instance.localId)).toMatchObject({
+      status: "skipped",
+    });
+  });
+
+  it("leaves a snooze that is still running snoozed", async () => {
+    const { owner } = deployment();
+    const { instance } = await seed(owner, OWNER);
+    const id = await owner.mutation(api.reminderInstances.create, instance);
+    await owner.mutation(api.reminderInstances.snooze, {
+      id,
+      snoozedUntil: NOW + 2 * HOUR,
+    });
+
+    await owner.mutation(api.reminderInstances.markMissed, { id });
+    await owner.mutation(api.reminderInstances.create, {
+      ...instance,
+      status: "missed",
+    });
+
+    expect(await stored(owner, instance.localId)).toMatchObject({
+      status: "snoozed",
+      snoozedUntil: NOW + 2 * HOUR,
+    });
+  });
+
+  it("marks a snooze missed once its deferral is past the Grace Period", async () => {
+    const { owner } = deployment();
+    const { instance } = await seed(owner, OWNER);
+    const id = await owner.mutation(api.reminderInstances.create, instance);
+    await owner.mutation(api.reminderInstances.snooze, {
+      id,
+      snoozedUntil: NOW + HOUR,
+    });
+
+    await owner.mutation(api.reminderInstances.markMissed, { id });
+
+    expect(await stored(owner, instance.localId)).toMatchObject({
+      status: "missed",
+    });
+  });
+
+  it("still marks an unanswered instance missed, by either road", async () => {
+    const { owner } = deployment();
+    const first = await seed(owner, OWNER);
+    const id = await owner.mutation(
+      api.reminderInstances.create,
+      first.instance
+    );
+    await owner.mutation(api.reminderInstances.markMissed, { id });
+
+    const second = await seed(owner, OWNER, { suffix: "-2" });
+    await owner.mutation(api.reminderInstances.create, second.instance);
+    await owner.mutation(api.reminderInstances.create, {
+      ...second.instance,
+      status: "missed",
+    });
+
+    expect(await stored(owner, first.instance.localId)).toMatchObject({
+      status: "missed",
+    });
+    expect(await stored(owner, second.instance.localId)).toMatchObject({
+      status: "missed",
+    });
+  });
+
+  it("lets a person's answer replace a sweep verdict", async () => {
+    const { owner } = deployment();
+    const { instance } = await seed(owner, OWNER);
+    const id = await owner.mutation(api.reminderInstances.create, {
+      ...instance,
+      status: "missed",
+    });
+
+    await owner.mutation(api.reminderInstances.markSkipped, { id });
+
+    expect(await stored(owner, instance.localId)).toMatchObject({
+      status: "skipped",
     });
   });
 });

@@ -60,6 +60,33 @@ function isCompleted(instance: { status: string }): boolean {
   return instance.status === "completed";
 }
 
+/** ADR 0005's Grace Period, as `GRACE_PERIOD_MS` in `:core`. */
+const GRACE_PERIOD_MS = 2 * 60 * 60 * 1000;
+
+/**
+ * Whether a sweep verdict of `missed` may land on this instance: only one nobody has
+ * answered. That is a `pending` row, a `missed` one already, or a `snoozed` one whose
+ * deferral has run out by the Grace Period — the same test the device's own
+ * `markMissed` applies before it writes (`ReminderInstancesRepository.markMissed`).
+ *
+ * The device's check protects only the device that swept. With the desktop Companion
+ * (ADR 0016) answering too, the phone's sweep can reach the server after a Skip or a
+ * fresh Snooze made elsewhere; a person's answer beats the app's guess (ADR 0018).
+ * `completed` needs no case here: it is never unanswered.
+ */
+function sweepMayMark(
+  instance: { status: string; snoozedUntil?: number },
+  now: number
+): boolean {
+  if (instance.status === "pending" || instance.status === "missed") {
+    return true;
+  }
+  if (instance.status === "snoozed") {
+    return (instance.snoozedUntil ?? 0) + GRACE_PERIOD_MS <= now;
+  }
+  return false;
+}
+
 /**
  * Reads a user's instances over a time window.
  *
@@ -217,6 +244,12 @@ export const create = mutation({
        */
       const settled = isCompleted(existing);
 
+      // A replayed sweep mint (`create` carrying `missed`) is refused over an answer
+      // exactly as `markMissed` is, and for the same reason: see `sweepMayMark`.
+      if (args.status === "missed" && !sweepMayMark(existing, Date.now())) {
+        return existing._id;
+      }
+
       await ctx.db.patch(existing._id, {
         reminderId: args.reminderId,
         reminderKind: reminder.kind,
@@ -372,7 +405,7 @@ export const markMissed = mutation({
     if (instance?.userId !== userId) {
       throw new Error("Reminder instance not found");
     }
-    if (isCompleted(instance)) {
+    if (!sweepMayMark(instance, Date.now())) {
       return args.id;
     }
 

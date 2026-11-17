@@ -175,4 +175,20 @@ class ShouldApplyRemoteReminderInstanceTest {
             )
         }
     }
+
+    @Test
+    fun `a remote skip or snooze replaces a local miss stamped later, as the server keeps the answer`() {
+        for (status in listOf(InstanceStatus.Skipped, InstanceStatus.Snoozed)) {
+            assertTrue(shouldApplyRemoteReminderInstance(row(200, InstanceStatus.Missed), row(100, status)), "$status")
+        }
+    }
+
+    @Test
+    fun `an older remote skip does not replace a local answer other than a miss`() {
+        assertFalse(shouldApplyRemoteReminderInstance(row(200, InstanceStatus.Pending), row(100, InstanceStatus.Skipped)))
+        assertFalse(shouldApplyRemoteReminderInstance(row(200, InstanceStatus.Snoozed), row(100, InstanceStatus.Skipped)))
+        // A miss meeting an older pending or miss is still last-write-wins: neither is an answer.
+        assertFalse(shouldApplyRemoteReminderInstance(row(200, InstanceStatus.Missed), row(100, InstanceStatus.Pending)))
+        assertFalse(shouldApplyRemoteReminderInstance(row(200, InstanceStatus.Missed), row(100, InstanceStatus.Missed)))
+    }
 }

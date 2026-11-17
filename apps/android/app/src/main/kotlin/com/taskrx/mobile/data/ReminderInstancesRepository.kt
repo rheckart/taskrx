@@ -6,6 +6,7 @@ import com.taskrx.core.domain.InstanceStatus
 import com.taskrx.core.domain.ReminderInstance
 import com.taskrx.core.domain.ReminderKind
 import com.taskrx.core.domain.allowsInstanceTransition
+import com.taskrx.core.domain.instanceIdFor
 import com.taskrx.core.domain.instanceTransitionProblem
 import com.taskrx.core.refill.supplyAfterDose
 import com.taskrx.core.sweep.GRACE_PERIOD_MS
@@ -60,15 +61,22 @@ class ReminderInstancesRepository(
     /** Where a taken dose spends its pills, through the Reminder's ordinary update (so it syncs). */
     private val reminders: RemindersRepository,
     private val clock: Clock = SystemClock,
-    private val newId: IdGenerator = RandomUuid,
 ) {
     private val dao = database.reminderInstanceDao()
 
-    /** Materializes an Instance - `Pending` unless told otherwise - and enqueues a `create`. */
+    /**
+     * Materializes an Instance - `Pending` unless told otherwise - and enqueues a `create`.
+     *
+     * Its id is derived from the Occurrence (ADR 0018), so the desktop Companion minting the
+     * same moment writes the same row. When that row is already here (pulled from the other
+     * device between a caller's lookup and this write) it is returned as it stands: what is
+     * already recorded for the moment wins over a fresh mint, and the caller acts on it.
+     */
     suspend fun create(input: CreateReminderInstanceInput): ReminderInstance =
         database.withTransaction {
             val now = clock()
-            val id = newId()
+            val id = instanceIdFor(input.reminderId, input.scheduledTime)
+            dao.get(id)?.let { return@withTransaction Codecs.toInstance(it) }
             dao.insert(
                 ReminderInstanceEntity(
                     id = id,

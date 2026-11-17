@@ -368,7 +368,8 @@ class HarnessRunnerTest {
         withRig(signedIn = USER) {
             val seeded = field(run("seed-due-reminder", "t", 120_000), "reminder_id")
             val at = NOW + HOUR
-            val first = fx.container.instances.create(CreateReminderInstanceInput(USER, seeded, ReminderKind.Medication, at))
+            // Two rows at one pairing exist only from before ADR 0018, so the first is a legacy one.
+            val first = fx.legacyInstance(seeded, at)
             fx.now += 1
             val second = fx.container.instances.create(CreateReminderInstanceInput(USER, seeded, ReminderKind.Medication, at))
             fx.container.instances.markCompleted(second.id, fx.now)

@@ -3,6 +3,7 @@ package com.taskrx.mobile.data
 import com.taskrx.core.domain.InstanceStatus
 import com.taskrx.core.domain.ReminderInstance
 import com.taskrx.core.domain.ReminderKind
+import com.taskrx.core.domain.instanceIdFor
 import com.taskrx.mobile.USER
 import com.taskrx.mobile.withFixture
 import kotlin.test.Test
@@ -74,6 +75,33 @@ class ReminderInstancesRepositoryTest {
             assertEquals(JsonNull, payload["completedAt"])
             assertEquals(JsonNull, payload["snoozedUntil"])
             assertEquals(JsonNull, payload["notes"])
+        }
+
+    @Test
+    fun `an Instance's id is derived from its Occurrence, so another device minting the moment writes the same row`() =
+        withFixture(T0) {
+            reminder("m1")
+
+            val created = container.instances.create(open())
+
+            assertEquals(instanceIdFor("m1", T0), created.id)
+        }
+
+    @Test
+    fun `creating a moment that already has its row returns that row and writes nothing`() =
+        withFixture(T0) {
+            reminder("m1")
+            val first = container.instances.create(open())
+            container.instances.markSkipped(first.id)
+            val queued = container.syncQueue.pending().size
+            now += 1
+
+            val again = container.instances.create(open())
+
+            assertEquals(first.id, again.id)
+            assertEquals(InstanceStatus.Skipped, again.status)
+            assertEquals(1, container.instances.allForOccurrence(USER, "m1", T0).size)
+            assertEquals(queued, container.syncQueue.pending().size)
         }
 
     @Test
