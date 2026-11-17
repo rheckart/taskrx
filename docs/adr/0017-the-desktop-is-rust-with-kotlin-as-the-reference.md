@@ -70,4 +70,11 @@ module. Not chosen for v1, but it remains the way to retire the port if drift be
 
 - Settled 2026-11-17: the Convex Rust client (0.10.4) runs a query and a subscription
   against the self-hosted deployment with the Clerk ID token and reads the phone's rows.
-- Rune on Hyprland: text input, IME, clipboard and accessibility. Check these on the first screen.
+- Settled 2026-11-17, Rune `dev` at `cca5df6` on Hyprland (Wayland), typed by a person:
+  a window opens, typing works, Ctrl+V pastes text another program put on the Wayland
+  clipboard, Ctrl+C puts the field's text there, and a rich copy offers `text/plain` and
+  `text/html` (no RTF on Linux). IME composition is untested: fcitx5 here has only the US
+  layout, and no composing input is a v1 need. Accessibility (AT-SPI) is still unchecked.
+- Synthetic keys (`wtype`) go to whichever window Hyprland has focused, which is not always the
+  one just asked for. Never send them to the live desktop unwatched. Rune's headless scripts
+  are the way to drive it in tests.

@@ -9,7 +9,7 @@ because two writers are unsafe until one Occurrence can only ever be one Instanc
 
 ## Steps
 
-- [ ] Verify the ground. Each check can change ADR 0017, so nothing desktop-side is built
+- [x] Verify the ground. Each check can change ADR 0017, so nothing desktop-side is built
       before all three pass:
   - [x] The Convex Rust client runs one query against the self-hosted deployment (`convex`
         0.10.4: a query and a subscription reach `reminders:list` and return the server's
@@ -17,10 +17,8 @@ because two writers are unsafe until one Occurrence can only ever be one Instanc
   - [x] A Clerk Public OAuth app (PKCE) issues a token that Convex accepts with a second
         `auth.config.ts` entry, and whose subject is the same Clerk user id (the ID token,
         client id `pZBo7hPNxnn4yT04`; from Rust it reads the phone's 27 reminders)
-  - [ ] Rune opens a window on Hyprland, takes typed text (and IME), and reads and writes the
-        Wayland clipboard (it builds and opens a window. Input and clipboard are unchecked:
-        synthetic keys need the person present or an isolated compositor, never the live
-        desktop unwatched)
+  - [x] Rune opens a window on Hyprland, takes typed text, and reads and writes the
+        Wayland clipboard (`cca5df6`, typed by hand. IME untested and not a v1 need)
 - [ ] One Instance per Occurrence (ADR 0018):
   - [x] `instanceIdFor(reminderLocalId, scheduledTime)` in `:core`: UUID v5 (SHA-1) under a
         fixed namespace, gated by Kover. `java.util.UUID.nameUUIDFromBytes` is v3 (MD5), so
