@@ -1,6 +1,6 @@
 # TaskRx
 
-An offline-first mobile app that carries a person's medications and their tasks
+An offline-first mobile app, with a desktop Companion, that carries a person's medications and their tasks
 on one timeline, so that "take the 09:00 dose" and "call the pharmacy" are the
 same kind of commitment, seen in one place.
 
@@ -120,10 +120,16 @@ _Avoid_: Postponed, Deferred
 ### Delivery
 
 **Horizon**:
-The bounded set of soonest Occurrences currently armed with the operating
+The bounded set of soonest Occurrences currently armed with the phone's operating
 system. Bounded because the OS will hold only so many, so the Horizon is always
-a selection, never the whole future.
+a selection, never the whole future. Only the phone has one; a Companion arms nothing.
 _Avoid_: Queue, Schedule window, Lookahead
+
+**Companion**:
+A device that shows and answers Reminders but never delivers them: it arms no
+Horizon, posts no notification and writes no sweep verdict. The desktop app is
+one. It holds the person's data in memory only and needs a connection.
+_Avoid_: Viewer, Second device, Client (the phone is a client too)
 
 **Tier**:
 The delivery guarantee a Reminder's notifications get, determined by Kind.

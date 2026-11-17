@@ -373,6 +373,12 @@ The gate commands are in the README.
 ## Deferred
 
 - iOS. `:core` has no Android imports so Kotlin Multiplatform stays possible.
+- The desktop Companion (`apps/desktop`, Rust on Rune) is decided but not built: it shows and
+  answers, never delivers, and keeps data in memory only (ADR 0016); its rules are a Rust port
+  held to `:core` by golden fixtures (ADR 0017); and two writers need an Instance id derived
+  from its Occurrence (ADR 0018), which changes the phone first. The phone also gains a
+  periodic background pull and a fail-open check at alarm time, so a desktop answer or edit
+  reaches its alarms (ADR 0016).
 - A web client.
 - Drug interaction checking.
 - Push notifications (currently local-only; caregiver alerts via FCM deferred).
