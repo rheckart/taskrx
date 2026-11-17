@@ -62,7 +62,7 @@ class SyncCoordinator(
     }
 
     fun onForeground() {
-        if (syncJob?.isActive == true) scope.launch { worker.drain() }
+        if (syncJob?.isActive == true) scope.launch { drain() }
     }
 
     private suspend fun runSync() {
@@ -71,7 +71,7 @@ class SyncCoordinator(
             launch { pull.run() }
             launch {
                 connectivity.connected.collectLatest { connected ->
-                    if (connected == false) worker.markOffline() else worker.drain()
+                    if (connected == false) worker.markOffline() else drain()
                 }
             }
             launch {
@@ -91,12 +91,18 @@ class SyncCoordinator(
                     // worker's own backoff (it holds the drain while it pauses) spaces the
                     // retries, and the fifth failure dead-letters, so this does not spin.
                     val retry = count > 0 && worker.status.value == SyncWorkerStatus.Error
-                    if ((count > seen || retry) && connectivity.connected.value != false) launch { worker.drain() }
+                    if ((count > seen || retry) && connectivity.connected.value != false) launch { drain() }
                     seen = count
                     delay(pendingPollMs)
                 }
             }
         }
+    }
+
+    /** A drain, then the last pull pass again, so a row the push refused converges ([PullSync.reapply]). */
+    private suspend fun drain() {
+        worker.drain()
+        pull.reapply()
     }
 
     private companion object {

@@ -299,7 +299,7 @@ move, and an answered, opened or past-grace occurrence never moves.
    - Idempotent: two consecutive reschedules with unchanged data cancel and create nothing.
 5. A dose is armed with `AlarmManager.setAlarmClock` (`AlarmClockGateway`); see the decision below. A task is armed as a WorkManager `OneTimeWorkRequest` (`WorkRequestGateway`); see ADR 0007. `RearmReceiver` re-arms both Tiers after boot.
 6. When a notification fires and the user taps it, `TapHandler` opens the answer screen with the reminder id and `scheduledTime` (`core/notifications/Tap.kt`). It is Kind-neutral: a task tap lands on the same answer screen, which already speaks both Kinds.
-7. Answering writes a Reminder Instance to SQLite and enqueues sync.
+7. Answering writes a Reminder Instance to SQLite and enqueues sync. Its id is derived from the Occurrence (`core/domain/InstanceId.kt`, ADR 0018), so another device answering the same moment writes the same row; the server refuses a sweep verdict or a fresh mint over an answer and re-stamps the answer it kept, and the coordinator re-runs the last pull pass after each drain so a refused push converges.
 
 ### The Today screen
 
@@ -317,7 +317,7 @@ Doses due at the same moment can be answered in one tap, from the Today screen o
 - **Shade:** each dose still posts its own notification. When a post leaves two or more doses for one moment in the shade, `NotificationPoster` adds a `batch-<scheduledTime>` notification with the same three buttons. It is rebuilt from the notifications showing (their extras carry the reminder id and moment), not from the database, so alarms that fire in the same second converge on the full list. It never alerts.
 - **One dose:** each medication notification carries Take, Snooze and Skip of its own, through the same receiver and `BatchAnswers` (a batch of one). Answering one rebuilds the batch notification from the doses left, or removes it when fewer than two remain. A task notification has no buttons.
 - **Buttons:** each is a `PendingIntent` with its own data URI (`taskrx://batch/<time>/<action>`, or `taskrx://dose/<id>/<time>/<action>` for one dose), because a PendingIntent's identity ignores extras. `BatchActionReceiver` runs `BatchAnswers` with the app closed.
-- **`BatchAnswers`** differs from the answer screen on purpose: a dose that already has an answer is left alone (the answer screen would mint a second pending Instance, double-counting it and its supply); one clock reading serves the batch so every snooze comes back together as a batch; the reschedule runs once at the end.
+- **`BatchAnswers`** differs from the answer screen on purpose: a dose that already has an answer is left alone (the answer screen opens such a moment on its recorded answer, with Undo); one clock reading serves the batch so every snooze comes back together as a batch; the reschedule runs once at the end.
 
 ### The two channels
 

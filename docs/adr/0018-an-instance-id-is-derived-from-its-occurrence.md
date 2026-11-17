@@ -31,10 +31,18 @@ asleep. That is most of the reason to have a desktop.
   writer looks up an existing Instance for the Occurrence first** (the phone's
   `findAnyForOccurrence`, the server's `listForReminder` on the desktop) and updates it
   rather than minting.
-- What the merge does is today's `create` upsert (`reminderInstances.ts`): `completed` is
-  terminal and keeps its `completedAt`. Any other status is **last arrival wins**, with no
-  `updatedAt` comparison. So a desktop Skip followed by a late phone sweep becomes Missed.
-  Decide whether the upsert should prefer the person's answer over a sweep verdict.
+- **A person's answer beats the app's guess.** The server refuses `missed` (by
+  `markMissed` or a replayed `create`) over a `skipped` row or a snooze still inside its
+  Grace Period, as the phone's own `markMissed` does. It also refuses a *fresh mint*
+  (`pending` with `createdAt === updatedAt`, a row never answered) over any status but
+  `pending`: that is a device that opened the moment before it pulled the other's answer.
+  A device's own undo replayed before its first create drained still reopens, because the
+  undo stamps `updatedAt` past `createdAt`. `completed` stays terminal.
+- **A refusal re-announces.** A refused write stamps the kept document's `updatedAt`, so
+  the refused device's subscription is delivered the answer as newer. On the phone a remote
+  Skip or Snooze replaces a local Missed whatever the stamps (`Conflict.kt`, as a remote
+  completion already did), and the coordinator re-runs the last pull pass after each drain,
+  because the server's answer can arrive while the refused push is still queued.
 - Creating an Instance whose id already exists locally becomes an update governed by
   `InstanceLifecycle` and `Conflict.kt`, not a failed insert.
 - The derivation is a rule, so it lives in `:core` and is in the golden fixtures
@@ -42,10 +50,9 @@ asleep. That is most of the reason to have a desktop.
 
 ## Open questions
 
-- `ReminderInstancesRepository.allForOccurrence` implies one Occurrence can hold more than
-  one Instance today. Before this lands, establish when that happens (the answer screen
-  minting a second pending row, snooze, undo per ADR 0008) and whether each case should
-  become an update of the one Instance.
+- Settled: the only source of two Instances at one moment was the answer screen reopening an
+  answered moment (issue #21). It now opens that moment on its recorded answer. Snooze and
+  undo already reused the one row. `allForOccurrence` stays for rows minted before this.
 - **Supply is a counter, and counters do not merge.** A completion spends pills through an
   ordinary Reminder update (`spendSupply`), and Reminders are last-write-wins. Two devices
   completing *different* doses before syncing would each write `remaining - 1` from the same

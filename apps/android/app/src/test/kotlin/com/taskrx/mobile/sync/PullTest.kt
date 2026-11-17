@@ -450,6 +450,36 @@ class PullTest {
         }
 
     @Test
+    fun `a row refused for an unpushed change converges once it is pushed, without another delivery`() =
+        withFixture(T0) {
+            // The phone swept the moment Missed while the desktop's Skip was on its way.
+            pull(this).run(listOf(reminderDoc()), listOf(instanceDoc()))
+            pushed()
+            container.instances.markMissed("i1")
+            val gateway = FakeGateway()
+            gateway.feeds[ConvexFunctions.REMINDERS_LIST] = flowOf(json("[${reminderDoc()}]"))
+            gateway.feeds[ConvexFunctions.INSTANCES_LIST] =
+                flowOf(json("[${instanceDoc(status = "skipped", updatedAt = "1780000500000.0")}]"))
+            val sync = PullSync(gateway, pull(this))
+
+            sync.run()
+            assertEquals(InstanceStatus.Missed, container.instances.get("i1")!!.status)
+
+            pushed() // the server refused the Missed and kept the Skip: no new delivery follows
+            sync.reapply()
+
+            assertEquals(InstanceStatus.Skipped, container.instances.get("i1")!!.status)
+        }
+
+    @Test
+    fun `reapplying before anything was delivered does nothing`() =
+        withFixture(T0) {
+            PullSync(FakeGateway(), pull(this)).reapply()
+
+            assertEquals(emptyList(), container.instances.list(com.taskrx.mobile.data.InstanceFilter(USER)))
+        }
+
+    @Test
     fun `a pass that fails is logged and the next delivery heals it`() =
         withFixture(T0) {
             val gateway = FakeGateway()

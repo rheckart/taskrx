@@ -19,6 +19,8 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.conflate
 import kotlinx.coroutines.flow.retryWhen
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonElement
 
@@ -150,12 +152,40 @@ class PullApplier(
  *
  * A failed pass (bad document, database error) is logged and the next delivery tries again;
  * a failed subscription (dropped, server error) is resubscribed after a backoff.
+ *
+ * [reapply] re-runs the last delivered pass. A pass refuses a row that has a change waiting
+ * to be pushed, and the server's answer to that push can arrive before the push worker has
+ * cleared the entry (the Convex client applies query updates before it resolves the
+ * mutation). If the server refused the push and kept another device's answer (ADR 0018),
+ * no later delivery need carry that row again, so the coordinator calls this after every
+ * drain and the row converges on what was already delivered.
  */
 class PullSync(
     private val gateway: ConvexGateway,
     private val applier: PullApplier,
     private val retryPause: suspend (Long) -> Unit = { delay(it) },
 ) {
+    private val passes = Mutex()
+    private var last: Quad? = null
+
+    /** Runs the last delivered pass again, or nothing when none has arrived yet. */
+    suspend fun reapply() {
+        passes.withLock {
+            val quad = last ?: return
+            pass(quad)
+        }
+    }
+
+    private suspend fun pass(quad: Quad) {
+        try {
+            applier.applyJson(quad.reminders, quad.instances, quad.watchSources, quad.notices)
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            Log.e(TAG, "pull failed", e)
+        }
+    }
+
     suspend fun run() {
         combine(
             gateway.subscribe(ConvexFunctions.REMINDERS_LIST),
@@ -172,13 +202,10 @@ class PullSync(
                 retryPause(backoffMillis(attempt.toInt() + 1))
                 true
             }
-            .collect { (remoteReminders, remoteInstances, remoteWatchSources, remoteNotices) ->
-                try {
-                    applier.applyJson(remoteReminders, remoteInstances, remoteWatchSources, remoteNotices)
-                } catch (e: CancellationException) {
-                    throw e
-                } catch (e: Exception) {
-                    Log.e(TAG, "pull failed", e)
+            .collect { quad ->
+                passes.withLock {
+                    last = quad
+                    pass(quad)
                 }
             }
     }

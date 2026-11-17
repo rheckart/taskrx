@@ -244,9 +244,32 @@ export const create = mutation({
        */
       const settled = isCompleted(existing);
 
-      // A replayed sweep mint (`create` carrying `missed`) is refused over an answer
-      // exactly as `markMissed` is, and for the same reason: see `sweepMayMark`.
-      if (args.status === "missed" && !sweepMayMark(existing, Date.now())) {
+      /**
+       * With ids derived from the Occurrence (ADR 0018), this upsert is also where two
+       * devices' writes for one moment meet, so two kinds of write are refused over what
+       * the other device already recorded:
+       *
+       * - A sweep mint (`create` carrying `missed`) over an answer, exactly as
+       *   `markMissed` is refused, for the same reason: see `sweepMayMark`.
+       * - A fresh mint over any status but `pending`. A row never answered has
+       *   `createdAt === updatedAt`, so it carries no answer; it is a device that opened
+       *   the moment before it pulled the other's answer, and must not erase it. A
+       *   device's own undo replayed before its first create drained is not one: the
+       *   undo stamps `updatedAt` past `createdAt`, so it still reopens the row.
+       *
+       * A refusal still stamps `updatedAt`. A write that changes nothing delivers nothing
+       * to the refused device's subscription, which would keep its stale row until some
+       * unrelated document changed; the stamp re-announces the server's answer as newer.
+       */
+      const now = Date.now();
+      const freshMint =
+        (args.status ?? "pending") === "pending" &&
+        args.createdAt === args.updatedAt;
+      if (
+        (args.status === "missed" && !sweepMayMark(existing, now)) ||
+        (freshMint && existing.status !== "pending")
+      ) {
+        await ctx.db.patch(existing._id, { updatedAt: now });
         return existing._id;
       }
 
@@ -406,6 +429,9 @@ export const markMissed = mutation({
       throw new Error("Reminder instance not found");
     }
     if (!sweepMayMark(instance, Date.now())) {
+      // Stamped for the same reason as a refused `create`: the device that swept must be
+      // told the answer it missed, and an unchanged document tells it nothing.
+      await ctx.db.patch(args.id, { updatedAt: Date.now() });
       return args.id;
     }
 

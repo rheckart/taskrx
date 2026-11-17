@@ -72,7 +72,7 @@ layer does not have either.
   Instance left from a schedule that has changed). Reopened, it would be a pending row nobody
   was ever due to answer, and the sweep would record a miss that never was.
 - **A moment that is already open again** (issue #21: the answer screen reopened it and
-  minted a second pending row). Reopening would leave two open rows at one pairing and the
+  minted a second pending row; since ADR 0018 only rows minted before derived ids can do this). Reopening would leave two open rows at one pairing and the
   sweep records a miss for each.
 - A `pending` or `missed` row: nothing was answered. A Missed moment is answered, not undone.
 - The notification shade. It cannot show the result.

@@ -745,6 +745,69 @@ describe("a sweep verdict never overwrites an answer", () => {
     });
   });
 
+  it("re-announces the answer it kept by stamping updatedAt, so the sweeping device pulls it", async () => {
+    const { owner } = deployment();
+    const { instance } = await seed(owner, OWNER);
+    const id = await owner.mutation(api.reminderInstances.create, instance);
+    await owner.mutation(api.reminderInstances.markSkipped, { id });
+    vi.setSystemTime(NOW + 4 * HOUR);
+
+    await owner.mutation(api.reminderInstances.markMissed, { id });
+
+    expect(await stored(owner, instance.localId)).toMatchObject({
+      status: "skipped",
+      updatedAt: NOW + 4 * HOUR,
+    });
+  });
+
+  it.each(["skipped", "snoozed", "missed"] as const)(
+    "keeps %s when another device mints the moment fresh before it has pulled",
+    async (answer) => {
+      const { owner } = deployment();
+      const { instance } = await seed(owner, OWNER);
+      const id = await owner.mutation(api.reminderInstances.create, instance);
+      if (answer === "skipped") {
+        await owner.mutation(api.reminderInstances.markSkipped, { id });
+      } else if (answer === "snoozed") {
+        await owner.mutation(api.reminderInstances.snooze, {
+          id,
+          snoozedUntil: NOW + 4 * HOUR,
+        });
+      } else {
+        await owner.mutation(api.reminderInstances.markMissed, { id });
+      }
+
+      await owner.mutation(api.reminderInstances.create, {
+        ...instance,
+        status: "pending",
+        createdAt: NOW + 3 * HOUR,
+        updatedAt: NOW + 3 * HOUR,
+      });
+
+      expect(await stored(owner, instance.localId)).toMatchObject({
+        status: answer,
+        updatedAt: NOW + 3 * HOUR,
+      });
+    }
+  );
+
+  it("still lets an undo replayed before the first create drained reopen the row", async () => {
+    const { owner } = deployment();
+    const { instance } = await seed(owner, OWNER);
+    const id = await owner.mutation(api.reminderInstances.create, instance);
+    await owner.mutation(api.reminderInstances.markSkipped, { id });
+
+    await owner.mutation(api.reminderInstances.create, {
+      ...instance,
+      status: "pending",
+      updatedAt: NOW + HOUR,
+    });
+
+    expect(await stored(owner, instance.localId)).toMatchObject({
+      status: "pending",
+    });
+  });
+
   it("lets a person's answer replace a sweep verdict", async () => {
     const { owner } = deployment();
     const { instance } = await seed(owner, OWNER);
