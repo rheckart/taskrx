@@ -26,11 +26,18 @@ reproduce it.
     ported: the server spends it (ADR 0018), so its second copy is TypeScript, and
     `reminderInstances.test.ts` holds it to `supplyAfterDose`'s cases. `refill` is ported
     only for the projection the screens show.
-- **Sign-in** is a browser handoff. The intended route is a Clerk OAuth application marked
-  Public, which uses PKCE (Clerk's documented route for native apps), with a loopback
-  redirect. Clerk issues its access tokens as JWTs. They will probably not carry the phone's
-  `aud: convex`, so `auth.config.ts` likely gains a second entry for the desktop's client id.
-  The identity's subject must still be the Clerk user id `getCurrentUserId` compares against.
+- **Sign-in** is a browser handoff to the Clerk OAuth application "TaskRx Desktop": public
+  (no secret), PKCE S256 required, no consent screen, redirect `http://127.0.0.1/callback`.
+  Clerk matches a loopback redirect on any port, so the desktop listens on a port the OS
+  picks. Scopes are `openid profile email offline_access`.
+- **Convex is sent the OIDC ID token**, not the access token. The ID token has the phone's
+  issuer and `sub` (the Clerk user id `getCurrentUserId` returns), and `aud` is the OAuth
+  client id, which the second `auth.config.ts` entry (`CLERK_DESKTOP_CLIENT_ID`) checks. The
+  access token (`typ: at+jwt`) has no `aud` and is not accepted. Both live 24 hours. A
+  refresh-token grant returns a new ID token, so the keyring holds only the refresh token.
+  The Rust client does not report a rejected token: it retries and never answers. So the
+  desktop decodes `exp` itself and refreshes before it, and treats a query that hangs past a
+  timeout after sign-in as signed out.
 - **Packaging:** a PKGBUILD and a `.desktop` entry install it into the app launcher. The
   app follows the Omarchy accent from `~/.local/state/omarchy/current/theme/colors.toml`
   (watched live) and asks `hyprctl` for the rounding, as Omarchy's own apps do.
@@ -58,8 +65,6 @@ module. Not chosen for v1, but it remains the way to retire the port if drift be
 
 ## Open questions
 
-- Whether a Clerk OAuth access token passes Convex's verification with a second
-  `auth.config.ts` entry (issuer, audience, subject). Prove it with one query before
-  building on it.
-- Whether the Convex Rust client works against the self-hosted backend's version.
+- Settled 2026-11-17: the Convex Rust client (0.10.4) runs a query and a subscription
+  against the self-hosted deployment with the Clerk ID token and reads the phone's rows.
 - Rune on Hyprland: text input, IME, clipboard and accessibility. Check these on the first screen.

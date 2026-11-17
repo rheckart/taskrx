@@ -14,10 +14,13 @@ because two writers are unsafe until one Occurrence can only ever be one Instanc
   - [x] The Convex Rust client runs one query against the self-hosted deployment (`convex`
         0.10.4: a query and a subscription reach `reminders:list` and return the server's
         "Not authenticated". Real data waits on the Clerk token)
-  - [ ] A Clerk Public OAuth app (PKCE) issues a token that Convex accepts with a second
-        `auth.config.ts` entry, and whose subject is the same Clerk user id
+  - [x] A Clerk Public OAuth app (PKCE) issues a token that Convex accepts with a second
+        `auth.config.ts` entry, and whose subject is the same Clerk user id (the ID token,
+        client id `pZBo7hPNxnn4yT04`; from Rust it reads the phone's 27 reminders)
   - [ ] Rune opens a window on Hyprland, takes typed text (and IME), and reads and writes the
-        Wayland clipboard
+        Wayland clipboard (it builds and opens a window. Input and clipboard are unchecked:
+        synthetic keys need the person present or an isolated compositor, never the live
+        desktop unwatched)
 - [ ] One Instance per Occurrence (ADR 0018):
   - [x] `instanceIdFor(reminderLocalId, scheduledTime)` in `:core`: UUID v5 (SHA-1) under a
         fixed namespace, gated by Kover. `java.util.UUID.nameUUIDFromBytes` is v3 (MD5), so
@@ -31,7 +34,9 @@ because two writers are unsafe until one Occurrence can only ever be one Instanc
         the two converge
   - [x] Supply is spent by the server inside the completing mutation, not by a Reminder
         update that the last writer wins. Deploy the server before the phone build
-  - [ ] Deploy `packages/convex` to the VPS (`infra/convex/deploy.sh`), then release the phone
+  - [x] Deploy `packages/convex` to the VPS (2026-11-17: `11bdb92` merged with
+        `mailbox-forwards` `8c7a4e2`, so the forwarded-notice poll stayed; same 34 functions)
+  - [ ] Release the phone build
 - [ ] Golden fixtures: a `:core` task writes JSON cases for every rule the desktop ports
       (list in ADR 0017). The files are checked in, and the Gradle gate fails when
       regenerated output differs from them.
