@@ -71,7 +71,8 @@ backend:
   box) leaves it alone. Bump it on purpose, after trying the new build locally.
 - **Secrets** are in `/docker/taskrx/.env` (mode 600): `TASKRX_DB_PASSWORD` and `INSTANCE_SECRET`. The admin key
   was made on the box (`docker compose exec -T backend ./generate_admin_key.sh`) and is kept in the gitignored
-  `infra/convex/.env.vps`, beside `CONVEX_SELF_HOSTED_URL` and `CLERK_JWT_ISSUER_DOMAIN`.
+  `infra/convex/.env.vps`, beside `CONVEX_SELF_HOSTED_URL`, `CLERK_JWT_ISSUER_DOMAIN` and
+  `CLERK_DESKTOP_CLIENT_ID` (the desktop Companion's Clerk OAuth client id, see `auth.config.ts`).
 
 Deploy functions and run any CLI command against it by naming the target:
 

@@ -16,12 +16,22 @@
  *
  * See the official Convex + Clerk guide:
  * https://docs.convex.dev/auth/clerk
+ *
+ * The second entry is the desktop Companion (ADR 0017). It signs in through the browser to a
+ * Clerk OAuth application (public, PKCE) and sends that application's OIDC ID token. The
+ * token has the same issuer and `sub` (the Clerk user id) as the phone's `convex` template
+ * token, so both devices are one user. Its `aud` is the OAuth client id, which is what
+ * `applicationID` checks. Set `CLERK_DESKTOP_CLIENT_ID` to that client id. Unset, the desktop
+ * is not accepted.
  */
+const issuer = process.env.CLERK_JWT_ISSUER_DOMAIN || "";
+const desktopClientId = process.env.CLERK_DESKTOP_CLIENT_ID;
+
 export default {
   providers: [
-    {
-      domain: process.env.CLERK_JWT_ISSUER_DOMAIN || "",
-      applicationID: "convex",
-    },
+    { domain: issuer, applicationID: "convex" },
+    ...(desktopClientId
+      ? [{ domain: issuer, applicationID: desktopClientId }]
+      : []),
   ],
 };
