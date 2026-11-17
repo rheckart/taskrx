@@ -3,6 +3,8 @@ package com.taskrx.mobile.notifications
 import android.app.AlarmManager
 import android.content.Context
 import androidx.work.WorkManager
+import com.taskrx.core.domain.ReminderInstance
+import com.taskrx.core.domain.isAnswerable
 import com.taskrx.core.notifications.NotificationSpec
 import com.taskrx.core.notifications.RearmCause
 import com.taskrx.core.notifications.dueWhileAway
@@ -62,6 +64,22 @@ class NotificationsModule(
     /** Takes these doses, and the batch notification for their moment, out of the shade. */
     fun dismissPosted(scheduledTime: Long, reminderIds: List<String>) =
         NotificationPoster.dismiss(context, scheduledTime, reminderIds)
+
+    /**
+     * Takes down what is showing for moments answered on another device and pulled here (ADR 0016),
+     * with the batch rebuilt from what is left and any "take another dose" prompt the answer made
+     * stale. A moment that still has an open row keeps its notification, the rule the snooze
+     * cancel in [NotificationScheduler] follows. Logged and dropped: the shade is a convenience
+     * the answer has already made right in the store.
+     */
+    suspend fun dismissAnsweredElsewhere(userId: String, answers: List<ReminderInstance>) =
+        logged("clearing answered notifications") {
+            val settled =
+                answers.map { it.reminderId to it.scheduledTime }.distinct().filter { (reminderId, time) ->
+                    instances.allForOccurrence(userId, reminderId, time).none { isAnswerable(it.status) }
+                }
+            for ((time, moment) in settled.groupBy { it.second }) dismissPosted(time, moment.map { it.first })
+        }
 
     /**
      * The app came to the foreground. Permission first, and only on the signed-in path

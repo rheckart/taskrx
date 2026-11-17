@@ -2,6 +2,8 @@ package com.taskrx.mobile.sync
 
 import android.util.Log
 import com.taskrx.core.domain.Notice
+import com.taskrx.core.domain.ReminderInstance
+import com.taskrx.core.domain.isAnswerable
 import com.taskrx.core.sync.ConvexFunctions
 import com.taskrx.core.sync.backoffMillis
 import com.taskrx.core.sync.shouldApplyRemoteReminder
@@ -58,6 +60,12 @@ class PullApplier(
      * here (ADR 0016).
      */
     private val onScheduleApplied: suspend () -> Unit = {},
+    /**
+     * Called with the answers this pass wrote (taken, skipped, missed). Re-arming stops what has
+     * not fired yet; a notification already in the shade for a moment answered on another device
+     * would otherwise keep offering Take for a dose already taken (ADR 0016).
+     */
+    private val onAnswersApplied: suspend (List<ReminderInstance>) -> Unit = {},
 ) {
     internal suspend fun apply(
         remoteReminders: List<ServerReminder>,
@@ -102,6 +110,16 @@ class PullApplier(
                 throw e
             } catch (e: Exception) {
                 Log.e(TAG, "rescheduling after pull failed", e)
+            }
+        }
+        val answers = resolved.map { it.instance }.filterNot { isAnswerable(it.status) }
+        if (answers.isNotEmpty()) {
+            try {
+                onAnswersApplied(answers)
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                Log.e(TAG, "clearing the shade after pull failed", e)
             }
         }
 

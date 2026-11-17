@@ -166,7 +166,15 @@ class AppContainer(
                 stuckChanges,
                 PullSync(
                     r.gateway,
-                    PullApplier(reminders, instances, notices, watchSources, noticePings::ping, { notifications.rescheduleAfterWrite(session.userId) }),
+                    PullApplier(
+                        reminders,
+                        instances,
+                        notices,
+                        watchSources,
+                        noticePings::ping,
+                        { notifications.rescheduleAfterWrite(session.userId) },
+                        { notifications.dismissAnsweredElsewhere(session.userId, it) },
+                    ),
                 ),
                 r.connectivity,
             )

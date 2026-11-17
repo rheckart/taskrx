@@ -104,7 +104,7 @@ class PullTest {
     fun `re-arms notifications after reminders are pulled, and survives that failing`() =
         withFixture(T0) {
             var calls = 0
-            val applier = PullApplier(container.reminders, container.instances, container.notices, container.watchSources) { calls++; error("native failure") }
+            val applier = PullApplier(container.reminders, container.instances, container.notices, container.watchSources, onScheduleApplied = { calls++; error("native failure") })
             applier.run(listOf(reminderDoc()))
             assertNotNull(container.reminders.get("r1"))
             assertEquals(1, calls)
@@ -117,7 +117,7 @@ class PullTest {
     fun `re-arms after another device's answer is pulled, so a dose answered there does not ring here`() =
         withFixture(T0) {
             var calls = 0
-            val applier = PullApplier(container.reminders, container.instances, container.notices, container.watchSources) { calls++ }
+            val applier = PullApplier(container.reminders, container.instances, container.notices, container.watchSources, onScheduleApplied = { calls++ })
             applier.run(listOf(reminderDoc()))
             assertEquals(1, calls)
 
@@ -127,6 +127,33 @@ class PullTest {
 
             applier.run(listOf(reminderDoc()), listOf(instanceDoc(status = "completed", extra = ""","completedAt":1780000050000.0""")))
             assertEquals(2, calls, "nothing new was written, so nothing to re-arm")
+        }
+
+    @Test
+    fun `hands the answers it wrote to the shade, and only those`() =
+        withFixture(T0) {
+            val handed = mutableListOf<List<String>>()
+            val applier =
+                PullApplier(container.reminders, container.instances, container.notices, container.watchSources, onAnswersApplied = { handed += it.map { row -> row.id } })
+            applier.run(listOf(reminderDoc()), listOf(instanceDoc()))
+            assertEquals(emptyList(), handed, "a pending row is not an answer")
+
+            val taken = instanceDoc(status = "completed", extra = ""","completedAt":1780000050000.0""", updatedAt = "1780000060000.0")
+            val skipped = instanceDoc(id = "ci2", localId = "i2", status = "skipped")
+            applier.run(listOf(reminderDoc()), listOf(taken, skipped))
+            assertEquals(listOf(listOf("i1", "i2")), handed)
+
+            applier.run(listOf(reminderDoc()), listOf(taken, skipped))
+            assertEquals(1, handed.size, "nothing new was written, so nothing to take down")
+        }
+
+    @Test
+    fun `a shade that fails to clear does not stop the pass`() =
+        withFixture(T0) {
+            val applier =
+                PullApplier(container.reminders, container.instances, container.notices, container.watchSources, onAnswersApplied = { error("shade broke") })
+            applier.run(listOf(reminderDoc()), listOf(instanceDoc(status = "skipped")))
+            assertEquals(InstanceStatus.Skipped, container.instances.get("i1")?.status)
         }
 
     @Test
