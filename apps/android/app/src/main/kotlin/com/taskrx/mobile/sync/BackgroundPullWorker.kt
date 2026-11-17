@@ -40,13 +40,19 @@ class BackgroundPullWorker(context: Context, params: WorkerParameters) : Corouti
                 BackgroundPull.NotReady, BackgroundPull.Failed -> Result.retry()
             }
 
-        /** One periodic pull, kept across launches (KEEP, so a launch never resets its clock). */
+        /**
+         * One periodic pull, updated in place on every launch. UPDATE keeps the job's clock (its
+         * enqueue time and period count), so a launch never postpones a pull, and it hands the job
+         * to the system again, which KEEP does not: a job WorkManager left out of the system's
+         * jobs (see `TaskRxApplication.workManagerConfiguration`) is repaired the next time the
+         * app starts, instead of waiting for some other job to finish.
+         */
         fun schedule(workManager: WorkManager) {
             val request =
                 PeriodicWorkRequestBuilder<BackgroundPullWorker>(15, TimeUnit.MINUTES)
                     .setConstraints(Constraints.Builder().setRequiredNetworkType(NetworkType.CONNECTED).build())
                     .build()
-            workManager.enqueueUniquePeriodicWork(NAME, ExistingPeriodicWorkPolicy.KEEP, request)
+            workManager.enqueueUniquePeriodicWork(NAME, ExistingPeriodicWorkPolicy.UPDATE, request)
         }
     }
 }

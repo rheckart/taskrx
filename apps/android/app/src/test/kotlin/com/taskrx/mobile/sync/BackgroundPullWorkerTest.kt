@@ -33,11 +33,17 @@ class BackgroundPullWorkerTest {
         val workManager = WorkManager.getInstance(context)
 
         BackgroundPullWorker.schedule(workManager)
+        val first = workManager.getWorkInfosForUniqueWork(BackgroundPullWorker.NAME).get().single()
         BackgroundPullWorker.schedule(workManager)
 
         val infos = workManager.getWorkInfosForUniqueWork(BackgroundPullWorker.NAME).get()
         assertEquals(1, infos.size)
         val info = infos.single()
+        // Each launch updates the job in place: that hands it to the system again if it was left
+        // out, and it keeps the job's clock, so launching often never postpones a pull.
+        assertEquals(first.id, info.id)
+        assertEquals(first.generation + 1, info.generation, "re-registered, not kept untouched")
+        assertEquals(first.nextScheduleTimeMillis, info.nextScheduleTimeMillis)
         assertEquals(WorkInfo.State.ENQUEUED, info.state)
         assertEquals(TimeUnit.MINUTES.toMillis(15), info.periodicityInfo!!.repeatIntervalMillis)
         assertEquals(NetworkType.CONNECTED, info.constraints.requiredNetworkType)
