@@ -1,0 +1,2404 @@
+{
+  "rule": "domain",
+  "about": "InstanceLifecycle (availableActions, actionTarget, allowsInstanceTransition), ReminderLifecycle (reminderPhase, canPause, reminderActions), pauses (isPausedAt, livePause, addPause, resumePause, the pauses field) and moves (moveRefusal, withOverride, withoutOverride, the overrides field)",
+  "generatedBy": "apps/android/core/src/test/kotlin/com/taskrx/core/golden (./gradlew :core:test -PupdateGoldens)",
+  "cases": [
+    {
+      "name": "availableActions: pending",
+      "input": {
+        "call": "availableActions",
+        "status": "pending"
+      },
+      "output": [
+        "complete",
+        "skip",
+        "snooze"
+      ]
+    },
+    {
+      "name": "availableActions: completed",
+      "input": {
+        "call": "availableActions",
+        "status": "completed"
+      },
+      "output": [
+        "change-completed-time",
+        "undo"
+      ]
+    },
+    {
+      "name": "availableActions: snoozed",
+      "input": {
+        "call": "availableActions",
+        "status": "snoozed"
+      },
+      "output": [
+        "complete",
+        "skip",
+        "snooze",
+        "undo"
+      ]
+    },
+    {
+      "name": "availableActions: skipped",
+      "input": {
+        "call": "availableActions",
+        "status": "skipped"
+      },
+      "output": [
+        "undo"
+      ]
+    },
+    {
+      "name": "availableActions: missed",
+      "input": {
+        "call": "availableActions",
+        "status": "missed"
+      },
+      "output": [
+        "complete",
+        "skip",
+        "snooze"
+      ]
+    },
+    {
+      "name": "actionTarget: complete from pending",
+      "input": {
+        "call": "actionTarget",
+        "action": "complete",
+        "from": "pending"
+      },
+      "output": "completed"
+    },
+    {
+      "name": "actionTarget: complete from completed",
+      "input": {
+        "call": "actionTarget",
+        "action": "complete",
+        "from": "completed"
+      },
+      "output": null
+    },
+    {
+      "name": "actionTarget: complete from snoozed",
+      "input": {
+        "call": "actionTarget",
+        "action": "complete",
+        "from": "snoozed"
+      },
+      "output": "completed"
+    },
+    {
+      "name": "actionTarget: complete from skipped",
+      "input": {
+        "call": "actionTarget",
+        "action": "complete",
+        "from": "skipped"
+      },
+      "output": null
+    },
+    {
+      "name": "actionTarget: complete from missed",
+      "input": {
+        "call": "actionTarget",
+        "action": "complete",
+        "from": "missed"
+      },
+      "output": "completed"
+    },
+    {
+      "name": "actionTarget: skip from pending",
+      "input": {
+        "call": "actionTarget",
+        "action": "skip",
+        "from": "pending"
+      },
+      "output": "skipped"
+    },
+    {
+      "name": "actionTarget: skip from completed",
+      "input": {
+        "call": "actionTarget",
+        "action": "skip",
+        "from": "completed"
+      },
+      "output": null
+    },
+    {
+      "name": "actionTarget: skip from snoozed",
+      "input": {
+        "call": "actionTarget",
+        "action": "skip",
+        "from": "snoozed"
+      },
+      "output": "skipped"
+    },
+    {
+      "name": "actionTarget: skip from skipped",
+      "input": {
+        "call": "actionTarget",
+        "action": "skip",
+        "from": "skipped"
+      },
+      "output": null
+    },
+    {
+      "name": "actionTarget: skip from missed",
+      "input": {
+        "call": "actionTarget",
+        "action": "skip",
+        "from": "missed"
+      },
+      "output": "skipped"
+    },
+    {
+      "name": "actionTarget: snooze from pending",
+      "input": {
+        "call": "actionTarget",
+        "action": "snooze",
+        "from": "pending"
+      },
+      "output": "snoozed"
+    },
+    {
+      "name": "actionTarget: snooze from completed",
+      "input": {
+        "call": "actionTarget",
+        "action": "snooze",
+        "from": "completed"
+      },
+      "output": null
+    },
+    {
+      "name": "actionTarget: snooze from snoozed",
+      "input": {
+        "call": "actionTarget",
+        "action": "snooze",
+        "from": "snoozed"
+      },
+      "output": "snoozed"
+    },
+    {
+      "name": "actionTarget: snooze from skipped",
+      "input": {
+        "call": "actionTarget",
+        "action": "snooze",
+        "from": "skipped"
+      },
+      "output": null
+    },
+    {
+      "name": "actionTarget: snooze from missed",
+      "input": {
+        "call": "actionTarget",
+        "action": "snooze",
+        "from": "missed"
+      },
+      "output": "snoozed"
+    },
+    {
+      "name": "actionTarget: undo from pending",
+      "input": {
+        "call": "actionTarget",
+        "action": "undo",
+        "from": "pending"
+      },
+      "output": null
+    },
+    {
+      "name": "actionTarget: undo from completed",
+      "input": {
+        "call": "actionTarget",
+        "action": "undo",
+        "from": "completed"
+      },
+      "output": "pending"
+    },
+    {
+      "name": "actionTarget: undo from snoozed",
+      "input": {
+        "call": "actionTarget",
+        "action": "undo",
+        "from": "snoozed"
+      },
+      "output": "pending"
+    },
+    {
+      "name": "actionTarget: undo from skipped",
+      "input": {
+        "call": "actionTarget",
+        "action": "undo",
+        "from": "skipped"
+      },
+      "output": "pending"
+    },
+    {
+      "name": "actionTarget: undo from missed",
+      "input": {
+        "call": "actionTarget",
+        "action": "undo",
+        "from": "missed"
+      },
+      "output": null
+    },
+    {
+      "name": "actionTarget: change-completed-time from pending",
+      "input": {
+        "call": "actionTarget",
+        "action": "change-completed-time",
+        "from": "pending"
+      },
+      "output": null
+    },
+    {
+      "name": "actionTarget: change-completed-time from completed",
+      "input": {
+        "call": "actionTarget",
+        "action": "change-completed-time",
+        "from": "completed"
+      },
+      "output": "completed"
+    },
+    {
+      "name": "actionTarget: change-completed-time from snoozed",
+      "input": {
+        "call": "actionTarget",
+        "action": "change-completed-time",
+        "from": "snoozed"
+      },
+      "output": null
+    },
+    {
+      "name": "actionTarget: change-completed-time from skipped",
+      "input": {
+        "call": "actionTarget",
+        "action": "change-completed-time",
+        "from": "skipped"
+      },
+      "output": null
+    },
+    {
+      "name": "actionTarget: change-completed-time from missed",
+      "input": {
+        "call": "actionTarget",
+        "action": "change-completed-time",
+        "from": "missed"
+      },
+      "output": null
+    },
+    {
+      "name": "allowsInstanceTransition: nothing to pending",
+      "input": {
+        "call": "allowsInstanceTransition",
+        "from": null,
+        "to": "pending"
+      },
+      "output": true
+    },
+    {
+      "name": "allowsInstanceTransition: nothing to completed",
+      "input": {
+        "call": "allowsInstanceTransition",
+        "from": null,
+        "to": "completed"
+      },
+      "output": true
+    },
+    {
+      "name": "allowsInstanceTransition: nothing to snoozed",
+      "input": {
+        "call": "allowsInstanceTransition",
+        "from": null,
+        "to": "snoozed"
+      },
+      "output": true
+    },
+    {
+      "name": "allowsInstanceTransition: nothing to skipped",
+      "input": {
+        "call": "allowsInstanceTransition",
+        "from": null,
+        "to": "skipped"
+      },
+      "output": true
+    },
+    {
+      "name": "allowsInstanceTransition: nothing to missed",
+      "input": {
+        "call": "allowsInstanceTransition",
+        "from": null,
+        "to": "missed"
+      },
+      "output": true
+    },
+    {
+      "name": "allowsInstanceTransition: pending to pending",
+      "input": {
+        "call": "allowsInstanceTransition",
+        "from": "pending",
+        "to": "pending"
+      },
+      "output": true
+    },
+    {
+      "name": "allowsInstanceTransition: pending to completed",
+      "input": {
+        "call": "allowsInstanceTransition",
+        "from": "pending",
+        "to": "completed"
+      },
+      "output": true
+    },
+    {
+      "name": "allowsInstanceTransition: pending to snoozed",
+      "input": {
+        "call": "allowsInstanceTransition",
+        "from": "pending",
+        "to": "snoozed"
+      },
+      "output": true
+    },
+    {
+      "name": "allowsInstanceTransition: pending to skipped",
+      "input": {
+        "call": "allowsInstanceTransition",
+        "from": "pending",
+        "to": "skipped"
+      },
+      "output": true
+    },
+    {
+      "name": "allowsInstanceTransition: pending to missed",
+      "input": {
+        "call": "allowsInstanceTransition",
+        "from": "pending",
+        "to": "missed"
+      },
+      "output": true
+    },
+    {
+      "name": "allowsInstanceTransition: completed to pending",
+      "input": {
+        "call": "allowsInstanceTransition",
+        "from": "completed",
+        "to": "pending"
+      },
+      "output": true
+    },
+    {
+      "name": "allowsInstanceTransition: completed to completed",
+      "input": {
+        "call": "allowsInstanceTransition",
+        "from": "completed",
+        "to": "completed"
+      },
+      "output": true
+    },
+    {
+      "name": "allowsInstanceTransition: completed to snoozed",
+      "input": {
+        "call": "allowsInstanceTransition",
+        "from": "completed",
+        "to": "snoozed"
+      },
+      "output": false
+    },
+    {
+      "name": "allowsInstanceTransition: completed to skipped",
+      "input": {
+        "call": "allowsInstanceTransition",
+        "from": "completed",
+        "to": "skipped"
+      },
+      "output": false
+    },
+    {
+      "name": "allowsInstanceTransition: completed to missed",
+      "input": {
+        "call": "allowsInstanceTransition",
+        "from": "completed",
+        "to": "missed"
+      },
+      "output": false
+    },
+    {
+      "name": "allowsInstanceTransition: snoozed to pending",
+      "input": {
+        "call": "allowsInstanceTransition",
+        "from": "snoozed",
+        "to": "pending"
+      },
+      "output": true
+    },
+    {
+      "name": "allowsInstanceTransition: snoozed to completed",
+      "input": {
+        "call": "allowsInstanceTransition",
+        "from": "snoozed",
+        "to": "completed"
+      },
+      "output": true
+    },
+    {
+      "name": "allowsInstanceTransition: snoozed to snoozed",
+      "input": {
+        "call": "allowsInstanceTransition",
+        "from": "snoozed",
+        "to": "snoozed"
+      },
+      "output": true
+    },
+    {
+      "name": "allowsInstanceTransition: snoozed to skipped",
+      "input": {
+        "call": "allowsInstanceTransition",
+        "from": "snoozed",
+        "to": "skipped"
+      },
+      "output": true
+    },
+    {
+      "name": "allowsInstanceTransition: snoozed to missed",
+      "input": {
+        "call": "allowsInstanceTransition",
+        "from": "snoozed",
+        "to": "missed"
+      },
+      "output": true
+    },
+    {
+      "name": "allowsInstanceTransition: skipped to pending",
+      "input": {
+        "call": "allowsInstanceTransition",
+        "from": "skipped",
+        "to": "pending"
+      },
+      "output": true
+    },
+    {
+      "name": "allowsInstanceTransition: skipped to completed",
+      "input": {
+        "call": "allowsInstanceTransition",
+        "from": "skipped",
+        "to": "completed"
+      },
+      "output": true
+    },
+    {
+      "name": "allowsInstanceTransition: skipped to snoozed",
+      "input": {
+        "call": "allowsInstanceTransition",
+        "from": "skipped",
+        "to": "snoozed"
+      },
+      "output": true
+    },
+    {
+      "name": "allowsInstanceTransition: skipped to skipped",
+      "input": {
+        "call": "allowsInstanceTransition",
+        "from": "skipped",
+        "to": "skipped"
+      },
+      "output": true
+    },
+    {
+      "name": "allowsInstanceTransition: skipped to missed",
+      "input": {
+        "call": "allowsInstanceTransition",
+        "from": "skipped",
+        "to": "missed"
+      },
+      "output": false
+    },
+    {
+      "name": "allowsInstanceTransition: missed to pending",
+      "input": {
+        "call": "allowsInstanceTransition",
+        "from": "missed",
+        "to": "pending"
+      },
+      "output": false
+    },
+    {
+      "name": "allowsInstanceTransition: missed to completed",
+      "input": {
+        "call": "allowsInstanceTransition",
+        "from": "missed",
+        "to": "completed"
+      },
+      "output": true
+    },
+    {
+      "name": "allowsInstanceTransition: missed to snoozed",
+      "input": {
+        "call": "allowsInstanceTransition",
+        "from": "missed",
+        "to": "snoozed"
+      },
+      "output": true
+    },
+    {
+      "name": "allowsInstanceTransition: missed to skipped",
+      "input": {
+        "call": "allowsInstanceTransition",
+        "from": "missed",
+        "to": "skipped"
+      },
+      "output": true
+    },
+    {
+      "name": "allowsInstanceTransition: missed to missed",
+      "input": {
+        "call": "allowsInstanceTransition",
+        "from": "missed",
+        "to": "missed"
+      },
+      "output": true
+    },
+    {
+      "name": "reminder: an active daily medication",
+      "input": {
+        "call": "reminderLifecycle",
+        "reminder": {
+          "_id": "j97doc3f1c0a52",
+          "localId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11",
+          "userId": "user_golden",
+          "kind": "medication",
+          "name": "Atorvastatin",
+          "dosage": "20mg",
+          "schedule": {
+            "type": "daily",
+            "times": [
+              "09:00"
+            ]
+          },
+          "priority": "normal",
+          "tags": [],
+          "caregiverIds": [],
+          "active": true,
+          "createdAt": 1700000000000,
+          "updatedAt": 1700000000000
+        },
+        "now": 1783353600000
+      },
+      "output": {
+        "phase": {
+          "phase": "active"
+        },
+        "canPause": true,
+        "actions": [
+          "pause",
+          "stop"
+        ]
+      }
+    },
+    {
+      "name": "reminder: a stopped medication",
+      "input": {
+        "call": "reminderLifecycle",
+        "reminder": {
+          "_id": "j97doc3f1c0a52",
+          "localId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11",
+          "userId": "user_golden",
+          "kind": "medication",
+          "name": "Atorvastatin",
+          "dosage": "20mg",
+          "schedule": {
+            "type": "daily",
+            "times": [
+              "09:00"
+            ]
+          },
+          "priority": "normal",
+          "tags": [],
+          "caregiverIds": [],
+          "active": false,
+          "createdAt": 1700000000000,
+          "updatedAt": 1700000000000
+        },
+        "now": 1783353600000
+      },
+      "output": {
+        "phase": {
+          "phase": "stopped"
+        },
+        "canPause": false,
+        "actions": []
+      }
+    },
+    {
+      "name": "reminder: a stopped medication that was paused",
+      "input": {
+        "call": "reminderLifecycle",
+        "reminder": {
+          "_id": "j97doc3f1c0a52",
+          "localId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11",
+          "userId": "user_golden",
+          "kind": "medication",
+          "name": "Atorvastatin",
+          "dosage": "20mg",
+          "schedule": {
+            "type": "daily",
+            "times": [
+              "09:00"
+            ]
+          },
+          "priority": "normal",
+          "tags": [],
+          "caregiverIds": [],
+          "active": false,
+          "createdAt": 1700000000000,
+          "updatedAt": 1700000000000,
+          "pauses": [
+            {
+              "from": 1783350000000
+            }
+          ]
+        },
+        "now": 1783353600000
+      },
+      "output": {
+        "phase": {
+          "phase": "stopped"
+        },
+        "canPause": false,
+        "actions": []
+      }
+    },
+    {
+      "name": "reminder: a medication paused until tomorrow",
+      "input": {
+        "call": "reminderLifecycle",
+        "reminder": {
+          "_id": "j97doc3f1c0a52",
+          "localId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11",
+          "userId": "user_golden",
+          "kind": "medication",
+          "name": "Atorvastatin",
+          "dosage": "20mg",
+          "schedule": {
+            "type": "daily",
+            "times": [
+              "09:00"
+            ]
+          },
+          "priority": "normal",
+          "tags": [],
+          "caregiverIds": [],
+          "active": true,
+          "createdAt": 1700000000000,
+          "updatedAt": 1700000000000,
+          "pauses": [
+            {
+              "from": 1783350000000,
+              "until": 1783440000000
+            }
+          ]
+        },
+        "now": 1783353600000
+      },
+      "output": {
+        "phase": {
+          "phase": "paused",
+          "from": 1783350000000,
+          "until": 1783440000000
+        },
+        "canPause": true,
+        "actions": [
+          "resume",
+          "stop"
+        ]
+      }
+    },
+    {
+      "name": "reminder: a medication paused with no end",
+      "input": {
+        "call": "reminderLifecycle",
+        "reminder": {
+          "_id": "j97doc3f1c0a52",
+          "localId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11",
+          "userId": "user_golden",
+          "kind": "medication",
+          "name": "Atorvastatin",
+          "dosage": "20mg",
+          "schedule": {
+            "type": "daily",
+            "times": [
+              "09:00"
+            ]
+          },
+          "priority": "normal",
+          "tags": [],
+          "caregiverIds": [],
+          "active": true,
+          "createdAt": 1700000000000,
+          "updatedAt": 1700000000000,
+          "pauses": [
+            {
+              "from": 1783350000000
+            }
+          ]
+        },
+        "now": 1783353600000
+      },
+      "output": {
+        "phase": {
+          "phase": "paused",
+          "from": 1783350000000,
+          "until": null
+        },
+        "canPause": true,
+        "actions": [
+          "resume",
+          "stop"
+        ]
+      }
+    },
+    {
+      "name": "reminder: a medication with a pause that starts tomorrow",
+      "input": {
+        "call": "reminderLifecycle",
+        "reminder": {
+          "_id": "j97doc3f1c0a52",
+          "localId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11",
+          "userId": "user_golden",
+          "kind": "medication",
+          "name": "Atorvastatin",
+          "dosage": "20mg",
+          "schedule": {
+            "type": "daily",
+            "times": [
+              "09:00"
+            ]
+          },
+          "priority": "normal",
+          "tags": [],
+          "caregiverIds": [],
+          "active": true,
+          "createdAt": 1700000000000,
+          "updatedAt": 1700000000000,
+          "pauses": [
+            {
+              "from": 1783440000000,
+              "until": 1783526400000
+            }
+          ]
+        },
+        "now": 1783353600000
+      },
+      "output": {
+        "phase": {
+          "phase": "paused",
+          "from": 1783440000000,
+          "until": 1783526400000
+        },
+        "canPause": true,
+        "actions": [
+          "resume",
+          "stop"
+        ]
+      }
+    },
+    {
+      "name": "reminder: a medication whose pause has ended",
+      "input": {
+        "call": "reminderLifecycle",
+        "reminder": {
+          "_id": "j97doc3f1c0a52",
+          "localId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11",
+          "userId": "user_golden",
+          "kind": "medication",
+          "name": "Atorvastatin",
+          "dosage": "20mg",
+          "schedule": {
+            "type": "daily",
+            "times": [
+              "09:00"
+            ]
+          },
+          "priority": "normal",
+          "tags": [],
+          "caregiverIds": [],
+          "active": true,
+          "createdAt": 1700000000000,
+          "updatedAt": 1700000000000,
+          "pauses": [
+            {
+              "from": 1783180800000,
+              "until": 1783267200000
+            }
+          ]
+        },
+        "now": 1783353600000
+      },
+      "output": {
+        "phase": {
+          "phase": "active"
+        },
+        "canPause": true,
+        "actions": [
+          "pause",
+          "stop"
+        ]
+      }
+    },
+    {
+      "name": "reminder: a pause that ends exactly now has ended",
+      "input": {
+        "call": "reminderLifecycle",
+        "reminder": {
+          "_id": "j97doc3f1c0a52",
+          "localId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11",
+          "userId": "user_golden",
+          "kind": "medication",
+          "name": "Atorvastatin",
+          "dosage": "20mg",
+          "schedule": {
+            "type": "daily",
+            "times": [
+              "09:00"
+            ]
+          },
+          "priority": "normal",
+          "tags": [],
+          "caregiverIds": [],
+          "active": true,
+          "createdAt": 1700000000000,
+          "updatedAt": 1700000000000,
+          "pauses": [
+            {
+              "from": 1783350000000,
+              "until": 1783353600000
+            }
+          ]
+        },
+        "now": 1783353600000
+      },
+      "output": {
+        "phase": {
+          "phase": "active"
+        },
+        "canPause": true,
+        "actions": [
+          "pause",
+          "stop"
+        ]
+      }
+    },
+    {
+      "name": "reminder: an as-needed medication",
+      "input": {
+        "call": "reminderLifecycle",
+        "reminder": {
+          "_id": "j97doc3f1c0a52",
+          "localId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11",
+          "userId": "user_golden",
+          "kind": "medication",
+          "name": "Atorvastatin",
+          "dosage": "20mg",
+          "schedule": {
+            "type": "asNeeded",
+            "minGapMinutes": 240
+          },
+          "priority": "normal",
+          "tags": [],
+          "caregiverIds": [],
+          "active": true,
+          "createdAt": 1700000000000,
+          "updatedAt": 1700000000000
+        },
+        "now": 1783353600000
+      },
+      "output": {
+        "phase": {
+          "phase": "active"
+        },
+        "canPause": false,
+        "actions": [
+          "stop"
+        ]
+      }
+    },
+    {
+      "name": "reminder: a task",
+      "input": {
+        "call": "reminderLifecycle",
+        "reminder": {
+          "_id": "j97doc3f1c0a52",
+          "localId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11",
+          "userId": "user_golden",
+          "kind": "task",
+          "name": "Water the plants",
+          "schedule": {
+            "type": "daily",
+            "times": [
+              "18:00"
+            ]
+          },
+          "priority": "normal",
+          "tags": [],
+          "caregiverIds": [],
+          "active": true,
+          "createdAt": 1700000000000,
+          "updatedAt": 1700000000000
+        },
+        "now": 1783353600000
+      },
+      "output": {
+        "phase": {
+          "phase": "active"
+        },
+        "canPause": false,
+        "actions": [
+          "stop"
+        ]
+      }
+    },
+    {
+      "name": "reminder: a paused task",
+      "input": {
+        "call": "reminderLifecycle",
+        "reminder": {
+          "_id": "j97doc3f1c0a52",
+          "localId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11",
+          "userId": "user_golden",
+          "kind": "task",
+          "name": "Water the plants",
+          "schedule": {
+            "type": "daily",
+            "times": [
+              "18:00"
+            ]
+          },
+          "priority": "normal",
+          "tags": [],
+          "caregiverIds": [],
+          "active": true,
+          "createdAt": 1700000000000,
+          "updatedAt": 1700000000000,
+          "pauses": [
+            {
+              "from": 1783350000000
+            }
+          ]
+        },
+        "now": 1783353600000
+      },
+      "output": {
+        "phase": {
+          "phase": "paused",
+          "from": 1783350000000,
+          "until": null
+        },
+        "canPause": false,
+        "actions": [
+          "resume",
+          "stop"
+        ]
+      }
+    },
+    {
+      "name": "isPausedAt: before a closed pause",
+      "input": {
+        "call": "isPausedAt",
+        "pauses": [
+          {
+            "from": 1783353600000,
+            "until": 1783360800000
+          }
+        ],
+        "instant": 1783353599999
+      },
+      "output": false
+    },
+    {
+      "name": "isPausedAt: at a closed pause's start",
+      "input": {
+        "call": "isPausedAt",
+        "pauses": [
+          {
+            "from": 1783353600000,
+            "until": 1783360800000
+          }
+        ],
+        "instant": 1783353600000
+      },
+      "output": true
+    },
+    {
+      "name": "isPausedAt: inside a closed pause",
+      "input": {
+        "call": "isPausedAt",
+        "pauses": [
+          {
+            "from": 1783353600000,
+            "until": 1783360800000
+          }
+        ],
+        "instant": 1783357200000
+      },
+      "output": true
+    },
+    {
+      "name": "isPausedAt: at a closed pause's end",
+      "input": {
+        "call": "isPausedAt",
+        "pauses": [
+          {
+            "from": 1783353600000,
+            "until": 1783360800000
+          }
+        ],
+        "instant": 1783360800000
+      },
+      "output": false
+    },
+    {
+      "name": "isPausedAt: long after an open pause starts",
+      "input": {
+        "call": "isPausedAt",
+        "pauses": [
+          {
+            "from": 1783353600000
+          }
+        ],
+        "instant": 1786953600000
+      },
+      "output": true
+    },
+    {
+      "name": "isPausedAt: with no pauses",
+      "input": {
+        "call": "isPausedAt",
+        "pauses": [],
+        "instant": 1783353600000
+      },
+      "output": false
+    },
+    {
+      "name": "livePause: a closed pause running now",
+      "input": {
+        "call": "livePause",
+        "pauses": [
+          {
+            "from": 1783353600000,
+            "until": 1783360800000
+          }
+        ],
+        "now": 1783357200000
+      },
+      "output": {
+        "from": 1783353600000,
+        "until": 1783360800000
+      }
+    },
+    {
+      "name": "livePause: a closed pause not started yet",
+      "input": {
+        "call": "livePause",
+        "pauses": [
+          {
+            "from": 1783353600000,
+            "until": 1783360800000
+          }
+        ],
+        "now": 1783350000000
+      },
+      "output": {
+        "from": 1783353600000,
+        "until": 1783360800000
+      }
+    },
+    {
+      "name": "livePause: a closed pause already over",
+      "input": {
+        "call": "livePause",
+        "pauses": [
+          {
+            "from": 1783353600000,
+            "until": 1783360800000
+          }
+        ],
+        "now": 1783364400000
+      },
+      "output": null
+    },
+    {
+      "name": "livePause: an open pause",
+      "input": {
+        "call": "livePause",
+        "pauses": [
+          {
+            "from": 1783353600000
+          }
+        ],
+        "now": 1783371600000
+      },
+      "output": {
+        "from": 1783353600000
+      }
+    },
+    {
+      "name": "livePause: the first live of two",
+      "input": {
+        "call": "livePause",
+        "pauses": [
+          {
+            "from": 1783180800000,
+            "until": 1783267200000
+          },
+          {
+            "from": 1783357200000
+          }
+        ],
+        "now": 1783353600000
+      },
+      "output": {
+        "from": 1783357200000
+      }
+    },
+    {
+      "name": "livePause: none",
+      "input": {
+        "call": "livePause",
+        "pauses": [],
+        "now": 1783353600000
+      },
+      "output": null
+    },
+    {
+      "name": "addPause: a first pause, open",
+      "input": {
+        "call": "addPause",
+        "pauses": [],
+        "from": 1783353600000,
+        "until": null,
+        "now": 1783353600000
+      },
+      "output": [
+        {
+          "from": 1783353600000
+        }
+      ]
+    },
+    {
+      "name": "addPause: a pause starting later, closed",
+      "input": {
+        "call": "addPause",
+        "pauses": [],
+        "from": 1783357200000,
+        "until": 1783371600000,
+        "now": 1783353600000
+      },
+      "output": [
+        {
+          "from": 1783357200000,
+          "until": 1783371600000
+        }
+      ]
+    },
+    {
+      "name": "addPause: after an old pause has ended",
+      "input": {
+        "call": "addPause",
+        "pauses": [
+          {
+            "from": 1783180800000,
+            "until": 1783267200000
+          }
+        ],
+        "from": 1783353600000,
+        "until": null,
+        "now": 1783353600000
+      },
+      "output": [
+        {
+          "from": 1783180800000,
+          "until": 1783267200000
+        },
+        {
+          "from": 1783353600000
+        }
+      ]
+    },
+    {
+      "name": "addPause: while already paused is refused",
+      "input": {
+        "call": "addPause",
+        "pauses": [
+          {
+            "from": 1783353600000
+          }
+        ],
+        "from": 1783357200000,
+        "until": null,
+        "now": 1783357200000
+      },
+      "output": {
+        "refused": "invalidArgument"
+      }
+    },
+    {
+      "name": "addPause: while a pause is scheduled is refused",
+      "input": {
+        "call": "addPause",
+        "pauses": [
+          {
+            "from": 1783357200000,
+            "until": 1783360800000
+          }
+        ],
+        "from": 1783364400000,
+        "until": null,
+        "now": 1783353600000
+      },
+      "output": {
+        "refused": "invalidArgument"
+      }
+    },
+    {
+      "name": "addPause: an end before its start is refused",
+      "input": {
+        "call": "addPause",
+        "pauses": [],
+        "from": 1783353600000,
+        "until": 1783353600000,
+        "now": 1783353600000
+      },
+      "output": {
+        "refused": "invalidArgument"
+      }
+    },
+    {
+      "name": "resumePause: ends a running open pause now",
+      "input": {
+        "call": "resumePause",
+        "pauses": [
+          {
+            "from": 1783353600000
+          }
+        ],
+        "now": 1783357200000
+      },
+      "output": [
+        {
+          "from": 1783353600000,
+          "until": 1783357200000
+        }
+      ]
+    },
+    {
+      "name": "resumePause: ends a running closed pause now",
+      "input": {
+        "call": "resumePause",
+        "pauses": [
+          {
+            "from": 1783353600000,
+            "until": 1783360800000
+          }
+        ],
+        "now": 1783357200000
+      },
+      "output": [
+        {
+          "from": 1783353600000,
+          "until": 1783357200000
+        }
+      ]
+    },
+    {
+      "name": "resumePause: cancels a pause that has not started",
+      "input": {
+        "call": "resumePause",
+        "pauses": [
+          {
+            "from": 1783353600000,
+            "until": 1783360800000
+          }
+        ],
+        "now": 1783350000000
+      },
+      "output": []
+    },
+    {
+      "name": "resumePause: cancels a pause starting exactly now",
+      "input": {
+        "call": "resumePause",
+        "pauses": [
+          {
+            "from": 1783353600000,
+            "until": 1783360800000
+          }
+        ],
+        "now": 1783353600000
+      },
+      "output": []
+    },
+    {
+      "name": "resumePause: with nothing live changes nothing",
+      "input": {
+        "call": "resumePause",
+        "pauses": [
+          {
+            "from": 1783180800000,
+            "until": 1783267200000
+          }
+        ],
+        "now": 1783353600000
+      },
+      "output": [
+        {
+          "from": 1783180800000,
+          "until": 1783267200000
+        }
+      ]
+    },
+    {
+      "name": "resumePause: keeps the history before the live one",
+      "input": {
+        "call": "resumePause",
+        "pauses": [
+          {
+            "from": 1783180800000,
+            "until": 1783267200000
+          },
+          {
+            "from": 1783357200000
+          }
+        ],
+        "now": 1783360800000
+      },
+      "output": [
+        {
+          "from": 1783180800000,
+          "until": 1783267200000
+        },
+        {
+          "from": 1783357200000,
+          "until": 1783360800000
+        }
+      ]
+    },
+    {
+      "name": "pauses field: a closed and an open window",
+      "input": {
+        "call": "pausesFromJson",
+        "pauses": [
+          {
+            "from": 1,
+            "until": 2
+          },
+          {
+            "from": 3
+          }
+        ]
+      },
+      "output": [
+        {
+          "from": 1,
+          "until": 2
+        },
+        {
+          "from": 3
+        }
+      ]
+    },
+    {
+      "name": "pauses field: float64 spellings",
+      "input": {
+        "call": "pausesFromJson",
+        "pauses": [
+          {
+            "from": 1.0,
+            "until": 2.0
+          }
+        ]
+      },
+      "output": [
+        {
+          "from": 1,
+          "until": 2
+        }
+      ]
+    },
+    {
+      "name": "pauses field: an end equal to the start drops every window",
+      "input": {
+        "call": "pausesFromJson",
+        "pauses": [
+          {
+            "from": 1,
+            "until": 5
+          },
+          {
+            "from": 2,
+            "until": 2
+          }
+        ]
+      },
+      "output": []
+    },
+    {
+      "name": "pauses field: a fractional moment drops every window",
+      "input": {
+        "call": "pausesFromJson",
+        "pauses": [
+          {
+            "from": 1.5
+          }
+        ]
+      },
+      "output": []
+    },
+    {
+      "name": "pauses field: a string moment drops every window",
+      "input": {
+        "call": "pausesFromJson",
+        "pauses": [
+          {
+            "from": "1"
+          }
+        ]
+      },
+      "output": []
+    },
+    {
+      "name": "pauses field: a null end drops every window",
+      "input": {
+        "call": "pausesFromJson",
+        "pauses": [
+          {
+            "from": 1,
+            "until": null
+          }
+        ]
+      },
+      "output": []
+    },
+    {
+      "name": "pauses field: a window that is not an object",
+      "input": {
+        "call": "pausesFromJson",
+        "pauses": [
+          1
+        ]
+      },
+      "output": []
+    },
+    {
+      "name": "pauses field: missing from",
+      "input": {
+        "call": "pausesFromJson",
+        "pauses": [
+          {
+            "until": 2
+          }
+        ]
+      },
+      "output": []
+    },
+    {
+      "name": "pauses field: not an array",
+      "input": {
+        "call": "pausesFromJson",
+        "pauses": {
+          "from": 1
+        }
+      },
+      "output": []
+    },
+    {
+      "name": "pauses field: absent",
+      "input": {
+        "call": "pausesFromJson",
+        "pauses": null
+      },
+      "output": []
+    },
+    {
+      "name": "moveRefusal: a task moved later today",
+      "input": {
+        "call": "moveRefusal",
+        "reminder": {
+          "_id": "j97doc3f1c0a52",
+          "localId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11",
+          "userId": "user_golden",
+          "kind": "task",
+          "name": "Water the plants",
+          "schedule": {
+            "type": "daily",
+            "times": [
+              "11:00"
+            ]
+          },
+          "priority": "normal",
+          "tags": [],
+          "caregiverIds": [],
+          "active": true,
+          "createdAt": 1700000000000,
+          "updatedAt": 1700000000000
+        },
+        "from": 1783350000000,
+        "to": 1783364400000,
+        "now": 1783353600000,
+        "instances": []
+      },
+      "output": null
+    },
+    {
+      "name": "moveRefusal: a medication is not a task",
+      "input": {
+        "call": "moveRefusal",
+        "reminder": {
+          "_id": "j97doc3f1c0a52",
+          "localId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11",
+          "userId": "user_golden",
+          "kind": "medication",
+          "name": "Atorvastatin",
+          "dosage": "20mg",
+          "schedule": {
+            "type": "daily",
+            "times": [
+              "11:00"
+            ]
+          },
+          "priority": "normal",
+          "tags": [],
+          "caregiverIds": [],
+          "active": true,
+          "createdAt": 1700000000000,
+          "updatedAt": 1700000000000
+        },
+        "from": 1783350000000,
+        "to": 1783364400000,
+        "now": 1783353600000,
+        "instances": []
+      },
+      "output": "notATask"
+    },
+    {
+      "name": "moveRefusal: a source past its Grace Period is too late",
+      "input": {
+        "call": "moveRefusal",
+        "reminder": {
+          "_id": "j97doc3f1c0a52",
+          "localId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11",
+          "userId": "user_golden",
+          "kind": "task",
+          "name": "Water the plants",
+          "schedule": {
+            "type": "daily",
+            "times": [
+              "11:00"
+            ]
+          },
+          "priority": "normal",
+          "tags": [],
+          "caregiverIds": [],
+          "active": true,
+          "createdAt": 1700000000000,
+          "updatedAt": 1700000000000
+        },
+        "from": 1783346399999,
+        "to": 1783357200000,
+        "now": 1783353600000,
+        "instances": []
+      },
+      "output": "tooLate"
+    },
+    {
+      "name": "moveRefusal: a source exactly at its Grace Period may still move",
+      "input": {
+        "call": "moveRefusal",
+        "reminder": {
+          "_id": "j97doc3f1c0a52",
+          "localId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11",
+          "userId": "user_golden",
+          "kind": "task",
+          "name": "Water the plants",
+          "schedule": {
+            "type": "daily",
+            "times": [
+              "11:00"
+            ]
+          },
+          "priority": "normal",
+          "tags": [],
+          "caregiverIds": [],
+          "active": true,
+          "createdAt": 1700000000000,
+          "updatedAt": 1700000000000
+        },
+        "from": 1783346400000,
+        "to": 1783357200000,
+        "now": 1783353600000,
+        "instances": []
+      },
+      "output": null
+    },
+    {
+      "name": "moveRefusal: an answered source",
+      "input": {
+        "call": "moveRefusal",
+        "reminder": {
+          "_id": "j97doc3f1c0a52",
+          "localId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11",
+          "userId": "user_golden",
+          "kind": "task",
+          "name": "Water the plants",
+          "schedule": {
+            "type": "daily",
+            "times": [
+              "11:00"
+            ]
+          },
+          "priority": "normal",
+          "tags": [],
+          "caregiverIds": [],
+          "active": true,
+          "createdAt": 1700000000000,
+          "updatedAt": 1700000000000
+        },
+        "from": 1783350000000,
+        "to": 1783357200000,
+        "now": 1783353600000,
+        "instances": [
+          {
+            "_id": "j57inst1783350000000",
+            "localId": "inst-1783350000000-completed",
+            "userId": "user_golden",
+            "reminderId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11",
+            "reminderKind": "task",
+            "scheduledTime": 1783350000000,
+            "status": "completed",
+            "completedAt": 1783350000000,
+            "snoozeCount": 0,
+            "createdAt": 1783350000000,
+            "updatedAt": 1783350000000
+          }
+        ]
+      },
+      "output": "alreadyAnswered"
+    },
+    {
+      "name": "moveRefusal: a skipped source",
+      "input": {
+        "call": "moveRefusal",
+        "reminder": {
+          "_id": "j97doc3f1c0a52",
+          "localId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11",
+          "userId": "user_golden",
+          "kind": "task",
+          "name": "Water the plants",
+          "schedule": {
+            "type": "daily",
+            "times": [
+              "11:00"
+            ]
+          },
+          "priority": "normal",
+          "tags": [],
+          "caregiverIds": [],
+          "active": true,
+          "createdAt": 1700000000000,
+          "updatedAt": 1700000000000
+        },
+        "from": 1783350000000,
+        "to": 1783357200000,
+        "now": 1783353600000,
+        "instances": [
+          {
+            "_id": "j57inst1783350000000",
+            "localId": "inst-1783350000000-skipped",
+            "userId": "user_golden",
+            "reminderId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11",
+            "reminderKind": "task",
+            "scheduledTime": 1783350000000,
+            "status": "skipped",
+            "snoozeCount": 0,
+            "createdAt": 1783350000000,
+            "updatedAt": 1783350000000
+          }
+        ]
+      },
+      "output": "alreadyAnswered"
+    },
+    {
+      "name": "moveRefusal: a missed source",
+      "input": {
+        "call": "moveRefusal",
+        "reminder": {
+          "_id": "j97doc3f1c0a52",
+          "localId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11",
+          "userId": "user_golden",
+          "kind": "task",
+          "name": "Water the plants",
+          "schedule": {
+            "type": "daily",
+            "times": [
+              "11:00"
+            ]
+          },
+          "priority": "normal",
+          "tags": [],
+          "caregiverIds": [],
+          "active": true,
+          "createdAt": 1700000000000,
+          "updatedAt": 1700000000000
+        },
+        "from": 1783350000000,
+        "to": 1783357200000,
+        "now": 1783353600000,
+        "instances": [
+          {
+            "_id": "j57inst1783350000000",
+            "localId": "inst-1783350000000-missed",
+            "userId": "user_golden",
+            "reminderId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11",
+            "reminderKind": "task",
+            "scheduledTime": 1783350000000,
+            "status": "missed",
+            "snoozeCount": 0,
+            "createdAt": 1783350000000,
+            "updatedAt": 1783350000000
+          }
+        ]
+      },
+      "output": "alreadyAnswered"
+    },
+    {
+      "name": "moveRefusal: a pending source is in progress",
+      "input": {
+        "call": "moveRefusal",
+        "reminder": {
+          "_id": "j97doc3f1c0a52",
+          "localId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11",
+          "userId": "user_golden",
+          "kind": "task",
+          "name": "Water the plants",
+          "schedule": {
+            "type": "daily",
+            "times": [
+              "11:00"
+            ]
+          },
+          "priority": "normal",
+          "tags": [],
+          "caregiverIds": [],
+          "active": true,
+          "createdAt": 1700000000000,
+          "updatedAt": 1700000000000
+        },
+        "from": 1783350000000,
+        "to": 1783357200000,
+        "now": 1783353600000,
+        "instances": [
+          {
+            "_id": "j57inst1783350000000",
+            "localId": "inst-1783350000000-pending",
+            "userId": "user_golden",
+            "reminderId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11",
+            "reminderKind": "task",
+            "scheduledTime": 1783350000000,
+            "status": "pending",
+            "snoozeCount": 0,
+            "createdAt": 1783350000000,
+            "updatedAt": 1783350000000
+          }
+        ]
+      },
+      "output": "inProgress"
+    },
+    {
+      "name": "moveRefusal: a snoozed source is in progress",
+      "input": {
+        "call": "moveRefusal",
+        "reminder": {
+          "_id": "j97doc3f1c0a52",
+          "localId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11",
+          "userId": "user_golden",
+          "kind": "task",
+          "name": "Water the plants",
+          "schedule": {
+            "type": "daily",
+            "times": [
+              "11:00"
+            ]
+          },
+          "priority": "normal",
+          "tags": [],
+          "caregiverIds": [],
+          "active": true,
+          "createdAt": 1700000000000,
+          "updatedAt": 1700000000000
+        },
+        "from": 1783350000000,
+        "to": 1783357200000,
+        "now": 1783353600000,
+        "instances": [
+          {
+            "_id": "j57inst1783350000000",
+            "localId": "inst-1783350000000-snoozed",
+            "userId": "user_golden",
+            "reminderId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11",
+            "reminderKind": "task",
+            "scheduledTime": 1783350000000,
+            "status": "snoozed",
+            "snoozedUntil": 1783353600000,
+            "snoozeCount": 0,
+            "createdAt": 1783350000000,
+            "updatedAt": 1783350000000
+          }
+        ]
+      },
+      "output": "inProgress"
+    },
+    {
+      "name": "moveRefusal: an answer beats an open row",
+      "input": {
+        "call": "moveRefusal",
+        "reminder": {
+          "_id": "j97doc3f1c0a52",
+          "localId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11",
+          "userId": "user_golden",
+          "kind": "task",
+          "name": "Water the plants",
+          "schedule": {
+            "type": "daily",
+            "times": [
+              "11:00"
+            ]
+          },
+          "priority": "normal",
+          "tags": [],
+          "caregiverIds": [],
+          "active": true,
+          "createdAt": 1700000000000,
+          "updatedAt": 1700000000000
+        },
+        "from": 1783350000000,
+        "to": 1783357200000,
+        "now": 1783353600000,
+        "instances": [
+          {
+            "_id": "j57inst1783350000000",
+            "localId": "a",
+            "userId": "user_golden",
+            "reminderId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11",
+            "reminderKind": "task",
+            "scheduledTime": 1783350000000,
+            "status": "pending",
+            "snoozeCount": 0,
+            "createdAt": 1783350000000,
+            "updatedAt": 1783350000000
+          },
+          {
+            "_id": "j57inst1783350000000",
+            "localId": "b",
+            "userId": "user_golden",
+            "reminderId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11",
+            "reminderKind": "task",
+            "scheduledTime": 1783350000000,
+            "status": "skipped",
+            "snoozeCount": 0,
+            "createdAt": 1783350000000,
+            "updatedAt": 1783350000000
+          }
+        ]
+      },
+      "output": "alreadyAnswered"
+    },
+    {
+      "name": "moveRefusal: a target not after the source",
+      "input": {
+        "call": "moveRefusal",
+        "reminder": {
+          "_id": "j97doc3f1c0a52",
+          "localId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11",
+          "userId": "user_golden",
+          "kind": "task",
+          "name": "Water the plants",
+          "schedule": {
+            "type": "daily",
+            "times": [
+              "11:00"
+            ]
+          },
+          "priority": "normal",
+          "tags": [],
+          "caregiverIds": [],
+          "active": true,
+          "createdAt": 1700000000000,
+          "updatedAt": 1700000000000
+        },
+        "from": 1783350000000,
+        "to": 1783350000000,
+        "now": 1783353600000,
+        "instances": []
+      },
+      "output": "notAfter"
+    },
+    {
+      "name": "moveRefusal: a target already past",
+      "input": {
+        "call": "moveRefusal",
+        "reminder": {
+          "_id": "j97doc3f1c0a52",
+          "localId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11",
+          "userId": "user_golden",
+          "kind": "task",
+          "name": "Water the plants",
+          "schedule": {
+            "type": "daily",
+            "times": [
+              "11:00"
+            ]
+          },
+          "priority": "normal",
+          "tags": [],
+          "caregiverIds": [],
+          "active": true,
+          "createdAt": 1700000000000,
+          "updatedAt": 1700000000000
+        },
+        "from": 1783350000000,
+        "to": 1783353600000,
+        "now": 1783353600000,
+        "instances": []
+      },
+      "output": "inThePast"
+    },
+    {
+      "name": "moveRefusal: a target inside a pause",
+      "input": {
+        "call": "moveRefusal",
+        "reminder": {
+          "_id": "j97doc3f1c0a52",
+          "localId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11",
+          "userId": "user_golden",
+          "kind": "task",
+          "name": "Water the plants",
+          "schedule": {
+            "type": "daily",
+            "times": [
+              "11:00"
+            ]
+          },
+          "priority": "normal",
+          "tags": [],
+          "caregiverIds": [],
+          "active": true,
+          "createdAt": 1700000000000,
+          "updatedAt": 1700000000000,
+          "pauses": [
+            {
+              "from": 1783360800000,
+              "until": 1783368000000
+            }
+          ]
+        },
+        "from": 1783350000000,
+        "to": 1783364400000,
+        "now": 1783353600000,
+        "instances": []
+      },
+      "output": "inAPause"
+    },
+    {
+      "name": "moveRefusal: a source inside a pause",
+      "input": {
+        "call": "moveRefusal",
+        "reminder": {
+          "_id": "j97doc3f1c0a52",
+          "localId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11",
+          "userId": "user_golden",
+          "kind": "task",
+          "name": "Water the plants",
+          "schedule": {
+            "type": "daily",
+            "times": [
+              "11:00"
+            ]
+          },
+          "priority": "normal",
+          "tags": [],
+          "caregiverIds": [],
+          "active": true,
+          "createdAt": 1700000000000,
+          "updatedAt": 1700000000000,
+          "pauses": [
+            {
+              "from": 1783346400000,
+              "until": 1783353600000
+            }
+          ]
+        },
+        "from": 1783350000000,
+        "to": 1783364400000,
+        "now": 1783353600000,
+        "instances": []
+      },
+      "output": "inAPause"
+    },
+    {
+      "name": "moveRefusal: a future source moved further",
+      "input": {
+        "call": "moveRefusal",
+        "reminder": {
+          "_id": "j97doc3f1c0a52",
+          "localId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11",
+          "userId": "user_golden",
+          "kind": "task",
+          "name": "Water the plants",
+          "schedule": {
+            "type": "daily",
+            "times": [
+              "11:00"
+            ]
+          },
+          "priority": "normal",
+          "tags": [],
+          "caregiverIds": [],
+          "active": true,
+          "createdAt": 1700000000000,
+          "updatedAt": 1700000000000
+        },
+        "from": 1783429200000,
+        "to": 1783461600000,
+        "now": 1783353600000,
+        "instances": []
+      },
+      "output": null
+    },
+    {
+      "name": "withOverride: adds and sorts by source",
+      "input": {
+        "call": "withOverride",
+        "overrides": [
+          {
+            "from": 10,
+            "to": 20
+          },
+          {
+            "from": 30,
+            "to": 40,
+            "noticeId": "notice-1"
+          }
+        ],
+        "override": {
+          "from": 5,
+          "to": 8
+        }
+      },
+      "output": [
+        {
+          "from": 5,
+          "to": 8
+        },
+        {
+          "from": 10,
+          "to": 20
+        },
+        {
+          "from": 30,
+          "to": 40,
+          "noticeId": "notice-1"
+        }
+      ]
+    },
+    {
+      "name": "withOverride: replaces a move of the same moment",
+      "input": {
+        "call": "withOverride",
+        "overrides": [
+          {
+            "from": 10,
+            "to": 20
+          },
+          {
+            "from": 30,
+            "to": 40,
+            "noticeId": "notice-1"
+          }
+        ],
+        "override": {
+          "from": 30,
+          "to": 45
+        }
+      },
+      "output": [
+        {
+          "from": 10,
+          "to": 20
+        },
+        {
+          "from": 30,
+          "to": 45
+        }
+      ]
+    },
+    {
+      "name": "withOverride: keeps a notice id",
+      "input": {
+        "call": "withOverride",
+        "overrides": [
+          {
+            "from": 10,
+            "to": 20
+          },
+          {
+            "from": 30,
+            "to": 40,
+            "noticeId": "notice-1"
+          }
+        ],
+        "override": {
+          "from": 50,
+          "to": 60,
+          "noticeId": "notice-2"
+        }
+      },
+      "output": [
+        {
+          "from": 10,
+          "to": 20
+        },
+        {
+          "from": 30,
+          "to": 40,
+          "noticeId": "notice-1"
+        },
+        {
+          "from": 50,
+          "to": 60,
+          "noticeId": "notice-2"
+        }
+      ]
+    },
+    {
+      "name": "withoutOverride: from 30",
+      "input": {
+        "call": "withoutOverride",
+        "overrides": [
+          {
+            "from": 10,
+            "to": 20
+          },
+          {
+            "from": 30,
+            "to": 40,
+            "noticeId": "notice-1"
+          }
+        ],
+        "from": 30
+      },
+      "output": [
+        {
+          "from": 10,
+          "to": 20
+        }
+      ]
+    },
+    {
+      "name": "withoutOverride: from 99",
+      "input": {
+        "call": "withoutOverride",
+        "overrides": [
+          {
+            "from": 10,
+            "to": 20
+          },
+          {
+            "from": 30,
+            "to": 40,
+            "noticeId": "notice-1"
+          }
+        ],
+        "from": 99
+      },
+      "output": [
+        {
+          "from": 10,
+          "to": 20
+        },
+        {
+          "from": 30,
+          "to": 40,
+          "noticeId": "notice-1"
+        }
+      ]
+    },
+    {
+      "name": "overrides field: moves with and without a notice",
+      "input": {
+        "call": "overridesFromJson",
+        "overrides": [
+          {
+            "from": 1,
+            "to": 2
+          },
+          {
+            "from": 3,
+            "to": 4,
+            "noticeId": "n"
+          }
+        ]
+      },
+      "output": [
+        {
+          "from": 1,
+          "to": 2
+        },
+        {
+          "from": 3,
+          "to": 4,
+          "noticeId": "n"
+        }
+      ]
+    },
+    {
+      "name": "overrides field: float64 spellings",
+      "input": {
+        "call": "overridesFromJson",
+        "overrides": [
+          {
+            "from": 1.0,
+            "to": 2.0
+          }
+        ]
+      },
+      "output": [
+        {
+          "from": 1,
+          "to": 2
+        }
+      ]
+    },
+    {
+      "name": "overrides field: a move backwards drops every move",
+      "input": {
+        "call": "overridesFromJson",
+        "overrides": [
+          {
+            "from": 1,
+            "to": 2
+          },
+          {
+            "from": 5,
+            "to": 4
+          }
+        ]
+      },
+      "output": []
+    },
+    {
+      "name": "overrides field: a move to the same moment drops every move",
+      "input": {
+        "call": "overridesFromJson",
+        "overrides": [
+          {
+            "from": 5,
+            "to": 5
+          }
+        ]
+      },
+      "output": []
+    },
+    {
+      "name": "overrides field: a numeric notice id drops every move",
+      "input": {
+        "call": "overridesFromJson",
+        "overrides": [
+          {
+            "from": 1,
+            "to": 2,
+            "noticeId": 7
+          }
+        ]
+      },
+      "output": []
+    },
+    {
+      "name": "overrides field: a null notice id drops every move",
+      "input": {
+        "call": "overridesFromJson",
+        "overrides": [
+          {
+            "from": 1,
+            "to": 2,
+            "noticeId": null
+          }
+        ]
+      },
+      "output": []
+    },
+    {
+      "name": "overrides field: missing to",
+      "input": {
+        "call": "overridesFromJson",
+        "overrides": [
+          {
+            "from": 1
+          }
+        ]
+      },
+      "output": []
+    },
+    {
+      "name": "overrides field: missing from",
+      "input": {
+        "call": "overridesFromJson",
+        "overrides": [
+          {
+            "to": 2
+          }
+        ]
+      },
+      "output": []
+    },
+    {
+      "name": "overrides field: an object for a notice id drops every move",
+      "input": {
+        "call": "overridesFromJson",
+        "overrides": [
+          {
+            "from": 1,
+            "to": 2,
+            "noticeId": {}
+          }
+        ]
+      },
+      "output": []
+    },
+    {
+      "name": "overrides field: a move that is not an object",
+      "input": {
+        "call": "overridesFromJson",
+        "overrides": [
+          "1-2"
+        ]
+      },
+      "output": []
+    },
+    {
+      "name": "overrides field: not an array",
+      "input": {
+        "call": "overridesFromJson",
+        "overrides": {
+          "from": 1,
+          "to": 2
+        }
+      },
+      "output": []
+    },
+    {
+      "name": "overrides field: absent",
+      "input": {
+        "call": "overridesFromJson",
+        "overrides": null
+      },
+      "output": []
+    }
+  ]
+}

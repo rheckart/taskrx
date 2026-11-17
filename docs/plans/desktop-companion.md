@@ -43,7 +43,8 @@ because two writers are unsafe until one Occurrence can only ever be one Instanc
   - [x] The mechanism, inside `:core:test` (fails on a changed, missing or orphaned file)
   - [x] `instance-id` (Rust reproduces all 8 with `Uuid::new_v5`), `schedule` (92 cases,
         four zones), `server-schedule` (the writer moved into `:core` as `scheduleToServer`)
-  - [ ] `domain` lifecycles, pause and stop
+  - [x] `domain` lifecycles, pause and stop (137 cases; the transition message is not part of
+        the contract)
   - [ ] `tasks`, `timeline`, `batch`, `asneeded`, `snooze`, `undo`, `sweep`
   - [ ] `backlog`, `catchup`, `refill` projection
   - [ ] `parser`, `notices`
