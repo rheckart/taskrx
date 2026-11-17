@@ -17,7 +17,8 @@ import kotlinx.coroutines.launch
 /**
  * Posts the notification for a medication alarm that has just fired, unless the server says the
  * moment was already answered on another device (ADR 0016). The check is bounded by [FireGate]
- * and fails open, so the dose posts whenever there is no positive answer in time.
+ * and fails open, so the dose posts whenever there is no positive answer in time, and a
+ * [DoseBackup] posts it if the process dies before either.
  */
 class AlarmReceiver : BroadcastReceiver() {
     override fun onReceive(context: Context, intent: Intent) {
@@ -28,29 +29,48 @@ class AlarmReceiver : BroadcastReceiver() {
     /**
      * The receiver's work, returned as a Job so a test can wait on it. [check] is the server's
      * answer; the app graph is built inside it, off the main thread, where a slow or failing
-     * build is the gate's to bound.
+     * build is the gate's to bound. [backup] is armed before the check starts, so a process that
+     * dies during it still posts the dose.
      */
     internal fun handle(
         context: Context,
         intent: Intent,
         timeoutMs: Long = FireGate.TIMEOUT_MS,
+        backup: DoseBackup = DoseBackup(context),
+        now: () -> Long = System::currentTimeMillis,
         check: suspend (NotificationSpec) -> FireCheck = { spec -> serverCheck(context, spec) },
-    ): Job =
-        scope.launch {
-            val spec = SpecCodec.decode(intent.getStringExtra(EXTRA_SPEC))
-            if (spec == null) {
-                Log.w(TAG, "fired with no readable payload; nothing to post")
-                return@launch
-            }
-            // "You can take another dose" is no Occurrence: nothing on the server can answer it.
-            val outcome = if (spec.asNeeded) null else FireGate.decide(timeoutMs) { check(spec) }
+    ): Job {
+        val spec = SpecCodec.decode(intent.getStringExtra(EXTRA_SPEC))
+        if (spec == null) {
+            Log.w(TAG, "fired with no readable payload; nothing to post")
+            return Job().apply { complete() }
+        }
+        if (intent.action == ACTION_BACKUP) {
+            Log.w(TAG, "${spec.id}: the fire-time check never finished; posting from the backup")
+            return scope.launch { NotificationPoster.post(context, spec) }
+        }
+        // "You can take another dose" is no Occurrence: nothing on the server can answer it.
+        if (spec.asNeeded) return scope.launch { NotificationPoster.post(context, spec) }
+
+        // Here, before anything that can kill the process: the binder call is quick, and from now
+        // on a dose that is neither posted nor answered is posted by the backup.
+        try {
+            backup.arm(spec, now())
+        } catch (e: Exception) {
+            Log.w(TAG, "${spec.id}: could not arm the backup; checking anyway", e)
+        }
+        return scope.launch {
+            val outcome = FireGate.decide(timeoutMs) { check(spec) }
             if (outcome == FireCheck.Answered) {
                 Log.i(TAG, "${spec.id}: answered on another device; not posting")
-                return@launch
+            } else {
+                Log.i(TAG, "${spec.id}: fire-time check $outcome; posting")
+                NotificationPoster.post(context, spec)
             }
-            if (outcome != null) Log.i(TAG, "${spec.id}: fire-time check $outcome; posting")
-            NotificationPoster.post(context, spec)
+            // Not in a finally: a post that throws leaves the backup to try again.
+            backup.cancel(spec)
         }
+    }
 
     private suspend fun serverCheck(context: Context, spec: NotificationSpec): FireCheck {
         val app = context.applicationContext as? TaskRxApplication ?: return FireCheck.LocalOnly
@@ -60,6 +80,7 @@ class AlarmReceiver : BroadcastReceiver() {
 
     companion object {
         const val ACTION_FIRE = "com.taskrx.mobile.action.ALARM_FIRE"
+        const val ACTION_BACKUP = "com.taskrx.mobile.action.ALARM_BACKUP"
         const val EXTRA_SPEC = "spec"
         private const val TAG = "alarm"
 

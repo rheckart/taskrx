@@ -56,6 +56,13 @@ runs. So, on the phone:
   does today. A Companion may suppress an alarm only by a positive answer from the server,
   never by being unreachable.
 
+Failing open covers a check that is slow or wrong, not one that never finishes: the check
+builds the app graph and loads the Convex library, and a process that dies on the way (a native
+crash, a low-memory kill) would take the dose with it. So before the check starts, the receiver
+arms a backup alarm holding the same dose, 15 seconds out on the same primitive, and cancels it
+once the dose has posted or the server has answered. The backup posts without asking. The price
+is a dose up to 15 seconds late in the rare case it is needed.
+
 The check runs on the Medication Tier's path, which ADR 0003's device evidence covers. It
 needs its own harness cases: offline posts, answered elsewhere stays silent, and a slow
 server posts within the timeout. Server push (FCM) was rejected for now: it brings a

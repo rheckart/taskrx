@@ -61,7 +61,7 @@ because two writers are unsafe until one Occurrence can only ever be one Instanc
   - [x] A periodic WorkManager pull (15 min) that reschedules (`BackgroundPullWorker`; a pulled
         answer now re-arms too. Unverified on a device until a build carrying it is installed)
   - [ ] A fire-time check before a dose posts: short timeout, fails open. Written and
-        unit-tested (`FireTimeCheck`, `FireGate`, 4 s). Unverified until the new harness
+        unit-tested (`FireTimeCheck`, `FireGate`, 4 s; `DoseBackup` posts if the process dies mid-check). Unverified until the new harness
         cases run on a device (offline posts, answered elsewhere stays silent, a slow server
         posts); they need a debug build, which cannot be installed over the release build
 - [ ] Desktop, `apps/desktop`:
