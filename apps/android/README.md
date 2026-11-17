@@ -115,3 +115,12 @@ Real sign-in needs a person with an inbox for the emailed code; it is checked by
 (`app/src/debug`); `scripts/verify-harness-guards.sh` checks the script reports a missing device as
 one. The harness works signed out against the local user. Its signed-in cases (8, 9, 12, 13) report
 `SIGNED OUT` until someone signs in on the device. Start from a fresh install or `pm clear`.
+
+Cases 15-18 (`--fire`) check the fire-time check (ADR 0016): answered elsewhere stays quiet,
+offline posts, a slow server posts at the bound, and a process killed mid-check is posted by the
+backup alarm. They run on an **emulator only** (they refuse anything else) against the local
+deployment: start `npx convex dev` in `packages/convex`, build with
+`./gradlew :app:assembleDebug -PCONVEX_URL=http://127.0.0.1:3210` (the property wins over
+`local.properties` for that build only), install, and sign in. A development Clerk instance
+accepts `+clerk_test` addresses with the code `424242`; when sign-ups are restricted, create the
+user through Clerk's Backend API first.

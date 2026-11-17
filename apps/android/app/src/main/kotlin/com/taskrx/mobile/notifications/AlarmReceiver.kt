@@ -3,6 +3,7 @@ package com.taskrx.mobile.notifications
 import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
+import android.os.SystemClock
 import android.util.Log
 import com.taskrx.core.notifications.NotificationSpec
 import com.taskrx.mobile.TaskRxApplication
@@ -60,11 +61,14 @@ class AlarmReceiver : BroadcastReceiver() {
             Log.w(TAG, "${spec.id}: could not arm the backup; checking anyway", e)
         }
         return scope.launch {
+            val started = SystemClock.elapsedRealtime()
             val outcome = FireGate.decide(timeoutMs) { check(spec) }
+            // The time it took, so real doses show whether the bound holds.
+            val took = SystemClock.elapsedRealtime() - started
             if (outcome == FireCheck.Answered) {
-                Log.i(TAG, "${spec.id}: answered on another device; not posting")
+                Log.i(TAG, "${spec.id}: answered on another device in $took ms; not posting")
             } else {
-                Log.i(TAG, "${spec.id}: fire-time check $outcome; posting")
+                Log.i(TAG, "${spec.id}: fire-time check $outcome in $took ms; posting")
                 NotificationPoster.post(context, spec)
             }
             // Not in a finally: a post that throws leaves the backup to try again.

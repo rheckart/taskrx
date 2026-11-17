@@ -8,13 +8,15 @@ plugins {
 }
 
 // CONVEX_URL and CLERK_PUBLISHABLE_KEY come from local.properties (gitignored), or the
-// environment for CI. Empty means "not configured": the app then runs local-only.
+// environment for CI. Empty means "not configured": the app then runs local-only. A Gradle
+// property (`-PCONVEX_URL=...`) wins over both, for one build only: the device harness points a
+// debug build at a local backend without touching local.properties, which release.sh reads.
 val localProperties =
     Properties().apply {
         rootProject.file("local.properties").takeIf { it.exists() }?.inputStream()?.use(::load)
     }
 
-fun setting(key: String): String = localProperties.getProperty(key) ?: System.getenv(key) ?: ""
+fun setting(key: String): String = (findProperty(key) as String?) ?: localProperties.getProperty(key) ?: System.getenv(key) ?: ""
 
 android {
     namespace = "com.taskrx.mobile"

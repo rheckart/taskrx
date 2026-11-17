@@ -2303,6 +2303,277 @@ case14_notice_intake() {
     "a notice was stored, the same one was a duplicate, and a different one was stored. first=[${first}] second=[${second}] third=[${third}]"
 }
 
+# ── Cases 15-18: the check at fire time (ADR 0016) ─────────────────────────
+#
+# Before a dose posts, AlarmReceiver asks the server whether the moment was
+# already answered on another device, and stays quiet only on that positive
+# answer. Each case seeds a real dose, lets it reach the server, then KILLS the
+# app before changing anything: a live process would pull the change and cancel
+# the alarm, and the check would never run. The alarm then starts a cold
+# process, which is the path being measured.
+#
+# Every case asserts the reason the receiver LOGGED, not only the shade:
+# "posted" is what a broken check also produces, and "quiet" is what a pull
+# that cancelled the alarm also produces.
+#
+#   15  answered elsewhere: the server holds the answer -> quiet, "answered"
+#   16  offline: radios off and the backend port unreachable -> posts, and the
+#       logged reason is TimedOut or Failed (never NotOnServer or SignedOut,
+#       which would mean the check never reached the network question)
+#   17  slow server: the answer exists but every reply is delayed past the
+#       bound -> posts, TimedOut. Run 15 first: it is this case's control.
+#   18  backup: as 17, and the process is killed with SIGKILL inside the bound
+#       -> the backup alarm posts the dose ~15 s later, without asking
+#
+# EMULATOR ONLY. They reconfigure `adb reverse`, toggle airplane mode, and 18
+# needs `adb root`. They refuse to run on anything that is not an emulator.
+# The backend is the local deployment (`npx convex dev` from packages/convex,
+# on port 3210, reached through `adb reverse`), and the CLI writes the answer
+# as the signed-in user with `--identity`, built from `auth-status` and the
+# issuer the build's publishable key encodes.
+
+FIRE_LEAD_MS="${FIRE_LEAD_MS:-75000}"
+FIRE_GRACE_S="${FIRE_GRACE_S:-45}"
+FIRE_SLOW_DELAY_S="${FIRE_SLOW_DELAY_S:-10}"
+FIRE_PROXY_PORT="${FIRE_PROXY_PORT:-3299}"
+FIRE_BACKUP_WAIT_S="${FIRE_BACKUP_WAIT_S:-40}"
+# The first sync after a fresh install or update can take over a minute.
+FIRE_SYNC_BUDGET_S="${FIRE_SYNC_BUDGET_S:-120}"
+
+FT_RID=""; FT_FIRE_AT=""; FT_SERVER_ID=""; FT_IDENTITY=""; FT_PROXY_PID=""
+
+require_emulator() {
+  local n="$1" name="$2"
+  if [[ "$(adb_shell getprop ro.kernel.qemu 2>/dev/null | tr -d '\r')" != 1 ]]; then
+    add_unevaluated "$n" "$name" not_emulator \
+      "NOT AN EMULATOR (refused, not run): this case reconfigures adb reverse, airplane mode and root, which must never happen on a person's phone. Set ANDROID_SERIAL to an emulator and re-run."
+    return 1
+  fi
+}
+
+# The identity the CLI writes as: the signed-in user, under the issuer the
+# build's publishable key names (`pk_test_<base64(frontend-api-domain$)>`).
+fire_identity() {
+  local uid key domain
+  uid="$(harness auth-status | grep -oE 'user_id=[^ ]+' | head -1 | cut -d= -f2)"
+  key="$(grep -oE '^CLERK_PUBLISHABLE_KEY=.*' "$repo_root/apps/android/local.properties" 2>/dev/null | cut -d= -f2)"
+  domain="$(printf '%s' "${key#pk_*_}" | base64 -d 2>/dev/null | tr -d '$')"
+  [[ -n "$uid" && -n "$domain" ]] || return 1
+  printf '{"subject":"%s","issuer":"https://%s","tokenIdentifier":"https://%s|%s"}' "$uid" "$domain" "$domain" "$uid"
+}
+
+fire_user_id() { printf '%s' "$FT_IDENTITY" | grep -oE '"subject":"[^"]+"' | cut -d'"' -f4; }
+
+fire_server_reminder_id() {
+  convex_cli run reminders:getByLocalId "{\"localId\":\"$1\"}" --identity "$FT_IDENTITY" 2>/dev/null \
+    | grep -oE '"_id": *"[^"]+"' | head -1 | cut -d'"' -f4
+}
+
+# Writes the moment as taken, as another device would.
+fire_answer_on_server() {
+  local now
+  now="$(date +%s%3N)"
+  convex_cli run reminderInstances:create \
+    "{\"localId\":\"harness-fire-$FT_RID\",\"userId\":\"$(fire_user_id)\",\"reminderId\":\"$FT_SERVER_ID\",\"scheduledTime\":$FT_FIRE_AT,\"status\":\"completed\",\"completedAt\":$now,\"createdAt\":$now,\"updatedAt\":$now}" \
+    --identity "$FT_IDENTITY" 2>/dev/null | grep -qE '"[a-z0-9]{20,}"'
+}
+
+# Seeds the dose, waits for it on the server, then leaves no process behind.
+# Returns non-zero after recording why the case could not be set up.
+fire_setup() {
+  local n="$1" name="$2" label="$3" seeded deadline
+  require_emulator "$n" "$name" || return 1
+  require_reachable "$n" "$name" || return 1
+  require_signed_in "$n" "$name" || return 1
+  adb_run reverse tcp:3210 tcp:3210 >/dev/null 2>&1
+  grant_exact
+  FT_IDENTITY="$(fire_identity)" || {
+    add_unevaluated "$n" "$name" setup_failed "SETUP FAILED (not a product failure): no identity for the CLI (auth-status user id, or the publishable key in local.properties, missing)."
+    return 1
+  }
+  harness cleanup-seeded x 0 "$HARNESS_SLOW_BUDGET_S" >/dev/null
+  seeded="$(harness_once seed-due-reminder "$label" "$FIRE_LEAD_MS" "$HARNESS_SLOW_BUDGET_S")"
+  FT_RID="$(printf '%s' "$seeded" | grep -oE 'reminder_id=[0-9a-fA-F-]+' | head -1 | cut -d= -f2)"
+  FT_FIRE_AT="$(printf '%s' "$seeded" | grep -oE 'fire_at=[0-9]+' | head -1 | cut -d= -f2)"
+  if [[ -z "$FT_RID" || -z "$FT_FIRE_AT" ]]; then
+    add_unevaluated "$n" "$name" setup_failed "SETUP FAILED (not a product failure): nothing was seeded or armed. The app answered: ${seeded:-<nothing>}"
+    return 1
+  fi
+  deadline=$(( $(date +%s) + FIRE_SYNC_BUDGET_S ))
+  FT_SERVER_ID=""
+  while (( $(date +%s) < deadline )); do
+    FT_SERVER_ID="$(fire_server_reminder_id "$FT_RID")"
+    [[ -n "$FT_SERVER_ID" ]] && break
+    sleep 3
+  done
+  if [[ -z "$FT_SERVER_ID" ]]; then
+    add_unevaluated "$n" "$name" setup_failed "SETUP FAILED (not a product failure): the seeded reminder $FT_RID never reached the local deployment within ${FIRE_SYNC_BUDGET_S}s, so the server could not hold an answer for it."
+    return 1
+  fi
+  adb_shell input keyevent KEYCODE_HOME >/dev/null 2>&1
+  sleep 2
+  adb_shell am kill "$PKG" >/dev/null 2>&1
+  sleep 2
+  if [[ -n "$(adb_shell pidof "$PKG" 2>/dev/null | tr -d '\r')" ]]; then
+    add_unevaluated "$n" "$name" setup_failed "SETUP FAILED (not a product failure): the app process survived am kill, so a live pull could cancel the alarm before the check ran."
+    return 1
+  fi
+  if (( $(date +%s) * 1000 + 15000 > FT_FIRE_AT )); then
+    add_unevaluated "$n" "$name" setup_failed "SETUP FAILED (not a product failure): setup took too long and the alarm is due in under 15 s. Raise FIRE_LEAD_MS."
+    return 1
+  fi
+  adb_run logcat -c >/dev/null 2>&1
+}
+
+# The receiver's line for this dose, once it has fired (empty if it never did).
+fire_wait_log() {
+  local pattern="$1" wait_s="$2" deadline line
+  deadline=$(( FT_FIRE_AT / 1000 + wait_s ))
+  while (( $(date +%s) < deadline )); do
+    line="$(adb_run logcat -d -s alarm 2>/dev/null | grep -F "$FT_RID-$FT_FIRE_AT" | grep -E "$pattern" | tail -1)"
+    [[ -n "$line" ]] && { printf '%s' "$line"; return 0; }
+    sleep 2
+  done
+  return 1
+}
+
+fire_posted() { notification_has "$1"; }
+
+fire_cleanup() {
+  [[ -n "$FT_PROXY_PID" ]] && kill "$FT_PROXY_PID" 2>/dev/null
+  FT_PROXY_PID=""
+  airplane_off
+  adb_run reverse tcp:3210 tcp:3210 >/dev/null 2>&1
+  harness cleanup-seeded x 0 "$HARNESS_SLOW_BUDGET_S" >/dev/null
+}
+
+# A TCP proxy that holds every reply from the backend for FIRE_SLOW_DELAY_S.
+fire_start_slow_proxy() {
+  python3 - "$FIRE_PROXY_PORT" "$FIRE_SLOW_DELAY_S" <<'PY' &
+import asyncio, sys
+port, delay = int(sys.argv[1]), float(sys.argv[2])
+async def pipe(src, dst, hold):
+    try:
+        while data := await src.read(65536):
+            if hold: await asyncio.sleep(delay)
+            dst.write(data); await dst.drain()
+    except Exception: pass
+    finally: dst.close()
+async def handle(r, w):
+    try: ur, uw = await asyncio.open_connection("127.0.0.1", 3210)
+    except Exception: w.close(); return
+    await asyncio.gather(pipe(r, uw, False), pipe(ur, w, True))
+async def main():
+    server = await asyncio.start_server(handle, "127.0.0.1", port)
+    async with server: await server.serve_forever()
+asyncio.run(main())
+PY
+  FT_PROXY_PID=$!
+  sleep 1
+  adb_run reverse tcp:3210 "tcp:$FIRE_PROXY_PORT" >/dev/null 2>&1
+}
+
+case15_fire_answered_elsewhere() {
+  local label="fire-answered-$(date +%s)" line
+  fire_setup 15 fire_answered_elsewhere "$label" || return
+  if ! fire_answer_on_server; then
+    fire_cleanup
+    add_unevaluated 15 fire_answered_elsewhere setup_failed "SETUP FAILED (not a product failure): the CLI could not write the answer for $FT_RID at $FT_FIRE_AT."
+    return
+  fi
+  line="$(fire_wait_log "answered on another device|fire-time check" "$FIRE_GRACE_S")"
+  local posted
+  posted="$(fire_posted "$label")"
+  fire_cleanup
+  if printf '%s' "$line" | grep -q "answered on another device" && [[ "$posted" -lt 1 ]]; then
+    add_result 15 fire_answered_elsewhere true "a cold process asked the server and stayed quiet: ${line##*: }"
+  elif [[ -z "$line" ]]; then
+    add_unevaluated 15 fire_answered_elsewhere unreachable "UNEVALUATED: the alarm left no receiver line within ${FIRE_GRACE_S}s of $FT_FIRE_AT, so the check was never seen to run (posted=$posted)."
+  else
+    add_result 15 fire_answered_elsewhere false "the server held the answer, yet: ${line} (posted=$posted)"
+  fi
+}
+
+case16_fire_offline_posts() {
+  local label="fire-offline-$(date +%s)" line
+  fire_setup 16 fire_offline_posts "$label" || return
+  airplane_on
+  adb_run reverse --remove tcp:3210 >/dev/null 2>&1
+  line="$(fire_wait_log "fire-time check|answered on another device" "$FIRE_GRACE_S")"
+  sleep 3
+  local posted
+  posted="$(fire_posted "$label")"
+  fire_cleanup
+  if printf '%s' "$line" | grep -qE "fire-time check (TimedOut|Failed)" && [[ "$posted" -ge 1 ]]; then
+    add_result 16 fire_offline_posts true "offline, the dose posted: ${line##*: }"
+  elif [[ -z "$line" ]]; then
+    add_unevaluated 16 fire_offline_posts unreachable "UNEVALUATED: no receiver line within ${FIRE_GRACE_S}s of $FT_FIRE_AT (posted=$posted)."
+  else
+    add_result 16 fire_offline_posts false "offline should time out or fail and post, got: ${line} (posted=$posted)"
+  fi
+}
+
+case17_fire_slow_server_posts() {
+  local label="fire-slow-$(date +%s)" line
+  fire_setup 17 fire_slow_server_posts "$label" || return
+  if ! fire_answer_on_server; then
+    fire_cleanup
+    add_unevaluated 17 fire_slow_server_posts setup_failed "SETUP FAILED (not a product failure): the CLI could not write the answer."
+    return
+  fi
+  fire_start_slow_proxy
+  line="$(fire_wait_log "fire-time check|answered on another device" "$FIRE_GRACE_S")"
+  sleep 3
+  local posted
+  posted="$(fire_posted "$label")"
+  fire_cleanup
+  if printf '%s' "$line" | grep -q "fire-time check TimedOut" && [[ "$posted" -ge 1 ]]; then
+    add_result 17 fire_slow_server_posts true "the server held an answer but replied ${FIRE_SLOW_DELAY_S}s late; the dose posted at the bound: ${line##*: }"
+  elif [[ -z "$line" ]]; then
+    add_unevaluated 17 fire_slow_server_posts unreachable "UNEVALUATED: no receiver line within ${FIRE_GRACE_S}s of $FT_FIRE_AT (posted=$posted)."
+  else
+    add_result 17 fire_slow_server_posts false "a slow server should time out and post, got: ${line} (posted=$posted)"
+  fi
+}
+
+case18_fire_backup_after_kill() {
+  local label="fire-backup-$(date +%s)" line pid="" deadline
+  adb_run root >/dev/null 2>&1
+  sleep 3
+  adb_run wait-for-device >/dev/null 2>&1
+  fire_setup 18 fire_backup_after_kill "$label" || return
+  fire_answer_on_server >/dev/null 2>&1
+  fire_start_slow_proxy
+  # The alarm starts the process; kill it while the check waits on the slow server.
+  deadline=$(( FT_FIRE_AT / 1000 + 20 ))
+  while (( $(date +%s) < deadline )); do
+    pid="$(adb_shell pidof "$PKG" 2>/dev/null | tr -d '\r')"
+    [[ -n "$pid" ]] && break
+    sleep 0.2
+  done
+  if [[ -z "$pid" ]]; then
+    fire_cleanup
+    add_unevaluated 18 fire_backup_after_kill unreachable "UNEVALUATED: the alarm never started a process to kill."
+    return
+  fi
+  sleep 1
+  adb_shell kill -9 "$pid" >/dev/null 2>&1
+  local decided
+  decided="$(adb_run logcat -d -s alarm 2>/dev/null | grep -F "$FT_RID-$FT_FIRE_AT" | grep -E "fire-time check|answered" | tail -1)"
+  line="$(fire_wait_log "posting from the backup" "$FIRE_BACKUP_WAIT_S")"
+  sleep 3
+  local posted
+  posted="$(fire_posted "$label")"
+  fire_cleanup
+  if [[ -n "$decided" ]]; then
+    add_unevaluated 18 fire_backup_after_kill setup_failed "SETUP FAILED (not a product failure): the check had already decided before the kill (${decided##*: }), so nothing was left for the backup to do."
+  elif [[ -n "$line" && "$posted" -ge 1 ]]; then
+    add_result 18 fire_backup_after_kill true "killed (SIGKILL) during the check; the backup posted the dose: ${line##*: }"
+  else
+    add_result 18 fire_backup_after_kill false "killed during the check, and the backup did not post within ${FIRE_BACKUP_WAIT_S}s of $FT_FIRE_AT (posted=$posted, log: ${line:-none})"
+  fi
+}
+
 run_case() {
   case "$1" in
     1) case1_killed_app ;;
@@ -2319,6 +2590,10 @@ run_case() {
     12) case12_fresh_install_asks_to_notify ;;
     13) case13_db_after_notification ;;
     14) case14_notice_intake ;;
+    15) case15_fire_answered_elsewhere ;;
+    16) case16_fire_offline_posts ;;
+    17) case17_fire_slow_server_posts ;;
+    18) case18_fire_backup_after_kill ;;
     *) echo "unknown case: $1" >&2; return 2 ;;
   esac
 }
@@ -2329,13 +2604,15 @@ notification-harness.sh — adb-driven notification test harness
 
   --list          List cases
   --purge         Hard-delete every row cases 8 and 9 seeded (Convex, then device)
-  --case N        Run case N (1..14)
+  --case N        Run case N (1..18)
   --all           Run cases 1-7, 10-11: the local-only delivery baseline
   --auth          Run cases 8-9: need a signed-in app and a reachable Convex.
                   Prefer `--case 8` then `--case 9` as separate invocations —
                   case 8 fires a notification, after which the app's SQLite
                   writes fail with "database is locked" and case 9 cannot set
                   itself up. See constraint 6a.
+  --fire          Run cases 15-18: the check at fire time. Signed in, EMULATOR
+                  only, against the local deployment (`npx convex dev`).
   --output PATH   JSON report destination
 
 `--all` deliberately skips 8, 9 and 12 rather than stopping at a number. Cases
@@ -2443,6 +2720,10 @@ list_cases() {
 12 fresh_install_asks_to_notify [signed in] POST_NOTIFICATIONS revoked and never asked: the app asks, and then DELIVERS
 13 db_after_notification    [signed in] Issue #23 repro: is SQLite still writable after a notification fired? Expected to FAIL until fixed
 14 notice_intake            [signed in] A notice is stored, the same one is a duplicate, a different one is stored
+15 fire_answered_elsewhere  [signed in, emulator] Answered on the server: the alarm asks at fire time and stays quiet
+16 fire_offline_posts       [signed in, emulator] Offline at fire time: the check fails open and the dose posts
+17 fire_slow_server_posts   [signed in, emulator] Answered but slow: the check times out and the dose posts
+18 fire_backup_after_kill   [signed in, emulator] Process killed mid-check: the backup alarm posts the dose
 EOF
 }
 
@@ -2473,6 +2754,7 @@ while [[ $# -gt 0 ]]; do
     --case) cases_to_run+=("$2"); shift 2 ;;
     --all) cases_to_run=(1 2 3 4 5 6 7 10 11); shift ;;
     --auth) cases_to_run+=(8 9); shift ;;
+    --fire) cases_to_run+=(15 16 17 18); shift ;;
     --output) output="$2"; shift 2 ;;
     *) echo "unknown arg: $1" >&2; usage; exit 2 ;;
   esac
