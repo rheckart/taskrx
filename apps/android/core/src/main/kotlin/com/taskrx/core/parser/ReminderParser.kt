@@ -130,10 +130,11 @@ private fun detectKind(first: String, tokens: List<String>): ReminderKind {
 
     if (isTaskVerb(first)) return ReminderKind.Task
 
-    // `as needed` is a way to take a medication: `ibuprofen as needed` is a drug, however short.
-    if (tokens.withIndex().any { (i, t) -> tryParseAsNeeded(t, tokens, i) != null }) return ReminderKind.Medication
-
     if (tokens.any(::isTaskSignal)) return ReminderKind.Task
+
+    // `as needed` is a way to take a medication: `ibuprofen as needed` is a drug, however short.
+    // A chore's own words (`laundry as needed`) have already said otherwise above.
+    if (tokens.withIndex().any { (i, t) -> tryParseAsNeeded(t, tokens, i) != null }) return ReminderKind.Medication
 
     val meaningful = tokens.count { !isNoiseWord(it) }
     return if (meaningful <= 3) ReminderKind.Task else ReminderKind.Medication

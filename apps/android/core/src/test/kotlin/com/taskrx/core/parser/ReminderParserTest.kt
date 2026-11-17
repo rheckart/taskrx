@@ -1054,6 +1054,13 @@ class ParseAsNeededTest {
     }
 
     @Test
+    fun `a chore named by its noun, done as needed, is still a chore`() {
+        val reminder = expectReminder(parse("laundry as needed"))
+        assertEquals(ReminderKind.Task, reminder.kind)
+        assertEquals(noneTimes(), reminder.schedule)
+    }
+
+    @Test
     fun `as directed is not as needed`() {
         val result = parse("aspirin 81mg daily as directed")
         assertEquals(dailyTimes(listOf("09:00")), expectReminder(result).schedule)
