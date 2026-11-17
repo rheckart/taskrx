@@ -1,6 +1,7 @@
 package com.taskrx.mobile.sync
 
 import android.content.Context
+import android.util.Log
 import androidx.work.Constraints
 import androidx.work.CoroutineWorker
 import androidx.work.ExistingPeriodicWorkPolicy
@@ -24,7 +25,9 @@ import java.util.concurrent.TimeUnit
 class BackgroundPullWorker(context: Context, params: WorkerParameters) : CoroutineWorker(context, params) {
     override suspend fun doWork(): Result {
         val sync = (applicationContext as TaskRxApplication).container.sync
-        return resultOf(sync?.pullOnce())
+        val outcome = sync?.pullOnce()
+        Log.i(NAME, "background pull: ${outcome ?: "local-only build"}")
+        return resultOf(outcome)
     }
 
     companion object {
