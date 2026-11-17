@@ -303,6 +303,35 @@ class SnoozeTest {
         }
 
     @Test
+    fun `a snooze is cancelled once its dose is answered on another device`() =
+        withNotifs(NOW) {
+            fx.reminder("med", ReminderKind.Medication, onceTimes(NOW + HOUR))
+            fx.reminder("other", ReminderKind.Medication, onceTimes(NOW + HOUR))
+            assertTrue(scheduler.snooze("med", NOW + HOUR, NOW + 2 * HOUR))
+            assertTrue(scheduler.snooze("other", NOW + HOUR, NOW + 2 * HOUR))
+
+            // What a pull writes when the desktop records the dose taken.
+            fx.container.instances.create(CreateReminderInstanceInput(USER, "med", ReminderKind.Medication, NOW + HOUR, InstanceStatus.Completed, NOW))
+            scheduler.rescheduleAll(USER)
+
+            val medSnooze = "snooze-${medicationNotificationId("med", NOW + HOUR)}-${NOW + 2 * HOUR}"
+            val otherSnooze = "snooze-${medicationNotificationId("other", NOW + HOUR)}-${NOW + 2 * HOUR}"
+            assertTrue(medSnooze !in alarmIds(), "a dose taken elsewhere must not ring again: ${alarmIds()}")
+            assertTrue(otherSnooze in alarmIds(), "another dose's snooze stays: ${alarmIds()}")
+        }
+
+    @Test
+    fun `a snooze stays while its moment is still open`() =
+        withNotifs(NOW) {
+            fx.reminder("med", ReminderKind.Medication, onceTimes(NOW + HOUR))
+            assertTrue(scheduler.snooze("med", NOW + HOUR, NOW + 2 * HOUR))
+            fx.container.instances.create(CreateReminderInstanceInput(USER, "med", ReminderKind.Medication, NOW + HOUR, InstanceStatus.Snoozed, null))
+            scheduler.rescheduleAll(USER)
+
+            assertTrue("snooze-${medicationNotificationId("med", NOW + HOUR)}-${NOW + 2 * HOUR}" in alarmIds(), "${alarmIds()}")
+        }
+
+    @Test
     fun `a snoozed dose takes the alarm clock`() =
         withNotifs(NOW) {
             fx.reminder("med", ReminderKind.Medication, onceTimes(NOW + HOUR))

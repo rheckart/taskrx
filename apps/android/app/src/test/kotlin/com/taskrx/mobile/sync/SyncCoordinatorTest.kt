@@ -13,11 +13,13 @@ import com.taskrx.mobile.data.CreateReminderInput
 import com.taskrx.mobile.withFixture
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertNotNull
 import kotlin.test.assertTrue
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitCancellation
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.flowOf
@@ -126,6 +128,26 @@ class SyncCoordinatorTest {
             assertEquals("mutation", gateway.calls.first().kind, "the push goes before the read")
             assertEquals(4, gateway.calls.count { it.kind == "query" })
             assertTrue(fx.container.syncQueue.pending().isEmpty())
+        }
+
+    @Test
+    fun `a background pull whose read never answers gives up in time`() =
+        rig {
+            gateway.onQuery = { _, _ -> awaitCancellation() }
+            assertEquals(BackgroundPull.Failed, coordinator.pullOnce(readyTimeoutMs = 50, workTimeoutMs = 100))
+        }
+
+    @Test
+    fun `a background pull beside the running coordinator still pulls, and the waiting change still goes up`() =
+        rig {
+            fx.reminder("m1")
+            gateway.onQuery = { _, _ -> Json.parseToJsonElement("[]") }
+            coordinator.start()
+
+            assertEquals(BackgroundPull.Done, coordinator.pullOnce(readyTimeoutMs = 2_000))
+            until("the push") { gateway.mutations.isNotEmpty() }
+            until("an empty queue") { fx.container.syncQueue.pending().isEmpty() }
+            assertNotNull(fx.container.reminders.get("m1"), "an empty pull does not remove a row")
         }
 
     @Test

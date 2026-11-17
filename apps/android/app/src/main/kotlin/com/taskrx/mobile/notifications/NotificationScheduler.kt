@@ -76,6 +76,16 @@ class NotificationScheduler(
         // reminder. A task request that has run is finished and needs no cancel.
         snoozes.pruneExpired(now).filter { it.tier == Tier.Medication }.forEach { gateway(it.tier).cancel(it.id) }
 
+        // A snooze is armed for one Occurrence, and the person can answer that Occurrence on
+        // another device (ADR 0016). Once every row at the moment is an answer, the snooze has
+        // nothing left to remind about. `planReschedule` never cancels a snooze, so it is done here.
+        for (spec in snoozes.all()) {
+            val rows = instances.allForOccurrence(userId, spec.reminderId, spec.scheduledTime)
+            if (rows.isNotEmpty() && rows.none { isAnswerable(it.status) }) {
+                snoozes.removeForOccurrence(spec.reminderId, spec.scheduledTime).forEach { gateway(it.tier).cancel(it.id) }
+            }
+        }
+
         // A moment the person already completed or skipped (taken early, say) must not ring.
         val answered =
             instances.list(InstanceFilter(userId = userId, since = now))

@@ -106,13 +106,22 @@ class SyncCoordinator(
      * alarms with the app closed. Waits for sign-in to finish starting and for the server to
      * hold a token, each within [readyTimeoutMs], since a process woken for this job starts both
      * from cold. The pull re-arms through its applier, as a live delivery does.
+     *
+     * The push is a drain, which returns at once when the live coordinator is already draining;
+     * the pull may then read before that push lands, which is safe because a pass never replaces
+     * a row with a change still waiting. The whole of it is bounded by [workTimeoutMs]: a query
+     * the client never answers (a refused token can look like that) must not hold the job open.
      */
-    suspend fun pullOnce(readyTimeoutMs: Long = READY_TIMEOUT_MS): BackgroundPull {
+    suspend fun pullOnce(readyTimeoutMs: Long = READY_TIMEOUT_MS, workTimeoutMs: Long = WORK_TIMEOUT_MS): BackgroundPull {
         val status = withTimeoutOrNull(readyTimeoutMs) { auth.status.first { it !is AuthStatus.Loading } } ?: return BackgroundPull.NotReady
         if (status !is AuthStatus.SignedIn) return BackgroundPull.SignedOut
         withTimeoutOrNull(readyTimeoutMs) { ready.first { it } } ?: return BackgroundPull.NotReady
-        worker.drain()
-        return if (pull.once()) BackgroundPull.Done else BackgroundPull.Failed
+        val pulled =
+            withTimeoutOrNull(workTimeoutMs) {
+                worker.drain()
+                pull.once()
+            }
+        return if (pulled == true) BackgroundPull.Done else BackgroundPull.Failed
     }
 
     /** A drain, then the last pull pass again, so a row the push refused converges ([PullSync.reapply]). */
@@ -126,6 +135,9 @@ class SyncCoordinator(
 
         /** Long enough for Clerk and the Convex client to start in a cold process. */
         const val READY_TIMEOUT_MS = 30_000L
+
+        /** The push and the four reads together; WorkManager allows a job ten minutes. */
+        const val WORK_TIMEOUT_MS = 120_000L
     }
 }
 
@@ -140,6 +152,6 @@ enum class BackgroundPull {
     /** Sign-in or the server's token did not come up in time. */
     NotReady,
 
-    /** A read or the pass failed. */
+    /** A read or the pass failed, or the push and pull ran out of time. */
     Failed,
 }
