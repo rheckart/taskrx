@@ -7,3 +7,5 @@ dist
 coverage
 .omo/
 docs/
+# Golden fixtures are compared byte for byte by :core:test; never reformat them.
+apps/android/core/golden/

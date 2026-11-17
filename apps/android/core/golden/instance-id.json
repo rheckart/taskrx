@@ -1,0 +1,71 @@
+{
+  "rule": "instance-id",
+  "about": "instanceIdFor(reminderId, scheduledTime): UUID v5 under the TaskRx namespace",
+  "generatedBy": "apps/android/core/src/test/kotlin/com/taskrx/core/golden (./gradlew :core:test -PupdateGoldens)",
+  "cases": [
+    {
+      "name": "a phone reminder at 09:00",
+      "input": {
+        "reminderId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11",
+        "scheduledTime": 1763283600000
+      },
+      "output": "5494a8dd-fd71-5cb5-8243-c66e77f77073"
+    },
+    {
+      "name": "the same reminder an hour later",
+      "input": {
+        "reminderId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11",
+        "scheduledTime": 1763287200000
+      },
+      "output": "dd4ae944-84d8-5962-855b-5c322b2d6367"
+    },
+    {
+      "name": "a desktop reminder",
+      "input": {
+        "reminderId": "b2a9d6f0-1c3e-4f5a-8b7c-9d0e1f2a3b4c",
+        "scheduledTime": 1763283600000
+      },
+      "output": "167afe00-9a5c-531e-b61f-db58401e6ff7"
+    },
+    {
+      "name": "the epoch",
+      "input": {
+        "reminderId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11",
+        "scheduledTime": 0
+      },
+      "output": "db03f6cd-fbbf-5b14-b111-de83906cb5d0"
+    },
+    {
+      "name": "a moment before the epoch",
+      "input": {
+        "reminderId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11",
+        "scheduledTime": -1
+      },
+      "output": "91fb0d0b-cb33-5952-a6b1-471539b31ab7"
+    },
+    {
+      "name": "a non-ASCII id is hashed as UTF-8",
+      "input": {
+        "reminderId": "local-ü",
+        "scheduledTime": 0
+      },
+      "output": "743337de-7ee2-5a91-9446-a0f93c0b91e0"
+    },
+    {
+      "name": "an upper-case id is not folded",
+      "input": {
+        "reminderId": "3F1C0A52-6A0E-4D8E-9A7F-2B1C9E0D4A11",
+        "scheduledTime": 1763283600000
+      },
+      "output": "96280dcf-0a0e-5869-93bf-c2f13da0de72"
+    },
+    {
+      "name": "the largest moment",
+      "input": {
+        "reminderId": "r",
+        "scheduledTime": 9223372036854775807
+      },
+      "output": "1cce9977-7bb9-58df-bfe2-aa2b0f0c20b3"
+    }
+  ]
+}

@@ -22,10 +22,25 @@ reproduce it.
   - Backlog and Catch up: `backlog`, `catchup`.
   - Proposals: `notices`. The date reader is meant to have one implementation, so this is
     a second one, held to the first only by these fixtures.
+  - Reading and writing Convex: `scheduleFromServer` and `scheduleToServer` (`sync`), so the
+    desktop reads a schedule as the phone's pull does and writes the shape the phone writes.
   - Answering a dose: the Instance id derivation (ADR 0018). Supply spending is not
     ported: the server spends it (ADR 0018), so its second copy is TypeScript, and
     `reminderInstances.test.ts` holds it to `supplyAfterDose`'s cases. `refill` is ported
     only for the projection the screens show.
+- **The fixture files** are `apps/android/core/golden/<rule>.json`, written by the sets in
+  `core/src/test/.../golden` and checked inside `:core:test` (so the existing gate covers
+  them): a file that differs, is missing, or has no set fails it, and
+  `./gradlew :core:test -PupdateGoldens` rewrites them. Each case is `{name, input, output}`.
+  A Reminder input is a Convex `reminders` document; a refused call is
+  `{"refused": "invalidArgument"}`; every zone-dependent case names its zone. Prettier
+  ignores the directory, because the gate compares bytes.
+  - Clock changes follow `java.time`: a wall-clock time inside a spring-forward gap moves
+    later by the gap (02:30 becomes 03:30), and one inside a fall-back overlap takes the
+    earlier offset. The Rust port must resolve both the same way.
+  - Cases are chosen until the golden test alone covers the ported functions, measured with
+    Kover. Paths only a malformed schedule reaches are covered through the server reader,
+    which refuses that input before the engine sees it.
 - **Sign-in** is a browser handoff to the Clerk OAuth application "TaskRx Desktop": public
   (no secret), PKCE S256 required, no consent screen, redirect `http://127.0.0.1/callback`.
   Clerk matches a loopback redirect on any port, so the desktop listens on a port the OS

@@ -1,0 +1,594 @@
+{
+  "rule": "server-schedule",
+  "about": "scheduleFromServer(schedule) then scheduleToServer(result): the canonical Convex shape a write sends; null when unreadable",
+  "generatedBy": "apps/android/core/src/test/kotlin/com/taskrx/core/golden (./gradlew :core:test -PupdateGoldens)",
+  "cases": [
+    {
+      "name": "daily",
+      "input": {
+        "schedule": {
+          "type": "daily",
+          "times": [
+            "09:00",
+            "21:30"
+          ]
+        }
+      },
+      "output": {
+        "type": "daily",
+        "times": [
+          "09:00",
+          "21:30"
+        ]
+      }
+    },
+    {
+      "name": "daily: a single-digit hour is padded",
+      "input": {
+        "schedule": {
+          "type": "daily",
+          "times": [
+            "7:05"
+          ]
+        }
+      },
+      "output": {
+        "type": "daily",
+        "times": [
+          "07:05"
+        ]
+      }
+    },
+    {
+      "name": "daily: a one-digit minute is unreadable",
+      "input": {
+        "schedule": {
+          "type": "daily",
+          "times": [
+            "07:5"
+          ]
+        }
+      },
+      "output": null
+    },
+    {
+      "name": "daily: 24:00 is unreadable",
+      "input": {
+        "schedule": {
+          "type": "daily",
+          "times": [
+            "24:00"
+          ]
+        }
+      },
+      "output": null
+    },
+    {
+      "name": "daily: 23:60 is unreadable",
+      "input": {
+        "schedule": {
+          "type": "daily",
+          "times": [
+            "23:60"
+          ]
+        }
+      },
+      "output": null
+    },
+    {
+      "name": "daily: a number for a time is unreadable",
+      "input": {
+        "schedule": {
+          "type": "daily",
+          "times": [
+            900
+          ]
+        }
+      },
+      "output": null
+    },
+    {
+      "name": "daily: no times is a readable empty schedule",
+      "input": {
+        "schedule": {
+          "type": "daily",
+          "times": []
+        }
+      },
+      "output": {
+        "type": "daily",
+        "times": []
+      }
+    },
+    {
+      "name": "daily: times missing",
+      "input": {
+        "schedule": {
+          "type": "daily"
+        }
+      },
+      "output": null
+    },
+    {
+      "name": "daily: times not an array",
+      "input": {
+        "schedule": {
+          "type": "daily",
+          "times": "09:00"
+        }
+      },
+      "output": null
+    },
+    {
+      "name": "interval",
+      "input": {
+        "schedule": {
+          "type": "interval",
+          "hours": 8,
+          "startAt": 1783072800000
+        }
+      },
+      "output": {
+        "type": "interval",
+        "hours": 8,
+        "startAt": 1783072800000
+      }
+    },
+    {
+      "name": "interval: float64 spellings of whole numbers",
+      "input": {
+        "schedule": {
+          "type": "interval",
+          "hours": 8.0,
+          "startAt": 1.7830728E12
+        }
+      },
+      "output": {
+        "type": "interval",
+        "hours": 8,
+        "startAt": 1783072800000
+      }
+    },
+    {
+      "name": "interval: a fractional hour is unreadable",
+      "input": {
+        "schedule": {
+          "type": "interval",
+          "hours": 2.5,
+          "startAt": 1783072800000
+        }
+      },
+      "output": null
+    },
+    {
+      "name": "interval: zero hours is unreadable",
+      "input": {
+        "schedule": {
+          "type": "interval",
+          "hours": 0,
+          "startAt": 1783072800000
+        }
+      },
+      "output": null
+    },
+    {
+      "name": "interval: negative hours is unreadable",
+      "input": {
+        "schedule": {
+          "type": "interval",
+          "hours": -8,
+          "startAt": 1783072800000
+        }
+      },
+      "output": null
+    },
+    {
+      "name": "interval: hours beyond Int is unreadable",
+      "input": {
+        "schedule": {
+          "type": "interval",
+          "hours": 3000000000,
+          "startAt": 1783072800000
+        }
+      },
+      "output": null
+    },
+    {
+      "name": "interval: a string number is unreadable",
+      "input": {
+        "schedule": {
+          "type": "interval",
+          "hours": "8",
+          "startAt": 1783072800000
+        }
+      },
+      "output": null
+    },
+    {
+      "name": "interval: startAt missing",
+      "input": {
+        "schedule": {
+          "type": "interval",
+          "hours": 8
+        }
+      },
+      "output": null
+    },
+    {
+      "name": "weekly",
+      "input": {
+        "schedule": {
+          "type": "weekly",
+          "daysOfWeek": [
+            1,
+            3,
+            5
+          ],
+          "times": [
+            "07:00"
+          ]
+        }
+      },
+      "output": {
+        "type": "weekly",
+        "daysOfWeek": [
+          1,
+          3,
+          5
+        ],
+        "times": [
+          "07:00"
+        ]
+      }
+    },
+    {
+      "name": "weekly: Sunday is 0 and Saturday 6",
+      "input": {
+        "schedule": {
+          "type": "weekly",
+          "daysOfWeek": [
+            0,
+            6
+          ],
+          "times": [
+            "07:00"
+          ]
+        }
+      },
+      "output": {
+        "type": "weekly",
+        "daysOfWeek": [
+          0,
+          6
+        ],
+        "times": [
+          "07:00"
+        ]
+      }
+    },
+    {
+      "name": "weekly: 7 is unreadable",
+      "input": {
+        "schedule": {
+          "type": "weekly",
+          "daysOfWeek": [
+            7
+          ],
+          "times": [
+            "07:00"
+          ]
+        }
+      },
+      "output": null
+    },
+    {
+      "name": "weekly: -1 is unreadable",
+      "input": {
+        "schedule": {
+          "type": "weekly",
+          "daysOfWeek": [
+            -1
+          ],
+          "times": [
+            "07:00"
+          ]
+        }
+      },
+      "output": null
+    },
+    {
+      "name": "weekly: a fractional day is unreadable",
+      "input": {
+        "schedule": {
+          "type": "weekly",
+          "daysOfWeek": [
+            1.5
+          ],
+          "times": [
+            "07:00"
+          ]
+        }
+      },
+      "output": null
+    },
+    {
+      "name": "weekly: days missing",
+      "input": {
+        "schedule": {
+          "type": "weekly",
+          "times": [
+            "07:00"
+          ]
+        }
+      },
+      "output": null
+    },
+    {
+      "name": "weekly: times missing",
+      "input": {
+        "schedule": {
+          "type": "weekly",
+          "daysOfWeek": [
+            1
+          ]
+        }
+      },
+      "output": null
+    },
+    {
+      "name": "monthly",
+      "input": {
+        "schedule": {
+          "type": "monthly",
+          "daysOfMonth": [
+            1,
+            15,
+            31
+          ],
+          "times": [
+            "09:00"
+          ]
+        }
+      },
+      "output": {
+        "type": "monthly",
+        "daysOfMonth": [
+          1,
+          15,
+          31
+        ],
+        "times": [
+          "09:00"
+        ]
+      }
+    },
+    {
+      "name": "monthly: 0 is unreadable",
+      "input": {
+        "schedule": {
+          "type": "monthly",
+          "daysOfMonth": [
+            0
+          ],
+          "times": [
+            "09:00"
+          ]
+        }
+      },
+      "output": null
+    },
+    {
+      "name": "monthly: 32 is unreadable",
+      "input": {
+        "schedule": {
+          "type": "monthly",
+          "daysOfMonth": [
+            32
+          ],
+          "times": [
+            "09:00"
+          ]
+        }
+      },
+      "output": null
+    },
+    {
+      "name": "monthly: days not an array",
+      "input": {
+        "schedule": {
+          "type": "monthly",
+          "daysOfMonth": 1,
+          "times": [
+            "09:00"
+          ]
+        }
+      },
+      "output": null
+    },
+    {
+      "name": "monthly: times missing",
+      "input": {
+        "schedule": {
+          "type": "monthly",
+          "daysOfMonth": [
+            1
+          ]
+        }
+      },
+      "output": null
+    },
+    {
+      "name": "once",
+      "input": {
+        "schedule": {
+          "type": "once",
+          "at": 1783699200000
+        }
+      },
+      "output": {
+        "type": "once",
+        "at": 1783699200000
+      }
+    },
+    {
+      "name": "once: float64 spelling",
+      "input": {
+        "schedule": {
+          "type": "once",
+          "at": 1.7836992E12
+        }
+      },
+      "output": {
+        "type": "once",
+        "at": 1783699200000
+      }
+    },
+    {
+      "name": "once: a fractional moment is unreadable",
+      "input": {
+        "schedule": {
+          "type": "once",
+          "at": 1.7836992000005E12
+        }
+      },
+      "output": null
+    },
+    {
+      "name": "once: at missing",
+      "input": {
+        "schedule": {
+          "type": "once"
+        }
+      },
+      "output": null
+    },
+    {
+      "name": "none",
+      "input": {
+        "schedule": {
+          "type": "none"
+        }
+      },
+      "output": {
+        "type": "none"
+      }
+    },
+    {
+      "name": "asNeeded with a daily limit",
+      "input": {
+        "schedule": {
+          "type": "asNeeded",
+          "minGapMinutes": 240,
+          "maxPer24h": 4
+        }
+      },
+      "output": {
+        "type": "asNeeded",
+        "minGapMinutes": 240,
+        "maxPer24h": 4
+      }
+    },
+    {
+      "name": "asNeeded with no limit",
+      "input": {
+        "schedule": {
+          "type": "asNeeded",
+          "minGapMinutes": 240
+        }
+      },
+      "output": {
+        "type": "asNeeded",
+        "minGapMinutes": 240
+      }
+    },
+    {
+      "name": "asNeeded: a zero gap is unreadable",
+      "input": {
+        "schedule": {
+          "type": "asNeeded",
+          "minGapMinutes": 0
+        }
+      },
+      "output": null
+    },
+    {
+      "name": "asNeeded: a zero limit is unreadable",
+      "input": {
+        "schedule": {
+          "type": "asNeeded",
+          "minGapMinutes": 240,
+          "maxPer24h": 0
+        }
+      },
+      "output": null
+    },
+    {
+      "name": "asNeeded: a null limit is unreadable",
+      "input": {
+        "schedule": {
+          "type": "asNeeded",
+          "minGapMinutes": 240,
+          "maxPer24h": null
+        }
+      },
+      "output": null
+    },
+    {
+      "name": "asNeeded: gap missing",
+      "input": {
+        "schedule": {
+          "type": "asNeeded"
+        }
+      },
+      "output": null
+    },
+    {
+      "name": "an unknown type",
+      "input": {
+        "schedule": {
+          "type": "hourly",
+          "times": [
+            "09:00"
+          ]
+        }
+      },
+      "output": null
+    },
+    {
+      "name": "no type",
+      "input": {
+        "schedule": {
+          "times": [
+            "09:00"
+          ]
+        }
+      },
+      "output": null
+    },
+    {
+      "name": "a type that is not a string",
+      "input": {
+        "schedule": {
+          "type": 1
+        }
+      },
+      "output": null
+    },
+    {
+      "name": "not an object",
+      "input": {
+        "schedule": [
+          "daily"
+        ]
+      },
+      "output": null
+    },
+    {
+      "name": "null",
+      "input": {
+        "schedule": null
+      },
+      "output": null
+    }
+  ]
+}

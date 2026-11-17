@@ -1,24 +1,18 @@
 package com.taskrx.mobile.data
 
-import com.taskrx.core.domain.AsNeededTimes
-import com.taskrx.core.domain.DailyTimes
-import com.taskrx.core.domain.IntervalTimes
-import com.taskrx.core.domain.MonthlyTimes
-import com.taskrx.core.domain.NoneTimes
 import com.taskrx.core.domain.NoticeResolution
 import com.taskrx.core.domain.NoticeRule
 import com.taskrx.core.domain.OccurrenceOverride
-import com.taskrx.core.domain.OnceTimes
 import com.taskrx.core.domain.PauseWindow
 import com.taskrx.core.domain.Priority
 import com.taskrx.core.domain.ReminderKind
 import com.taskrx.core.domain.InstanceStatus
 import com.taskrx.core.domain.ScheduleTimes
 import com.taskrx.core.domain.SourceKind
-import com.taskrx.core.domain.WeeklyTimes
 import com.taskrx.core.domain.noticeRulesToJson
 import com.taskrx.core.domain.overridesToJson
 import com.taskrx.core.domain.pausesToJson
+import com.taskrx.core.sync.scheduleToServer
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonNull
 import kotlinx.serialization.json.JsonObject
@@ -42,44 +36,8 @@ import kotlinx.serialization.json.put
  * format, this is the server's.
  */
 internal object SyncPayloads {
-    fun scheduleForServer(schedule: ScheduleTimes): JsonObject =
-        when (schedule) {
-            is DailyTimes ->
-                buildJsonObject {
-                    put("type", "daily")
-                    put("times", strings(schedule.times))
-                }
-            is IntervalTimes ->
-                buildJsonObject {
-                    put("type", "interval")
-                    put("hours", schedule.hours)
-                    put("startAt", schedule.startAt)
-                }
-            is WeeklyTimes ->
-                buildJsonObject {
-                    put("type", "weekly")
-                    put("daysOfWeek", JsonArray(schedule.daysOfWeek.map(::JsonPrimitive)))
-                    put("times", strings(schedule.times))
-                }
-            is MonthlyTimes ->
-                buildJsonObject {
-                    put("type", "monthly")
-                    put("daysOfMonth", JsonArray(schedule.daysOfMonth.map(::JsonPrimitive)))
-                    put("times", strings(schedule.times))
-                }
-            is OnceTimes ->
-                buildJsonObject {
-                    put("type", "once")
-                    put("at", schedule.at)
-                }
-            NoneTimes -> buildJsonObject { put("type", "none") }
-            is AsNeededTimes ->
-                buildJsonObject {
-                    put("type", "asNeeded")
-                    put("minGapMinutes", schedule.minGapMinutes)
-                    schedule.maxPer24h?.let { put("maxPer24h", it) }
-                }
-        }
+    /** The Convex shape; the rule is `:core`'s, shared with the desktop Companion. */
+    fun scheduleForServer(schedule: ScheduleTimes): JsonObject = scheduleToServer(schedule)
 
     @Suppress("LongParameterList")
     fun reminder(

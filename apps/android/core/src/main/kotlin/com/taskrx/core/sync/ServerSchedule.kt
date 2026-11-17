@@ -14,10 +14,13 @@ import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
+import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.put
 
 /*
  * The schedule as Convex stores it (`scheduleTimesValidator` in packages/convex/convex/schema.ts),
- * read into the domain union. The inverse of what the app writes into a queue payload.
+ * read into the domain union, and written back from it. Both directions live here because every
+ * device that talks to Convex (the phone's queue, the desktop Companion) must write the same shape.
  *
  * Every number arrives as a float64: whole values are spelled `1700000000000.0` or
  * `1.7E12` as readily as `1700000000000`, so nothing here asks for an integer token.
@@ -105,3 +108,49 @@ fun scheduleFromServer(value: JsonElement?): ScheduleTimes? {
         else -> null
     }
 }
+
+/**
+ * [schedule] in the Convex `scheduleTimesValidator` shape: what a create or update sends, and
+ * what [scheduleFromServer] reads back. Not the PascalCase wire JSON of `serializeScheduleTimes`,
+ * which is the phone's local column format.
+ */
+fun scheduleToServer(schedule: ScheduleTimes): JsonObject =
+    when (schedule) {
+        is DailyTimes ->
+            buildJsonObject {
+                put("type", "daily")
+                put("times", strings(schedule.times))
+            }
+        is IntervalTimes ->
+            buildJsonObject {
+                put("type", "interval")
+                put("hours", schedule.hours)
+                put("startAt", schedule.startAt)
+            }
+        is WeeklyTimes ->
+            buildJsonObject {
+                put("type", "weekly")
+                put("daysOfWeek", JsonArray(schedule.daysOfWeek.map(::JsonPrimitive)))
+                put("times", strings(schedule.times))
+            }
+        is MonthlyTimes ->
+            buildJsonObject {
+                put("type", "monthly")
+                put("daysOfMonth", JsonArray(schedule.daysOfMonth.map(::JsonPrimitive)))
+                put("times", strings(schedule.times))
+            }
+        is OnceTimes ->
+            buildJsonObject {
+                put("type", "once")
+                put("at", schedule.at)
+            }
+        NoneTimes -> buildJsonObject { put("type", "none") }
+        is AsNeededTimes ->
+            buildJsonObject {
+                put("type", "asNeeded")
+                put("minGapMinutes", schedule.minGapMinutes)
+                schedule.maxPer24h?.let { put("maxPer24h", it) }
+            }
+    }
+
+private fun strings(values: List<String>): JsonArray = JsonArray(values.map(::JsonPrimitive))

@@ -6,6 +6,7 @@ import com.taskrx.core.domain.IntervalTimes
 import com.taskrx.core.domain.MonthlyTimes
 import com.taskrx.core.domain.NoneTimes
 import com.taskrx.core.domain.OnceTimes
+import com.taskrx.core.domain.ScheduleTimes
 import com.taskrx.core.domain.WeeklyTimes
 import kotlinx.serialization.json.Json
 import kotlin.test.Test
@@ -94,5 +95,27 @@ class ScheduleFromServerTest {
         assertNull(read("""{"type":"monthly","daysOfMonth":["1st"],"times":["09:00"]}"""))
         // once
         assertNull(read("""{"type":"once"}"""))
+    }
+}
+
+class ScheduleToServerTest {
+    private fun roundTrip(schedule: ScheduleTimes) = assertEquals(schedule, scheduleFromServer(scheduleToServer(schedule)))
+
+    @Test
+    fun `every variant reads back as itself`() {
+        roundTrip(DailyTimes(listOf("09:00", "21:30")))
+        roundTrip(IntervalTimes(8, 1_783_072_800_000))
+        roundTrip(WeeklyTimes(listOf(0, 6), listOf("07:00")))
+        roundTrip(MonthlyTimes(listOf(1, 31), listOf("09:00")))
+        roundTrip(OnceTimes(1_783_699_200_000))
+        roundTrip(NoneTimes)
+        roundTrip(AsNeededTimes(240, 4))
+        roundTrip(AsNeededTimes(240, null))
+    }
+
+    @Test
+    fun `writes the server's field names, not the local column's`() {
+        assertEquals("""{"type":"daily","times":["09:00"]}""", scheduleToServer(DailyTimes(listOf("09:00"))).toString())
+        assertEquals("""{"type":"asNeeded","minGapMinutes":240}""", scheduleToServer(AsNeededTimes(240, null)).toString())
     }
 }

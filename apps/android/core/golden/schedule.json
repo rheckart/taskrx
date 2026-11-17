@@ -1,0 +1,5186 @@
+{
+  "rule": "schedule",
+  "about": "nextOccurrences(reminder, fromMs, count, zone) and latestOccurrenceBefore(reminder, now, zone). `reminder` is a Convex reminders document; a schedule the server shape does not allow reads as none.",
+  "generatedBy": "apps/android/core/src/test/kotlin/com/taskrx/core/golden (./gradlew :core:test -PupdateGoldens)",
+  "cases": [
+    {
+      "name": "daily: two times a day, in order",
+      "input": {
+        "call": "nextOccurrences",
+        "reminder": {
+          "_id": "j97doc3f1c0a52",
+          "localId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11",
+          "userId": "user_golden",
+          "kind": "medication",
+          "name": "Atorvastatin",
+          "dosage": "20mg",
+          "schedule": {
+            "type": "daily",
+            "times": [
+              "21:00",
+              "09:00"
+            ]
+          },
+          "priority": "normal",
+          "tags": [],
+          "caregiverIds": [],
+          "active": true,
+          "createdAt": 1700000000000,
+          "updatedAt": 1700000000000
+        },
+        "fromMs": 1783051200000,
+        "count": 5,
+        "zone": "America/New_York"
+      },
+      "output": [
+        {
+          "occurrenceId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11:1783083600000",
+          "reminderId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11",
+          "name": "Atorvastatin",
+          "dosage": "20mg",
+          "fireAt": 1783083600000
+        },
+        {
+          "occurrenceId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11:1783126800000",
+          "reminderId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11",
+          "name": "Atorvastatin",
+          "dosage": "20mg",
+          "fireAt": 1783126800000
+        },
+        {
+          "occurrenceId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11:1783170000000",
+          "reminderId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11",
+          "name": "Atorvastatin",
+          "dosage": "20mg",
+          "fireAt": 1783170000000
+        },
+        {
+          "occurrenceId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11:1783213200000",
+          "reminderId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11",
+          "name": "Atorvastatin",
+          "dosage": "20mg",
+          "fireAt": 1783213200000
+        },
+        {
+          "occurrenceId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11:1783256400000",
+          "reminderId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11",
+          "name": "Atorvastatin",
+          "dosage": "20mg",
+          "fireAt": 1783256400000
+        }
+      ]
+    },
+    {
+      "name": "daily: two times inside one hour order by minute",
+      "input": {
+        "call": "nextOccurrences",
+        "reminder": {
+          "_id": "j97doc3f1c0a52",
+          "localId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11",
+          "userId": "user_golden",
+          "kind": "medication",
+          "name": "Atorvastatin",
+          "dosage": "20mg",
+          "schedule": {
+            "type": "daily",
+            "times": [
+              "08:45",
+              "08:15"
+            ]
+          },
+          "priority": "normal",
+          "tags": [],
+          "caregiverIds": [],
+          "active": true,
+          "createdAt": 1700000000000,
+          "updatedAt": 1700000000000
+        },
+        "fromMs": 1783051200000,
+        "count": 2,
+        "zone": "America/New_York"
+      },
+      "output": [
+        {
+          "occurrenceId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11:1783080900000",
+          "reminderId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11",
+          "name": "Atorvastatin",
+          "dosage": "20mg",
+          "fireAt": 1783080900000
+        },
+        {
+          "occurrenceId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11:1783082700000",
+          "reminderId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11",
+          "name": "Atorvastatin",
+          "dosage": "20mg",
+          "fireAt": 1783082700000
+        }
+      ]
+    },
+    {
+      "name": "daily: a slot already past today rolls to tomorrow",
+      "input": {
+        "call": "nextOccurrences",
+        "reminder": {
+          "_id": "j97doc3f1c0a52",
+          "localId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11",
+          "userId": "user_golden",
+          "kind": "medication",
+          "name": "Atorvastatin",
+          "dosage": "20mg",
+          "schedule": {
+            "type": "daily",
+            "times": [
+              "09:00"
+            ]
+          },
+          "priority": "normal",
+          "tags": [],
+          "caregiverIds": [],
+          "active": true,
+          "createdAt": 1700000000000,
+          "updatedAt": 1700000000000
+        },
+        "fromMs": 1783087200000,
+        "count": 1,
+        "zone": "America/New_York"
+      },
+      "output": [
+        {
+          "occurrenceId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11:1783170000000",
+          "reminderId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11",
+          "name": "Atorvastatin",
+          "dosage": "20mg",
+          "fireAt": 1783170000000
+        }
+      ]
+    },
+    {
+      "name": "daily: a moment exactly at from is excluded",
+      "input": {
+        "call": "nextOccurrences",
+        "reminder": {
+          "_id": "j97doc3f1c0a52",
+          "localId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11",
+          "userId": "user_golden",
+          "kind": "medication",
+          "name": "Atorvastatin",
+          "dosage": "20mg",
+          "schedule": {
+            "type": "daily",
+            "times": [
+              "09:00"
+            ]
+          },
+          "priority": "normal",
+          "tags": [],
+          "caregiverIds": [],
+          "active": true,
+          "createdAt": 1700000000000,
+          "updatedAt": 1700000000000
+        },
+        "fromMs": 1783083600000,
+        "count": 1,
+        "zone": "America/New_York"
+      },
+      "output": [
+        {
+          "occurrenceId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11:1783170000000",
+          "reminderId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11",
+          "name": "Atorvastatin",
+          "dosage": "20mg",
+          "fireAt": 1783170000000
+        }
+      ]
+    },
+    {
+      "name": "daily: no times, no moments",
+      "input": {
+        "call": "nextOccurrences",
+        "reminder": {
+          "_id": "j97doc3f1c0a52",
+          "localId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11",
+          "userId": "user_golden",
+          "kind": "medication",
+          "name": "Atorvastatin",
+          "dosage": "20mg",
+          "schedule": {
+            "type": "daily",
+            "times": []
+          },
+          "priority": "normal",
+          "tags": [],
+          "caregiverIds": [],
+          "active": true,
+          "createdAt": 1700000000000,
+          "updatedAt": 1700000000000
+        },
+        "fromMs": 1783051200000,
+        "count": 5,
+        "zone": "America/New_York"
+      },
+      "output": []
+    },
+    {
+      "name": "daily: an unreadable time makes the schedule unreadable",
+      "input": {
+        "call": "nextOccurrences",
+        "reminder": {
+          "_id": "j97doc3f1c0a52",
+          "localId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11",
+          "userId": "user_golden",
+          "kind": "medication",
+          "name": "Atorvastatin",
+          "dosage": "20mg",
+          "schedule": {
+            "type": "daily",
+            "times": [
+              "9am",
+              "09:00"
+            ]
+          },
+          "priority": "normal",
+          "tags": [],
+          "caregiverIds": [],
+          "active": true,
+          "createdAt": 1700000000000,
+          "updatedAt": 1700000000000
+        },
+        "fromMs": 1783051200000,
+        "count": 2,
+        "zone": "America/New_York"
+      },
+      "output": []
+    },
+    {
+      "name": "daily: an hour past 23 is unreadable",
+      "input": {
+        "call": "nextOccurrences",
+        "reminder": {
+          "_id": "j97doc3f1c0a52",
+          "localId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11",
+          "userId": "user_golden",
+          "kind": "medication",
+          "name": "Atorvastatin",
+          "dosage": "20mg",
+          "schedule": {
+            "type": "daily",
+            "times": [
+              "24:00"
+            ]
+          },
+          "priority": "normal",
+          "tags": [],
+          "caregiverIds": [],
+          "active": true,
+          "createdAt": 1700000000000,
+          "updatedAt": 1700000000000
+        },
+        "fromMs": 1783051200000,
+        "count": 2,
+        "zone": "America/New_York"
+      },
+      "output": []
+    },
+    {
+      "name": "daily: a single-digit hour reads",
+      "input": {
+        "call": "nextOccurrences",
+        "reminder": {
+          "_id": "j97doc3f1c0a52",
+          "localId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11",
+          "userId": "user_golden",
+          "kind": "medication",
+          "name": "Atorvastatin",
+          "dosage": "20mg",
+          "schedule": {
+            "type": "daily",
+            "times": [
+              "7:05"
+            ]
+          },
+          "priority": "normal",
+          "tags": [],
+          "caregiverIds": [],
+          "active": true,
+          "createdAt": 1700000000000,
+          "updatedAt": 1700000000000
+        },
+        "fromMs": 1783051200000,
+        "count": 2,
+        "zone": "America/New_York"
+      },
+      "output": [
+        {
+          "occurrenceId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11:1783076700000",
+          "reminderId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11",
+          "name": "Atorvastatin",
+          "dosage": "20mg",
+          "fireAt": 1783076700000
+        },
+        {
+          "occurrenceId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11:1783163100000",
+          "reminderId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11",
+          "name": "Atorvastatin",
+          "dosage": "20mg",
+          "fireAt": 1783163100000
+        }
+      ]
+    },
+    {
+      "name": "daily: stops at the 60-day horizon",
+      "input": {
+        "call": "nextOccurrences",
+        "reminder": {
+          "_id": "j97doc3f1c0a52",
+          "localId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11",
+          "userId": "user_golden",
+          "kind": "medication",
+          "name": "Atorvastatin",
+          "dosage": "20mg",
+          "schedule": {
+            "type": "daily",
+            "times": [
+              "09:00"
+            ]
+          },
+          "priority": "normal",
+          "tags": [],
+          "caregiverIds": [],
+          "active": true,
+          "createdAt": 1700000000000,
+          "updatedAt": 1700000000000
+        },
+        "fromMs": 1783051200000,
+        "count": 70,
+        "zone": "America/New_York"
+      },
+      "output": [
+        {
+          "occurrenceId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11:1783083600000",
+          "reminderId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11",
+          "name": "Atorvastatin",
+          "dosage": "20mg",
+          "fireAt": 1783083600000
+        },
+        {
+          "occurrenceId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11:1783170000000",
+          "reminderId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11",
+          "name": "Atorvastatin",
+          "dosage": "20mg",
+          "fireAt": 1783170000000
+        },
+        {
+          "occurrenceId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11:1783256400000",
+          "reminderId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11",
+          "name": "Atorvastatin",
+          "dosage": "20mg",
+          "fireAt": 1783256400000
+        },
+        {
+          "occurrenceId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11:1783342800000",
+          "reminderId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11",
+          "name": "Atorvastatin",
+          "dosage": "20mg",
+          "fireAt": 1783342800000
+        },
+        {
+          "occurrenceId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11:1783429200000",
+          "reminderId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11",
+          "name": "Atorvastatin",
+          "dosage": "20mg",
+          "fireAt": 1783429200000
+        },
+        {
+          "occurrenceId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11:1783515600000",
+          "reminderId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11",
+          "name": "Atorvastatin",
+          "dosage": "20mg",
+          "fireAt": 1783515600000
+        },
+        {
+          "occurrenceId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11:1783602000000",
+          "reminderId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11",
+          "name": "Atorvastatin",
+          "dosage": "20mg",
+          "fireAt": 1783602000000
+        },
+        {
+          "occurrenceId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11:1783688400000",
+          "reminderId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11",
+          "name": "Atorvastatin",
+          "dosage": "20mg",
+          "fireAt": 1783688400000
+        },
+        {
+          "occurrenceId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11:1783774800000",
+          "reminderId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11",
+          "name": "Atorvastatin",
+          "dosage": "20mg",
+          "fireAt": 1783774800000
+        },
+        {
+          "occurrenceId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11:1783861200000",
+          "reminderId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11",
+          "name": "Atorvastatin",
+          "dosage": "20mg",
+          "fireAt": 1783861200000
+        },
+        {
+          "occurrenceId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11:1783947600000",
+          "reminderId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11",
+          "name": "Atorvastatin",
+          "dosage": "20mg",
+          "fireAt": 1783947600000
+        },
+        {
+          "occurrenceId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11:1784034000000",
+          "reminderId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11",
+          "name": "Atorvastatin",
+          "dosage": "20mg",
+          "fireAt": 1784034000000
+        },
+        {
+          "occurrenceId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11:1784120400000",
+          "reminderId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11",
+          "name": "Atorvastatin",
+          "dosage": "20mg",
+          "fireAt": 1784120400000
+        },
+        {
+          "occurrenceId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11:1784206800000",
+          "reminderId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11",
+          "name": "Atorvastatin",
+          "dosage": "20mg",
+          "fireAt": 1784206800000
+        },
+        {
+          "occurrenceId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11:1784293200000",
+          "reminderId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11",
+          "name": "Atorvastatin",
+          "dosage": "20mg",
+          "fireAt": 1784293200000
+        },
+        {
+          "occurrenceId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11:1784379600000",
+          "reminderId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11",
+          "name": "Atorvastatin",
+          "dosage": "20mg",
+          "fireAt": 1784379600000
+        },
+        {
+          "occurrenceId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11:1784466000000",
+          "reminderId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11",
+          "name": "Atorvastatin",
+          "dosage": "20mg",
+          "fireAt": 1784466000000
+        },
+        {
+          "occurrenceId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11:1784552400000",
+          "reminderId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11",
+          "name": "Atorvastatin",
+          "dosage": "20mg",
+          "fireAt": 1784552400000
+        },
+        {
+          "occurrenceId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11:1784638800000",
+          "reminderId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11",
+          "name": "Atorvastatin",
+          "dosage": "20mg",
+          "fireAt": 1784638800000
+        },
+        {
+          "occurrenceId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11:1784725200000",
+          "reminderId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11",
+          "name": "Atorvastatin",
+          "dosage": "20mg",
+          "fireAt": 1784725200000
+        },
+        {
+          "occurrenceId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11:1784811600000",
+          "reminderId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11",
+          "name": "Atorvastatin",
+          "dosage": "20mg",
+          "fireAt": 1784811600000
+        },
+        {
+          "occurrenceId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11:1784898000000",
+          "reminderId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11",
+          "name": "Atorvastatin",
+          "dosage": "20mg",
+          "fireAt": 1784898000000
+        },
+        {
+          "occurrenceId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11:1784984400000",
+          "reminderId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11",
+          "name": "Atorvastatin",
+          "dosage": "20mg",
+          "fireAt": 1784984400000
+        },
+        {
+          "occurrenceId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11:1785070800000",
+          "reminderId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11",
+          "name": "Atorvastatin",
+          "dosage": "20mg",
+          "fireAt": 1785070800000
+        },
+        {
+          "occurrenceId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11:1785157200000",
+          "reminderId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11",
+          "name": "Atorvastatin",
+          "dosage": "20mg",
+          "fireAt": 1785157200000
+        },
+        {
+          "occurrenceId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11:1785243600000",
+          "reminderId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11",
+          "name": "Atorvastatin",
+          "dosage": "20mg",
+          "fireAt": 1785243600000
+        },
+        {
+          "occurrenceId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11:1785330000000",
+          "reminderId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11",
+          "name": "Atorvastatin",
+          "dosage": "20mg",
+          "fireAt": 1785330000000
+        },
+        {
+          "occurrenceId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11:1785416400000",
+          "reminderId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11",
+          "name": "Atorvastatin",
+          "dosage": "20mg",
+          "fireAt": 1785416400000
+        },
+        {
+          "occurrenceId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11:1785502800000",
+          "reminderId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11",
+          "name": "Atorvastatin",
+          "dosage": "20mg",
+          "fireAt": 1785502800000
+        },
+        {
+          "occurrenceId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11:1785589200000",
+          "reminderId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11",
+          "name": "Atorvastatin",
+          "dosage": "20mg",
+          "fireAt": 1785589200000
+        },
+        {
+          "occurrenceId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11:1785675600000",
+          "reminderId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11",
+          "name": "Atorvastatin",
+          "dosage": "20mg",
+          "fireAt": 1785675600000
+        },
+        {
+          "occurrenceId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11:1785762000000",
+          "reminderId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11",
+          "name": "Atorvastatin",
+          "dosage": "20mg",
+          "fireAt": 1785762000000
+        },
+        {
+          "occurrenceId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11:1785848400000",
+          "reminderId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11",
+          "name": "Atorvastatin",
+          "dosage": "20mg",
+          "fireAt": 1785848400000
+        },
+        {
+          "occurrenceId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11:1785934800000",
+          "reminderId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11",
+          "name": "Atorvastatin",
+          "dosage": "20mg",
+          "fireAt": 1785934800000
+        },
+        {
+          "occurrenceId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11:1786021200000",
+          "reminderId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11",
+          "name": "Atorvastatin",
+          "dosage": "20mg",
+          "fireAt": 1786021200000
+        },
+        {
+          "occurrenceId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11:1786107600000",
+          "reminderId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11",
+          "name": "Atorvastatin",
+          "dosage": "20mg",
+          "fireAt": 1786107600000
+        },
+        {
+          "occurrenceId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11:1786194000000",
+          "reminderId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11",
+          "name": "Atorvastatin",
+          "dosage": "20mg",
+          "fireAt": 1786194000000
+        },
+        {
+          "occurrenceId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11:1786280400000",
+          "reminderId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11",
+          "name": "Atorvastatin",
+          "dosage": "20mg",
+          "fireAt": 1786280400000
+        },
+        {
+          "occurrenceId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11:1786366800000",
+          "reminderId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11",
+          "name": "Atorvastatin",
+          "dosage": "20mg",
+          "fireAt": 1786366800000
+        },
+        {
+          "occurrenceId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11:1786453200000",
+          "reminderId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11",
+          "name": "Atorvastatin",
+          "dosage": "20mg",
+          "fireAt": 1786453200000
+        },
+        {
+          "occurrenceId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11:1786539600000",
+          "reminderId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11",
+          "name": "Atorvastatin",
+          "dosage": "20mg",
+          "fireAt": 1786539600000
+        },
+        {
+          "occurrenceId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11:1786626000000",
+          "reminderId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11",
+          "name": "Atorvastatin",
+          "dosage": "20mg",
+          "fireAt": 1786626000000
+        },
+        {
+          "occurrenceId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11:1786712400000",
+          "reminderId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11",
+          "name": "Atorvastatin",
+          "dosage": "20mg",
+          "fireAt": 1786712400000
+        },
+        {
+          "occurrenceId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11:1786798800000",
+          "reminderId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11",
+          "name": "Atorvastatin",
+          "dosage": "20mg",
+          "fireAt": 1786798800000
+        },
+        {
+          "occurrenceId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11:1786885200000",
+          "reminderId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11",
+          "name": "Atorvastatin",
+          "dosage": "20mg",
+          "fireAt": 1786885200000
+        },
+        {
+          "occurrenceId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11:1786971600000",
+          "reminderId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11",
+          "name": "Atorvastatin",
+          "dosage": "20mg",
+          "fireAt": 1786971600000
+        },
+        {
+          "occurrenceId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11:1787058000000",
+          "reminderId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11",
+          "name": "Atorvastatin",
+          "dosage": "20mg",
+          "fireAt": 1787058000000
+        },
+        {
+          "occurrenceId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11:1787144400000",
+          "reminderId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11",
+          "name": "Atorvastatin",
+          "dosage": "20mg",
+          "fireAt": 1787144400000
+        },
+        {
+          "occurrenceId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11:1787230800000",
+          "reminderId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11",
+          "name": "Atorvastatin",
+          "dosage": "20mg",
+          "fireAt": 1787230800000
+        },
+        {
+          "occurrenceId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11:1787317200000",
+          "reminderId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11",
+          "name": "Atorvastatin",
+          "dosage": "20mg",
+          "fireAt": 1787317200000
+        },
+        {
+          "occurrenceId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11:1787403600000",
+          "reminderId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11",
+          "name": "Atorvastatin",
+          "dosage": "20mg",
+          "fireAt": 1787403600000
+        },
+        {
+          "occurrenceId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11:1787490000000",
+          "reminderId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11",
+          "name": "Atorvastatin",
+          "dosage": "20mg",
+          "fireAt": 1787490000000
+        },
+        {
+          "occurrenceId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11:1787576400000",
+          "reminderId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11",
+          "name": "Atorvastatin",
+          "dosage": "20mg",
+          "fireAt": 1787576400000
+        },
+        {
+          "occurrenceId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11:1787662800000",
+          "reminderId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11",
+          "name": "Atorvastatin",
+          "dosage": "20mg",
+          "fireAt": 1787662800000
+        },
+        {
+          "occurrenceId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11:1787749200000",
+          "reminderId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11",
+          "name": "Atorvastatin",
+          "dosage": "20mg",
+          "fireAt": 1787749200000
+        },
+        {
+          "occurrenceId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11:1787835600000",
+          "reminderId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11",
+          "name": "Atorvastatin",
+          "dosage": "20mg",
+          "fireAt": 1787835600000
+        },
+        {
+          "occurrenceId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11:1787922000000",
+          "reminderId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11",
+          "name": "Atorvastatin",
+          "dosage": "20mg",
+          "fireAt": 1787922000000
+        },
+        {
+          "occurrenceId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11:1788008400000",
+          "reminderId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11",
+          "name": "Atorvastatin",
+          "dosage": "20mg",
+          "fireAt": 1788008400000
+        },
+        {
+          "occurrenceId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11:1788094800000",
+          "reminderId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11",
+          "name": "Atorvastatin",
+          "dosage": "20mg",
+          "fireAt": 1788094800000
+        },
+        {
+          "occurrenceId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11:1788181200000",
+          "reminderId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11",
+          "name": "Atorvastatin",
+          "dosage": "20mg",
+          "fireAt": 1788181200000
+        }
+      ]
+    },
+    {
+      "name": "daily: spring forward, 02:30 does not exist",
+      "input": {
+        "call": "nextOccurrences",
+        "reminder": {
+          "_id": "j97doc3f1c0a52",
+          "localId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11",
+          "userId": "user_golden",
+          "kind": "medication",
+          "name": "Atorvastatin",
+          "dosage": "20mg",
+          "schedule": {
+            "type": "daily",
+            "times": [
+              "02:30",
+              "09:00"
+            ]
+          },
+          "priority": "normal",
+          "tags": [],
+          "caregiverIds": [],
+          "active": true,
+          "createdAt": 1700000000000,
+          "updatedAt": 1700000000000
+        },
+        "fromMs": 1772859600000,
+        "count": 6,
+        "zone": "America/New_York"
+      },
+      "output": [
+        {
+          "occurrenceId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11:1772868600000",
+          "reminderId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11",
+          "name": "Atorvastatin",
+          "dosage": "20mg",
+          "fireAt": 1772868600000
+        },
+        {
+          "occurrenceId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11:1772892000000",
+          "reminderId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11",
+          "name": "Atorvastatin",
+          "dosage": "20mg",
+          "fireAt": 1772892000000
+        },
+        {
+          "occurrenceId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11:1772955000000",
+          "reminderId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11",
+          "name": "Atorvastatin",
+          "dosage": "20mg",
+          "fireAt": 1772955000000
+        },
+        {
+          "occurrenceId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11:1772974800000",
+          "reminderId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11",
+          "name": "Atorvastatin",
+          "dosage": "20mg",
+          "fireAt": 1772974800000
+        },
+        {
+          "occurrenceId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11:1773037800000",
+          "reminderId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11",
+          "name": "Atorvastatin",
+          "dosage": "20mg",
+          "fireAt": 1773037800000
+        },
+        {
+          "occurrenceId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11:1773061200000",
+          "reminderId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11",
+          "name": "Atorvastatin",
+          "dosage": "20mg",
+          "fireAt": 1773061200000
+        }
+      ]
+    },
+    {
+      "name": "daily: fall back, 01:30 happens twice",
+      "input": {
+        "call": "nextOccurrences",
+        "reminder": {
+          "_id": "j97doc3f1c0a52",
+          "localId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11",
+          "userId": "user_golden",
+          "kind": "medication",
+          "name": "Atorvastatin",
+          "dosage": "20mg",
+          "schedule": {
+            "type": "daily",
+            "times": [
+              "01:30",
+              "09:00"
+            ]
+          },
+          "priority": "normal",
+          "tags": [],
+          "caregiverIds": [],
+          "active": true,
+          "createdAt": 1700000000000,
+          "updatedAt": 1700000000000
+        },
+        "fromMs": 1793419200000,
+        "count": 6,
+        "zone": "America/New_York"
+      },
+      "output": [
+        {
+          "occurrenceId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11:1793424600000",
+          "reminderId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11",
+          "name": "Atorvastatin",
+          "dosage": "20mg",
+          "fireAt": 1793424600000
+        },
+        {
+          "occurrenceId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11:1793451600000",
+          "reminderId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11",
+          "name": "Atorvastatin",
+          "dosage": "20mg",
+          "fireAt": 1793451600000
+        },
+        {
+          "occurrenceId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11:1793511000000",
+          "reminderId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11",
+          "name": "Atorvastatin",
+          "dosage": "20mg",
+          "fireAt": 1793511000000
+        },
+        {
+          "occurrenceId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11:1793541600000",
+          "reminderId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11",
+          "name": "Atorvastatin",
+          "dosage": "20mg",
+          "fireAt": 1793541600000
+        },
+        {
+          "occurrenceId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11:1793601000000",
+          "reminderId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11",
+          "name": "Atorvastatin",
+          "dosage": "20mg",
+          "fireAt": 1793601000000
+        },
+        {
+          "occurrenceId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11:1793628000000",
+          "reminderId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11",
+          "name": "Atorvastatin",
+          "dosage": "20mg",
+          "fireAt": 1793628000000
+        }
+      ]
+    },
+    {
+      "name": "daily: London's spring change",
+      "input": {
+        "call": "nextOccurrences",
+        "reminder": {
+          "_id": "j97doc3f1c0a52",
+          "localId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11",
+          "userId": "user_golden",
+          "kind": "medication",
+          "name": "Atorvastatin",
+          "dosage": "20mg",
+          "schedule": {
+            "type": "daily",
+            "times": [
+              "01:30",
+              "09:00"
+            ]
+          },
+          "priority": "normal",
+          "tags": [],
+          "caregiverIds": [],
+          "active": true,
+          "createdAt": 1700000000000,
+          "updatedAt": 1700000000000
+        },
+        "fromMs": 1774656000000,
+        "count": 6,
+        "zone": "Europe/London"
+      },
+      "output": [
+        {
+          "occurrenceId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11:1774661400000",
+          "reminderId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11",
+          "name": "Atorvastatin",
+          "dosage": "20mg",
+          "fireAt": 1774661400000
+        },
+        {
+          "occurrenceId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11:1774688400000",
+          "reminderId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11",
+          "name": "Atorvastatin",
+          "dosage": "20mg",
+          "fireAt": 1774688400000
+        },
+        {
+          "occurrenceId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11:1774747800000",
+          "reminderId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11",
+          "name": "Atorvastatin",
+          "dosage": "20mg",
+          "fireAt": 1774747800000
+        },
+        {
+          "occurrenceId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11:1774771200000",
+          "reminderId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11",
+          "name": "Atorvastatin",
+          "dosage": "20mg",
+          "fireAt": 1774771200000
+        },
+        {
+          "occurrenceId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11:1774830600000",
+          "reminderId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11",
+          "name": "Atorvastatin",
+          "dosage": "20mg",
+          "fireAt": 1774830600000
+        },
+        {
+          "occurrenceId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11:1774857600000",
+          "reminderId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11",
+          "name": "Atorvastatin",
+          "dosage": "20mg",
+          "fireAt": 1774857600000
+        }
+      ]
+    },
+    {
+      "name": "daily: Sydney's autumn change",
+      "input": {
+        "call": "nextOccurrences",
+        "reminder": {
+          "_id": "j97doc3f1c0a52",
+          "localId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11",
+          "userId": "user_golden",
+          "kind": "medication",
+          "name": "Atorvastatin",
+          "dosage": "20mg",
+          "schedule": {
+            "type": "daily",
+            "times": [
+              "02:30"
+            ]
+          },
+          "priority": "normal",
+          "tags": [],
+          "caregiverIds": [],
+          "active": true,
+          "createdAt": 1700000000000,
+          "updatedAt": 1700000000000
+        },
+        "fromMs": 1775221200000,
+        "count": 3,
+        "zone": "Australia/Sydney"
+      },
+      "output": [
+        {
+          "occurrenceId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11:1775230200000",
+          "reminderId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11",
+          "name": "Atorvastatin",
+          "dosage": "20mg",
+          "fireAt": 1775230200000
+        },
+        {
+          "occurrenceId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11:1775316600000",
+          "reminderId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11",
+          "name": "Atorvastatin",
+          "dosage": "20mg",
+          "fireAt": 1775316600000
+        },
+        {
+          "occurrenceId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11:1775406600000",
+          "reminderId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11",
+          "name": "Atorvastatin",
+          "dosage": "20mg",
+          "fireAt": 1775406600000
+        }
+      ]
+    },
+    {
+      "name": "daily: in UTC",
+      "input": {
+        "call": "nextOccurrences",
+        "reminder": {
+          "_id": "j97doc3f1c0a52",
+          "localId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11",
+          "userId": "user_golden",
+          "kind": "medication",
+          "name": "Atorvastatin",
+          "dosage": "20mg",
+          "schedule": {
+            "type": "daily",
+            "times": [
+              "09:00"
+            ]
+          },
+          "priority": "normal",
+          "tags": [],
+          "caregiverIds": [],
+          "active": true,
+          "createdAt": 1700000000000,
+          "updatedAt": 1700000000000
+        },
+        "fromMs": 1783036800000,
+        "count": 3,
+        "zone": "UTC"
+      },
+      "output": [
+        {
+          "occurrenceId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11:1783069200000",
+          "reminderId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11",
+          "name": "Atorvastatin",
+          "dosage": "20mg",
+          "fireAt": 1783069200000
+        },
+        {
+          "occurrenceId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11:1783155600000",
+          "reminderId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11",
+          "name": "Atorvastatin",
+          "dosage": "20mg",
+          "fireAt": 1783155600000
+        },
+        {
+          "occurrenceId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11:1783242000000",
+          "reminderId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11",
+          "name": "Atorvastatin",
+          "dosage": "20mg",
+          "fireAt": 1783242000000
+        }
+      ]
+    },
+    {
+      "name": "daily: a task",
+      "input": {
+        "call": "nextOccurrences",
+        "reminder": {
+          "_id": "j97doc3f1c0a52",
+          "localId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11",
+          "userId": "user_golden",
+          "kind": "task",
+          "name": "Water the plants",
+          "schedule": {
+            "type": "daily",
+            "times": [
+              "18:00"
+            ]
+          },
+          "priority": "normal",
+          "tags": [],
+          "caregiverIds": [],
+          "active": true,
+          "createdAt": 1700000000000,
+          "updatedAt": 1700000000000
+        },
+        "fromMs": 1783051200000,
+        "count": 2,
+        "zone": "America/New_York"
+      },
+      "output": [
+        {
+          "occurrenceId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11:1783116000000",
+          "reminderId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11",
+          "name": "Water the plants",
+          "dosage": null,
+          "fireAt": 1783116000000
+        },
+        {
+          "occurrenceId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11:1783202400000",
+          "reminderId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11",
+          "name": "Water the plants",
+          "dosage": null,
+          "fireAt": 1783202400000
+        }
+      ]
+    },
+    {
+      "name": "daily: an inactive reminder still has moments",
+      "input": {
+        "call": "nextOccurrences",
+        "reminder": {
+          "_id": "j97doc3f1c0a52",
+          "localId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11",
+          "userId": "user_golden",
+          "kind": "medication",
+          "name": "Atorvastatin",
+          "dosage": "20mg",
+          "schedule": {
+            "type": "daily",
+            "times": [
+              "09:00"
+            ]
+          },
+          "priority": "normal",
+          "tags": [],
+          "caregiverIds": [],
+          "active": false,
+          "createdAt": 1700000000000,
+          "updatedAt": 1700000000000
+        },
+        "fromMs": 1783051200000,
+        "count": 2,
+        "zone": "America/New_York"
+      },
+      "output": [
+        {
+          "occurrenceId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11:1783083600000",
+          "reminderId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11",
+          "name": "Atorvastatin",
+          "dosage": "20mg",
+          "fireAt": 1783083600000
+        },
+        {
+          "occurrenceId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11:1783170000000",
+          "reminderId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11",
+          "name": "Atorvastatin",
+          "dosage": "20mg",
+          "fireAt": 1783170000000
+        }
+      ]
+    },
+    {
+      "name": "count zero is nothing",
+      "input": {
+        "call": "nextOccurrences",
+        "reminder": {
+          "_id": "j97doc3f1c0a52",
+          "localId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11",
+          "userId": "user_golden",
+          "kind": "medication",
+          "name": "Atorvastatin",
+          "dosage": "20mg",
+          "schedule": {
+            "type": "daily",
+            "times": [
+              "09:00"
+            ]
+          },
+          "priority": "normal",
+          "tags": [],
+          "caregiverIds": [],
+          "active": true,
+          "createdAt": 1700000000000,
+          "updatedAt": 1700000000000
+        },
+        "fromMs": 1783051200000,
+        "count": 0,
+        "zone": "America/New_York"
+      },
+      "output": []
+    },
+    {
+      "name": "a negative count is refused",
+      "input": {
+        "call": "nextOccurrences",
+        "reminder": {
+          "_id": "j97doc3f1c0a52",
+          "localId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11",
+          "userId": "user_golden",
+          "kind": "medication",
+          "name": "Atorvastatin",
+          "dosage": "20mg",
+          "schedule": {
+            "type": "daily",
+            "times": [
+              "09:00"
+            ]
+          },
+          "priority": "normal",
+          "tags": [],
+          "caregiverIds": [],
+          "active": true,
+          "createdAt": 1700000000000,
+          "updatedAt": 1700000000000
+        },
+        "fromMs": 1783051200000,
+        "count": -1,
+        "zone": "America/New_York"
+      },
+      "output": {
+        "refused": "invalidArgument"
+      }
+    },
+    {
+      "name": "interval: from before the start begins at the start",
+      "input": {
+        "call": "nextOccurrences",
+        "reminder": {
+          "_id": "j97doc3f1c0a52",
+          "localId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11",
+          "userId": "user_golden",
+          "kind": "medication",
+          "name": "Atorvastatin",
+          "dosage": "20mg",
+          "schedule": {
+            "type": "interval",
+            "hours": 8,
+            "startAt": 1783072800000
+          },
+          "priority": "normal",
+          "tags": [],
+          "caregiverIds": [],
+          "active": true,
+          "createdAt": 1700000000000,
+          "updatedAt": 1700000000000
+        },
+        "fromMs": 1783069200000,
+        "count": 3,
+        "zone": "America/New_York"
+      },
+      "output": [
+        {
+          "occurrenceId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11:1783072800000",
+          "reminderId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11",
+          "name": "Atorvastatin",
+          "dosage": "20mg",
+          "fireAt": 1783072800000
+        },
+        {
+          "occurrenceId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11:1783101600000",
+          "reminderId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11",
+          "name": "Atorvastatin",
+          "dosage": "20mg",
+          "fireAt": 1783101600000
+        },
+        {
+          "occurrenceId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11:1783130400000",
+          "reminderId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11",
+          "name": "Atorvastatin",
+          "dosage": "20mg",
+          "fireAt": 1783130400000
+        }
+      ]
+    },
+    {
+      "name": "interval: fast-forwards to the slot after from",
+      "input": {
+        "call": "nextOccurrences",
+        "reminder": {
+          "_id": "j97doc3f1c0a52",
+          "localId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11",
+          "userId": "user_golden",
+          "kind": "medication",
+          "name": "Atorvastatin",
+          "dosage": "20mg",
+          "schedule": {
+            "type": "interval",
+            "hours": 8,
+            "startAt": 1783072800000
+          },
+          "priority": "normal",
+          "tags": [],
+          "caregiverIds": [],
+          "active": true,
+          "createdAt": 1700000000000,
+          "updatedAt": 1700000000000
+        },
+        "fromMs": 1783144800000,
+        "count": 3,
+        "zone": "America/New_York"
+      },
+      "output": [
+        {
+          "occurrenceId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11:1783159200000",
+          "reminderId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11",
+          "name": "Atorvastatin",
+          "dosage": "20mg",
+          "fireAt": 1783159200000
+        },
+        {
+          "occurrenceId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11:1783188000000",
+          "reminderId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11",
+          "name": "Atorvastatin",
+          "dosage": "20mg",
+          "fireAt": 1783188000000
+        },
+        {
+          "occurrenceId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11:1783216800000",
+          "reminderId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11",
+          "name": "Atorvastatin",
+          "dosage": "20mg",
+          "fireAt": 1783216800000
+        }
+      ]
+    },
+    {
+      "name": "interval: a slot exactly at from is excluded",
+      "input": {
+        "call": "nextOccurrences",
+        "reminder": {
+          "_id": "j97doc3f1c0a52",
+          "localId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11",
+          "userId": "user_golden",
+          "kind": "medication",
+          "name": "Atorvastatin",
+          "dosage": "20mg",
+          "schedule": {
+            "type": "interval",
+            "hours": 8,
+            "startAt": 1783072800000
+          },
+          "priority": "normal",
+          "tags": [],
+          "caregiverIds": [],
+          "active": true,
+          "createdAt": 1700000000000,
+          "updatedAt": 1700000000000
+        },
+        "fromMs": 1783130400000,
+        "count": 2,
+        "zone": "America/New_York"
+      },
+      "output": [
+        {
+          "occurrenceId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11:1783159200000",
+          "reminderId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11",
+          "name": "Atorvastatin",
+          "dosage": "20mg",
+          "fireAt": 1783159200000
+        },
+        {
+          "occurrenceId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11:1783188000000",
+          "reminderId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11",
+          "name": "Atorvastatin",
+          "dosage": "20mg",
+          "fireAt": 1783188000000
+        }
+      ]
+    },
+    {
+      "name": "interval: the start exactly at from is excluded",
+      "input": {
+        "call": "nextOccurrences",
+        "reminder": {
+          "_id": "j97doc3f1c0a52",
+          "localId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11",
+          "userId": "user_golden",
+          "kind": "medication",
+          "name": "Atorvastatin",
+          "dosage": "20mg",
+          "schedule": {
+            "type": "interval",
+            "hours": 8,
+            "startAt": 1783072800000
+          },
+          "priority": "normal",
+          "tags": [],
+          "caregiverIds": [],
+          "active": true,
+          "createdAt": 1700000000000,
+          "updatedAt": 1700000000000
+        },
+        "fromMs": 1783072800000,
+        "count": 2,
+        "zone": "America/New_York"
+      },
+      "output": [
+        {
+          "occurrenceId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11:1783101600000",
+          "reminderId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11",
+          "name": "Atorvastatin",
+          "dosage": "20mg",
+          "fireAt": 1783101600000
+        },
+        {
+          "occurrenceId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11:1783130400000",
+          "reminderId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11",
+          "name": "Atorvastatin",
+          "dosage": "20mg",
+          "fireAt": 1783130400000
+        }
+      ]
+    },
+    {
+      "name": "interval: zero hours is unreadable",
+      "input": {
+        "call": "nextOccurrences",
+        "reminder": {
+          "_id": "j97doc3f1c0a52",
+          "localId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11",
+          "userId": "user_golden",
+          "kind": "medication",
+          "name": "Atorvastatin",
+          "dosage": "20mg",
+          "schedule": {
+            "type": "interval",
+            "hours": 0,
+            "startAt": 1783072800000
+          },
+          "priority": "normal",
+          "tags": [],
+          "caregiverIds": [],
+          "active": true,
+          "createdAt": 1700000000000,
+          "updatedAt": 1700000000000
+        },
+        "fromMs": 1783072800000,
+        "count": 3,
+        "zone": "America/New_York"
+      },
+      "output": []
+    },
+    {
+      "name": "interval: crosses fall back by elapsed time, not wall clock",
+      "input": {
+        "call": "nextOccurrences",
+        "reminder": {
+          "_id": "j97doc3f1c0a52",
+          "localId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11",
+          "userId": "user_golden",
+          "kind": "medication",
+          "name": "Atorvastatin",
+          "dosage": "20mg",
+          "schedule": {
+            "type": "interval",
+            "hours": 6,
+            "startAt": 1793491200000
+          },
+          "priority": "normal",
+          "tags": [],
+          "caregiverIds": [],
+          "active": true,
+          "createdAt": 1700000000000,
+          "updatedAt": 1700000000000
+        },
+        "fromMs": 1793487600000,
+        "count": 5,
+        "zone": "America/New_York"
+      },
+      "output": [
+        {
+          "occurrenceId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11:1793491200000",
+          "reminderId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11",
+          "name": "Atorvastatin",
+          "dosage": "20mg",
+          "fireAt": 1793491200000
+        },
+        {
+          "occurrenceId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11:1793512800000",
+          "reminderId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11",
+          "name": "Atorvastatin",
+          "dosage": "20mg",
+          "fireAt": 1793512800000
+        },
+        {
+          "occurrenceId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11:1793534400000",
+          "reminderId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11",
+          "name": "Atorvastatin",
+          "dosage": "20mg",
+          "fireAt": 1793534400000
+        },
+        {
+          "occurrenceId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11:1793556000000",
+          "reminderId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11",
+          "name": "Atorvastatin",
+          "dosage": "20mg",
+          "fireAt": 1793556000000
+        },
+        {
+          "occurrenceId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11:1793577600000",
+          "reminderId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11",
+          "name": "Atorvastatin",
+          "dosage": "20mg",
+          "fireAt": 1793577600000
+        }
+      ]
+    },
+    {
+      "name": "interval: not capped by a day horizon",
+      "input": {
+        "call": "nextOccurrences",
+        "reminder": {
+          "_id": "j97doc3f1c0a52",
+          "localId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11",
+          "userId": "user_golden",
+          "kind": "medication",
+          "name": "Atorvastatin",
+          "dosage": "20mg",
+          "schedule": {
+            "type": "interval",
+            "hours": 24,
+            "startAt": 1783072800000
+          },
+          "priority": "normal",
+          "tags": [],
+          "caregiverIds": [],
+          "active": true,
+          "createdAt": 1700000000000,
+          "updatedAt": 1700000000000
+        },
+        "fromMs": 1783072800000,
+        "count": 75,
+        "zone": "America/New_York"
+      },
+      "output": [
+        {
+          "occurrenceId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11:1783159200000",
+          "reminderId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11",
+          "name": "Atorvastatin",
+          "dosage": "20mg",
+          "fireAt": 1783159200000
+        },
+        {
+          "occurrenceId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11:1783245600000",
+          "reminderId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11",
+          "name": "Atorvastatin",
+          "dosage": "20mg",
+          "fireAt": 1783245600000
+        },
+        {
+          "occurrenceId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11:1783332000000",
+          "reminderId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11",
+          "name": "Atorvastatin",
+          "dosage": "20mg",
+          "fireAt": 1783332000000
+        },
+        {
+          "occurrenceId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11:1783418400000",
+          "reminderId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11",
+          "name": "Atorvastatin",
+          "dosage": "20mg",
+          "fireAt": 1783418400000
+        },
+        {
+          "occurrenceId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11:1783504800000",
+          "reminderId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11",
+          "name": "Atorvastatin",
+          "dosage": "20mg",
+          "fireAt": 1783504800000
+        },
+        {
+          "occurrenceId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11:1783591200000",
+          "reminderId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11",
+          "name": "Atorvastatin",
+          "dosage": "20mg",
+          "fireAt": 1783591200000
+        },
+        {
+          "occurrenceId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11:1783677600000",
+          "reminderId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11",
+          "name": "Atorvastatin",
+          "dosage": "20mg",
+          "fireAt": 1783677600000
+        },
+        {
+          "occurrenceId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11:1783764000000",
+          "reminderId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11",
+          "name": "Atorvastatin",
+          "dosage": "20mg",
+          "fireAt": 1783764000000
+        },
+        {
+          "occurrenceId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11:1783850400000",
+          "reminderId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11",
+          "name": "Atorvastatin",
+          "dosage": "20mg",
+          "fireAt": 1783850400000
+        },
+        {
+          "occurrenceId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11:1783936800000",
+          "reminderId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11",
+          "name": "Atorvastatin",
+          "dosage": "20mg",
+          "fireAt": 1783936800000
+        },
+        {
+          "occurrenceId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11:1784023200000",
+          "reminderId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11",
+          "name": "Atorvastatin",
+          "dosage": "20mg",
+          "fireAt": 1784023200000
+        },
+        {
+          "occurrenceId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11:1784109600000",
+          "reminderId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11",
+          "name": "Atorvastatin",
+          "dosage": "20mg",
+          "fireAt": 1784109600000
+        },
+        {
+          "occurrenceId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11:1784196000000",
+          "reminderId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11",
+          "name": "Atorvastatin",
+          "dosage": "20mg",
+          "fireAt": 1784196000000
+        },
+        {
+          "occurrenceId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11:1784282400000",
+          "reminderId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11",
+          "name": "Atorvastatin",
+          "dosage": "20mg",
+          "fireAt": 1784282400000
+        },
+        {
+          "occurrenceId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11:1784368800000",
+          "reminderId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11",
+          "name": "Atorvastatin",
+          "dosage": "20mg",
+          "fireAt": 1784368800000
+        },
+        {
+          "occurrenceId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11:1784455200000",
+          "reminderId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11",
+          "name": "Atorvastatin",
+          "dosage": "20mg",
+          "fireAt": 1784455200000
+        },
+        {
+          "occurrenceId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11:1784541600000",
+          "reminderId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11",
+          "name": "Atorvastatin",
+          "dosage": "20mg",
+          "fireAt": 1784541600000
+        },
+        {
+          "occurrenceId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11:1784628000000",
+          "reminderId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11",
+          "name": "Atorvastatin",
+          "dosage": "20mg",
+          "fireAt": 1784628000000
+        },
+        {
+          "occurrenceId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11:1784714400000",
+          "reminderId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11",
+          "name": "Atorvastatin",
+          "dosage": "20mg",
+          "fireAt": 1784714400000
+        },
+        {
+          "occurrenceId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11:1784800800000",
+          "reminderId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11",
+          "name": "Atorvastatin",
+          "dosage": "20mg",
+          "fireAt": 1784800800000
+        },
+        {
+          "occurrenceId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11:1784887200000",
+          "reminderId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11",
+          "name": "Atorvastatin",
+          "dosage": "20mg",
+          "fireAt": 1784887200000
+        },
+        {
+          "occurrenceId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11:1784973600000",
+          "reminderId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11",
+          "name": "Atorvastatin",
+          "dosage": "20mg",
+          "fireAt": 1784973600000
+        },
+        {
+          "occurrenceId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11:1785060000000",
+          "reminderId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11",
+          "name": "Atorvastatin",
+          "dosage": "20mg",
+          "fireAt": 1785060000000
+        },
+        {
+          "occurrenceId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11:1785146400000",
+          "reminderId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11",
+          "name": "Atorvastatin",
+          "dosage": "20mg",
+          "fireAt": 1785146400000
+        },
+        {
+          "occurrenceId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11:1785232800000",
+          "reminderId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11",
+          "name": "Atorvastatin",
+          "dosage": "20mg",
+          "fireAt": 1785232800000
+        },
+        {
+          "occurrenceId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11:1785319200000",
+          "reminderId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11",
+          "name": "Atorvastatin",
+          "dosage": "20mg",
+          "fireAt": 1785319200000
+        },
+        {
+          "occurrenceId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11:1785405600000",
+          "reminderId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11",
+          "name": "Atorvastatin",
+          "dosage": "20mg",
+          "fireAt": 1785405600000
+        },
+        {
+          "occurrenceId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11:1785492000000",
+          "reminderId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11",
+          "name": "Atorvastatin",
+          "dosage": "20mg",
+          "fireAt": 1785492000000
+        },
+        {
+          "occurrenceId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11:1785578400000",
+          "reminderId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11",
+          "name": "Atorvastatin",
+          "dosage": "20mg",
+          "fireAt": 1785578400000
+        },
+        {
+          "occurrenceId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11:1785664800000",
+          "reminderId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11",
+          "name": "Atorvastatin",
+          "dosage": "20mg",
+          "fireAt": 1785664800000
+        },
+        {
+          "occurrenceId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11:1785751200000",
+          "reminderId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11",
+          "name": "Atorvastatin",
+          "dosage": "20mg",
+          "fireAt": 1785751200000
+        },
+        {
+          "occurrenceId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11:1785837600000",
+          "reminderId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11",
+          "name": "Atorvastatin",
+          "dosage": "20mg",
+          "fireAt": 1785837600000
+        },
+        {
+          "occurrenceId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11:1785924000000",
+          "reminderId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11",
+          "name": "Atorvastatin",
+          "dosage": "20mg",
+          "fireAt": 1785924000000
+        },
+        {
+          "occurrenceId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11:1786010400000",
+          "reminderId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11",
+          "name": "Atorvastatin",
+          "dosage": "20mg",
+          "fireAt": 1786010400000
+        },
+        {
+          "occurrenceId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11:1786096800000",
+          "reminderId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11",
+          "name": "Atorvastatin",
+          "dosage": "20mg",
+          "fireAt": 1786096800000
+        },
+        {
+          "occurrenceId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11:1786183200000",
+          "reminderId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11",
+          "name": "Atorvastatin",
+          "dosage": "20mg",
+          "fireAt": 1786183200000
+        },
+        {
+          "occurrenceId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11:1786269600000",
+          "reminderId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11",
+          "name": "Atorvastatin",
+          "dosage": "20mg",
+          "fireAt": 1786269600000
+        },
+        {
+          "occurrenceId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11:1786356000000",
+          "reminderId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11",
+          "name": "Atorvastatin",
+          "dosage": "20mg",
+          "fireAt": 1786356000000
+        },
+        {
+          "occurrenceId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11:1786442400000",
+          "reminderId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11",
+          "name": "Atorvastatin",
+          "dosage": "20mg",
+          "fireAt": 1786442400000
+        },
+        {
+          "occurrenceId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11:1786528800000",
+          "reminderId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11",
+          "name": "Atorvastatin",
+          "dosage": "20mg",
+          "fireAt": 1786528800000
+        },
+        {
+          "occurrenceId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11:1786615200000",
+          "reminderId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11",
+          "name": "Atorvastatin",
+          "dosage": "20mg",
+          "fireAt": 1786615200000
+        },
+        {
+          "occurrenceId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11:1786701600000",
+          "reminderId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11",
+          "name": "Atorvastatin",
+          "dosage": "20mg",
+          "fireAt": 1786701600000
+        },
+        {
+          "occurrenceId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11:1786788000000",
+          "reminderId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11",
+          "name": "Atorvastatin",
+          "dosage": "20mg",
+          "fireAt": 1786788000000
+        },
+        {
+          "occurrenceId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11:1786874400000",
+          "reminderId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11",
+          "name": "Atorvastatin",
+          "dosage": "20mg",
+          "fireAt": 1786874400000
+        },
+        {
+          "occurrenceId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11:1786960800000",
+          "reminderId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11",
+          "name": "Atorvastatin",
+          "dosage": "20mg",
+          "fireAt": 1786960800000
+        },
+        {
+          "occurrenceId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11:1787047200000",
+          "reminderId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11",
+          "name": "Atorvastatin",
+          "dosage": "20mg",
+          "fireAt": 1787047200000
+        },
+        {
+          "occurrenceId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11:1787133600000",
+          "reminderId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11",
+          "name": "Atorvastatin",
+          "dosage": "20mg",
+          "fireAt": 1787133600000
+        },
+        {
+          "occurrenceId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11:1787220000000",
+          "reminderId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11",
+          "name": "Atorvastatin",
+          "dosage": "20mg",
+          "fireAt": 1787220000000
+        },
+        {
+          "occurrenceId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11:1787306400000",
+          "reminderId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11",
+          "name": "Atorvastatin",
+          "dosage": "20mg",
+          "fireAt": 1787306400000
+        },
+        {
+          "occurrenceId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11:1787392800000",
+          "reminderId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11",
+          "name": "Atorvastatin",
+          "dosage": "20mg",
+          "fireAt": 1787392800000
+        },
+        {
+          "occurrenceId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11:1787479200000",
+          "reminderId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11",
+          "name": "Atorvastatin",
+          "dosage": "20mg",
+          "fireAt": 1787479200000
+        },
+        {
+          "occurrenceId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11:1787565600000",
+          "reminderId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11",
+          "name": "Atorvastatin",
+          "dosage": "20mg",
+          "fireAt": 1787565600000
+        },
+        {
+          "occurrenceId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11:1787652000000",
+          "reminderId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11",
+          "name": "Atorvastatin",
+          "dosage": "20mg",
+          "fireAt": 1787652000000
+        },
+        {
+          "occurrenceId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11:1787738400000",
+          "reminderId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11",
+          "name": "Atorvastatin",
+          "dosage": "20mg",
+          "fireAt": 1787738400000
+        },
+        {
+          "occurrenceId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11:1787824800000",
+          "reminderId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11",
+          "name": "Atorvastatin",
+          "dosage": "20mg",
+          "fireAt": 1787824800000
+        },
+        {
+          "occurrenceId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11:1787911200000",
+          "reminderId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11",
+          "name": "Atorvastatin",
+          "dosage": "20mg",
+          "fireAt": 1787911200000
+        },
+        {
+          "occurrenceId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11:1787997600000",
+          "reminderId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11",
+          "name": "Atorvastatin",
+          "dosage": "20mg",
+          "fireAt": 1787997600000
+        },
+        {
+          "occurrenceId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11:1788084000000",
+          "reminderId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11",
+          "name": "Atorvastatin",
+          "dosage": "20mg",
+          "fireAt": 1788084000000
+        },
+        {
+          "occurrenceId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11:1788170400000",
+          "reminderId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11",
+          "name": "Atorvastatin",
+          "dosage": "20mg",
+          "fireAt": 1788170400000
+        },
+        {
+          "occurrenceId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11:1788256800000",
+          "reminderId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11",
+          "name": "Atorvastatin",
+          "dosage": "20mg",
+          "fireAt": 1788256800000
+        },
+        {
+          "occurrenceId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11:1788343200000",
+          "reminderId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11",
+          "name": "Atorvastatin",
+          "dosage": "20mg",
+          "fireAt": 1788343200000
+        },
+        {
+          "occurrenceId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11:1788429600000",
+          "reminderId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11",
+          "name": "Atorvastatin",
+          "dosage": "20mg",
+          "fireAt": 1788429600000
+        },
+        {
+          "occurrenceId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11:1788516000000",
+          "reminderId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11",
+          "name": "Atorvastatin",
+          "dosage": "20mg",
+          "fireAt": 1788516000000
+        },
+        {
+          "occurrenceId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11:1788602400000",
+          "reminderId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11",
+          "name": "Atorvastatin",
+          "dosage": "20mg",
+          "fireAt": 1788602400000
+        },
+        {
+          "occurrenceId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11:1788688800000",
+          "reminderId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11",
+          "name": "Atorvastatin",
+          "dosage": "20mg",
+          "fireAt": 1788688800000
+        },
+        {
+          "occurrenceId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11:1788775200000",
+          "reminderId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11",
+          "name": "Atorvastatin",
+          "dosage": "20mg",
+          "fireAt": 1788775200000
+        },
+        {
+          "occurrenceId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11:1788861600000",
+          "reminderId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11",
+          "name": "Atorvastatin",
+          "dosage": "20mg",
+          "fireAt": 1788861600000
+        },
+        {
+          "occurrenceId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11:1788948000000",
+          "reminderId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11",
+          "name": "Atorvastatin",
+          "dosage": "20mg",
+          "fireAt": 1788948000000
+        },
+        {
+          "occurrenceId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11:1789034400000",
+          "reminderId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11",
+          "name": "Atorvastatin",
+          "dosage": "20mg",
+          "fireAt": 1789034400000
+        },
+        {
+          "occurrenceId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11:1789120800000",
+          "reminderId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11",
+          "name": "Atorvastatin",
+          "dosage": "20mg",
+          "fireAt": 1789120800000
+        },
+        {
+          "occurrenceId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11:1789207200000",
+          "reminderId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11",
+          "name": "Atorvastatin",
+          "dosage": "20mg",
+          "fireAt": 1789207200000
+        },
+        {
+          "occurrenceId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11:1789293600000",
+          "reminderId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11",
+          "name": "Atorvastatin",
+          "dosage": "20mg",
+          "fireAt": 1789293600000
+        },
+        {
+          "occurrenceId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11:1789380000000",
+          "reminderId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11",
+          "name": "Atorvastatin",
+          "dosage": "20mg",
+          "fireAt": 1789380000000
+        },
+        {
+          "occurrenceId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11:1789466400000",
+          "reminderId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11",
+          "name": "Atorvastatin",
+          "dosage": "20mg",
+          "fireAt": 1789466400000
+        },
+        {
+          "occurrenceId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11:1789552800000",
+          "reminderId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11",
+          "name": "Atorvastatin",
+          "dosage": "20mg",
+          "fireAt": 1789552800000
+        }
+      ]
+    },
+    {
+      "name": "weekly: only the selected weekdays",
+      "input": {
+        "call": "nextOccurrences",
+        "reminder": {
+          "_id": "j97doc3f1c0a52",
+          "localId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11",
+          "userId": "user_golden",
+          "kind": "medication",
+          "name": "Atorvastatin",
+          "dosage": "20mg",
+          "schedule": {
+            "type": "weekly",
+            "daysOfWeek": [
+              1,
+              3,
+              5
+            ],
+            "times": [
+              "07:00"
+            ]
+          },
+          "priority": "normal",
+          "tags": [],
+          "caregiverIds": [],
+          "active": true,
+          "createdAt": 1700000000000,
+          "updatedAt": 1700000000000
+        },
+        "fromMs": 1783051200000,
+        "count": 5,
+        "zone": "America/New_York"
+      },
+      "output": [
+        {
+          "occurrenceId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11:1783076400000",
+          "reminderId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11",
+          "name": "Atorvastatin",
+          "dosage": "20mg",
+          "fireAt": 1783076400000
+        },
+        {
+          "occurrenceId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11:1783335600000",
+          "reminderId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11",
+          "name": "Atorvastatin",
+          "dosage": "20mg",
+          "fireAt": 1783335600000
+        },
+        {
+          "occurrenceId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11:1783508400000",
+          "reminderId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11",
+          "name": "Atorvastatin",
+          "dosage": "20mg",
+          "fireAt": 1783508400000
+        },
+        {
+          "occurrenceId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11:1783681200000",
+          "reminderId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11",
+          "name": "Atorvastatin",
+          "dosage": "20mg",
+          "fireAt": 1783681200000
+        },
+        {
+          "occurrenceId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11:1783940400000",
+          "reminderId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11",
+          "name": "Atorvastatin",
+          "dosage": "20mg",
+          "fireAt": 1783940400000
+        }
+      ]
+    },
+    {
+      "name": "weekly: several times on a selected day",
+      "input": {
+        "call": "nextOccurrences",
+        "reminder": {
+          "_id": "j97doc3f1c0a52",
+          "localId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11",
+          "userId": "user_golden",
+          "kind": "medication",
+          "name": "Atorvastatin",
+          "dosage": "20mg",
+          "schedule": {
+            "type": "weekly",
+            "daysOfWeek": [
+              1
+            ],
+            "times": [
+              "19:00",
+              "07:00"
+            ]
+          },
+          "priority": "normal",
+          "tags": [],
+          "caregiverIds": [],
+          "active": true,
+          "createdAt": 1700000000000,
+          "updatedAt": 1700000000000
+        },
+        "fromMs": 1783310400000,
+        "count": 2,
+        "zone": "America/New_York"
+      },
+      "output": [
+        {
+          "occurrenceId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11:1783335600000",
+          "reminderId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11",
+          "name": "Atorvastatin",
+          "dosage": "20mg",
+          "fireAt": 1783335600000
+        },
+        {
+          "occurrenceId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11:1783378800000",
+          "reminderId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11",
+          "name": "Atorvastatin",
+          "dosage": "20mg",
+          "fireAt": 1783378800000
+        }
+      ]
+    },
+    {
+      "name": "weekly: no days, no moments",
+      "input": {
+        "call": "nextOccurrences",
+        "reminder": {
+          "_id": "j97doc3f1c0a52",
+          "localId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11",
+          "userId": "user_golden",
+          "kind": "medication",
+          "name": "Atorvastatin",
+          "dosage": "20mg",
+          "schedule": {
+            "type": "weekly",
+            "daysOfWeek": [],
+            "times": [
+              "09:00"
+            ]
+          },
+          "priority": "normal",
+          "tags": [],
+          "caregiverIds": [],
+          "active": true,
+          "createdAt": 1700000000000,
+          "updatedAt": 1700000000000
+        },
+        "fromMs": 1783051200000,
+        "count": 5,
+        "zone": "America/New_York"
+      },
+      "output": []
+    },
+    {
+      "name": "weekly: no times, no moments",
+      "input": {
+        "call": "nextOccurrences",
+        "reminder": {
+          "_id": "j97doc3f1c0a52",
+          "localId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11",
+          "userId": "user_golden",
+          "kind": "medication",
+          "name": "Atorvastatin",
+          "dosage": "20mg",
+          "schedule": {
+            "type": "weekly",
+            "daysOfWeek": [
+              1
+            ],
+            "times": []
+          },
+          "priority": "normal",
+          "tags": [],
+          "caregiverIds": [],
+          "active": true,
+          "createdAt": 1700000000000,
+          "updatedAt": 1700000000000
+        },
+        "fromMs": 1783051200000,
+        "count": 5,
+        "zone": "America/New_York"
+      },
+      "output": []
+    },
+    {
+      "name": "weekly: a day outside 0..6 is unreadable",
+      "input": {
+        "call": "nextOccurrences",
+        "reminder": {
+          "_id": "j97doc3f1c0a52",
+          "localId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11",
+          "userId": "user_golden",
+          "kind": "medication",
+          "name": "Atorvastatin",
+          "dosage": "20mg",
+          "schedule": {
+            "type": "weekly",
+            "daysOfWeek": [
+              7
+            ],
+            "times": [
+              "09:00"
+            ]
+          },
+          "priority": "normal",
+          "tags": [],
+          "caregiverIds": [],
+          "active": true,
+          "createdAt": 1700000000000,
+          "updatedAt": 1700000000000
+        },
+        "fromMs": 1783051200000,
+        "count": 5,
+        "zone": "America/New_York"
+      },
+      "output": []
+    },
+    {
+      "name": "weekly: a moment exactly at from is excluded",
+      "input": {
+        "call": "nextOccurrences",
+        "reminder": {
+          "_id": "j97doc3f1c0a52",
+          "localId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11",
+          "userId": "user_golden",
+          "kind": "medication",
+          "name": "Atorvastatin",
+          "dosage": "20mg",
+          "schedule": {
+            "type": "weekly",
+            "daysOfWeek": [
+              1
+            ],
+            "times": [
+              "07:00"
+            ]
+          },
+          "priority": "normal",
+          "tags": [],
+          "caregiverIds": [],
+          "active": true,
+          "createdAt": 1700000000000,
+          "updatedAt": 1700000000000
+        },
+        "fromMs": 1783335600000,
+        "count": 1,
+        "zone": "America/New_York"
+      },
+      "output": [
+        {
+          "occurrenceId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11:1783940400000",
+          "reminderId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11",
+          "name": "Atorvastatin",
+          "dosage": "20mg",
+          "fireAt": 1783940400000
+        }
+      ]
+    },
+    {
+      "name": "weekly: stops at the 56-day horizon",
+      "input": {
+        "call": "nextOccurrences",
+        "reminder": {
+          "_id": "j97doc3f1c0a52",
+          "localId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11",
+          "userId": "user_golden",
+          "kind": "medication",
+          "name": "Atorvastatin",
+          "dosage": "20mg",
+          "schedule": {
+            "type": "weekly",
+            "daysOfWeek": [
+              0
+            ],
+            "times": [
+              "09:00"
+            ]
+          },
+          "priority": "normal",
+          "tags": [],
+          "caregiverIds": [],
+          "active": true,
+          "createdAt": 1700000000000,
+          "updatedAt": 1700000000000
+        },
+        "fromMs": 1783051200000,
+        "count": 20,
+        "zone": "America/New_York"
+      },
+      "output": [
+        {
+          "occurrenceId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11:1783256400000",
+          "reminderId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11",
+          "name": "Atorvastatin",
+          "dosage": "20mg",
+          "fireAt": 1783256400000
+        },
+        {
+          "occurrenceId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11:1783861200000",
+          "reminderId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11",
+          "name": "Atorvastatin",
+          "dosage": "20mg",
+          "fireAt": 1783861200000
+        },
+        {
+          "occurrenceId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11:1784466000000",
+          "reminderId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11",
+          "name": "Atorvastatin",
+          "dosage": "20mg",
+          "fireAt": 1784466000000
+        },
+        {
+          "occurrenceId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11:1785070800000",
+          "reminderId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11",
+          "name": "Atorvastatin",
+          "dosage": "20mg",
+          "fireAt": 1785070800000
+        },
+        {
+          "occurrenceId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11:1785675600000",
+          "reminderId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11",
+          "name": "Atorvastatin",
+          "dosage": "20mg",
+          "fireAt": 1785675600000
+        },
+        {
+          "occurrenceId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11:1786280400000",
+          "reminderId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11",
+          "name": "Atorvastatin",
+          "dosage": "20mg",
+          "fireAt": 1786280400000
+        },
+        {
+          "occurrenceId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11:1786885200000",
+          "reminderId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11",
+          "name": "Atorvastatin",
+          "dosage": "20mg",
+          "fireAt": 1786885200000
+        },
+        {
+          "occurrenceId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11:1787490000000",
+          "reminderId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11",
+          "name": "Atorvastatin",
+          "dosage": "20mg",
+          "fireAt": 1787490000000
+        }
+      ]
+    },
+    {
+      "name": "weekly: Sunday across spring forward",
+      "input": {
+        "call": "nextOccurrences",
+        "reminder": {
+          "_id": "j97doc3f1c0a52",
+          "localId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11",
+          "userId": "user_golden",
+          "kind": "medication",
+          "name": "Atorvastatin",
+          "dosage": "20mg",
+          "schedule": {
+            "type": "weekly",
+            "daysOfWeek": [
+              0
+            ],
+            "times": [
+              "02:30"
+            ]
+          },
+          "priority": "normal",
+          "tags": [],
+          "caregiverIds": [],
+          "active": true,
+          "createdAt": 1700000000000,
+          "updatedAt": 1700000000000
+        },
+        "fromMs": 1772341200000,
+        "count": 3,
+        "zone": "America/New_York"
+      },
+      "output": [
+        {
+          "occurrenceId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11:1772350200000",
+          "reminderId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11",
+          "name": "Atorvastatin",
+          "dosage": "20mg",
+          "fireAt": 1772350200000
+        },
+        {
+          "occurrenceId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11:1772955000000",
+          "reminderId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11",
+          "name": "Atorvastatin",
+          "dosage": "20mg",
+          "fireAt": 1772955000000
+        },
+        {
+          "occurrenceId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11:1773556200000",
+          "reminderId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11",
+          "name": "Atorvastatin",
+          "dosage": "20mg",
+          "fireAt": 1773556200000
+        }
+      ]
+    },
+    {
+      "name": "monthly: the dates it names",
+      "input": {
+        "call": "nextOccurrences",
+        "reminder": {
+          "_id": "j97doc3f1c0a52",
+          "localId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11",
+          "userId": "user_golden",
+          "kind": "medication",
+          "name": "Atorvastatin",
+          "dosage": "20mg",
+          "schedule": {
+            "type": "monthly",
+            "daysOfMonth": [
+              15
+            ],
+            "times": [
+              "09:00"
+            ]
+          },
+          "priority": "normal",
+          "tags": [],
+          "caregiverIds": [],
+          "active": true,
+          "createdAt": 1700000000000,
+          "updatedAt": 1700000000000
+        },
+        "fromMs": 1767243600000,
+        "count": 4,
+        "zone": "America/New_York"
+      },
+      "output": [
+        {
+          "occurrenceId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11:1768485600000",
+          "reminderId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11",
+          "name": "Atorvastatin",
+          "dosage": "20mg",
+          "fireAt": 1768485600000
+        },
+        {
+          "occurrenceId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11:1771164000000",
+          "reminderId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11",
+          "name": "Atorvastatin",
+          "dosage": "20mg",
+          "fireAt": 1771164000000
+        },
+        {
+          "occurrenceId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11:1773579600000",
+          "reminderId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11",
+          "name": "Atorvastatin",
+          "dosage": "20mg",
+          "fireAt": 1773579600000
+        },
+        {
+          "occurrenceId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11:1776258000000",
+          "reminderId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11",
+          "name": "Atorvastatin",
+          "dosage": "20mg",
+          "fireAt": 1776258000000
+        }
+      ]
+    },
+    {
+      "name": "monthly: the 31st lands on a short month's last day",
+      "input": {
+        "call": "nextOccurrences",
+        "reminder": {
+          "_id": "j97doc3f1c0a52",
+          "localId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11",
+          "userId": "user_golden",
+          "kind": "medication",
+          "name": "Atorvastatin",
+          "dosage": "20mg",
+          "schedule": {
+            "type": "monthly",
+            "daysOfMonth": [
+              31
+            ],
+            "times": [
+              "09:00"
+            ]
+          },
+          "priority": "normal",
+          "tags": [],
+          "caregiverIds": [],
+          "active": true,
+          "createdAt": 1700000000000,
+          "updatedAt": 1700000000000
+        },
+        "fromMs": 1767243600000,
+        "count": 6,
+        "zone": "America/New_York"
+      },
+      "output": [
+        {
+          "occurrenceId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11:1769868000000",
+          "reminderId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11",
+          "name": "Atorvastatin",
+          "dosage": "20mg",
+          "fireAt": 1769868000000
+        },
+        {
+          "occurrenceId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11:1772287200000",
+          "reminderId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11",
+          "name": "Atorvastatin",
+          "dosage": "20mg",
+          "fireAt": 1772287200000
+        },
+        {
+          "occurrenceId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11:1774962000000",
+          "reminderId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11",
+          "name": "Atorvastatin",
+          "dosage": "20mg",
+          "fireAt": 1774962000000
+        },
+        {
+          "occurrenceId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11:1777554000000",
+          "reminderId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11",
+          "name": "Atorvastatin",
+          "dosage": "20mg",
+          "fireAt": 1777554000000
+        },
+        {
+          "occurrenceId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11:1780232400000",
+          "reminderId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11",
+          "name": "Atorvastatin",
+          "dosage": "20mg",
+          "fireAt": 1780232400000
+        },
+        {
+          "occurrenceId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11:1782824400000",
+          "reminderId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11",
+          "name": "Atorvastatin",
+          "dosage": "20mg",
+          "fireAt": 1782824400000
+        }
+      ]
+    },
+    {
+      "name": "monthly: the 31st lands on February 29 in a leap year",
+      "input": {
+        "call": "nextOccurrences",
+        "reminder": {
+          "_id": "j97doc3f1c0a52",
+          "localId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11",
+          "userId": "user_golden",
+          "kind": "medication",
+          "name": "Atorvastatin",
+          "dosage": "20mg",
+          "schedule": {
+            "type": "monthly",
+            "daysOfMonth": [
+              31
+            ],
+            "times": [
+              "09:00"
+            ]
+          },
+          "priority": "normal",
+          "tags": [],
+          "caregiverIds": [],
+          "active": true,
+          "createdAt": 1700000000000,
+          "updatedAt": 1700000000000
+        },
+        "fromMs": 1832994000000,
+        "count": 1,
+        "zone": "America/New_York"
+      },
+      "output": [
+        {
+          "occurrenceId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11:1835445600000",
+          "reminderId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11",
+          "name": "Atorvastatin",
+          "dosage": "20mg",
+          "fireAt": 1835445600000
+        }
+      ]
+    },
+    {
+      "name": "monthly: the 30th and 31st collapse onto one February date",
+      "input": {
+        "call": "nextOccurrences",
+        "reminder": {
+          "_id": "j97doc3f1c0a52",
+          "localId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11",
+          "userId": "user_golden",
+          "kind": "medication",
+          "name": "Atorvastatin",
+          "dosage": "20mg",
+          "schedule": {
+            "type": "monthly",
+            "daysOfMonth": [
+              30,
+              31
+            ],
+            "times": [
+              "09:00"
+            ]
+          },
+          "priority": "normal",
+          "tags": [],
+          "caregiverIds": [],
+          "active": true,
+          "createdAt": 1700000000000,
+          "updatedAt": 1700000000000
+        },
+        "fromMs": 1769922000000,
+        "count": 2,
+        "zone": "America/New_York"
+      },
+      "output": [
+        {
+          "occurrenceId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11:1772287200000",
+          "reminderId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11",
+          "name": "Atorvastatin",
+          "dosage": "20mg",
+          "fireAt": 1772287200000
+        },
+        {
+          "occurrenceId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11:1774875600000",
+          "reminderId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11",
+          "name": "Atorvastatin",
+          "dosage": "20mg",
+          "fireAt": 1774875600000
+        }
+      ]
+    },
+    {
+      "name": "monthly: the 29th skips a non-leap February",
+      "input": {
+        "call": "nextOccurrences",
+        "reminder": {
+          "_id": "j97doc3f1c0a52",
+          "localId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11",
+          "userId": "user_golden",
+          "kind": "medication",
+          "name": "Atorvastatin",
+          "dosage": "20mg",
+          "schedule": {
+            "type": "monthly",
+            "daysOfMonth": [
+              29
+            ],
+            "times": [
+              "09:00"
+            ]
+          },
+          "priority": "normal",
+          "tags": [],
+          "caregiverIds": [],
+          "active": true,
+          "createdAt": 1700000000000,
+          "updatedAt": 1700000000000
+        },
+        "fromMs": 1769922000000,
+        "count": 1,
+        "zone": "America/New_York"
+      },
+      "output": [
+        {
+          "occurrenceId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11:1772287200000",
+          "reminderId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11",
+          "name": "Atorvastatin",
+          "dosage": "20mg",
+          "fireAt": 1772287200000
+        }
+      ]
+    },
+    {
+      "name": "monthly: dates in any order come out in order",
+      "input": {
+        "call": "nextOccurrences",
+        "reminder": {
+          "_id": "j97doc3f1c0a52",
+          "localId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11",
+          "userId": "user_golden",
+          "kind": "medication",
+          "name": "Atorvastatin",
+          "dosage": "20mg",
+          "schedule": {
+            "type": "monthly",
+            "daysOfMonth": [
+              20,
+              5
+            ],
+            "times": [
+              "18:00",
+              "08:00"
+            ]
+          },
+          "priority": "normal",
+          "tags": [],
+          "caregiverIds": [],
+          "active": true,
+          "createdAt": 1700000000000,
+          "updatedAt": 1700000000000
+        },
+        "fromMs": 1767243600000,
+        "count": 4,
+        "zone": "America/New_York"
+      },
+      "output": [
+        {
+          "occurrenceId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11:1767618000000",
+          "reminderId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11",
+          "name": "Atorvastatin",
+          "dosage": "20mg",
+          "fireAt": 1767618000000
+        },
+        {
+          "occurrenceId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11:1767654000000",
+          "reminderId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11",
+          "name": "Atorvastatin",
+          "dosage": "20mg",
+          "fireAt": 1767654000000
+        },
+        {
+          "occurrenceId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11:1768914000000",
+          "reminderId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11",
+          "name": "Atorvastatin",
+          "dosage": "20mg",
+          "fireAt": 1768914000000
+        },
+        {
+          "occurrenceId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11:1768950000000",
+          "reminderId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11",
+          "name": "Atorvastatin",
+          "dosage": "20mg",
+          "fireAt": 1768950000000
+        }
+      ]
+    },
+    {
+      "name": "monthly: a later date this month comes due this month",
+      "input": {
+        "call": "nextOccurrences",
+        "reminder": {
+          "_id": "j97doc3f1c0a52",
+          "localId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11",
+          "userId": "user_golden",
+          "kind": "medication",
+          "name": "Atorvastatin",
+          "dosage": "20mg",
+          "schedule": {
+            "type": "monthly",
+            "daysOfMonth": [
+              10
+            ],
+            "times": [
+              "09:00"
+            ]
+          },
+          "priority": "normal",
+          "tags": [],
+          "caregiverIds": [],
+          "active": true,
+          "createdAt": 1700000000000,
+          "updatedAt": 1700000000000
+        },
+        "fromMs": 1767330000000,
+        "count": 1,
+        "zone": "America/New_York"
+      },
+      "output": [
+        {
+          "occurrenceId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11:1768053600000",
+          "reminderId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11",
+          "name": "Atorvastatin",
+          "dosage": "20mg",
+          "fireAt": 1768053600000
+        }
+      ]
+    },
+    {
+      "name": "monthly: a moment exactly at from is excluded",
+      "input": {
+        "call": "nextOccurrences",
+        "reminder": {
+          "_id": "j97doc3f1c0a52",
+          "localId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11",
+          "userId": "user_golden",
+          "kind": "medication",
+          "name": "Atorvastatin",
+          "dosage": "20mg",
+          "schedule": {
+            "type": "monthly",
+            "daysOfMonth": [
+              15
+            ],
+            "times": [
+              "09:00"
+            ]
+          },
+          "priority": "normal",
+          "tags": [],
+          "caregiverIds": [],
+          "active": true,
+          "createdAt": 1700000000000,
+          "updatedAt": 1700000000000
+        },
+        "fromMs": 1768485600000,
+        "count": 1,
+        "zone": "America/New_York"
+      },
+      "output": [
+        {
+          "occurrenceId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11:1771164000000",
+          "reminderId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11",
+          "name": "Atorvastatin",
+          "dosage": "20mg",
+          "fireAt": 1771164000000
+        }
+      ]
+    },
+    {
+      "name": "monthly: no dates, no moments",
+      "input": {
+        "call": "nextOccurrences",
+        "reminder": {
+          "_id": "j97doc3f1c0a52",
+          "localId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11",
+          "userId": "user_golden",
+          "kind": "medication",
+          "name": "Atorvastatin",
+          "dosage": "20mg",
+          "schedule": {
+            "type": "monthly",
+            "daysOfMonth": [],
+            "times": [
+              "09:00"
+            ]
+          },
+          "priority": "normal",
+          "tags": [],
+          "caregiverIds": [],
+          "active": true,
+          "createdAt": 1700000000000,
+          "updatedAt": 1700000000000
+        },
+        "fromMs": 1767243600000,
+        "count": 5,
+        "zone": "America/New_York"
+      },
+      "output": []
+    },
+    {
+      "name": "monthly: a date of 0 is unreadable",
+      "input": {
+        "call": "nextOccurrences",
+        "reminder": {
+          "_id": "j97doc3f1c0a52",
+          "localId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11",
+          "userId": "user_golden",
+          "kind": "medication",
+          "name": "Atorvastatin",
+          "dosage": "20mg",
+          "schedule": {
+            "type": "monthly",
+            "daysOfMonth": [
+              0
+            ],
+            "times": [
+              "09:00"
+            ]
+          },
+          "priority": "normal",
+          "tags": [],
+          "caregiverIds": [],
+          "active": true,
+          "createdAt": 1700000000000,
+          "updatedAt": 1700000000000
+        },
+        "fromMs": 1767243600000,
+        "count": 5,
+        "zone": "America/New_York"
+      },
+      "output": []
+    },
+    {
+      "name": "monthly: keeps its wall-clock time across a clock change",
+      "input": {
+        "call": "nextOccurrences",
+        "reminder": {
+          "_id": "j97doc3f1c0a52",
+          "localId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11",
+          "userId": "user_golden",
+          "kind": "medication",
+          "name": "Atorvastatin",
+          "dosage": "20mg",
+          "schedule": {
+            "type": "monthly",
+            "daysOfMonth": [
+              1
+            ],
+            "times": [
+              "09:00"
+            ]
+          },
+          "priority": "normal",
+          "tags": [],
+          "caregiverIds": [],
+          "active": true,
+          "createdAt": 1700000000000,
+          "updatedAt": 1700000000000
+        },
+        "fromMs": 1771131600000,
+        "count": 2,
+        "zone": "America/New_York"
+      },
+      "output": [
+        {
+          "occurrenceId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11:1772373600000",
+          "reminderId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11",
+          "name": "Atorvastatin",
+          "dosage": "20mg",
+          "fireAt": 1772373600000
+        },
+        {
+          "occurrenceId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11:1775048400000",
+          "reminderId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11",
+          "name": "Atorvastatin",
+          "dosage": "20mg",
+          "fireAt": 1775048400000
+        }
+      ]
+    },
+    {
+      "name": "monthly: stops at the 400-day horizon",
+      "input": {
+        "call": "nextOccurrences",
+        "reminder": {
+          "_id": "j97doc3f1c0a52",
+          "localId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11",
+          "userId": "user_golden",
+          "kind": "medication",
+          "name": "Atorvastatin",
+          "dosage": "20mg",
+          "schedule": {
+            "type": "monthly",
+            "daysOfMonth": [
+              1
+            ],
+            "times": [
+              "09:00"
+            ]
+          },
+          "priority": "normal",
+          "tags": [],
+          "caregiverIds": [],
+          "active": true,
+          "createdAt": 1700000000000,
+          "updatedAt": 1700000000000
+        },
+        "fromMs": 1767243600000,
+        "count": 20,
+        "zone": "America/New_York"
+      },
+      "output": [
+        {
+          "occurrenceId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11:1767276000000",
+          "reminderId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11",
+          "name": "Atorvastatin",
+          "dosage": "20mg",
+          "fireAt": 1767276000000
+        },
+        {
+          "occurrenceId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11:1769954400000",
+          "reminderId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11",
+          "name": "Atorvastatin",
+          "dosage": "20mg",
+          "fireAt": 1769954400000
+        },
+        {
+          "occurrenceId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11:1772373600000",
+          "reminderId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11",
+          "name": "Atorvastatin",
+          "dosage": "20mg",
+          "fireAt": 1772373600000
+        },
+        {
+          "occurrenceId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11:1775048400000",
+          "reminderId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11",
+          "name": "Atorvastatin",
+          "dosage": "20mg",
+          "fireAt": 1775048400000
+        },
+        {
+          "occurrenceId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11:1777640400000",
+          "reminderId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11",
+          "name": "Atorvastatin",
+          "dosage": "20mg",
+          "fireAt": 1777640400000
+        },
+        {
+          "occurrenceId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11:1780318800000",
+          "reminderId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11",
+          "name": "Atorvastatin",
+          "dosage": "20mg",
+          "fireAt": 1780318800000
+        },
+        {
+          "occurrenceId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11:1782910800000",
+          "reminderId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11",
+          "name": "Atorvastatin",
+          "dosage": "20mg",
+          "fireAt": 1782910800000
+        },
+        {
+          "occurrenceId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11:1785589200000",
+          "reminderId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11",
+          "name": "Atorvastatin",
+          "dosage": "20mg",
+          "fireAt": 1785589200000
+        },
+        {
+          "occurrenceId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11:1788267600000",
+          "reminderId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11",
+          "name": "Atorvastatin",
+          "dosage": "20mg",
+          "fireAt": 1788267600000
+        },
+        {
+          "occurrenceId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11:1790859600000",
+          "reminderId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11",
+          "name": "Atorvastatin",
+          "dosage": "20mg",
+          "fireAt": 1790859600000
+        },
+        {
+          "occurrenceId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11:1793541600000",
+          "reminderId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11",
+          "name": "Atorvastatin",
+          "dosage": "20mg",
+          "fireAt": 1793541600000
+        },
+        {
+          "occurrenceId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11:1796133600000",
+          "reminderId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11",
+          "name": "Atorvastatin",
+          "dosage": "20mg",
+          "fireAt": 1796133600000
+        },
+        {
+          "occurrenceId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11:1798812000000",
+          "reminderId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11",
+          "name": "Atorvastatin",
+          "dosage": "20mg",
+          "fireAt": 1798812000000
+        },
+        {
+          "occurrenceId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11:1801490400000",
+          "reminderId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11",
+          "name": "Atorvastatin",
+          "dosage": "20mg",
+          "fireAt": 1801490400000
+        }
+      ]
+    },
+    {
+      "name": "once: comes due exactly once",
+      "input": {
+        "call": "nextOccurrences",
+        "reminder": {
+          "_id": "j97doc3f1c0a52",
+          "localId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11",
+          "userId": "user_golden",
+          "kind": "medication",
+          "name": "Atorvastatin",
+          "dosage": "20mg",
+          "schedule": {
+            "type": "once",
+            "at": 1783706400000
+          },
+          "priority": "normal",
+          "tags": [],
+          "caregiverIds": [],
+          "active": true,
+          "createdAt": 1700000000000,
+          "updatedAt": 1700000000000
+        },
+        "fromMs": 1783051200000,
+        "count": 64,
+        "zone": "America/New_York"
+      },
+      "output": [
+        {
+          "occurrenceId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11:1783706400000",
+          "reminderId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11",
+          "name": "Atorvastatin",
+          "dosage": "20mg",
+          "fireAt": 1783706400000
+        }
+      ]
+    },
+    {
+      "name": "once: spent once its moment has passed",
+      "input": {
+        "call": "nextOccurrences",
+        "reminder": {
+          "_id": "j97doc3f1c0a52",
+          "localId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11",
+          "userId": "user_golden",
+          "kind": "medication",
+          "name": "Atorvastatin",
+          "dosage": "20mg",
+          "schedule": {
+            "type": "once",
+            "at": 1783706400000
+          },
+          "priority": "normal",
+          "tags": [],
+          "caregiverIds": [],
+          "active": true,
+          "createdAt": 1700000000000,
+          "updatedAt": 1700000000000
+        },
+        "fromMs": 1783706460000,
+        "count": 64,
+        "zone": "America/New_York"
+      },
+      "output": []
+    },
+    {
+      "name": "once: a moment exactly at from is excluded",
+      "input": {
+        "call": "nextOccurrences",
+        "reminder": {
+          "_id": "j97doc3f1c0a52",
+          "localId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11",
+          "userId": "user_golden",
+          "kind": "medication",
+          "name": "Atorvastatin",
+          "dosage": "20mg",
+          "schedule": {
+            "type": "once",
+            "at": 1783706400000
+          },
+          "priority": "normal",
+          "tags": [],
+          "caregiverIds": [],
+          "active": true,
+          "createdAt": 1700000000000,
+          "updatedAt": 1700000000000
+        },
+        "fromMs": 1783706400000,
+        "count": 64,
+        "zone": "America/New_York"
+      },
+      "output": []
+    },
+    {
+      "name": "none: the Backlog never comes due",
+      "input": {
+        "call": "nextOccurrences",
+        "reminder": {
+          "_id": "j97doc3f1c0a52",
+          "localId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11",
+          "userId": "user_golden",
+          "kind": "medication",
+          "name": "Atorvastatin",
+          "dosage": "20mg",
+          "schedule": {
+            "type": "none"
+          },
+          "priority": "normal",
+          "tags": [],
+          "caregiverIds": [],
+          "active": true,
+          "createdAt": 1700000000000,
+          "updatedAt": 1700000000000
+        },
+        "fromMs": 1783051200000,
+        "count": 64,
+        "zone": "America/New_York"
+      },
+      "output": []
+    },
+    {
+      "name": "asNeeded: never comes due",
+      "input": {
+        "call": "nextOccurrences",
+        "reminder": {
+          "_id": "j97doc3f1c0a52",
+          "localId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11",
+          "userId": "user_golden",
+          "kind": "medication",
+          "name": "Atorvastatin",
+          "dosage": "20mg",
+          "schedule": {
+            "type": "asNeeded",
+            "minGapMinutes": 240,
+            "maxPer24h": 4
+          },
+          "priority": "normal",
+          "tags": [],
+          "caregiverIds": [],
+          "active": true,
+          "createdAt": 1700000000000,
+          "updatedAt": 1700000000000
+        },
+        "fromMs": 1783051200000,
+        "count": 64,
+        "zone": "America/New_York"
+      },
+      "output": []
+    },
+    {
+      "name": "pause: moments inside a closed pause are skipped, count still filled",
+      "input": {
+        "call": "nextOccurrences",
+        "reminder": {
+          "_id": "j97doc3f1c0a52",
+          "localId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11",
+          "userId": "user_golden",
+          "kind": "medication",
+          "name": "Atorvastatin",
+          "dosage": "20mg",
+          "schedule": {
+            "type": "daily",
+            "times": [
+              "09:00"
+            ]
+          },
+          "priority": "normal",
+          "tags": [],
+          "caregiverIds": [],
+          "active": true,
+          "createdAt": 1700000000000,
+          "updatedAt": 1700000000000,
+          "pauses": [
+            {
+              "from": 1783170000000,
+              "until": 1783342800000
+            }
+          ]
+        },
+        "fromMs": 1783051200000,
+        "count": 4,
+        "zone": "America/New_York"
+      },
+      "output": [
+        {
+          "occurrenceId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11:1783083600000",
+          "reminderId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11",
+          "name": "Atorvastatin",
+          "dosage": "20mg",
+          "fireAt": 1783083600000
+        },
+        {
+          "occurrenceId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11:1783342800000",
+          "reminderId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11",
+          "name": "Atorvastatin",
+          "dosage": "20mg",
+          "fireAt": 1783342800000
+        },
+        {
+          "occurrenceId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11:1783429200000",
+          "reminderId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11",
+          "name": "Atorvastatin",
+          "dosage": "20mg",
+          "fireAt": 1783429200000
+        },
+        {
+          "occurrenceId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11:1783515600000",
+          "reminderId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11",
+          "name": "Atorvastatin",
+          "dosage": "20mg",
+          "fireAt": 1783515600000
+        }
+      ]
+    },
+    {
+      "name": "pause: the first moment of a pause is paused, the moment it ends is not",
+      "input": {
+        "call": "nextOccurrences",
+        "reminder": {
+          "_id": "j97doc3f1c0a52",
+          "localId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11",
+          "userId": "user_golden",
+          "kind": "medication",
+          "name": "Atorvastatin",
+          "dosage": "20mg",
+          "schedule": {
+            "type": "daily",
+            "times": [
+              "09:00"
+            ]
+          },
+          "priority": "normal",
+          "tags": [],
+          "caregiverIds": [],
+          "active": true,
+          "createdAt": 1700000000000,
+          "updatedAt": 1700000000000,
+          "pauses": [
+            {
+              "from": 1783170000000,
+              "until": 1783256400000
+            }
+          ]
+        },
+        "fromMs": 1783051200000,
+        "count": 3,
+        "zone": "America/New_York"
+      },
+      "output": [
+        {
+          "occurrenceId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11:1783083600000",
+          "reminderId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11",
+          "name": "Atorvastatin",
+          "dosage": "20mg",
+          "fireAt": 1783083600000
+        },
+        {
+          "occurrenceId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11:1783256400000",
+          "reminderId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11",
+          "name": "Atorvastatin",
+          "dosage": "20mg",
+          "fireAt": 1783256400000
+        },
+        {
+          "occurrenceId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11:1783342800000",
+          "reminderId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11",
+          "name": "Atorvastatin",
+          "dosage": "20mg",
+          "fireAt": 1783342800000
+        }
+      ]
+    },
+    {
+      "name": "pause: an open pause leaves only the moments before it",
+      "input": {
+        "call": "nextOccurrences",
+        "reminder": {
+          "_id": "j97doc3f1c0a52",
+          "localId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11",
+          "userId": "user_golden",
+          "kind": "medication",
+          "name": "Atorvastatin",
+          "dosage": "20mg",
+          "schedule": {
+            "type": "daily",
+            "times": [
+              "09:00"
+            ]
+          },
+          "priority": "normal",
+          "tags": [],
+          "caregiverIds": [],
+          "active": true,
+          "createdAt": 1700000000000,
+          "updatedAt": 1700000000000,
+          "pauses": [
+            {
+              "from": 1783256400000
+            }
+          ]
+        },
+        "fromMs": 1783051200000,
+        "count": 5,
+        "zone": "America/New_York"
+      },
+      "output": [
+        {
+          "occurrenceId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11:1783083600000",
+          "reminderId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11",
+          "name": "Atorvastatin",
+          "dosage": "20mg",
+          "fireAt": 1783083600000
+        },
+        {
+          "occurrenceId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11:1783170000000",
+          "reminderId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11",
+          "name": "Atorvastatin",
+          "dosage": "20mg",
+          "fireAt": 1783170000000
+        }
+      ]
+    },
+    {
+      "name": "pause: asking from inside an open pause finds nothing",
+      "input": {
+        "call": "nextOccurrences",
+        "reminder": {
+          "_id": "j97doc3f1c0a52",
+          "localId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11",
+          "userId": "user_golden",
+          "kind": "medication",
+          "name": "Atorvastatin",
+          "dosage": "20mg",
+          "schedule": {
+            "type": "daily",
+            "times": [
+              "09:00"
+            ]
+          },
+          "priority": "normal",
+          "tags": [],
+          "caregiverIds": [],
+          "active": true,
+          "createdAt": 1700000000000,
+          "updatedAt": 1700000000000,
+          "pauses": [
+            {
+              "from": 1783256400000
+            }
+          ]
+        },
+        "fromMs": 1783342800000,
+        "count": 5,
+        "zone": "America/New_York"
+      },
+      "output": []
+    },
+    {
+      "name": "pause: asking from inside a closed pause starts at its end",
+      "input": {
+        "call": "nextOccurrences",
+        "reminder": {
+          "_id": "j97doc3f1c0a52",
+          "localId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11",
+          "userId": "user_golden",
+          "kind": "medication",
+          "name": "Atorvastatin",
+          "dosage": "20mg",
+          "schedule": {
+            "type": "daily",
+            "times": [
+              "09:00"
+            ]
+          },
+          "priority": "normal",
+          "tags": [],
+          "caregiverIds": [],
+          "active": true,
+          "createdAt": 1700000000000,
+          "updatedAt": 1700000000000,
+          "pauses": [
+            {
+              "from": 1783170000000,
+              "until": 1783526400000
+            }
+          ]
+        },
+        "fromMs": 1783256400000,
+        "count": 2,
+        "zone": "America/New_York"
+      },
+      "output": [
+        {
+          "occurrenceId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11:1783602000000",
+          "reminderId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11",
+          "name": "Atorvastatin",
+          "dosage": "20mg",
+          "fireAt": 1783602000000
+        },
+        {
+          "occurrenceId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11:1783688400000",
+          "reminderId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11",
+          "name": "Atorvastatin",
+          "dosage": "20mg",
+          "fireAt": 1783688400000
+        }
+      ]
+    },
+    {
+      "name": "pause: longer than the look-ahead still resumes after it",
+      "input": {
+        "call": "nextOccurrences",
+        "reminder": {
+          "_id": "j97doc3f1c0a52",
+          "localId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11",
+          "userId": "user_golden",
+          "kind": "medication",
+          "name": "Atorvastatin",
+          "dosage": "20mg",
+          "schedule": {
+            "type": "daily",
+            "times": [
+              "09:00"
+            ]
+          },
+          "priority": "normal",
+          "tags": [],
+          "caregiverIds": [],
+          "active": true,
+          "createdAt": 1700000000000,
+          "updatedAt": 1700000000000,
+          "pauses": [
+            {
+              "from": 1783170000000,
+              "until": 1790827200000
+            }
+          ]
+        },
+        "fromMs": 1783051200000,
+        "count": 2,
+        "zone": "America/New_York"
+      },
+      "output": [
+        {
+          "occurrenceId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11:1783083600000",
+          "reminderId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11",
+          "name": "Atorvastatin",
+          "dosage": "20mg",
+          "fireAt": 1783083600000
+        },
+        {
+          "occurrenceId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11:1790859600000",
+          "reminderId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11",
+          "name": "Atorvastatin",
+          "dosage": "20mg",
+          "fireAt": 1790859600000
+        }
+      ]
+    },
+    {
+      "name": "pause: two pauses are both honoured",
+      "input": {
+        "call": "nextOccurrences",
+        "reminder": {
+          "_id": "j97doc3f1c0a52",
+          "localId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11",
+          "userId": "user_golden",
+          "kind": "medication",
+          "name": "Atorvastatin",
+          "dosage": "20mg",
+          "schedule": {
+            "type": "daily",
+            "times": [
+              "09:00"
+            ]
+          },
+          "priority": "normal",
+          "tags": [],
+          "caregiverIds": [],
+          "active": true,
+          "createdAt": 1700000000000,
+          "updatedAt": 1700000000000,
+          "pauses": [
+            {
+              "from": 1783170000000,
+              "until": 1783256400000
+            },
+            {
+              "from": 1783342800000,
+              "until": 1783429200000
+            }
+          ]
+        },
+        "fromMs": 1783051200000,
+        "count": 4,
+        "zone": "America/New_York"
+      },
+      "output": [
+        {
+          "occurrenceId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11:1783083600000",
+          "reminderId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11",
+          "name": "Atorvastatin",
+          "dosage": "20mg",
+          "fireAt": 1783083600000
+        },
+        {
+          "occurrenceId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11:1783256400000",
+          "reminderId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11",
+          "name": "Atorvastatin",
+          "dosage": "20mg",
+          "fireAt": 1783256400000
+        },
+        {
+          "occurrenceId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11:1783429200000",
+          "reminderId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11",
+          "name": "Atorvastatin",
+          "dosage": "20mg",
+          "fireAt": 1783429200000
+        },
+        {
+          "occurrenceId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11:1783515600000",
+          "reminderId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11",
+          "name": "Atorvastatin",
+          "dosage": "20mg",
+          "fireAt": 1783515600000
+        }
+      ]
+    },
+    {
+      "name": "pause: an interval keeps its grid across a pause",
+      "input": {
+        "call": "nextOccurrences",
+        "reminder": {
+          "_id": "j97doc3f1c0a52",
+          "localId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11",
+          "userId": "user_golden",
+          "kind": "medication",
+          "name": "Atorvastatin",
+          "dosage": "20mg",
+          "schedule": {
+            "type": "interval",
+            "hours": 8,
+            "startAt": 1783072800000
+          },
+          "priority": "normal",
+          "tags": [],
+          "caregiverIds": [],
+          "active": true,
+          "createdAt": 1700000000000,
+          "updatedAt": 1700000000000,
+          "pauses": [
+            {
+              "from": 1783076400000,
+              "until": 1783134000000
+            }
+          ]
+        },
+        "fromMs": 1783072799999,
+        "count": 4,
+        "zone": "America/New_York"
+      },
+      "output": [
+        {
+          "occurrenceId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11:1783072800000",
+          "reminderId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11",
+          "name": "Atorvastatin",
+          "dosage": "20mg",
+          "fireAt": 1783072800000
+        },
+        {
+          "occurrenceId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11:1783159200000",
+          "reminderId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11",
+          "name": "Atorvastatin",
+          "dosage": "20mg",
+          "fireAt": 1783159200000
+        },
+        {
+          "occurrenceId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11:1783188000000",
+          "reminderId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11",
+          "name": "Atorvastatin",
+          "dosage": "20mg",
+          "fireAt": 1783188000000
+        },
+        {
+          "occurrenceId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11:1783216800000",
+          "reminderId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11",
+          "name": "Atorvastatin",
+          "dosage": "20mg",
+          "fireAt": 1783216800000
+        }
+      ]
+    },
+    {
+      "name": "pause: a once moment inside a pause is gone",
+      "input": {
+        "call": "nextOccurrences",
+        "reminder": {
+          "_id": "j97doc3f1c0a52",
+          "localId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11",
+          "userId": "user_golden",
+          "kind": "medication",
+          "name": "Atorvastatin",
+          "dosage": "20mg",
+          "schedule": {
+            "type": "once",
+            "at": 1783688400000
+          },
+          "priority": "normal",
+          "tags": [],
+          "caregiverIds": [],
+          "active": true,
+          "createdAt": 1700000000000,
+          "updatedAt": 1700000000000,
+          "pauses": [
+            {
+              "from": 1783602000000,
+              "until": 1783774800000
+            }
+          ]
+        },
+        "fromMs": 1783051200000,
+        "count": 2,
+        "zone": "America/New_York"
+      },
+      "output": []
+    },
+    {
+      "name": "move: an occurrence comes back at its new moment",
+      "input": {
+        "call": "nextOccurrences",
+        "reminder": {
+          "_id": "j97doc3f1c0a52",
+          "localId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11",
+          "userId": "user_golden",
+          "kind": "medication",
+          "name": "Atorvastatin",
+          "dosage": "20mg",
+          "schedule": {
+            "type": "daily",
+            "times": [
+              "09:00"
+            ]
+          },
+          "priority": "normal",
+          "tags": [],
+          "caregiverIds": [],
+          "active": true,
+          "createdAt": 1700000000000,
+          "updatedAt": 1700000000000,
+          "overrides": [
+            {
+              "from": 1783170000000,
+              "to": 1783179000000
+            }
+          ]
+        },
+        "fromMs": 1783051200000,
+        "count": 3,
+        "zone": "America/New_York"
+      },
+      "output": [
+        {
+          "occurrenceId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11:1783083600000",
+          "reminderId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11",
+          "name": "Atorvastatin",
+          "dosage": "20mg",
+          "fireAt": 1783083600000
+        },
+        {
+          "occurrenceId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11:1783179000000",
+          "reminderId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11",
+          "name": "Atorvastatin",
+          "dosage": "20mg",
+          "fireAt": 1783179000000
+        },
+        {
+          "occurrenceId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11:1783256400000",
+          "reminderId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11",
+          "name": "Atorvastatin",
+          "dosage": "20mg",
+          "fireAt": 1783256400000
+        }
+      ]
+    },
+    {
+      "name": "move: a source that has passed still moves its occurrence",
+      "input": {
+        "call": "nextOccurrences",
+        "reminder": {
+          "_id": "j97doc3f1c0a52",
+          "localId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11",
+          "userId": "user_golden",
+          "kind": "medication",
+          "name": "Atorvastatin",
+          "dosage": "20mg",
+          "schedule": {
+            "type": "daily",
+            "times": [
+              "09:00"
+            ]
+          },
+          "priority": "normal",
+          "tags": [],
+          "caregiverIds": [],
+          "active": true,
+          "createdAt": 1700000000000,
+          "updatedAt": 1700000000000,
+          "overrides": [
+            {
+              "from": 1783170000000,
+              "to": 1783191600000
+            }
+          ]
+        },
+        "fromMs": 1783173600000,
+        "count": 2,
+        "zone": "America/New_York"
+      },
+      "output": [
+        {
+          "occurrenceId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11:1783191600000",
+          "reminderId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11",
+          "name": "Atorvastatin",
+          "dosage": "20mg",
+          "fireAt": 1783191600000
+        },
+        {
+          "occurrenceId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11:1783256400000",
+          "reminderId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11",
+          "name": "Atorvastatin",
+          "dosage": "20mg",
+          "fireAt": 1783256400000
+        }
+      ]
+    },
+    {
+      "name": "move: a target already behind us changes nothing",
+      "input": {
+        "call": "nextOccurrences",
+        "reminder": {
+          "_id": "j97doc3f1c0a52",
+          "localId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11",
+          "userId": "user_golden",
+          "kind": "medication",
+          "name": "Atorvastatin",
+          "dosage": "20mg",
+          "schedule": {
+            "type": "daily",
+            "times": [
+              "09:00"
+            ]
+          },
+          "priority": "normal",
+          "tags": [],
+          "caregiverIds": [],
+          "active": true,
+          "createdAt": 1700000000000,
+          "updatedAt": 1700000000000,
+          "overrides": [
+            {
+              "from": 1783170000000,
+              "to": 1783171800000
+            }
+          ]
+        },
+        "fromMs": 1783173600000,
+        "count": 2,
+        "zone": "America/New_York"
+      },
+      "output": [
+        {
+          "occurrenceId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11:1783256400000",
+          "reminderId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11",
+          "name": "Atorvastatin",
+          "dosage": "20mg",
+          "fireAt": 1783256400000
+        },
+        {
+          "occurrenceId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11:1783342800000",
+          "reminderId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11",
+          "name": "Atorvastatin",
+          "dosage": "20mg",
+          "fireAt": 1783342800000
+        }
+      ]
+    },
+    {
+      "name": "move: two occurrences moved onto one moment give one",
+      "input": {
+        "call": "nextOccurrences",
+        "reminder": {
+          "_id": "j97doc3f1c0a52",
+          "localId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11",
+          "userId": "user_golden",
+          "kind": "medication",
+          "name": "Atorvastatin",
+          "dosage": "20mg",
+          "schedule": {
+            "type": "daily",
+            "times": [
+              "09:00"
+            ]
+          },
+          "priority": "normal",
+          "tags": [],
+          "caregiverIds": [],
+          "active": true,
+          "createdAt": 1700000000000,
+          "updatedAt": 1700000000000,
+          "overrides": [
+            {
+              "from": 1783170000000,
+              "to": 1783267200000
+            },
+            {
+              "from": 1783256400000,
+              "to": 1783267200000
+            }
+          ]
+        },
+        "fromMs": 1783051200000,
+        "count": 3,
+        "zone": "America/New_York"
+      },
+      "output": [
+        {
+          "occurrenceId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11:1783083600000",
+          "reminderId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11",
+          "name": "Atorvastatin",
+          "dosage": "20mg",
+          "fireAt": 1783083600000
+        },
+        {
+          "occurrenceId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11:1783267200000",
+          "reminderId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11",
+          "name": "Atorvastatin",
+          "dosage": "20mg",
+          "fireAt": 1783267200000
+        },
+        {
+          "occurrenceId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11:1783342800000",
+          "reminderId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11",
+          "name": "Atorvastatin",
+          "dosage": "20mg",
+          "fireAt": 1783342800000
+        }
+      ]
+    },
+    {
+      "name": "move: a move that reorders the batch is sorted",
+      "input": {
+        "call": "nextOccurrences",
+        "reminder": {
+          "_id": "j97doc3f1c0a52",
+          "localId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11",
+          "userId": "user_golden",
+          "kind": "medication",
+          "name": "Atorvastatin",
+          "dosage": "20mg",
+          "schedule": {
+            "type": "daily",
+            "times": [
+              "09:00"
+            ]
+          },
+          "priority": "normal",
+          "tags": [],
+          "caregiverIds": [],
+          "active": true,
+          "createdAt": 1700000000000,
+          "updatedAt": 1700000000000,
+          "overrides": [
+            {
+              "from": 1783170000000,
+              "to": 1783353600000
+            }
+          ]
+        },
+        "fromMs": 1783051200000,
+        "count": 4,
+        "zone": "America/New_York"
+      },
+      "output": [
+        {
+          "occurrenceId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11:1783083600000",
+          "reminderId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11",
+          "name": "Atorvastatin",
+          "dosage": "20mg",
+          "fireAt": 1783083600000
+        },
+        {
+          "occurrenceId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11:1783256400000",
+          "reminderId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11",
+          "name": "Atorvastatin",
+          "dosage": "20mg",
+          "fireAt": 1783256400000
+        },
+        {
+          "occurrenceId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11:1783342800000",
+          "reminderId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11",
+          "name": "Atorvastatin",
+          "dosage": "20mg",
+          "fireAt": 1783342800000
+        },
+        {
+          "occurrenceId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11:1783353600000",
+          "reminderId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11",
+          "name": "Atorvastatin",
+          "dosage": "20mg",
+          "fireAt": 1783353600000
+        }
+      ]
+    },
+    {
+      "name": "move: a source the schedule never produces is inert",
+      "input": {
+        "call": "nextOccurrences",
+        "reminder": {
+          "_id": "j97doc3f1c0a52",
+          "localId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11",
+          "userId": "user_golden",
+          "kind": "medication",
+          "name": "Atorvastatin",
+          "dosage": "20mg",
+          "schedule": {
+            "type": "daily",
+            "times": [
+              "09:00"
+            ]
+          },
+          "priority": "normal",
+          "tags": [],
+          "caregiverIds": [],
+          "active": true,
+          "createdAt": 1700000000000,
+          "updatedAt": 1700000000000,
+          "overrides": [
+            {
+              "from": 1783173600000,
+              "to": 1783191600000
+            }
+          ]
+        },
+        "fromMs": 1783051200000,
+        "count": 2,
+        "zone": "America/New_York"
+      },
+      "output": [
+        {
+          "occurrenceId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11:1783083600000",
+          "reminderId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11",
+          "name": "Atorvastatin",
+          "dosage": "20mg",
+          "fireAt": 1783083600000
+        },
+        {
+          "occurrenceId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11:1783170000000",
+          "reminderId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11",
+          "name": "Atorvastatin",
+          "dosage": "20mg",
+          "fireAt": 1783170000000
+        }
+      ]
+    },
+    {
+      "name": "move: a pause over the source keeps the occurrence where it was",
+      "input": {
+        "call": "nextOccurrences",
+        "reminder": {
+          "_id": "j97doc3f1c0a52",
+          "localId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11",
+          "userId": "user_golden",
+          "kind": "medication",
+          "name": "Atorvastatin",
+          "dosage": "20mg",
+          "schedule": {
+            "type": "daily",
+            "times": [
+              "09:00"
+            ]
+          },
+          "priority": "normal",
+          "tags": [],
+          "caregiverIds": [],
+          "active": true,
+          "createdAt": 1700000000000,
+          "updatedAt": 1700000000000,
+          "pauses": [
+            {
+              "from": 1783166400000,
+              "until": 1783173600000
+            }
+          ],
+          "overrides": [
+            {
+              "from": 1783170000000,
+              "to": 1783191600000
+            }
+          ]
+        },
+        "fromMs": 1783051200000,
+        "count": 3,
+        "zone": "America/New_York"
+      },
+      "output": [
+        {
+          "occurrenceId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11:1783083600000",
+          "reminderId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11",
+          "name": "Atorvastatin",
+          "dosage": "20mg",
+          "fireAt": 1783083600000
+        },
+        {
+          "occurrenceId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11:1783256400000",
+          "reminderId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11",
+          "name": "Atorvastatin",
+          "dosage": "20mg",
+          "fireAt": 1783256400000
+        },
+        {
+          "occurrenceId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11:1783342800000",
+          "reminderId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11",
+          "name": "Atorvastatin",
+          "dosage": "20mg",
+          "fireAt": 1783342800000
+        }
+      ]
+    },
+    {
+      "name": "move: a pause over the target leaves the occurrence at its own moment",
+      "input": {
+        "call": "nextOccurrences",
+        "reminder": {
+          "_id": "j97doc3f1c0a52",
+          "localId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11",
+          "userId": "user_golden",
+          "kind": "medication",
+          "name": "Atorvastatin",
+          "dosage": "20mg",
+          "schedule": {
+            "type": "daily",
+            "times": [
+              "09:00"
+            ]
+          },
+          "priority": "normal",
+          "tags": [],
+          "caregiverIds": [],
+          "active": true,
+          "createdAt": 1700000000000,
+          "updatedAt": 1700000000000,
+          "pauses": [
+            {
+              "from": 1783188000000,
+              "until": 1783195200000
+            }
+          ],
+          "overrides": [
+            {
+              "from": 1783170000000,
+              "to": 1783191600000
+            }
+          ]
+        },
+        "fromMs": 1783051200000,
+        "count": 3,
+        "zone": "America/New_York"
+      },
+      "output": [
+        {
+          "occurrenceId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11:1783083600000",
+          "reminderId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11",
+          "name": "Atorvastatin",
+          "dosage": "20mg",
+          "fireAt": 1783083600000
+        },
+        {
+          "occurrenceId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11:1783170000000",
+          "reminderId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11",
+          "name": "Atorvastatin",
+          "dosage": "20mg",
+          "fireAt": 1783170000000
+        },
+        {
+          "occurrenceId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11:1783256400000",
+          "reminderId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11",
+          "name": "Atorvastatin",
+          "dosage": "20mg",
+          "fireAt": 1783256400000
+        }
+      ]
+    },
+    {
+      "name": "move: a once reminder moves",
+      "input": {
+        "call": "nextOccurrences",
+        "reminder": {
+          "_id": "j97doc3f1c0a52",
+          "localId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11",
+          "userId": "user_golden",
+          "kind": "medication",
+          "name": "Atorvastatin",
+          "dosage": "20mg",
+          "schedule": {
+            "type": "once",
+            "at": 1783688400000
+          },
+          "priority": "normal",
+          "tags": [],
+          "caregiverIds": [],
+          "active": true,
+          "createdAt": 1700000000000,
+          "updatedAt": 1700000000000,
+          "overrides": [
+            {
+              "from": 1783688400000,
+              "to": 1783634400000
+            }
+          ]
+        },
+        "fromMs": 1783051200000,
+        "count": 2,
+        "zone": "America/New_York"
+      },
+      "output": [
+        {
+          "occurrenceId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11:1783688400000",
+          "reminderId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11",
+          "name": "Atorvastatin",
+          "dosage": "20mg",
+          "fireAt": 1783688400000
+        }
+      ]
+    },
+    {
+      "name": "move: an interval moves only from a real slot",
+      "input": {
+        "call": "nextOccurrences",
+        "reminder": {
+          "_id": "j97doc3f1c0a52",
+          "localId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11",
+          "userId": "user_golden",
+          "kind": "medication",
+          "name": "Atorvastatin",
+          "dosage": "20mg",
+          "schedule": {
+            "type": "interval",
+            "hours": 8,
+            "startAt": 1783072800000
+          },
+          "priority": "normal",
+          "tags": [],
+          "caregiverIds": [],
+          "active": true,
+          "createdAt": 1700000000000,
+          "updatedAt": 1700000000000,
+          "overrides": [
+            {
+              "from": 1783101600000,
+              "to": 1783105200000
+            },
+            {
+              "from": 1783083600000,
+              "to": 1783087200000
+            }
+          ]
+        },
+        "fromMs": 1783072799999,
+        "count": 3,
+        "zone": "America/New_York"
+      },
+      "output": [
+        {
+          "occurrenceId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11:1783072800000",
+          "reminderId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11",
+          "name": "Atorvastatin",
+          "dosage": "20mg",
+          "fireAt": 1783072800000
+        },
+        {
+          "occurrenceId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11:1783105200000",
+          "reminderId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11",
+          "name": "Atorvastatin",
+          "dosage": "20mg",
+          "fireAt": 1783105200000
+        },
+        {
+          "occurrenceId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11:1783130400000",
+          "reminderId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11",
+          "name": "Atorvastatin",
+          "dosage": "20mg",
+          "fireAt": 1783130400000
+        }
+      ]
+    },
+    {
+      "name": "move: the Backlog ignores its moves",
+      "input": {
+        "call": "nextOccurrences",
+        "reminder": {
+          "_id": "j97doc3f1c0a52",
+          "localId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11",
+          "userId": "user_golden",
+          "kind": "medication",
+          "name": "Atorvastatin",
+          "dosage": "20mg",
+          "schedule": {
+            "type": "none"
+          },
+          "priority": "normal",
+          "tags": [],
+          "caregiverIds": [],
+          "active": true,
+          "createdAt": 1700000000000,
+          "updatedAt": 1700000000000,
+          "overrides": [
+            {
+              "from": 1783170000000,
+              "to": 1783256400000
+            }
+          ]
+        },
+        "fromMs": 1783051200000,
+        "count": 2,
+        "zone": "America/New_York"
+      },
+      "output": []
+    },
+    {
+      "name": "move: across a clock change both wall-clock times hold",
+      "input": {
+        "call": "nextOccurrences",
+        "reminder": {
+          "_id": "j97doc3f1c0a52",
+          "localId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11",
+          "userId": "user_golden",
+          "kind": "medication",
+          "name": "Atorvastatin",
+          "dosage": "20mg",
+          "schedule": {
+            "type": "daily",
+            "times": [
+              "09:00"
+            ]
+          },
+          "priority": "normal",
+          "tags": [],
+          "caregiverIds": [],
+          "active": true,
+          "createdAt": 1700000000000,
+          "updatedAt": 1700000000000,
+          "overrides": [
+            {
+              "from": 1772892000000,
+              "to": 1772971200000
+            }
+          ]
+        },
+        "fromMs": 1772859600000,
+        "count": 3,
+        "zone": "America/New_York"
+      },
+      "output": [
+        {
+          "occurrenceId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11:1772971200000",
+          "reminderId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11",
+          "name": "Atorvastatin",
+          "dosage": "20mg",
+          "fireAt": 1772971200000
+        },
+        {
+          "occurrenceId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11:1772974800000",
+          "reminderId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11",
+          "name": "Atorvastatin",
+          "dosage": "20mg",
+          "fireAt": 1772974800000
+        },
+        {
+          "occurrenceId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11:1773061200000",
+          "reminderId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11",
+          "name": "Atorvastatin",
+          "dosage": "20mg",
+          "fireAt": 1773061200000
+        }
+      ]
+    },
+    {
+      "name": "move: the answer is as long as asked for",
+      "input": {
+        "call": "nextOccurrences",
+        "reminder": {
+          "_id": "j97doc3f1c0a52",
+          "localId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11",
+          "userId": "user_golden",
+          "kind": "medication",
+          "name": "Atorvastatin",
+          "dosage": "20mg",
+          "schedule": {
+            "type": "daily",
+            "times": [
+              "09:00"
+            ]
+          },
+          "priority": "normal",
+          "tags": [],
+          "caregiverIds": [],
+          "active": true,
+          "createdAt": 1700000000000,
+          "updatedAt": 1700000000000,
+          "overrides": [
+            {
+              "from": 1783170000000,
+              "to": 1784552400000
+            },
+            {
+              "from": 1783256400000,
+              "to": 1784638800000
+            }
+          ]
+        },
+        "fromMs": 1783051200000,
+        "count": 3,
+        "zone": "America/New_York"
+      },
+      "output": [
+        {
+          "occurrenceId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11:1783083600000",
+          "reminderId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11",
+          "name": "Atorvastatin",
+          "dosage": "20mg",
+          "fireAt": 1783083600000
+        },
+        {
+          "occurrenceId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11:1783342800000",
+          "reminderId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11",
+          "name": "Atorvastatin",
+          "dosage": "20mg",
+          "fireAt": 1783342800000
+        },
+        {
+          "occurrenceId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11:1783429200000",
+          "reminderId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11",
+          "name": "Atorvastatin",
+          "dosage": "20mg",
+          "fireAt": 1783429200000
+        }
+      ]
+    },
+    {
+      "name": "move: count zero is nothing, moves or not",
+      "input": {
+        "call": "nextOccurrences",
+        "reminder": {
+          "_id": "j97doc3f1c0a52",
+          "localId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11",
+          "userId": "user_golden",
+          "kind": "medication",
+          "name": "Atorvastatin",
+          "dosage": "20mg",
+          "schedule": {
+            "type": "daily",
+            "times": [
+              "09:00"
+            ]
+          },
+          "priority": "normal",
+          "tags": [],
+          "caregiverIds": [],
+          "active": true,
+          "createdAt": 1700000000000,
+          "updatedAt": 1700000000000,
+          "overrides": [
+            {
+              "from": 1783170000000,
+              "to": 1783256400000
+            }
+          ]
+        },
+        "fromMs": 1783051200000,
+        "count": 0,
+        "zone": "America/New_York"
+      },
+      "output": []
+    },
+    {
+      "name": "latest: once, its moment while past",
+      "input": {
+        "call": "latestOccurrenceBefore",
+        "reminder": {
+          "_id": "j97doc3f1c0a52",
+          "localId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11",
+          "userId": "user_golden",
+          "kind": "task",
+          "name": "Water the plants",
+          "schedule": {
+            "type": "once",
+            "at": 1782910800000
+          },
+          "priority": "normal",
+          "tags": [],
+          "caregiverIds": [],
+          "active": true,
+          "createdAt": 1700000000000,
+          "updatedAt": 1700000000000
+        },
+        "now": 1783353600000,
+        "zone": "America/New_York"
+      },
+      "output": {
+        "occurrenceId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11:1782910800000",
+        "reminderId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11",
+        "name": "Water the plants",
+        "dosage": null,
+        "fireAt": 1782910800000
+      }
+    },
+    {
+      "name": "latest: once, a future moment has nothing behind it",
+      "input": {
+        "call": "latestOccurrenceBefore",
+        "reminder": {
+          "_id": "j97doc3f1c0a52",
+          "localId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11",
+          "userId": "user_golden",
+          "kind": "task",
+          "name": "Water the plants",
+          "schedule": {
+            "type": "once",
+            "at": 1783602000000
+          },
+          "priority": "normal",
+          "tags": [],
+          "caregiverIds": [],
+          "active": true,
+          "createdAt": 1700000000000,
+          "updatedAt": 1700000000000
+        },
+        "now": 1783353600000,
+        "zone": "America/New_York"
+      },
+      "output": null
+    },
+    {
+      "name": "latest: a moment exactly now is not before now",
+      "input": {
+        "call": "latestOccurrenceBefore",
+        "reminder": {
+          "_id": "j97doc3f1c0a52",
+          "localId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11",
+          "userId": "user_golden",
+          "kind": "task",
+          "name": "Water the plants",
+          "schedule": {
+            "type": "daily",
+            "times": [
+              "12:00"
+            ]
+          },
+          "priority": "normal",
+          "tags": [],
+          "caregiverIds": [],
+          "active": true,
+          "createdAt": 1700000000000,
+          "updatedAt": 1700000000000
+        },
+        "now": 1783353600000,
+        "zone": "America/New_York"
+      },
+      "output": {
+        "occurrenceId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11:1783267200000",
+        "reminderId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11",
+        "name": "Water the plants",
+        "dosage": null,
+        "fireAt": 1783267200000
+      }
+    },
+    {
+      "name": "latest: daily, the last time passed today",
+      "input": {
+        "call": "latestOccurrenceBefore",
+        "reminder": {
+          "_id": "j97doc3f1c0a52",
+          "localId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11",
+          "userId": "user_golden",
+          "kind": "task",
+          "name": "Water the plants",
+          "schedule": {
+            "type": "daily",
+            "times": [
+              "08:00",
+              "11:00",
+              "18:00"
+            ]
+          },
+          "priority": "normal",
+          "tags": [],
+          "caregiverIds": [],
+          "active": true,
+          "createdAt": 1700000000000,
+          "updatedAt": 1700000000000
+        },
+        "now": 1783353600000,
+        "zone": "America/New_York"
+      },
+      "output": {
+        "occurrenceId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11:1783350000000",
+        "reminderId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11",
+        "name": "Water the plants",
+        "dosage": null,
+        "fireAt": 1783350000000
+      }
+    },
+    {
+      "name": "latest: daily, yesterday when today's times are ahead",
+      "input": {
+        "call": "latestOccurrenceBefore",
+        "reminder": {
+          "_id": "j97doc3f1c0a52",
+          "localId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11",
+          "userId": "user_golden",
+          "kind": "task",
+          "name": "Water the plants",
+          "schedule": {
+            "type": "daily",
+            "times": [
+              "18:00",
+              "20:00"
+            ]
+          },
+          "priority": "normal",
+          "tags": [],
+          "caregiverIds": [],
+          "active": true,
+          "createdAt": 1700000000000,
+          "updatedAt": 1700000000000
+        },
+        "now": 1783353600000,
+        "zone": "America/New_York"
+      },
+      "output": {
+        "occurrenceId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11:1783296000000",
+        "reminderId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11",
+        "name": "Water the plants",
+        "dosage": null,
+        "fireAt": 1783296000000
+      }
+    },
+    {
+      "name": "latest: weekly, back to the last selected weekday",
+      "input": {
+        "call": "latestOccurrenceBefore",
+        "reminder": {
+          "_id": "j97doc3f1c0a52",
+          "localId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11",
+          "userId": "user_golden",
+          "kind": "task",
+          "name": "Water the plants",
+          "schedule": {
+            "type": "weekly",
+            "daysOfWeek": [
+              4
+            ],
+            "times": [
+              "09:00"
+            ]
+          },
+          "priority": "normal",
+          "tags": [],
+          "caregiverIds": [],
+          "active": true,
+          "createdAt": 1700000000000,
+          "updatedAt": 1700000000000
+        },
+        "now": 1783353600000,
+        "zone": "America/New_York"
+      },
+      "output": {
+        "occurrenceId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11:1782997200000",
+        "reminderId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11",
+        "name": "Water the plants",
+        "dosage": null,
+        "fireAt": 1782997200000
+      }
+    },
+    {
+      "name": "latest: weekly, several days and times",
+      "input": {
+        "call": "latestOccurrenceBefore",
+        "reminder": {
+          "_id": "j97doc3f1c0a52",
+          "localId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11",
+          "userId": "user_golden",
+          "kind": "task",
+          "name": "Water the plants",
+          "schedule": {
+            "type": "weekly",
+            "daysOfWeek": [
+              5,
+              1
+            ],
+            "times": [
+              "07:00",
+              "13:00"
+            ]
+          },
+          "priority": "normal",
+          "tags": [],
+          "caregiverIds": [],
+          "active": true,
+          "createdAt": 1700000000000,
+          "updatedAt": 1700000000000
+        },
+        "now": 1783353600000,
+        "zone": "America/New_York"
+      },
+      "output": {
+        "occurrenceId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11:1783335600000",
+        "reminderId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11",
+        "name": "Water the plants",
+        "dosage": null,
+        "fireAt": 1783335600000
+      }
+    },
+    {
+      "name": "latest: monthly, several dates and times",
+      "input": {
+        "call": "latestOccurrenceBefore",
+        "reminder": {
+          "_id": "j97doc3f1c0a52",
+          "localId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11",
+          "userId": "user_golden",
+          "kind": "task",
+          "name": "Water the plants",
+          "schedule": {
+            "type": "monthly",
+            "daysOfMonth": [
+              1,
+              3
+            ],
+            "times": [
+              "07:00",
+              "20:00"
+            ]
+          },
+          "priority": "normal",
+          "tags": [],
+          "caregiverIds": [],
+          "active": true,
+          "createdAt": 1700000000000,
+          "updatedAt": 1700000000000
+        },
+        "now": 1783353600000,
+        "zone": "America/New_York"
+      },
+      "output": {
+        "occurrenceId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11:1783123200000",
+        "reminderId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11",
+        "name": "Water the plants",
+        "dosage": null,
+        "fireAt": 1783123200000
+      }
+    },
+    {
+      "name": "latest: monthly, back to the last selected date",
+      "input": {
+        "call": "latestOccurrenceBefore",
+        "reminder": {
+          "_id": "j97doc3f1c0a52",
+          "localId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11",
+          "userId": "user_golden",
+          "kind": "task",
+          "name": "Water the plants",
+          "schedule": {
+            "type": "monthly",
+            "daysOfMonth": [
+              20
+            ],
+            "times": [
+              "09:00"
+            ]
+          },
+          "priority": "normal",
+          "tags": [],
+          "caregiverIds": [],
+          "active": true,
+          "createdAt": 1700000000000,
+          "updatedAt": 1700000000000
+        },
+        "now": 1783353600000,
+        "zone": "America/New_York"
+      },
+      "output": {
+        "occurrenceId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11:1781960400000",
+        "reminderId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11",
+        "name": "Water the plants",
+        "dosage": null,
+        "fireAt": 1781960400000
+      }
+    },
+    {
+      "name": "latest: monthly, a 31st clamps to a short month's last day",
+      "input": {
+        "call": "latestOccurrenceBefore",
+        "reminder": {
+          "_id": "j97doc3f1c0a52",
+          "localId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11",
+          "userId": "user_golden",
+          "kind": "task",
+          "name": "Water the plants",
+          "schedule": {
+            "type": "monthly",
+            "daysOfMonth": [
+              31
+            ],
+            "times": [
+              "09:00"
+            ]
+          },
+          "priority": "normal",
+          "tags": [],
+          "caregiverIds": [],
+          "active": true,
+          "createdAt": 1700000000000,
+          "updatedAt": 1700000000000
+        },
+        "now": 1782964800000,
+        "zone": "America/New_York"
+      },
+      "output": {
+        "occurrenceId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11:1782824400000",
+        "reminderId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11",
+        "name": "Water the plants",
+        "dosage": null,
+        "fireAt": 1782824400000
+      }
+    },
+    {
+      "name": "latest: interval, the slot just before now",
+      "input": {
+        "call": "latestOccurrenceBefore",
+        "reminder": {
+          "_id": "j97doc3f1c0a52",
+          "localId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11",
+          "userId": "user_golden",
+          "kind": "task",
+          "name": "Water the plants",
+          "schedule": {
+            "type": "interval",
+            "hours": 5,
+            "startAt": 1782878400000
+          },
+          "priority": "normal",
+          "tags": [],
+          "caregiverIds": [],
+          "active": true,
+          "createdAt": 1700000000000,
+          "updatedAt": 1700000000000
+        },
+        "now": 1783353600000,
+        "zone": "America/New_York"
+      },
+      "output": {
+        "occurrenceId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11:1783346400000",
+        "reminderId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11",
+        "name": "Water the plants",
+        "dosage": null,
+        "fireAt": 1783346400000
+      }
+    },
+    {
+      "name": "latest: interval of zero hours has none",
+      "input": {
+        "call": "latestOccurrenceBefore",
+        "reminder": {
+          "_id": "j97doc3f1c0a52",
+          "localId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11",
+          "userId": "user_golden",
+          "kind": "task",
+          "name": "Water the plants",
+          "schedule": {
+            "type": "interval",
+            "hours": 0,
+            "startAt": 1782878400000
+          },
+          "priority": "normal",
+          "tags": [],
+          "caregiverIds": [],
+          "active": true,
+          "createdAt": 1700000000000,
+          "updatedAt": 1700000000000
+        },
+        "now": 1783353600000,
+        "zone": "America/New_York"
+      },
+      "output": null
+    },
+    {
+      "name": "latest: the Backlog has none",
+      "input": {
+        "call": "latestOccurrenceBefore",
+        "reminder": {
+          "_id": "j97doc3f1c0a52",
+          "localId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11",
+          "userId": "user_golden",
+          "kind": "task",
+          "name": "Water the plants",
+          "schedule": {
+            "type": "none"
+          },
+          "priority": "normal",
+          "tags": [],
+          "caregiverIds": [],
+          "active": true,
+          "createdAt": 1700000000000,
+          "updatedAt": 1700000000000
+        },
+        "now": 1783353600000,
+        "zone": "America/New_York"
+      },
+      "output": null
+    },
+    {
+      "name": "latest: as needed has none",
+      "input": {
+        "call": "latestOccurrenceBefore",
+        "reminder": {
+          "_id": "j97doc3f1c0a52",
+          "localId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11",
+          "userId": "user_golden",
+          "kind": "task",
+          "name": "Water the plants",
+          "schedule": {
+            "type": "asNeeded",
+            "minGapMinutes": 240,
+            "maxPer24h": 4
+          },
+          "priority": "normal",
+          "tags": [],
+          "caregiverIds": [],
+          "active": true,
+          "createdAt": 1700000000000,
+          "updatedAt": 1700000000000
+        },
+        "now": 1783353600000,
+        "zone": "America/New_York"
+      },
+      "output": null
+    },
+    {
+      "name": "latest: a paused moment is not a moment",
+      "input": {
+        "call": "latestOccurrenceBefore",
+        "reminder": {
+          "_id": "j97doc3f1c0a52",
+          "localId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11",
+          "userId": "user_golden",
+          "kind": "task",
+          "name": "Water the plants",
+          "schedule": {
+            "type": "daily",
+            "times": [
+              "09:00"
+            ]
+          },
+          "priority": "normal",
+          "tags": [],
+          "caregiverIds": [],
+          "active": true,
+          "createdAt": 1700000000000,
+          "updatedAt": 1700000000000,
+          "pauses": [
+            {
+              "from": 1783339200000,
+              "until": 1783346400000
+            }
+          ]
+        },
+        "now": 1783353600000,
+        "zone": "America/New_York"
+      },
+      "output": {
+        "occurrenceId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11:1783256400000",
+        "reminderId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11",
+        "name": "Water the plants",
+        "dosage": null,
+        "fireAt": 1783256400000
+      }
+    },
+    {
+      "name": "latest: a pause longer than a cycle leaves nothing",
+      "input": {
+        "call": "latestOccurrenceBefore",
+        "reminder": {
+          "_id": "j97doc3f1c0a52",
+          "localId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11",
+          "userId": "user_golden",
+          "kind": "task",
+          "name": "Water the plants",
+          "schedule": {
+            "type": "daily",
+            "times": [
+              "09:00"
+            ]
+          },
+          "priority": "normal",
+          "tags": [],
+          "caregiverIds": [],
+          "active": true,
+          "createdAt": 1700000000000,
+          "updatedAt": 1700000000000,
+          "pauses": [
+            {
+              "from": 1782878400000,
+              "until": 1783350000000
+            }
+          ]
+        },
+        "now": 1783353600000,
+        "zone": "America/New_York"
+      },
+      "output": null
+    },
+    {
+      "name": "latest: a moved moment is found where it moved to",
+      "input": {
+        "call": "latestOccurrenceBefore",
+        "reminder": {
+          "_id": "j97doc3f1c0a52",
+          "localId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11",
+          "userId": "user_golden",
+          "kind": "task",
+          "name": "Water the plants",
+          "schedule": {
+            "type": "daily",
+            "times": [
+              "09:00"
+            ]
+          },
+          "priority": "normal",
+          "tags": [],
+          "caregiverIds": [],
+          "active": true,
+          "createdAt": 1700000000000,
+          "updatedAt": 1700000000000,
+          "overrides": [
+            {
+              "from": 1783342800000,
+              "to": 1783350000000
+            }
+          ]
+        },
+        "now": 1783353600000,
+        "zone": "America/New_York"
+      },
+      "output": {
+        "occurrenceId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11:1783350000000",
+        "reminderId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11",
+        "name": "Water the plants",
+        "dosage": null,
+        "fireAt": 1783350000000
+      }
+    },
+    {
+      "name": "latest: across fall back",
+      "input": {
+        "call": "latestOccurrenceBefore",
+        "reminder": {
+          "_id": "j97doc3f1c0a52",
+          "localId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11",
+          "userId": "user_golden",
+          "kind": "task",
+          "name": "Water the plants",
+          "schedule": {
+            "type": "daily",
+            "times": [
+              "01:30"
+            ]
+          },
+          "priority": "normal",
+          "tags": [],
+          "caregiverIds": [],
+          "active": true,
+          "createdAt": 1700000000000,
+          "updatedAt": 1700000000000
+        },
+        "now": 1793520000000,
+        "zone": "America/New_York"
+      },
+      "output": {
+        "occurrenceId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11:1793511000000",
+        "reminderId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11",
+        "name": "Water the plants",
+        "dosage": null,
+        "fireAt": 1793511000000
+      }
+    },
+    {
+      "name": "latest: in London",
+      "input": {
+        "call": "latestOccurrenceBefore",
+        "reminder": {
+          "_id": "j97doc3f1c0a52",
+          "localId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11",
+          "userId": "user_golden",
+          "kind": "task",
+          "name": "Water the plants",
+          "schedule": {
+            "type": "daily",
+            "times": [
+              "09:00"
+            ]
+          },
+          "priority": "normal",
+          "tags": [],
+          "caregiverIds": [],
+          "active": true,
+          "createdAt": 1700000000000,
+          "updatedAt": 1700000000000
+        },
+        "now": 1783335600000,
+        "zone": "Europe/London"
+      },
+      "output": {
+        "occurrenceId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11:1783324800000",
+        "reminderId": "3f1c0a52-6a0e-4d8e-9a7f-2b1c9e0d4a11",
+        "name": "Water the plants",
+        "dosage": null,
+        "fireAt": 1783324800000
+      }
+    }
+  ]
+}

@@ -22,6 +22,14 @@ tasks.test {
     // suite must see the same zone so the DST cases mean the same thing.
     systemProperty("user.timezone", "UTC")
     jvmArgs("-Duser.timezone=UTC")
+    // Golden fixtures (ADR 0017): checked against these files, or rewritten with -PupdateGoldens.
+    // Declared as an input so a hand-edited fixture is not "up to date".
+    val goldens = layout.projectDirectory.dir("golden")
+    inputs.dir(goldens).withPropertyName("goldenFixtures")
+    systemProperty("taskrx.goldenDir", goldens.asFile.absolutePath)
+    val updateGoldens = providers.gradleProperty("updateGoldens").isPresent
+    systemProperty("taskrx.updateGoldens", updateGoldens.toString())
+    if (updateGoldens) outputs.upToDateWhen { false }
 }
 
 kover {

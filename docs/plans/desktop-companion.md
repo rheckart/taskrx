@@ -40,6 +40,13 @@ because two writers are unsafe until one Occurrence can only ever be one Instanc
 - [ ] Golden fixtures: a `:core` task writes JSON cases for every rule the desktop ports
       (list in ADR 0017). The files are checked in, and the Gradle gate fails when
       regenerated output differs from them.
+  - [x] The mechanism, inside `:core:test` (fails on a changed, missing or orphaned file)
+  - [x] `instance-id` (Rust reproduces all 8 with `Uuid::new_v5`), `schedule` (92 cases,
+        four zones), `server-schedule` (the writer moved into `:core` as `scheduleToServer`)
+  - [ ] `domain` lifecycles, pause and stop
+  - [ ] `tasks`, `timeline`, `batch`, `asneeded`, `snooze`, `undo`, `sweep`
+  - [ ] `backlog`, `catchup`, `refill` projection
+  - [ ] `parser`, `notices`
 - [ ] Phone catch-up (ADR 0016):
   - [ ] A periodic WorkManager pull (15 min) that reschedules
   - [ ] A fire-time check before a dose posts: short timeout, fails open. Unverified until
