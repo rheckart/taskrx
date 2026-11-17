@@ -60,9 +60,10 @@ because two writers are unsafe until one Occurrence can only ever be one Instanc
 - [ ] Phone catch-up (ADR 0016):
   - [x] A periodic WorkManager pull (15 min) that reschedules (`BackgroundPullWorker`; a pulled
         answer now re-arms too. Unverified on a device until a build carrying it is installed)
-  - [ ] A fire-time check before a dose posts: short timeout, fails open. Unverified until
-        the new harness cases run on a device (offline posts, answered elsewhere stays
-        silent, a slow server posts)
+  - [ ] A fire-time check before a dose posts: short timeout, fails open. Written and
+        unit-tested (`FireTimeCheck`, `FireGate`, 4 s). Unverified until the new harness
+        cases run on a device (offline posts, answered elsewhere stays silent, a slow server
+        posts); they need a debug build, which cannot be installed over the release build
 - [ ] Desktop, `apps/desktop`:
   - [ ] Cargo workspace: `taskrx-desktop-core` (rules, Convex, screen state) and the Rune crate
   - [ ] Rules ported to Rust against the fixtures

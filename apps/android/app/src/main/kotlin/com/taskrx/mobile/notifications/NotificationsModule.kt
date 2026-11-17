@@ -4,7 +4,7 @@ import android.app.AlarmManager
 import android.content.Context
 import androidx.work.WorkManager
 import com.taskrx.core.domain.ReminderInstance
-import com.taskrx.core.domain.isAnswerable
+import com.taskrx.core.domain.isMomentAnswered
 import com.taskrx.core.notifications.NotificationSpec
 import com.taskrx.core.notifications.RearmCause
 import com.taskrx.core.notifications.dueWhileAway
@@ -76,7 +76,7 @@ class NotificationsModule(
         logged("clearing answered notifications") {
             val settled =
                 answers.map { it.reminderId to it.scheduledTime }.distinct().filter { (reminderId, time) ->
-                    instances.allForOccurrence(userId, reminderId, time).none { isAnswerable(it.status) }
+                    isMomentAnswered(instances.allForOccurrence(userId, reminderId, time).map { it.status })
                 }
             for ((time, moment) in settled.groupBy { it.second }) dismissPosted(time, moment.map { it.first })
         }

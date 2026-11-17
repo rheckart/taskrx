@@ -13,6 +13,7 @@ import kotlin.test.assertEquals
 import kotlin.test.assertNotNull
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
+import kotlinx.coroutines.runBlocking
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.Shadows.shadowOf
@@ -50,7 +51,7 @@ class PostingTest {
 
     @Test
     fun `an alarm firing posts the dose on the medication channel`() {
-        AlarmReceiver().onReceive(context, Intent().putExtra(AlarmReceiver.EXTRA_SPEC, SpecCodec.encode(DOSE)))
+        runBlocking { AlarmReceiver().handle(context, Intent().putExtra(AlarmReceiver.EXTRA_SPEC, SpecCodec.encode(DOSE))).join() }
 
         val posted = shadowOf(manager).getNotification(DOSE.id, 0)
         assertNotNull(posted)
@@ -61,8 +62,10 @@ class PostingTest {
 
     @Test
     fun `an unreadable alarm payload posts nothing and does not throw`() {
-        AlarmReceiver().onReceive(context, Intent().putExtra(AlarmReceiver.EXTRA_SPEC, "not json"))
-        AlarmReceiver().onReceive(context, Intent())
+        runBlocking {
+            AlarmReceiver().handle(context, Intent().putExtra(AlarmReceiver.EXTRA_SPEC, "not json")).join()
+            AlarmReceiver().handle(context, Intent()).join()
+        }
         assertTrue(shadowOf(manager).allNotifications.isEmpty())
     }
 

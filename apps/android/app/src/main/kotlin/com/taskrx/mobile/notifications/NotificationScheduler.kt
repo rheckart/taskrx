@@ -4,6 +4,7 @@ import com.taskrx.core.asneeded.takings
 import com.taskrx.core.domain.AsNeededTimes
 import com.taskrx.core.domain.Reminder
 import com.taskrx.core.domain.isAnswerable
+import com.taskrx.core.domain.isMomentAnswered
 import com.taskrx.core.notifications.RearmCause
 import com.taskrx.core.notifications.ReschedulePlan
 import com.taskrx.core.notifications.Tier
@@ -81,7 +82,7 @@ class NotificationScheduler(
         // nothing left to remind about. `planReschedule` never cancels a snooze, so it is done here.
         for (spec in snoozes.all()) {
             val rows = instances.allForOccurrence(userId, spec.reminderId, spec.scheduledTime)
-            if (rows.isNotEmpty() && rows.none { isAnswerable(it.status) }) {
+            if (isMomentAnswered(rows.map { it.status })) {
                 snoozes.removeForOccurrence(spec.reminderId, spec.scheduledTime).forEach { gateway(it.tier).cancel(it.id) }
             }
         }

@@ -40,6 +40,16 @@ class InstanceLifecycleTest {
     }
 
     @Test
+    fun `a moment is answered only when it has rows and every one is an answer`() {
+        assertFalse(isMomentAnswered(emptyList()), "no row is no answer")
+        assertTrue(isMomentAnswered(listOf(InstanceStatus.Completed)))
+        assertTrue(isMomentAnswered(listOf(InstanceStatus.Skipped, InstanceStatus.Completed)))
+        assertFalse(isMomentAnswered(listOf(InstanceStatus.Completed, InstanceStatus.Pending)), "one open row keeps it open")
+        assertFalse(isMomentAnswered(listOf(InstanceStatus.Snoozed)), "a snooze is a deferral")
+        assertFalse(isMomentAnswered(listOf(InstanceStatus.Missed)), "a miss is the app's guess")
+    }
+
+    @Test
     fun `an offered action targets the status it names`() {
         assertEquals(InstanceStatus.Completed, actionTarget(InstanceAction.Complete, InstanceStatus.Pending))
         assertEquals(InstanceStatus.Skipped, actionTarget(InstanceAction.Skip, InstanceStatus.Missed))

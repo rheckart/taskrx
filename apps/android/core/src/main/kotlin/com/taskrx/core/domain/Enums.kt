@@ -94,6 +94,13 @@ val ANSWERABLE_STATUSES: Set<InstanceStatus> = instanceAnswerableStatuses
 fun isAnswerable(status: InstanceStatus): Boolean = status in ANSWERABLE_STATUSES
 
 /**
+ * Whether a moment, given the statuses of its rows, is answered: it has a row, and every row is
+ * an answer. One open row (a snooze, a guessed miss) keeps it open. This is the positive answer
+ * ADR 0016 requires before a phone stays quiet about a moment answered on another device.
+ */
+fun isMomentAnswered(statuses: Collection<InstanceStatus>): Boolean = statuses.isNotEmpty() && statuses.none(::isAnswerable)
+
+/**
  * `TaskRx.Core.NotificationType`, used by the notification log.
  *
  * [Taken] here is NOT the [InstanceStatus] member ADR 0001 renamed. This enum

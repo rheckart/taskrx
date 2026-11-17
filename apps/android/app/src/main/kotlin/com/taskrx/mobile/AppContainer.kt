@@ -38,6 +38,7 @@ import com.taskrx.mobile.sync.PushWorker
 import com.taskrx.mobile.sync.RealConvexGateway
 import com.taskrx.mobile.sync.ReauthenticatingGateway
 import com.taskrx.mobile.sync.StuckChanges
+import com.taskrx.mobile.sync.FireTimeCheck
 import com.taskrx.mobile.sync.SyncCoordinator
 import com.taskrx.mobile.sweep.MissedSweepRunner
 import com.taskrx.mobile.sweep.RoomSweepStore
@@ -179,6 +180,9 @@ class AppContainer(
                 r.connectivity,
             )
         }
+
+    /** Asks the server, as a dose's alarm fires, whether it was answered elsewhere (ADR 0016). Null in a local-only build. */
+    val fireTimeCheck: FireTimeCheck? = remote?.let { FireTimeCheck(auth, it.ready, it.gateway, reminders) }
 
     init {
         session.follow(scope) { notifications.onForeground() }
