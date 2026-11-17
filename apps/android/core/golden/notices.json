@@ -230,7 +230,9 @@
         "zone": "UTC"
       },
       "output": {
-        "unread": "ambiguous"
+        "date": "2026-11-18",
+        "time": null,
+        "matchedText": "18/11/2026"
       }
     },
     {
@@ -678,7 +680,9 @@
         "zone": "UTC"
       },
       "output": {
-        "unread": "ambiguous"
+        "date": "2026-12-25",
+        "time": null,
+        "matchedText": "12/25/2026"
       }
     },
     {

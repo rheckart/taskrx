@@ -164,7 +164,7 @@ private fun dateCandidates(text: String, today: LocalDate): List<Candidate> {
     }
 
     for (match in NUMERIC_WITH_YEAR.findAll(text)) {
-        all += Candidate.Ambiguous(match.range.first, match.range.last + 1)
+        all += numericWithYearCandidate(match)
     }
 
     for (match in NUMERIC_DATE.findAll(text)) {
@@ -231,6 +231,30 @@ private fun numericCandidate(match: MatchResult, today: LocalDate): Candidate {
     val date = calendarDate(today.year, month, day) ?: return Candidate.Invalid(start, end)
     val resolved = if (date.isBefore(today)) calendarDate(today.year + 1, month, day) ?: return Candidate.Invalid(start, end) else date
     return Candidate.Valid(resolved, match.value, start, end)
+}
+
+/**
+ * A numeric date with a year (`18/11/2026`). The year is written out, so nothing is guessed but
+ * which part is the month, and that is read by the rule [numericCandidate] uses: one part must
+ * exceed 12 (D7). A two-digit year is refused as well, since its century would be a guess (D6).
+ */
+private fun numericWithYearCandidate(match: MatchResult): Candidate {
+    val start = match.range.first
+    val end = match.range.last + 1
+    val first = match.groupValues[1].toInt()
+    val second = match.groupValues[2].toInt()
+    val yearText = match.groupValues[3]
+    if (yearText.length != 4) return Candidate.Ambiguous(start, end)
+
+    val (month, day) =
+        when {
+            first > 12 && second > 12 -> return Candidate.Invalid(start, end)
+            first > 12 -> second to first
+            second > 12 -> first to second
+            else -> return Candidate.Ambiguous(start, end)
+        }
+    val date = calendarDate(yearText.toInt(), month, day) ?: return Candidate.Invalid(start, end)
+    return Candidate.Valid(date, match.value, start, end)
 }
 
 /* ---------------------------------------------------------------------------------------

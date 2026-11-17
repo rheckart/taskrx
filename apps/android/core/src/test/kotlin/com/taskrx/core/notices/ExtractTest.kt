@@ -76,9 +76,33 @@ class ExtractTest {
     }
 
     @Test
-    fun `a numeric date with a year is not one of the accepted forms`() {
-        assertEquals(ReadDate.Unread(UnreadReason.Ambiguous), read("18/11/2026"))
+    fun `a numeric date with a four-digit year reads when one part can only be the day`() {
+        assertEquals(LocalDate.of(2026, 11, 18), found("18/11/2026").date)
+        assertEquals(LocalDate.of(2026, 12, 25), found("12/25/2026").date)
+        assertEquals(LocalDate.of(2027, 1, 13), found("13.01.2027").date)
+        assertEquals("12/25/2026", found("Collection on 12/25/2026.").matchedText)
+    }
+
+    @Test
+    fun `a numeric date with a year in the past is that date, as a month name with a year is`() {
+        assertEquals(LocalDate.of(2024, 11, 18), found("18/11/2024").date)
+    }
+
+    @Test
+    fun `a numeric date with a year is still refused when either part could be the month`() {
+        assertEquals(ReadDate.Unread(UnreadReason.Ambiguous), read("05/06/2026"))
+    }
+
+    @Test
+    fun `a two-digit year is refused, because its century would be a guess`() {
         assertEquals(ReadDate.Unread(UnreadReason.Ambiguous), read("11/18/26"))
+    }
+
+    @Test
+    fun `a numeric date with a year that is not a real date is impossible`() {
+        assertEquals(ReadDate.Unread(UnreadReason.Impossible), read("31/02/2026"))
+        assertEquals(ReadDate.Unread(UnreadReason.Impossible), read("13/13/2026"))
+        assertEquals(ReadDate.Unread(UnreadReason.Impossible), read("0/13/2026"))
     }
 
     @Test
