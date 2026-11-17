@@ -400,3 +400,17 @@ fun mergeTime(schedule: ScheduleTimes?, time: String): ScheduleTimes =
         // the dates this one cannot.
         else -> dailyTimes(listOf(time))
     }
+
+/** The gap a dose taken as needed gets when the phrase names none: the add form's default. */
+const val DEFAULT_AS_NEEDED_GAP_MINUTES: Int = 4 * 60
+
+/**
+ * `as needed`, `when needed`, `if needed` or `prn` starting at [index]: how many tokens it takes,
+ * or null. `needed` alone is an ordinary word (`buy needed supplies`).
+ */
+fun tryParseAsNeeded(token: String, tokens: List<String>, index: Int): Int? {
+    if (equalsIgnoreCase(token, "prn")) return 1
+    val opener = equalsIgnoreCase(token, "as") || equalsIgnoreCase(token, "when") || equalsIgnoreCase(token, "if")
+    return if (opener && equalsIgnoreCase(tokenAt(tokens, index + 1), "needed")) 2 else null
+}
+

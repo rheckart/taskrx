@@ -4360,10 +4360,8 @@
           "kind": "medication",
           "name": "ibuprofen",
           "schedule": {
-            "type": "daily",
-            "times": [
-              "09:00"
-            ]
+            "type": "asNeeded",
+            "minGapMinutes": 240
           },
           "priority": "normal",
           "dosage": "200mg",
@@ -4372,10 +4370,7 @@
           "pillsPerDose": null,
           "refillReminderDays": null,
           "rxcui": null,
-          "unparsedTokens": [
-            "as",
-            "needed"
-          ],
+          "unparsedTokens": [],
           "isSavable": true
         }
       }
@@ -4735,10 +4730,8 @@
           "kind": "medication",
           "name": "ibuprofen",
           "schedule": {
-            "type": "daily",
-            "times": [
-              "09:00"
-            ]
+            "type": "asNeeded",
+            "minGapMinutes": 240
           },
           "priority": "normal",
           "dosage": "200mg",
@@ -4747,10 +4740,7 @@
           "pillsPerDose": null,
           "refillReminderDays": null,
           "rxcui": "860975",
-          "unparsedTokens": [
-            "as",
-            "needed"
-          ],
+          "unparsedTokens": [],
           "isSavable": true
         },
         "call": "withKind",
@@ -4760,10 +4750,8 @@
         "kind": "medication",
         "name": "ibuprofen",
         "schedule": {
-          "type": "daily",
-          "times": [
-            "09:00"
-          ]
+          "type": "asNeeded",
+          "minGapMinutes": 240
         },
         "priority": "normal",
         "dosage": "200mg",
@@ -4772,10 +4760,7 @@
         "pillsPerDose": null,
         "refillReminderDays": null,
         "rxcui": "860975",
-        "unparsedTokens": [
-          "as",
-          "needed"
-        ],
+        "unparsedTokens": [],
         "isSavable": true
       }
     },
@@ -4788,10 +4773,8 @@
           "kind": "medication",
           "name": "ibuprofen",
           "schedule": {
-            "type": "daily",
-            "times": [
-              "09:00"
-            ]
+            "type": "asNeeded",
+            "minGapMinutes": 240
           },
           "priority": "normal",
           "dosage": "200mg",
@@ -4800,10 +4783,7 @@
           "pillsPerDose": null,
           "refillReminderDays": null,
           "rxcui": "860975",
-          "unparsedTokens": [
-            "as",
-            "needed"
-          ],
+          "unparsedTokens": [],
           "isSavable": true
         },
         "call": "withKind",
@@ -4813,10 +4793,7 @@
         "kind": "task",
         "name": "ibuprofen",
         "schedule": {
-          "type": "daily",
-          "times": [
-            "09:00"
-          ]
+          "type": "none"
         },
         "priority": "normal",
         "dosage": null,
@@ -4825,10 +4802,7 @@
         "pillsPerDose": null,
         "refillReminderDays": null,
         "rxcui": null,
-        "unparsedTokens": [
-          "as",
-          "needed"
-        ],
+        "unparsedTokens": [],
         "isSavable": true
       }
     },
@@ -4841,10 +4815,8 @@
           "kind": "medication",
           "name": "ibuprofen",
           "schedule": {
-            "type": "daily",
-            "times": [
-              "09:00"
-            ]
+            "type": "asNeeded",
+            "minGapMinutes": 240
           },
           "priority": "normal",
           "dosage": "200mg",
@@ -4853,10 +4825,7 @@
           "pillsPerDose": null,
           "refillReminderDays": null,
           "rxcui": "860975",
-          "unparsedTokens": [
-            "as",
-            "needed"
-          ],
+          "unparsedTokens": [],
           "isSavable": true
         },
         "call": "withName",
@@ -4866,10 +4835,8 @@
         "kind": "medication",
         "name": "Metformin",
         "schedule": {
-          "type": "daily",
-          "times": [
-            "09:00"
-          ]
+          "type": "asNeeded",
+          "minGapMinutes": 240
         },
         "priority": "normal",
         "dosage": "200mg",
@@ -4878,10 +4845,7 @@
         "pillsPerDose": null,
         "refillReminderDays": null,
         "rxcui": null,
-        "unparsedTokens": [
-          "as",
-          "needed"
-        ],
+        "unparsedTokens": [],
         "isSavable": true
       }
     },
@@ -4894,10 +4858,8 @@
           "kind": "medication",
           "name": "ibuprofen",
           "schedule": {
-            "type": "daily",
-            "times": [
-              "09:00"
-            ]
+            "type": "asNeeded",
+            "minGapMinutes": 240
           },
           "priority": "normal",
           "dosage": "200mg",
@@ -4906,10 +4868,7 @@
           "pillsPerDose": null,
           "refillReminderDays": null,
           "rxcui": "860975",
-          "unparsedTokens": [
-            "as",
-            "needed"
-          ],
+          "unparsedTokens": [],
           "isSavable": true
         },
         "call": "withName",
@@ -4919,10 +4878,8 @@
         "kind": "medication",
         "name": "   ",
         "schedule": {
-          "type": "daily",
-          "times": [
-            "09:00"
-          ]
+          "type": "asNeeded",
+          "minGapMinutes": 240
         },
         "priority": "normal",
         "dosage": "200mg",
@@ -4931,10 +4888,7 @@
         "pillsPerDose": null,
         "refillReminderDays": null,
         "rxcui": null,
-        "unparsedTokens": [
-          "as",
-          "needed"
-        ],
+        "unparsedTokens": [],
         "isSavable": false
       }
     },

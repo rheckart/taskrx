@@ -4,11 +4,14 @@ import com.taskrx.core.domain.Priority
 import com.taskrx.core.domain.Reminder
 import com.taskrx.core.domain.ReminderKind
 import com.taskrx.core.domain.ScheduleTimes
+import com.taskrx.core.domain.IntervalTimes
 import com.taskrx.core.domain.MonthlyTimes
 import com.taskrx.core.domain.WeeklyTimes
 import com.taskrx.core.domain.createReminder
+import com.taskrx.core.domain.asNeededTimes
 import com.taskrx.core.domain.dailyTimes
 import com.taskrx.core.domain.monthlyTimes
+import com.taskrx.core.domain.noneTimes
 import com.taskrx.core.domain.weeklyTimes
 
 /*
@@ -91,6 +94,8 @@ private class ParserState(
     val monthDays: MutableList<Int> = mutableListOf()
     val unparsedTokens: MutableList<String> = mutableListOf()
     var nameClosed: Boolean = false
+    /** Set by [tryParseAsNeeded]: the phrase said `as needed`, which replaces any other schedule at the end. */
+    var asNeeded: Boolean = false
     /** Set by [tryParseMonthly]: a month word is a schedule, and nothing else may claim it. */
     var monthlyNamed: Boolean = false
 }
@@ -124,6 +129,9 @@ private fun detectKind(first: String, tokens: List<String>): ReminderKind {
     if (tokens.any(::looksLikeDosage) || hasDrugSuffix(tokens)) return ReminderKind.Medication
 
     if (isTaskVerb(first)) return ReminderKind.Task
+
+    // `as needed` is a way to take a medication: `ibuprofen as needed` is a drug, however short.
+    if (tokens.withIndex().any { (i, t) -> tryParseAsNeeded(t, tokens, i) != null }) return ReminderKind.Medication
 
     if (tokens.any(::isTaskSignal)) return ReminderKind.Task
 
@@ -260,6 +268,13 @@ private fun consumeToken(state: ParserState, token: String, index: Int): Int {
         return priority.consumed
     }
 
+    val asNeeded = tryParseAsNeeded(token, tokens, index)
+    if (asNeeded != null) {
+        state.asNeeded = true
+        closeNameIfSet(state)
+        return asNeeded
+    }
+
     // `every month` and `monthly`. The month wins over the words around it: `the` in `the 1st of
     // every month` is a noise word, and `9am` in `monthly at 9am` is a time that belongs to the
     // dates this file cannot see. So it is read first, and it takes the schedule whatever else
@@ -394,6 +409,13 @@ private fun extractFields(state: ParserState) {
     if (state.monthlyNamed) {
         val times = (state.schedule as? MonthlyTimes)?.times.orEmpty()
         state.schedule = monthlyTimes(state.monthDays.distinct().sorted(), times)
+    }
+    // `as needed` replaces any other schedule. `every 6 hours as needed` is the gap between doses;
+    // a time of day means nothing to a dose taken when it is needed. A chore has no doses to
+    // space, so it goes to the Backlog, as `withKind` sends an as-needed draft corrected to a task.
+    if (state.asNeeded) {
+        val gap = (state.schedule as? IntervalTimes)?.hours?.let { it * 60 } ?: DEFAULT_AS_NEEDED_GAP_MINUTES
+        state.schedule = if (state.kind == ReminderKind.Task) noneTimes() else asNeededTimes(gap)
     }
 }
 

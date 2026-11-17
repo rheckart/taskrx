@@ -1,5 +1,9 @@
 package com.taskrx.core.parser
 
+import com.taskrx.core.domain.noneTimes
+
+import com.taskrx.core.domain.asNeededTimes
+
 import com.taskrx.core.domain.Priority
 import com.taskrx.core.domain.Reminder
 import com.taskrx.core.domain.ReminderKind
@@ -1002,5 +1006,62 @@ class ParserPatternHelpersTest {
         assertNull(lookupNumberWord("21"))
         assertTrue(isDoseUnit("Pills"))
         assertNotNull(DRUG_SUFFIXES.firstOrNull { it == "statin" })
+    }
+}
+
+class ParseAsNeededTest {
+    @Test
+    fun `as needed is a schedule, with the form's four-hour gap`() {
+        val reminder = expectReminder(parse("ibuprofen 200mg as needed"))
+        assertEquals(ReminderKind.Medication, reminder.kind)
+        assertEquals("ibuprofen", reminder.name)
+        assertEquals("200mg", reminder.dosage)
+        assertEquals(asNeededTimes(240), reminder.schedule)
+    }
+
+    @Test
+    fun `every so many hours as needed is the gap between doses`() {
+        assertEquals(asNeededTimes(360), expectReminder(parse("ibuprofen 400mg every 6 hours as needed")).schedule)
+        assertEquals(asNeededTimes(360), expectReminder(parse("ibuprofen 400mg as needed every 6 hours")).schedule)
+    }
+
+    @Test
+    fun `when needed, if needed and prn say the same`() {
+        assertEquals(asNeededTimes(240), expectReminder(parse("tylenol 500mg when needed")).schedule)
+        assertEquals(asNeededTimes(240), expectReminder(parse("tylenol 500mg if needed")).schedule)
+        assertEquals(asNeededTimes(240), expectReminder(parse("tylenol 500mg PRN")).schedule)
+    }
+
+    @Test
+    fun `as needed names a medication even without a dosage`() {
+        val reminder = expectReminder(parse("ibuprofen as needed"))
+        assertEquals(ReminderKind.Medication, reminder.kind)
+        assertEquals("ibuprofen", reminder.name)
+        assertEquals(asNeededTimes(240), reminder.schedule)
+    }
+
+    @Test
+    fun `a chore done when needed goes to the Backlog, since a task has no doses to space`() {
+        val reminder = expectReminder(parse("call the plumber when needed"))
+        assertEquals(ReminderKind.Task, reminder.kind)
+        assertEquals(noneTimes(), reminder.schedule)
+    }
+
+    @Test
+    fun `as needed takes the place of a time it was given`() {
+        val result = parse("ibuprofen 200mg as needed at 9am")
+        assertEquals(asNeededTimes(240), expectReminder(result).schedule)
+    }
+
+    @Test
+    fun `as directed is not as needed`() {
+        val result = parse("aspirin 81mg daily as directed")
+        assertEquals(dailyTimes(listOf("09:00")), expectReminder(result).schedule)
+    }
+
+    @Test
+    fun `needed on its own is a word, not a schedule`() {
+        val reminder = expectReminder(parse("buy needed supplies friday"))
+        assertEquals("buy needed supplies", reminder.name)
     }
 }

@@ -1,5 +1,6 @@
 package com.taskrx.mobile.ui.forms
 
+import com.taskrx.core.parser.DEFAULT_AS_NEEDED_GAP_MINUTES
 import com.taskrx.core.domain.AsNeededTimes
 import com.taskrx.core.domain.DailyTimes
 import com.taskrx.core.domain.IntervalTimes
@@ -74,7 +75,7 @@ fun defaultSchedule(type: ScheduleType, now: Long): ScheduleTimes =
         ScheduleType.Once -> onceTimes(now + 3_600_000L)
         ScheduleType.None -> noneTimes()
         // Four hours is what the label of most over-the-counter pain relief says; no daily limit until one is typed.
-        ScheduleType.AsNeeded -> asNeededTimes(4 * 60)
+        ScheduleType.AsNeeded -> asNeededTimes(DEFAULT_AS_NEEDED_GAP_MINUTES)
     }
 
 /** Sunday first; the index is the domain's weekday number. */
