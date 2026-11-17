@@ -178,6 +178,9 @@ class RemindersRepository(
     suspend fun get(id: String): Reminder? = dao.get(id)?.let(Codecs::toReminder)
 
     /** Applies [patch], bumps `updated_at`, returns the row to `pending` and enqueues an `update`. */
+    /** Whether an edit to this Reminder is waiting to be pushed, so a pull must leave it be. */
+    suspend fun hasUnpushedChange(id: String): Boolean = queue.hasEntriesFor(SyncEntityType.Reminder, id)
+
     /**
      * This device's estimate of the supply after a dose it recorded, written to the row only.
      *
@@ -347,7 +350,9 @@ class RemindersRepository(
                 schedule = existing.schedule,
                 priority = null,
                 tags = null,
-                pillsRemaining = existing.pillsRemaining,
+                // A row the server has never seen brings its count; one it has keeps the
+                // server's, which has spent doses this device's estimate may not know of.
+                pillsRemaining = existing.pillsRemaining.takeIf { row.convexId == null },
                 pillsPerDose = existing.pillsPerDose,
                 refillReminderDays = existing.refillReminderDays,
                 caregiverIds = null,

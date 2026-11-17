@@ -777,17 +777,18 @@ describe("a sweep verdict never overwrites an answer", () => {
         await owner.mutation(api.reminderInstances.markMissed, { id });
       }
 
+      // Stamped ahead of the server's clock, as a phone's clock can be.
       await owner.mutation(api.reminderInstances.create, {
         ...instance,
         status: "pending",
-        createdAt: NOW + 3 * HOUR,
-        updatedAt: NOW + 3 * HOUR,
+        createdAt: NOW + 5 * HOUR,
+        updatedAt: NOW + 5 * HOUR,
       });
 
-      expect(await stored(owner, instance.localId)).toMatchObject({
-        status: answer,
-        updatedAt: NOW + 3 * HOUR,
-      });
+      const kept = await stored(owner, instance.localId);
+      expect(kept).toMatchObject({ status: answer });
+      // Newer than the refused write, so the device that sent it takes the answer back.
+      expect(kept?.updatedAt).toBeGreaterThan(NOW + 5 * HOUR);
     }
   );
 
@@ -1262,6 +1263,24 @@ describe("a dose spends the supply on the server", () => {
     );
     await second.mutation(api.reminderInstances.markCompleted, { id: u });
     expect(await uncounted.remaining()).toBeUndefined();
+  });
+
+  it("stamps the reminder past any stamp it held, so every device pulls the count", async () => {
+    const { owner } = deployment();
+    const { reminderId, dose } = await bottle(owner);
+    // A device edit stamped ahead of the server's clock.
+    const ahead = Date.now() + 10 * HOUR;
+    await owner.mutation(api.reminders.update, {
+      id: reminderId,
+      name: "Metformin XR",
+      updatedAt: ahead,
+    });
+    const id = await owner.mutation(api.reminderInstances.create, dose(1));
+
+    await owner.mutation(api.reminderInstances.markCompleted, { id });
+
+    const reminder = await owner.query(api.reminders.get, { id: reminderId });
+    expect(reminder?.updatedAt).toBeGreaterThan(ahead);
   });
 
   it("spends nothing when a fresh mint from another device is refused", async () => {

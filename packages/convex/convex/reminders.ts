@@ -264,7 +264,11 @@ export const update = mutation({
 
     const now = Date.now();
     await ctx.db.patch(args.id, {
-      updatedAt: args.updatedAt ?? now,
+      // Never behind the stored stamp. The server now stamps a Reminder itself when it
+      // spends a dose (ADR 0018), and an edit queued offline behind that dose carries an
+      // older device stamp: written as is, the merged row would read as older than the copy
+      // the device already holds, and the device would never take it.
+      updatedAt: Math.max(args.updatedAt ?? now, existing.updatedAt + 1),
       ...(args.name !== undefined ? { name: args.name } : {}),
       ...(args.rxcui !== undefined ? { rxcui: args.rxcui } : {}),
       ...(args.dosage !== undefined ? { dosage: args.dosage } : {}),

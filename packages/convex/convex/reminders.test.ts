@@ -305,6 +305,43 @@ describe("reminders.update", () => {
       caregiverIds: ["care_2"],
     });
   });
+
+  it("stamps an edit after the stored stamp, so the merged row is newer than either copy", async () => {
+    const t = deployment();
+    const id = await t.mutation(api.reminders.create, DEVICE_PUSH);
+    // The server stamped the row itself (a dose's spend) after the device last saw it.
+    await t.mutation(api.reminders.update, {
+      id,
+      name: "A",
+      updatedAt: NOW + 2 * 60_000,
+    });
+
+    // An edit queued offline before that, carrying the device's older stamp.
+    await t.mutation(api.reminders.update, {
+      id,
+      active: false,
+      updatedAt: NOW + 60_000,
+    });
+
+    const row = await t.query(api.reminders.get, { id });
+    expect(row).toMatchObject({ name: "A", active: false });
+    expect(row?.updatedAt).toBeGreaterThan(NOW + 2 * 60_000);
+  });
+
+  it("keeps a device's stamp when it is the newest", async () => {
+    const t = deployment();
+    const id = await t.mutation(api.reminders.create, DEVICE_PUSH);
+
+    await t.mutation(api.reminders.update, {
+      id,
+      name: "B",
+      updatedAt: NOW + 60_000,
+    });
+
+    expect((await t.query(api.reminders.get, { id }))?.updatedAt).toBe(
+      NOW + 60_000
+    );
+  });
 });
 
 /**

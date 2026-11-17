@@ -38,6 +38,12 @@ class ShouldApplyRemoteReminderTest {
     fun `keeps the local row when both were edited at the same instant`() {
         assertFalse(shouldApplyRemoteReminder(stamped(100), stamped(100)))
     }
+
+    @Test
+    fun `never overwrites a reminder with an edit this device has not pushed yet`() {
+        assertFalse(shouldApplyRemoteReminder(stamped(100), stamped(200), localHasUnpushedChange = true))
+        assertTrue(shouldApplyRemoteReminder(null, stamped(200), localHasUnpushedChange = true))
+    }
 }
 
 class ShouldApplyRemoteReminderInstanceTest {

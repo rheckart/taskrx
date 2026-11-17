@@ -316,6 +316,7 @@ class PullTest {
         withFixture(T0) {
             now = T0 + 100
             reminder("r1", createdAt = T0 + 100, name = "Local")
+            pushed() // last-write-wins is for a synced row; an unpushed one is never overwritten
 
             pull(this).run(listOf(reminderDoc(localId = "r1", updatedAt = "${T0 + 50}.0").replace("Metformin", "Older")))
             assertEquals("Local", container.reminders.get("r1")!!.name)
@@ -469,6 +470,32 @@ class PullTest {
             sync.reapply()
 
             assertEquals(InstanceStatus.Skipped, container.instances.get("i1")!!.status)
+        }
+
+    @Test
+    fun `an edit queued behind an offline dose is not overwritten by the server's spend, and converges`() =
+        withFixture(T0) {
+            pull(this).run(listOf(reminderDoc()))
+            pushed()
+            // Offline: the medication is stopped (as a pause would be). The dose before it drains first, and the
+            // server stamps the Reminder when it spends the pills.
+            container.reminders.update("r1", com.taskrx.mobile.data.UpdateReminderPatch(active = false))
+            val gateway = FakeGateway()
+            gateway.feeds[ConvexFunctions.REMINDERS_LIST] =
+                flowOf(json("[${reminderDoc(updatedAt = "1790000000000.0")}]"))
+            val sync = PullSync(gateway, pull(this))
+
+            sync.run()
+            assertEquals(false, container.reminders.get("r1")!!.active)
+
+            // The edit lands; the server stamps the merged row after both.
+            pushed()
+            gateway.feeds[ConvexFunctions.REMINDERS_LIST] =
+                flowOf(json("[${reminderDoc(updatedAt = "1790000000001.0").replace("\"active\":true", "\"active\":false")}]"))
+            PullSync(gateway, pull(this)).run()
+
+            assertEquals(false, container.reminders.get("r1")!!.active)
+            assertEquals(1_790_000_000_001L, container.reminders.get("r1")!!.updatedAt)
         }
 
     @Test

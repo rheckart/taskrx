@@ -69,7 +69,7 @@ class PullApplier(
                 continue
             }
             val local = reminders.get(candidate.reminder.id)
-            if (shouldApplyRemoteReminder(local, candidate.reminder)) applicable += candidate
+            if (shouldApplyRemoteReminder(local, candidate.reminder, reminders.hasUnpushedChange(candidate.reminder.id))) applicable += candidate
         }
         reminders.upsertMany(applicable)
         if (applicable.isNotEmpty()) {

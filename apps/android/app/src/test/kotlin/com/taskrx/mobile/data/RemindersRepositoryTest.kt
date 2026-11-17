@@ -414,7 +414,7 @@ class RemindersRepositoryTest {
     @Test
     fun `enqueueExternalWrite chooses create for an unsynced row and update for a synced one`() =
         withFixture(T0) {
-            reminder("m1") { it.copy(rxcui = "83367", priority = Priority.High, tags = listOf("t")) }
+            reminder("m1") { it.copy(rxcui = "83367", priority = Priority.High, tags = listOf("t"), pillsRemaining = 30.0) }
             val before = container.syncQueue.pending().size
 
             container.reminders.enqueueExternalWrite("m1")
@@ -424,6 +424,9 @@ class RemindersRepositoryTest {
 
             val added = container.syncQueue.pending().drop(before)
             assertEquals(listOf(SyncOperation.Create, SyncOperation.Update), added.map { it.operation })
+            // A first create brings the count; an update leaves the server's, which spends doses (ADR 0018).
+            assertEquals(30.0, payloads()[payloads().size - 2]["pillsRemaining"]!!.jsonPrimitive.double)
+            assertEquals(JsonNull, payloads().last()["pillsRemaining"])
             val payload = payloads().last()
             assertEquals("83367", payload["rxcui"]!!.jsonPrimitive.content)
             assertTrue(payload["active"]!!.jsonPrimitive.boolean)

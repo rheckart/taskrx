@@ -28,14 +28,25 @@ typealias ReminderInstanceWithConflictFields = StatusTracked
 
 /**
  * Decide whether an incoming remote reminder should overwrite the local row.
- * Last-write-wins, with the local row winning ties.
+ * Last-write-wins, with the local row winning ties, and never over a change this device has
+ * not pushed yet.
+ *
+ * The last clause matters since the server spends the supply (ADR 0018): a dose this device
+ * recorded offline stamps the Reminder on the server when it drains, and that delivery would
+ * otherwise overwrite an edit queued behind it (a pause made offline), which then lands with
+ * an older stamp than the row it replaced. The edit is pushed first; the coordinator re-runs
+ * the pull after the drain, and the server's merged row arrives stamped after both.
  */
 fun shouldApplyRemoteReminder(
     local: ReminderWithTimestamps?,
     remote: ReminderWithTimestamps,
+    localHasUnpushedChange: Boolean = false,
 ): Boolean {
     if (local == null) {
         return true
+    }
+    if (localHasUnpushedChange) {
+        return false
     }
     return remote.updatedAt > local.updatedAt
 }

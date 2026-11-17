@@ -242,8 +242,10 @@ Live subscriptions to `reminders.list` and `reminderInstances.list` mirror chang
 
 Two pure functions consumed by both repository upsert paths:
 
-- `shouldApplyRemoteReminder(local, remote)`: false when `local != null && local.updatedAt >= remote.updatedAt` (local wins ties). True otherwise.
-- `shouldApplyRemoteReminderInstance(local, remote, localHasUnpushedChange)`: false when the local row has a change not yet pushed; false when local is `completed` unless the remote is a newer `pending` (an undo, ADR 0008); true when remote is `completed`; otherwise last-write-wins with local winning ties.
+- `shouldApplyRemoteReminder(local, remote, localHasUnpushedChange)`: false when the local row has an edit not yet pushed (the server stamps a Reminder itself when it spends a dose, so a delivery could otherwise overwrite an edit queued offline); otherwise false when `local.updatedAt >= remote.updatedAt` (local wins ties).
+- `shouldApplyRemoteReminderInstance(local, remote, localHasUnpushedChange)`: false when the local row has a change not yet pushed; false when local is `completed` unless the remote is a newer `pending` (an undo, ADR 0008); true when remote is `completed`; true when local is `missed` and remote is `skipped` or `snoozed`, since the server keeps an answer over a sweep verdict (ADR 0018); otherwise last-write-wins with local winning ties.
+
+The server's stamps only move forward: an edit, a supply spend or a refused write stamps after the stored `updatedAt` (and a refusal after the refused write's own), so the device that wrote last always receives the merged row as newer. `PullSync.reapply` re-runs the last delivered pass after each drain, because the server's answer can arrive while the refused or superseded push is still queued.
 
 The truth table, including the safety-critical completed-instance preservation, is covered by `:core` tests and sits under the Kover gate.
 

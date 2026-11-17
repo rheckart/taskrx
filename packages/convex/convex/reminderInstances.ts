@@ -101,7 +101,12 @@ async function spendSupply(
   const pillsRemaining = intoCompleted
     ? Math.max(0, reminder.pillsRemaining - perDose)
     : reminder.pillsRemaining + perDose;
-  await ctx.db.patch(reminderId, { pillsRemaining, updatedAt: Date.now() });
+  // After the stored stamp as well as now: a device's own stamp can run ahead of the
+  // server's clock, and a pull only takes a row newer than the one it holds.
+  await ctx.db.patch(reminderId, {
+    pillsRemaining,
+    updatedAt: Math.max(Date.now(), reminder.updatedAt + 1),
+  });
 }
 
 /** ADR 0005's Grace Period, as `GRACE_PERIOD_MS` in `:core`. */
@@ -313,7 +318,10 @@ export const create = mutation({
         (args.status === "missed" && !sweepMayMark(existing, now)) ||
         (freshMint && existing.status !== "pending")
       ) {
-        await ctx.db.patch(existing._id, { updatedAt: now });
+        // Past the refused write's own stamp too, so its device takes the answer back.
+        await ctx.db.patch(existing._id, {
+          updatedAt: Math.max(now, existing.updatedAt + 1, args.updatedAt + 1),
+        });
         return existing._id;
       }
 
@@ -485,7 +493,9 @@ export const markMissed = mutation({
     if (!sweepMayMark(instance, Date.now())) {
       // Stamped for the same reason as a refused `create`: the device that swept must be
       // told the answer it missed, and an unchanged document tells it nothing.
-      await ctx.db.patch(args.id, { updatedAt: Date.now() });
+      await ctx.db.patch(args.id, {
+        updatedAt: Math.max(Date.now(), instance.updatedAt + 1),
+      });
       return args.id;
     }
 
