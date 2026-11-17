@@ -2538,6 +2538,8 @@ case17_fire_slow_server_posts() {
 
 case18_fire_backup_after_kill() {
   local label="fire-backup-$(date +%s)" line pid="" deadline
+  # Before root, not inside fire_setup after it: nothing here may touch a phone.
+  require_emulator 18 fire_backup_after_kill || return
   adb_run root >/dev/null 2>&1
   sleep 3
   adb_run wait-for-device >/dev/null 2>&1

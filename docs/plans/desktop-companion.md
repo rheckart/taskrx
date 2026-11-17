@@ -62,8 +62,10 @@ because two writers are unsafe until one Occurrence can only ever be one Instanc
         answer now re-arms too. Unverified on a device until a build carrying it is installed)
   - [x] A fire-time check before a dose posts: short timeout, fails open (`FireTimeCheck`,
         `FireGate`, 4 s; `DoseBackup` posts if the process dies mid-check). Harness cases 15-18
-        pass on an API 34 emulator: answered elsewhere stays quiet (461 ms cold), offline and a
-        slow server post at the bound, and a SIGKILL mid-check is posted by the backup
+        pass on an API 34 emulator against a local backend: answered elsewhere stays quiet (461 ms
+        cold, on the same machine as the server, so not the phone's number), offline and a slow
+        server post at the bound, and a SIGKILL mid-check is posted by the backup. Still to see:
+        a real dose's `alarm` line on the phone against the VPS
 - [ ] Desktop, `apps/desktop`:
   - [ ] Cargo workspace: `taskrx-desktop-core` (rules, Convex, screen state) and the Rune crate
   - [ ] Rules ported to Rust against the fixtures
