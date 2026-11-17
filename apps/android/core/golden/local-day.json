@@ -1,0 +1,594 @@
+{
+  "rule": "local-day",
+  "about": "localDayBounds(now, offsetDays, zone), localCalendarDaysBetween(from, to, zone), atClockTimeOnDayOf(day, hour, minute, zone), takenAtOrNull(scheduledTime, hour, minute, now, zone)",
+  "generatedBy": "apps/android/core/src/test/kotlin/com/taskrx/core/golden (./gradlew :core:test -PupdateGoldens)",
+  "cases": [
+    {
+      "name": "localDayBounds: New York, the day before spring forward, offset -1",
+      "input": {
+        "call": "localDayBounds",
+        "now": 1772902800000,
+        "offsetDays": -1,
+        "zone": "America/New_York"
+      },
+      "output": {
+        "start": 1772773200000,
+        "end": 1772859599999
+      }
+    },
+    {
+      "name": "localDayBounds: New York, the day before spring forward, offset 0",
+      "input": {
+        "call": "localDayBounds",
+        "now": 1772902800000,
+        "offsetDays": 0,
+        "zone": "America/New_York"
+      },
+      "output": {
+        "start": 1772859600000,
+        "end": 1772945999999
+      }
+    },
+    {
+      "name": "localDayBounds: New York, the day before spring forward, offset 1",
+      "input": {
+        "call": "localDayBounds",
+        "now": 1772902800000,
+        "offsetDays": 1,
+        "zone": "America/New_York"
+      },
+      "output": {
+        "start": 1772946000000,
+        "end": 1773028799999
+      }
+    },
+    {
+      "name": "localDayBounds: New York, the day before spring forward, offset 7",
+      "input": {
+        "call": "localDayBounds",
+        "now": 1772902800000,
+        "offsetDays": 7,
+        "zone": "America/New_York"
+      },
+      "output": {
+        "start": 1773460800000,
+        "end": 1773547199999
+      }
+    },
+    {
+      "name": "localDayBounds: New York, spring forward (23 hours), offset -1",
+      "input": {
+        "call": "localDayBounds",
+        "now": 1772985600000,
+        "offsetDays": -1,
+        "zone": "America/New_York"
+      },
+      "output": {
+        "start": 1772859600000,
+        "end": 1772945999999
+      }
+    },
+    {
+      "name": "localDayBounds: New York, spring forward (23 hours), offset 0",
+      "input": {
+        "call": "localDayBounds",
+        "now": 1772985600000,
+        "offsetDays": 0,
+        "zone": "America/New_York"
+      },
+      "output": {
+        "start": 1772946000000,
+        "end": 1773028799999
+      }
+    },
+    {
+      "name": "localDayBounds: New York, spring forward (23 hours), offset 1",
+      "input": {
+        "call": "localDayBounds",
+        "now": 1772985600000,
+        "offsetDays": 1,
+        "zone": "America/New_York"
+      },
+      "output": {
+        "start": 1773028800000,
+        "end": 1773115199999
+      }
+    },
+    {
+      "name": "localDayBounds: New York, spring forward (23 hours), offset 7",
+      "input": {
+        "call": "localDayBounds",
+        "now": 1772985600000,
+        "offsetDays": 7,
+        "zone": "America/New_York"
+      },
+      "output": {
+        "start": 1773547200000,
+        "end": 1773633599999
+      }
+    },
+    {
+      "name": "localDayBounds: New York, fall back (25 hours), offset -1",
+      "input": {
+        "call": "localDayBounds",
+        "now": 1793552400000,
+        "offsetDays": -1,
+        "zone": "America/New_York"
+      },
+      "output": {
+        "start": 1793419200000,
+        "end": 1793505599999
+      }
+    },
+    {
+      "name": "localDayBounds: New York, fall back (25 hours), offset 0",
+      "input": {
+        "call": "localDayBounds",
+        "now": 1793552400000,
+        "offsetDays": 0,
+        "zone": "America/New_York"
+      },
+      "output": {
+        "start": 1793505600000,
+        "end": 1793595599999
+      }
+    },
+    {
+      "name": "localDayBounds: New York, fall back (25 hours), offset 1",
+      "input": {
+        "call": "localDayBounds",
+        "now": 1793552400000,
+        "offsetDays": 1,
+        "zone": "America/New_York"
+      },
+      "output": {
+        "start": 1793595600000,
+        "end": 1793681999999
+      }
+    },
+    {
+      "name": "localDayBounds: New York, fall back (25 hours), offset 7",
+      "input": {
+        "call": "localDayBounds",
+        "now": 1793552400000,
+        "offsetDays": 7,
+        "zone": "America/New_York"
+      },
+      "output": {
+        "start": 1794114000000,
+        "end": 1794200399999
+      }
+    },
+    {
+      "name": "localDayBounds: New York, 00:30 on fall back, offset -1",
+      "input": {
+        "call": "localDayBounds",
+        "now": 1793507400000,
+        "offsetDays": -1,
+        "zone": "America/New_York"
+      },
+      "output": {
+        "start": 1793419200000,
+        "end": 1793505599999
+      }
+    },
+    {
+      "name": "localDayBounds: New York, 00:30 on fall back, offset 0",
+      "input": {
+        "call": "localDayBounds",
+        "now": 1793507400000,
+        "offsetDays": 0,
+        "zone": "America/New_York"
+      },
+      "output": {
+        "start": 1793505600000,
+        "end": 1793595599999
+      }
+    },
+    {
+      "name": "localDayBounds: New York, 00:30 on fall back, offset 1",
+      "input": {
+        "call": "localDayBounds",
+        "now": 1793507400000,
+        "offsetDays": 1,
+        "zone": "America/New_York"
+      },
+      "output": {
+        "start": 1793595600000,
+        "end": 1793681999999
+      }
+    },
+    {
+      "name": "localDayBounds: New York, 00:30 on fall back, offset 7",
+      "input": {
+        "call": "localDayBounds",
+        "now": 1793507400000,
+        "offsetDays": 7,
+        "zone": "America/New_York"
+      },
+      "output": {
+        "start": 1794114000000,
+        "end": 1794200399999
+      }
+    },
+    {
+      "name": "localDayBounds: London, spring forward, offset -1",
+      "input": {
+        "call": "localDayBounds",
+        "now": 1774782000000,
+        "offsetDays": -1,
+        "zone": "Europe/London"
+      },
+      "output": {
+        "start": 1774656000000,
+        "end": 1774742399999
+      }
+    },
+    {
+      "name": "localDayBounds: London, spring forward, offset 0",
+      "input": {
+        "call": "localDayBounds",
+        "now": 1774782000000,
+        "offsetDays": 0,
+        "zone": "Europe/London"
+      },
+      "output": {
+        "start": 1774742400000,
+        "end": 1774825199999
+      }
+    },
+    {
+      "name": "localDayBounds: London, spring forward, offset 1",
+      "input": {
+        "call": "localDayBounds",
+        "now": 1774782000000,
+        "offsetDays": 1,
+        "zone": "Europe/London"
+      },
+      "output": {
+        "start": 1774825200000,
+        "end": 1774911599999
+      }
+    },
+    {
+      "name": "localDayBounds: London, spring forward, offset 7",
+      "input": {
+        "call": "localDayBounds",
+        "now": 1774782000000,
+        "offsetDays": 7,
+        "zone": "Europe/London"
+      },
+      "output": {
+        "start": 1775343600000,
+        "end": 1775429999999
+      }
+    },
+    {
+      "name": "localDayBounds: London, fall back, offset -1",
+      "input": {
+        "call": "localDayBounds",
+        "now": 1792929600000,
+        "offsetDays": -1,
+        "zone": "Europe/London"
+      },
+      "output": {
+        "start": 1792796400000,
+        "end": 1792882799999
+      }
+    },
+    {
+      "name": "localDayBounds: London, fall back, offset 0",
+      "input": {
+        "call": "localDayBounds",
+        "now": 1792929600000,
+        "offsetDays": 0,
+        "zone": "Europe/London"
+      },
+      "output": {
+        "start": 1792882800000,
+        "end": 1792972799999
+      }
+    },
+    {
+      "name": "localDayBounds: London, fall back, offset 1",
+      "input": {
+        "call": "localDayBounds",
+        "now": 1792929600000,
+        "offsetDays": 1,
+        "zone": "Europe/London"
+      },
+      "output": {
+        "start": 1792972800000,
+        "end": 1793059199999
+      }
+    },
+    {
+      "name": "localDayBounds: London, fall back, offset 7",
+      "input": {
+        "call": "localDayBounds",
+        "now": 1792929600000,
+        "offsetDays": 7,
+        "zone": "Europe/London"
+      },
+      "output": {
+        "start": 1793491200000,
+        "end": 1793577599999
+      }
+    },
+    {
+      "name": "localDayBounds: Sydney, fall back, offset -1",
+      "input": {
+        "call": "localDayBounds",
+        "now": 1775354400000,
+        "offsetDays": -1,
+        "zone": "Australia/Sydney"
+      },
+      "output": {
+        "start": 1775221200000,
+        "end": 1775307599999
+      }
+    },
+    {
+      "name": "localDayBounds: Sydney, fall back, offset 0",
+      "input": {
+        "call": "localDayBounds",
+        "now": 1775354400000,
+        "offsetDays": 0,
+        "zone": "Australia/Sydney"
+      },
+      "output": {
+        "start": 1775307600000,
+        "end": 1775397599999
+      }
+    },
+    {
+      "name": "localDayBounds: Sydney, fall back, offset 1",
+      "input": {
+        "call": "localDayBounds",
+        "now": 1775354400000,
+        "offsetDays": 1,
+        "zone": "Australia/Sydney"
+      },
+      "output": {
+        "start": 1775397600000,
+        "end": 1775483999999
+      }
+    },
+    {
+      "name": "localDayBounds: Sydney, fall back, offset 7",
+      "input": {
+        "call": "localDayBounds",
+        "now": 1775354400000,
+        "offsetDays": 7,
+        "zone": "Australia/Sydney"
+      },
+      "output": {
+        "start": 1775916000000,
+        "end": 1776002399999
+      }
+    },
+    {
+      "name": "localDayBounds: Sydney, spring forward, offset -1",
+      "input": {
+        "call": "localDayBounds",
+        "now": 1791075600000,
+        "offsetDays": -1,
+        "zone": "Australia/Sydney"
+      },
+      "output": {
+        "start": 1790949600000,
+        "end": 1791035999999
+      }
+    },
+    {
+      "name": "localDayBounds: Sydney, spring forward, offset 0",
+      "input": {
+        "call": "localDayBounds",
+        "now": 1791075600000,
+        "offsetDays": 0,
+        "zone": "Australia/Sydney"
+      },
+      "output": {
+        "start": 1791036000000,
+        "end": 1791118799999
+      }
+    },
+    {
+      "name": "localDayBounds: Sydney, spring forward, offset 1",
+      "input": {
+        "call": "localDayBounds",
+        "now": 1791075600000,
+        "offsetDays": 1,
+        "zone": "Australia/Sydney"
+      },
+      "output": {
+        "start": 1791118800000,
+        "end": 1791205199999
+      }
+    },
+    {
+      "name": "localDayBounds: Sydney, spring forward, offset 7",
+      "input": {
+        "call": "localDayBounds",
+        "now": 1791075600000,
+        "offsetDays": 7,
+        "zone": "Australia/Sydney"
+      },
+      "output": {
+        "start": 1791637200000,
+        "end": 1791723599999
+      }
+    },
+    {
+      "name": "localDayBounds: UTC, offset -1",
+      "input": {
+        "call": "localDayBounds",
+        "now": 1783382340000,
+        "offsetDays": -1,
+        "zone": "UTC"
+      },
+      "output": {
+        "start": 1783209600000,
+        "end": 1783295999999
+      }
+    },
+    {
+      "name": "localDayBounds: UTC, offset 0",
+      "input": {
+        "call": "localDayBounds",
+        "now": 1783382340000,
+        "offsetDays": 0,
+        "zone": "UTC"
+      },
+      "output": {
+        "start": 1783296000000,
+        "end": 1783382399999
+      }
+    },
+    {
+      "name": "localDayBounds: UTC, offset 1",
+      "input": {
+        "call": "localDayBounds",
+        "now": 1783382340000,
+        "offsetDays": 1,
+        "zone": "UTC"
+      },
+      "output": {
+        "start": 1783382400000,
+        "end": 1783468799999
+      }
+    },
+    {
+      "name": "localDayBounds: UTC, offset 7",
+      "input": {
+        "call": "localDayBounds",
+        "now": 1783382340000,
+        "offsetDays": 7,
+        "zone": "UTC"
+      },
+      "output": {
+        "start": 1783900800000,
+        "end": 1783987199999
+      }
+    },
+    {
+      "name": "localCalendarDaysBetween: across spring forward",
+      "input": {
+        "call": "localCalendarDaysBetween",
+        "from": 1772942400000,
+        "to": 1773032400000,
+        "zone": "America/New_York"
+      },
+      "output": 2
+    },
+    {
+      "name": "localCalendarDaysBetween: across fall back",
+      "input": {
+        "call": "localCalendarDaysBetween",
+        "from": 1793502000000,
+        "to": 1793599200000,
+        "zone": "America/New_York"
+      },
+      "output": 2
+    },
+    {
+      "name": "localCalendarDaysBetween: the same day",
+      "input": {
+        "call": "localCalendarDaysBetween",
+        "from": 1793507400000,
+        "to": 1793592000000,
+        "zone": "America/New_York"
+      },
+      "output": 0
+    },
+    {
+      "name": "localCalendarDaysBetween: backwards",
+      "input": {
+        "call": "localCalendarDaysBetween",
+        "from": 1793887200000,
+        "to": 1793541600000,
+        "zone": "America/New_York"
+      },
+      "output": -4
+    },
+    {
+      "name": "localCalendarDaysBetween: a year",
+      "input": {
+        "call": "localCalendarDaysBetween",
+        "from": 1767276000000,
+        "to": 1798812000000,
+        "zone": "America/New_York"
+      },
+      "output": 365
+    },
+    {
+      "name": "atClockTimeOnDayOf: 02:30 on spring forward does not exist",
+      "input": {
+        "call": "atClockTimeOnDayOf",
+        "day": 1772985600000,
+        "hour": 2,
+        "minute": 30,
+        "zone": "America/New_York"
+      },
+      "output": 1772955000000
+    },
+    {
+      "name": "atClockTimeOnDayOf: 01:30 on fall back happens twice",
+      "input": {
+        "call": "atClockTimeOnDayOf",
+        "day": 1793552400000,
+        "hour": 1,
+        "minute": 30,
+        "zone": "America/New_York"
+      },
+      "output": 1793511000000
+    },
+    {
+      "name": "atClockTimeOnDayOf: an ordinary morning",
+      "input": {
+        "call": "atClockTimeOnDayOf",
+        "day": 1783353600000,
+        "hour": 8,
+        "minute": 15,
+        "zone": "America/New_York"
+      },
+      "output": 1783340100000
+    },
+    {
+      "name": "takenAtOrNull: a time before now",
+      "input": {
+        "call": "takenAtOrNull",
+        "scheduledTime": 1783342800000,
+        "hour": 8,
+        "minute": 30,
+        "now": 1783353600000,
+        "zone": "America/New_York"
+      },
+      "output": 1783341000000
+    },
+    {
+      "name": "takenAtOrNull: a time after now is refused",
+      "input": {
+        "call": "takenAtOrNull",
+        "scheduledTime": 1783342800000,
+        "hour": 13,
+        "minute": 0,
+        "now": 1783353600000,
+        "zone": "America/New_York"
+      },
+      "output": null
+    },
+    {
+      "name": "takenAtOrNull: exactly now",
+      "input": {
+        "call": "takenAtOrNull",
+        "scheduledTime": 1783342800000,
+        "hour": 12,
+        "minute": 0,
+        "now": 1783353600000,
+        "zone": "America/New_York"
+      },
+      "output": 1783353600000
+    }
+  ]
+}

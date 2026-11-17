@@ -22,6 +22,8 @@ reproduce it.
   - Backlog and Catch up: `backlog`, `catchup`.
   - Proposals: `notices`. The date reader is meant to have one implementation, so this is
     a second one, held to the first only by these fixtures.
+  - The local day (`time`): `localDayBounds` and its neighbours, on the clock changes, since
+    every screen's "today" is cut with it.
   - Reading and writing Convex: `scheduleFromServer` and `scheduleToServer` (`sync`), so the
     desktop reads a schedule as the phone's pull does and writes the shape the phone writes.
   - Answering a dose: the Instance id derivation (ADR 0018). Supply spending is not
@@ -44,8 +46,14 @@ reproduce it.
     developer-facing messages (`instanceTransitionProblem`, the Backlog refusal's text) and
     `parseScheduleGrammar`, which nothing outside its own tests calls. The parser's
     `reasons` are shown to the person, so they are in.
-  - Eleven files, 675 cases (2026-11-17). Rust loads every one under a strict schema; every
-    whole number fits an `i64`.
+  - Twelve files, 734 cases (2026-11-17). Rust loads every one under a strict schema; every
+    whole number fits an `i64`. The date reader's remaining unreached branches are guards its
+    own patterns make unreachable (a month name the pattern matched but the map lacks).
+  - Fixture numbers are JSON integers, but Convex delivers float64. The Rust harness converts
+    them before decoding, so it tests the path production takes.
+  - Documents are read by `reminderFromDoc` and `instanceFromDoc`, test-code mirrors of the
+    phone's `ServerDocs` in `:app`, and an instance input already carries its parent's local
+    id. Neither the decoder nor resolving a Convex `reminderId` is held by these files yet.
 - **Sign-in** is a browser handoff to the Clerk OAuth application "TaskRx Desktop": public
   (no secret), PKCE S256 required, no consent screen, redirect `http://127.0.0.1/callback`.
   Clerk matches a loopback redirect on any port, so the desktop listens on a port the OS

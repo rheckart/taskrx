@@ -31,7 +31,9 @@ import java.time.ZoneId
  * a diff the Rust port has to follow.
  *
  * Inputs are in the shape the desktop receives: a Reminder is a Convex `reminders` document,
- * read by [reminderFromDoc] exactly as the phone's pull reads one. Every case that depends on
+ * read by [reminderFromDoc], a test-code mirror of the phone's `ServerDocs.toPulled` (which
+ * lives in `:app`). An instance input already carries its parent's local id; resolving the
+ * Convex `reminderId` is not held by these files. Every case that depends on
  * a zone names it, because the functions default to the JVM's zone and the desktop's is not
  * the test JVM's.
  */
@@ -54,6 +56,7 @@ val goldenSets: List<GoldenSet> =
         InstanceIdGolden,
         ScheduleGolden,
         ServerScheduleGolden,
+        LocalDayGolden,
         DomainGolden,
         TodayGolden,
         AnswerGolden,
@@ -113,7 +116,7 @@ private fun JsonObject.text(key: String): String? = (this[key] as? JsonPrimitive
 
 private fun JsonObject.number(key: String): Double? = (this[key] as? JsonPrimitive)?.takeUnless { it is JsonNull || it.isString }?.double
 
-/** The phone's `ServerDocs.toPulled`, over `:core`'s own readers. */
+/** A mirror of the phone's `ServerDocs.toPulled` (in `:app`), over `:core`'s own readers. */
 fun reminderFromDoc(doc: JsonObject): Reminder =
     Reminder(
         id = doc.text("localId")!!,

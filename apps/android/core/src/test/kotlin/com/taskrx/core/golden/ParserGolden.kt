@@ -1,5 +1,6 @@
 package com.taskrx.core.golden
 
+import com.taskrx.core.domain.AsNeededTimes
 import com.taskrx.core.domain.ReminderKind
 import com.taskrx.core.parser.ReadPhraseOptions
 import com.taskrx.core.parser.ReminderDraft
@@ -239,6 +240,20 @@ object ParserGolden : GoldenSet {
                         )
                     }
             }
-        return readings + corrections
+        // `readPhrase` never yields as needed, so that draft is built: a task cannot be taken as needed.
+        val asNeededDraft = readPhrase("ibuprofen 200mg", ReadPhraseOptions(now = NOW)).draft.copy(schedule = AsNeededTimes(240, 4), rxcui = "5640")
+        val asNeeded =
+            ReminderKind.entries.map { kind ->
+                GoldenCase(
+                    "withKind ${kind.wire}: an as-needed draft",
+                    buildJsonObject {
+                        put("call", "withKind")
+                        put("draft", draftJson(asNeededDraft))
+                        put("kind", kind.wire)
+                    },
+                    draftJson(withKind(asNeededDraft, kind)),
+                )
+            }
+        return readings + corrections + asNeeded
     }
 }

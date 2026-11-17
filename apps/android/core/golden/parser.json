@@ -5149,6 +5149,90 @@
         "unparsedTokens": [],
         "isSavable": false
       }
+    },
+    {
+      "name": "withKind medication: an as-needed draft",
+      "input": {
+        "call": "withKind",
+        "draft": {
+          "kind": "medication",
+          "name": "ibuprofen",
+          "schedule": {
+            "type": "asNeeded",
+            "minGapMinutes": 240,
+            "maxPer24h": 4
+          },
+          "priority": "normal",
+          "dosage": "200mg",
+          "instructions": null,
+          "pillsRemaining": null,
+          "pillsPerDose": null,
+          "refillReminderDays": null,
+          "rxcui": "5640",
+          "unparsedTokens": [],
+          "isSavable": true
+        },
+        "kind": "medication"
+      },
+      "output": {
+        "kind": "medication",
+        "name": "ibuprofen",
+        "schedule": {
+          "type": "asNeeded",
+          "minGapMinutes": 240,
+          "maxPer24h": 4
+        },
+        "priority": "normal",
+        "dosage": "200mg",
+        "instructions": null,
+        "pillsRemaining": null,
+        "pillsPerDose": null,
+        "refillReminderDays": null,
+        "rxcui": "5640",
+        "unparsedTokens": [],
+        "isSavable": true
+      }
+    },
+    {
+      "name": "withKind task: an as-needed draft",
+      "input": {
+        "call": "withKind",
+        "draft": {
+          "kind": "medication",
+          "name": "ibuprofen",
+          "schedule": {
+            "type": "asNeeded",
+            "minGapMinutes": 240,
+            "maxPer24h": 4
+          },
+          "priority": "normal",
+          "dosage": "200mg",
+          "instructions": null,
+          "pillsRemaining": null,
+          "pillsPerDose": null,
+          "refillReminderDays": null,
+          "rxcui": "5640",
+          "unparsedTokens": [],
+          "isSavable": true
+        },
+        "kind": "task"
+      },
+      "output": {
+        "kind": "task",
+        "name": "ibuprofen",
+        "schedule": {
+          "type": "none"
+        },
+        "priority": "normal",
+        "dosage": null,
+        "instructions": null,
+        "pillsRemaining": null,
+        "pillsPerDose": null,
+        "refillReminderDays": null,
+        "rxcui": null,
+        "unparsedTokens": [],
+        "isSavable": true
+      }
     }
   ]
 }

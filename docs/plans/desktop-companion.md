@@ -45,15 +45,18 @@ because two writers are unsafe until one Occurrence can only ever be one Instanc
         four zones), `server-schedule` (the writer moved into `:core` as `scheduleToServer`)
   - [x] `domain` lifecycles, pause and stop (137 cases; the transition message is not part of
         the contract)
-  - [x] `tasks`, `timeline`, `batch`, `asneeded`, `snooze`, `undo`, `sweep` (`today`, 50
-        cases over one week of data; `answer`, 46)
+  - [x] `tasks`, `timeline`, `batch`, `asneeded`, `snooze`, `undo`, `sweep` (`today`, 58
+        cases over one week of data; `answer`, 46), and `time` (`local-day`, 47)
   - [ ] Move the Tasks tab's assembly out of `:app`'s `TodayViewModel` into `:core`, with
         fixtures: the stored task rows older than the fortnight (a run-out snooze read as
         missed), the one invented row at a task's latest moment, and which rows offer Undo.
         Until then the desktop would port them from a view model with no reference
+  - [ ] Move the Convex document decoders (`ServerDocs.toPulled`) and the write call shapes
+        (`Push.kt`'s callers in `SyncPayloads`) into `:core` with fixtures, including
+        resolving an instance's Convex `reminderId` to the parent's `localId`
   - [x] `backlog`, `catchup`, `refill` projection (`backlog` 5, `catch-up` 5, `refill` 22)
-  - [x] `parser` (155: every phrase the parser tests read, and kind and name corrections),
-        `notices` (103)
+  - [x] `parser` (157: every phrase the parser tests read, and kind and name corrections),
+        `notices` (112)
 - [ ] Phone catch-up (ADR 0016):
   - [ ] A periodic WorkManager pull (15 min) that reschedules
   - [ ] A fire-time check before a dose posts: short timeout, fails open. Unverified until

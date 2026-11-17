@@ -738,6 +738,84 @@
       }
     },
     {
+      "name": "readNoticeDate: \"18 Nov 18\" (extra)",
+      "input": {
+        "call": "readNoticeDate",
+        "text": "18 Nov 18",
+        "now": 1794657600000,
+        "zone": "UTC"
+      },
+      "output": {
+        "date": "2026-11-18",
+        "time": null,
+        "matchedText": "18 Nov"
+      }
+    },
+    {
+      "name": "readNoticeDate: \"Feb 30, 2027\" (extra)",
+      "input": {
+        "call": "readNoticeDate",
+        "text": "Feb 30, 2027",
+        "now": 1794657600000,
+        "zone": "UTC"
+      },
+      "output": {
+        "unread": "impossible"
+      }
+    },
+    {
+      "name": "readNoticeDate: \"0/15\" (extra)",
+      "input": {
+        "call": "readNoticeDate",
+        "text": "0/15",
+        "now": 1794657600000,
+        "zone": "UTC"
+      },
+      "output": {
+        "unread": "impossible"
+      }
+    },
+    {
+      "name": "readNoticeDate: \"15/0\" (extra)",
+      "input": {
+        "call": "readNoticeDate",
+        "text": "15/0",
+        "now": 1794657600000,
+        "zone": "UTC"
+      },
+      "output": {
+        "unread": "impossible"
+      }
+    },
+    {
+      "name": "readNoticeDate: \"Nov 18 at 0am\" (extra)",
+      "input": {
+        "call": "readNoticeDate",
+        "text": "Nov 18 at 0am",
+        "now": 1794657600000,
+        "zone": "UTC"
+      },
+      "output": {
+        "date": "2026-11-18",
+        "time": null,
+        "matchedText": "Nov 18"
+      }
+    },
+    {
+      "name": "readNoticeDate: \"Nov 18 at 24:00\" (extra)",
+      "input": {
+        "call": "readNoticeDate",
+        "text": "Nov 18 at 24:00",
+        "now": 1794657600000,
+        "zone": "UTC"
+      },
+      "output": {
+        "date": "2026-11-18",
+        "time": null,
+        "matchedText": "Nov 18"
+      }
+    },
+    {
       "name": "readNoticeDate: today is the zone's day: late evening in New York",
       "input": {
         "call": "readNoticeDate",
@@ -777,6 +855,18 @@
         "date": "2027-11-14",
         "time": null,
         "matchedText": "Nov 14"
+      }
+    },
+    {
+      "name": "readNoticeDate: 29/02 after a leap day has no next year",
+      "input": {
+        "call": "readNoticeDate",
+        "text": "29/02",
+        "now": 1835524800000,
+        "zone": "UTC"
+      },
+      "output": {
+        "unread": "impossible"
       }
     },
     {
@@ -1026,6 +1116,17 @@
         "zone": "UTC"
       },
       "output": "18 November"
+    },
+    {
+      "name": "keptNoticeSentence: no sentences and a blank title",
+      "input": {
+        "call": "keptNoticeSentence",
+        "body": "",
+        "title": "   ",
+        "now": 1794657600000,
+        "zone": "UTC"
+      },
+      "output": null
     },
     {
       "name": "matches: an email rule matches case-insensitively, with no words",
@@ -1312,6 +1413,34 @@
       "output": {
         "matches": false,
         "noticeText": "Delivery update Your parcel now arrives Friday."
+      }
+    },
+    {
+      "name": "matches: a notice whose sender has no @ never matches",
+      "input": {
+        "call": "matches",
+        "rule": {
+          "sourceKind": "email",
+          "sourceValue": "council@example.gov",
+          "terms": []
+        },
+        "notice": {
+          "_id": "j77notice-1",
+          "localId": "notice-1",
+          "userId": "user_golden",
+          "sourceKind": "email",
+          "sourceValue": "council",
+          "title": "Bin collection change",
+          "sentence": "Collection moves to 18 November.",
+          "receivedAt": 1794654000000,
+          "resolution": "none",
+          "createdAt": 1794654000000,
+          "updatedAt": 1794654000000
+        }
+      },
+      "output": {
+        "matches": false,
+        "noticeText": "Bin collection change Collection moves to 18 November."
       }
     },
     {

@@ -284,7 +284,23 @@ object TodayGolden : GoldenSet {
                 row("past-the-horizon", ny(14, 9), InstanceStatus.Pending),
                 row("a-medication", ny(6, 9), InstanceStatus.Pending, ReminderKind.Medication),
             )
+        // A week whose horizon crosses the fall-back change: 1 November is 25 hours long.
+        val fallNow = at(NY, 2026, 10, 29, 12)
+        fun fallRow(name: String, day: Int, month: Int = 11) =
+            TimelineRow("task-$name", null, name, null, ReminderKind.Task, at(NY, 2026, month, day, 23, 30), InstanceStatus.Pending, null, false)
+        val fallRows =
+            listOf(fallRow("oct-31", 31, 10), fallRow("nov-1", 1), fallRow("nov-4", 4), fallRow("nov-5", 5), fallRow("nov-6", 6))
         return listOf(
+            GoldenCase(
+                "sectionTasks: a week across the fall-back change",
+                buildJsonObject {
+                    put("call", "sectionTasks")
+                    put("rows", JsonArray(fallRows.map(::rowJson)))
+                    put("now", fallNow)
+                    put("zone", NY)
+                },
+                sectionsJson(sectionTasks(fallRows, fallNow, ZONE)),
+            ),
             GoldenCase(
                 "sectionTasks: rows of every status around the week",
                 buildJsonObject {

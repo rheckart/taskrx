@@ -10270,6 +10270,150 @@
       }
     },
     {
+      "name": "sectionTasks: a week across the fall-back change",
+      "input": {
+        "call": "sectionTasks",
+        "rows": [
+          {
+            "reminderId": "task-oct-31",
+            "instanceId": null,
+            "name": "oct-31",
+            "dosage": null,
+            "kind": "task",
+            "scheduledTime": 1793503800000,
+            "status": "pending",
+            "snoozedUntil": null,
+            "isNext": false,
+            "completedAt": null
+          },
+          {
+            "reminderId": "task-nov-1",
+            "instanceId": null,
+            "name": "nov-1",
+            "dosage": null,
+            "kind": "task",
+            "scheduledTime": 1793593800000,
+            "status": "pending",
+            "snoozedUntil": null,
+            "isNext": false,
+            "completedAt": null
+          },
+          {
+            "reminderId": "task-nov-4",
+            "instanceId": null,
+            "name": "nov-4",
+            "dosage": null,
+            "kind": "task",
+            "scheduledTime": 1793853000000,
+            "status": "pending",
+            "snoozedUntil": null,
+            "isNext": false,
+            "completedAt": null
+          },
+          {
+            "reminderId": "task-nov-5",
+            "instanceId": null,
+            "name": "nov-5",
+            "dosage": null,
+            "kind": "task",
+            "scheduledTime": 1793939400000,
+            "status": "pending",
+            "snoozedUntil": null,
+            "isNext": false,
+            "completedAt": null
+          },
+          {
+            "reminderId": "task-nov-6",
+            "instanceId": null,
+            "name": "nov-6",
+            "dosage": null,
+            "kind": "task",
+            "scheduledTime": 1794025800000,
+            "status": "pending",
+            "snoozedUntil": null,
+            "isNext": false,
+            "completedAt": null
+          }
+        ],
+        "now": 1793289600000,
+        "zone": "America/New_York"
+      },
+      "output": {
+        "overdue": [],
+        "dueToday": [],
+        "upcoming": [
+          {
+            "dayStart": 1793419200000,
+            "rows": [
+              {
+                "reminderId": "task-oct-31",
+                "instanceId": null,
+                "name": "oct-31",
+                "dosage": null,
+                "kind": "task",
+                "scheduledTime": 1793503800000,
+                "status": "pending",
+                "snoozedUntil": null,
+                "isNext": false,
+                "completedAt": null
+              }
+            ]
+          },
+          {
+            "dayStart": 1793505600000,
+            "rows": [
+              {
+                "reminderId": "task-nov-1",
+                "instanceId": null,
+                "name": "nov-1",
+                "dosage": null,
+                "kind": "task",
+                "scheduledTime": 1793593800000,
+                "status": "pending",
+                "snoozedUntil": null,
+                "isNext": false,
+                "completedAt": null
+              }
+            ]
+          },
+          {
+            "dayStart": 1793768400000,
+            "rows": [
+              {
+                "reminderId": "task-nov-4",
+                "instanceId": null,
+                "name": "nov-4",
+                "dosage": null,
+                "kind": "task",
+                "scheduledTime": 1793853000000,
+                "status": "pending",
+                "snoozedUntil": null,
+                "isNext": false,
+                "completedAt": null
+              }
+            ]
+          },
+          {
+            "dayStart": 1793854800000,
+            "rows": [
+              {
+                "reminderId": "task-nov-5",
+                "instanceId": null,
+                "name": "nov-5",
+                "dosage": null,
+                "kind": "task",
+                "scheduledTime": 1793939400000,
+                "status": "pending",
+                "snoozedUntil": null,
+                "isNext": false,
+                "completedAt": null
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
       "name": "sectionTasks: rows of every status around the week",
       "input": {
         "call": "sectionTasks",

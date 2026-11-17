@@ -217,6 +217,7 @@ object NoticesGolden : GoldenSet {
             listOf(
                 "Nov 18 at 12:30 am", "Nov 18 at 11 am", "Smarch 5", "December 1st", "on 18 nov.", "Sept 31", "12/25/2026",
                 "2026-11-18 at 7:05", "Nov 18 2026-11-18", "Nov 18 at 0:00", "18 November 2026 or 18/11/2026",
+                "18 Nov 18", "Feb 30, 2027", "0/15", "15/0", "Nov 18 at 0am", "Nov 18 at 24:00",
             ).map { text ->
                 GoldenCase(
                     "readNoticeDate: \"$text\" (extra)",
@@ -233,6 +234,7 @@ object NoticesGolden : GoldenSet {
                 Triple("today is the zone's day: late evening in New York", "Nov 15", nowAt(2026, 11, 15, 3) to "America/New_York"),
                 Triple("today is the zone's day: the same moment in UTC", "Nov 15", nowAt(2026, 11, 15, 3) to "UTC"),
                 Triple("next year when the date has passed, in Sydney", "Nov 14", nowAt(2026, 11, 14, 14) to "Australia/Sydney"),
+                Triple("29/02 after a leap day has no next year", "29/02", nowAt(2028, 3, 1) to "UTC"),
             ).map { (name, text, at) ->
                 val (now, zone) = at
                 GoldenCase(
@@ -272,6 +274,19 @@ object NoticesGolden : GoldenSet {
                 )
             }
 
+    private fun blankTitleCase(): GoldenCase =
+        GoldenCase(
+            "keptNoticeSentence: no sentences and a blank title",
+            buildJsonObject {
+                put("call", "keptNoticeSentence")
+                put("body", "")
+                put("title", "   ")
+                put("now", NOW)
+                put("zone", "UTC")
+            },
+            keptNoticeSentence("", "   ", NOW, UTC)?.let(::JsonPrimitive) ?: JsonNull,
+        )
+
     private fun ruleCases(): List<GoldenCase> {
         val notice = noticeDoc("Bin collection change", "Collection moves to Wednesday 18 November.")
         val rules =
@@ -286,12 +301,14 @@ object NoticesGolden : GoldenSet {
                 "a blank value never matches" to NoticeRule(SourceKind.Email, "   "),
             )
         val app = noticeDoc("Delivery update", "Your parcel now arrives Friday.", sourceKind = "app", sourceValue = "com.Courier.App")
+        val unaddressed = noticeDoc("Bin collection change", "Collection moves to 18 November.", sourceValue = "council")
         val appRules =
             listOf(
                 "an app rule matches its package exactly" to NoticeRule(SourceKind.App, "com.Courier.App"),
                 "an app rule is case-sensitive" to NoticeRule(SourceKind.App, "com.courier.app"),
             )
-        return (rules.map { it to notice } + appRules.map { it to app }).map { (rule, doc) ->
+        val oddRules = listOf("a notice whose sender has no @ never matches" to NoticeRule(SourceKind.Email, "council@example.gov"))
+        return (rules.map { it to notice } + appRules.map { it to app } + oddRules.map { it to unaddressed }).map { (rule, doc) ->
             val (name, r) = rule
             GoldenCase(
                 "matches: $name",
@@ -393,5 +410,5 @@ object NoticesGolden : GoldenSet {
             }
     }
 
-    override fun cases(): List<GoldenCase> = dateCases() + sentenceCases() + ruleCases() + proposalCases()
+    override fun cases(): List<GoldenCase> = dateCases() + sentenceCases() + blankTitleCase() + ruleCases() + proposalCases()
 }
