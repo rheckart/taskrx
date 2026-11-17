@@ -40,7 +40,12 @@ reproduce it.
     earlier offset. The Rust port must resolve both the same way.
   - Cases are chosen until the golden test alone covers the ported functions, measured with
     Kover. Paths only a malformed schedule reaches are covered through the server reader,
-    which refuses that input before the engine sees it.
+    which refuses that input before the engine sees it. What is left out on purpose:
+    developer-facing messages (`instanceTransitionProblem`, the Backlog refusal's text) and
+    `parseScheduleGrammar`, which nothing outside its own tests calls. The parser's
+    `reasons` are shown to the person, so they are in.
+  - Eleven files, 675 cases (2026-11-17). Rust loads every one under a strict schema; every
+    whole number fits an `i64`.
 - **Sign-in** is a browser handoff to the Clerk OAuth application "TaskRx Desktop": public
   (no secret), PKCE S256 required, no consent screen, redirect `http://127.0.0.1/callback`.
   Clerk matches a loopback redirect on any port, so the desktop listens on a port the OS

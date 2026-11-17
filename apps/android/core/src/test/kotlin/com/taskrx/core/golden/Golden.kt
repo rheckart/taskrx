@@ -60,6 +60,8 @@ val goldenSets: List<GoldenSet> =
         BacklogGolden,
         CatchUpGolden,
         RefillGolden,
+        ParserGolden,
+        NoticesGolden,
     )
 
 // ---- input helpers ------------------------------------------------------------------------

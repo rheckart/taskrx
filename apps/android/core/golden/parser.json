@@ -1,0 +1,5154 @@
+{
+  "rule": "parser",
+  "about": "readPhrase(phrase, now) -> {understood, reasons, draft (+ isSavableDraft)}; withKind and withName on a read draft",
+  "generatedBy": "apps/android/core/src/test/kotlin/com/taskrx/core/golden (./gradlew :core:test -PupdateGoldens)",
+  "cases": [
+    {
+      "name": "readPhrase: atorvastatin 20mg every morning with food",
+      "input": {
+        "call": "readPhrase",
+        "phrase": "atorvastatin 20mg every morning with food",
+        "now": 1768478400000
+      },
+      "output": {
+        "understood": true,
+        "reasons": [],
+        "draft": {
+          "kind": "medication",
+          "name": "atorvastatin",
+          "schedule": {
+            "type": "daily",
+            "times": [
+              "08:00"
+            ]
+          },
+          "priority": "normal",
+          "dosage": "20mg",
+          "instructions": "with food",
+          "pillsRemaining": null,
+          "pillsPerDose": null,
+          "refillReminderDays": null,
+          "rxcui": null,
+          "unparsedTokens": [],
+          "isSavable": true
+        }
+      }
+    },
+    {
+      "name": "readPhrase: metformin 500mg twice daily",
+      "input": {
+        "call": "readPhrase",
+        "phrase": "metformin 500mg twice daily",
+        "now": 1768478400000
+      },
+      "output": {
+        "understood": true,
+        "reasons": [],
+        "draft": {
+          "kind": "medication",
+          "name": "metformin",
+          "schedule": {
+            "type": "daily",
+            "times": [
+              "08:00",
+              "18:00"
+            ]
+          },
+          "priority": "normal",
+          "dosage": "500mg",
+          "instructions": null,
+          "pillsRemaining": null,
+          "pillsPerDose": null,
+          "refillReminderDays": null,
+          "rxcui": null,
+          "unparsedTokens": [],
+          "isSavable": true
+        }
+      }
+    },
+    {
+      "name": "readPhrase: aspirin 81mg every 8 hours",
+      "input": {
+        "call": "readPhrase",
+        "phrase": "aspirin 81mg every 8 hours",
+        "now": 1768478400000
+      },
+      "output": {
+        "understood": true,
+        "reasons": [],
+        "draft": {
+          "kind": "medication",
+          "name": "aspirin",
+          "schedule": {
+            "type": "interval",
+            "hours": 8,
+            "startAt": 1768478400000
+          },
+          "priority": "normal",
+          "dosage": "81mg",
+          "instructions": null,
+          "pillsRemaining": null,
+          "pillsPerDose": null,
+          "refillReminderDays": null,
+          "rxcui": null,
+          "unparsedTokens": [],
+          "isSavable": true
+        }
+      }
+    },
+    {
+      "name": "readPhrase: do laundry every monday wednesday friday at 9am",
+      "input": {
+        "call": "readPhrase",
+        "phrase": "do laundry every monday wednesday friday at 9am",
+        "now": 1768478400000
+      },
+      "output": {
+        "understood": true,
+        "reasons": [],
+        "draft": {
+          "kind": "task",
+          "name": "do laundry",
+          "schedule": {
+            "type": "weekly",
+            "daysOfWeek": [
+              1,
+              3,
+              5
+            ],
+            "times": [
+              "09:00"
+            ]
+          },
+          "priority": "normal",
+          "dosage": null,
+          "instructions": null,
+          "pillsRemaining": null,
+          "pillsPerDose": null,
+          "refillReminderDays": null,
+          "rxcui": null,
+          "unparsedTokens": [],
+          "isSavable": true
+        }
+      }
+    },
+    {
+      "name": "readPhrase: (blank: 0 chars)",
+      "input": {
+        "call": "readPhrase",
+        "phrase": "",
+        "now": 1768478400000
+      },
+      "output": {
+        "understood": false,
+        "reasons": [
+          "Input is empty."
+        ],
+        "draft": {
+          "kind": "task",
+          "name": "",
+          "schedule": {
+            "type": "none"
+          },
+          "priority": "normal",
+          "dosage": null,
+          "instructions": null,
+          "pillsRemaining": null,
+          "pillsPerDose": null,
+          "refillReminderDays": null,
+          "rxcui": null,
+          "unparsedTokens": [],
+          "isSavable": false
+        }
+      }
+    },
+    {
+      "name": "readPhrase: atorvastatin 20mg frobnicate",
+      "input": {
+        "call": "readPhrase",
+        "phrase": "atorvastatin 20mg frobnicate",
+        "now": 1768478400000
+      },
+      "output": {
+        "understood": true,
+        "reasons": [],
+        "draft": {
+          "kind": "medication",
+          "name": "atorvastatin",
+          "schedule": {
+            "type": "daily",
+            "times": [
+              "09:00"
+            ]
+          },
+          "priority": "normal",
+          "dosage": "20mg",
+          "instructions": null,
+          "pillsRemaining": null,
+          "pillsPerDose": null,
+          "refillReminderDays": null,
+          "rxcui": null,
+          "unparsedTokens": [
+            "frobnicate"
+          ],
+          "isSavable": true
+        }
+      }
+    },
+    {
+      "name": "readPhrase: urgent lisinopril 10mg daily",
+      "input": {
+        "call": "readPhrase",
+        "phrase": "urgent lisinopril 10mg daily",
+        "now": 1768478400000
+      },
+      "output": {
+        "understood": true,
+        "reasons": [],
+        "draft": {
+          "kind": "medication",
+          "name": "lisinopril",
+          "schedule": {
+            "type": "daily",
+            "times": [
+              "09:00"
+            ]
+          },
+          "priority": "critical",
+          "dosage": "10mg",
+          "instructions": null,
+          "pillsRemaining": null,
+          "pillsPerDose": null,
+          "refillReminderDays": null,
+          "rxcui": null,
+          "unparsedTokens": [],
+          "isSavable": true
+        }
+      }
+    },
+    {
+      "name": "readPhrase: atorvastatin 20mg daily 30 pills 1 per dose refill in 7 days",
+      "input": {
+        "call": "readPhrase",
+        "phrase": "atorvastatin 20mg daily 30 pills 1 per dose refill in 7 days",
+        "now": 1768478400000
+      },
+      "output": {
+        "understood": true,
+        "reasons": [],
+        "draft": {
+          "kind": "medication",
+          "name": "atorvastatin",
+          "schedule": {
+            "type": "daily",
+            "times": [
+              "09:00"
+            ]
+          },
+          "priority": "normal",
+          "dosage": "20mg",
+          "instructions": null,
+          "pillsRemaining": 30.0,
+          "pillsPerDose": 1.0,
+          "refillReminderDays": 7,
+          "rxcui": null,
+          "unparsedTokens": [],
+          "isSavable": true
+        }
+      }
+    },
+    {
+      "name": "readPhrase: atorvastatin daily",
+      "input": {
+        "call": "readPhrase",
+        "phrase": "atorvastatin daily",
+        "now": 1768478400000
+      },
+      "output": {
+        "understood": true,
+        "reasons": [],
+        "draft": {
+          "kind": "medication",
+          "name": "atorvastatin",
+          "schedule": {
+            "type": "daily",
+            "times": [
+              "09:00"
+            ]
+          },
+          "priority": "normal",
+          "dosage": null,
+          "instructions": null,
+          "pillsRemaining": null,
+          "pillsPerDose": null,
+          "refillReminderDays": null,
+          "rxcui": null,
+          "unparsedTokens": [],
+          "isSavable": true
+        }
+      }
+    },
+    {
+      "name": "readPhrase: take out trash weekly",
+      "input": {
+        "call": "readPhrase",
+        "phrase": "take out trash weekly",
+        "now": 1768478400000
+      },
+      "output": {
+        "understood": true,
+        "reasons": [],
+        "draft": {
+          "kind": "task",
+          "name": "take out trash",
+          "schedule": {
+            "type": "weekly",
+            "daysOfWeek": [],
+            "times": []
+          },
+          "priority": "normal",
+          "dosage": null,
+          "instructions": null,
+          "pillsRemaining": null,
+          "pillsPerDose": null,
+          "refillReminderDays": null,
+          "rxcui": null,
+          "unparsedTokens": [],
+          "isSavable": false
+        }
+      }
+    },
+    {
+      "name": "readPhrase: atorvastatin 20mg daily",
+      "input": {
+        "call": "readPhrase",
+        "phrase": "atorvastatin 20mg daily",
+        "now": 1768478400000
+      },
+      "output": {
+        "understood": true,
+        "reasons": [],
+        "draft": {
+          "kind": "medication",
+          "name": "atorvastatin",
+          "schedule": {
+            "type": "daily",
+            "times": [
+              "09:00"
+            ]
+          },
+          "priority": "normal",
+          "dosage": "20mg",
+          "instructions": null,
+          "pillsRemaining": null,
+          "pillsPerDose": null,
+          "refillReminderDays": null,
+          "rxcui": null,
+          "unparsedTokens": [],
+          "isSavable": true
+        }
+      }
+    },
+    {
+      "name": "readPhrase: atorvastatin 20mg every morning at 9pm",
+      "input": {
+        "call": "readPhrase",
+        "phrase": "atorvastatin 20mg every morning at 9pm",
+        "now": 1768478400000
+      },
+      "output": {
+        "understood": true,
+        "reasons": [],
+        "draft": {
+          "kind": "medication",
+          "name": "atorvastatin",
+          "schedule": {
+            "type": "daily",
+            "times": [
+              "08:00",
+              "21:00"
+            ]
+          },
+          "priority": "normal",
+          "dosage": "20mg",
+          "instructions": null,
+          "pillsRemaining": null,
+          "pillsPerDose": null,
+          "refillReminderDays": null,
+          "rxcui": null,
+          "unparsedTokens": [],
+          "isSavable": true
+        }
+      }
+    },
+    {
+      "name": "readPhrase: !!! ??? ***",
+      "input": {
+        "call": "readPhrase",
+        "phrase": "!!! ??? ***",
+        "now": 1768478400000
+      },
+      "output": {
+        "understood": false,
+        "reasons": [
+          "Input is empty."
+        ],
+        "draft": {
+          "kind": "task",
+          "name": "!!! ??? ***",
+          "schedule": {
+            "type": "none"
+          },
+          "priority": "normal",
+          "dosage": null,
+          "instructions": null,
+          "pillsRemaining": null,
+          "pillsPerDose": null,
+          "refillReminderDays": null,
+          "rxcui": null,
+          "unparsedTokens": [],
+          "isSavable": true
+        }
+      }
+    },
+    {
+      "name": "readPhrase: (blank: 6 chars)",
+      "input": {
+        "call": "readPhrase",
+        "phrase": "   \t\n ",
+        "now": 1768478400000
+      },
+      "output": {
+        "understood": false,
+        "reasons": [
+          "Input is empty."
+        ],
+        "draft": {
+          "kind": "task",
+          "name": "",
+          "schedule": {
+            "type": "none"
+          },
+          "priority": "normal",
+          "dosage": null,
+          "instructions": null,
+          "pillsRemaining": null,
+          "pillsPerDose": null,
+          "refillReminderDays": null,
+          "rxcui": null,
+          "unparsedTokens": [],
+          "isSavable": false
+        }
+      }
+    },
+    {
+      "name": "readPhrase: daily",
+      "input": {
+        "call": "readPhrase",
+        "phrase": "daily",
+        "now": 1768478400000
+      },
+      "output": {
+        "understood": false,
+        "reasons": [
+          "Could not determine a name for the reminder."
+        ],
+        "draft": {
+          "kind": "task",
+          "name": "daily",
+          "schedule": {
+            "type": "none"
+          },
+          "priority": "normal",
+          "dosage": null,
+          "instructions": null,
+          "pillsRemaining": null,
+          "pillsPerDose": null,
+          "refillReminderDays": null,
+          "rxcui": null,
+          "unparsedTokens": [],
+          "isSavable": true
+        }
+      }
+    },
+    {
+      "name": "readPhrase: gym session",
+      "input": {
+        "call": "readPhrase",
+        "phrase": "gym session",
+        "now": 1768478400000
+      },
+      "output": {
+        "understood": true,
+        "reasons": [],
+        "draft": {
+          "kind": "task",
+          "name": "gym session",
+          "schedule": {
+            "type": "daily",
+            "times": [
+              "09:00"
+            ]
+          },
+          "priority": "normal",
+          "dosage": null,
+          "instructions": null,
+          "pillsRemaining": null,
+          "pillsPerDose": null,
+          "refillReminderDays": null,
+          "rxcui": null,
+          "unparsedTokens": [],
+          "isSavable": true
+        }
+      }
+    },
+    {
+      "name": "readPhrase: check the boiler pressure tomorrow",
+      "input": {
+        "call": "readPhrase",
+        "phrase": "check the boiler pressure tomorrow",
+        "now": 1768478400000
+      },
+      "output": {
+        "understood": true,
+        "reasons": [],
+        "draft": {
+          "kind": "medication",
+          "name": "check boiler pressure tomorrow",
+          "schedule": {
+            "type": "daily",
+            "times": [
+              "09:00"
+            ]
+          },
+          "priority": "normal",
+          "dosage": null,
+          "instructions": null,
+          "pillsRemaining": null,
+          "pillsPerDose": null,
+          "refillReminderDays": null,
+          "rxcui": null,
+          "unparsedTokens": [],
+          "isSavable": true
+        }
+      }
+    },
+    {
+      "name": "readPhrase: take atorvastatin 20mg daily",
+      "input": {
+        "call": "readPhrase",
+        "phrase": "take atorvastatin 20mg daily",
+        "now": 1768478400000
+      },
+      "output": {
+        "understood": true,
+        "reasons": [],
+        "draft": {
+          "kind": "medication",
+          "name": "atorvastatin",
+          "schedule": {
+            "type": "daily",
+            "times": [
+              "09:00"
+            ]
+          },
+          "priority": "normal",
+          "dosage": "20mg",
+          "instructions": null,
+          "pillsRemaining": null,
+          "pillsPerDose": null,
+          "refillReminderDays": null,
+          "rxcui": null,
+          "unparsedTokens": [],
+          "isSavable": true
+        }
+      }
+    },
+    {
+      "name": "readPhrase: gym session today",
+      "input": {
+        "call": "readPhrase",
+        "phrase": "gym session today",
+        "now": 1768478400000
+      },
+      "output": {
+        "understood": true,
+        "reasons": [],
+        "draft": {
+          "kind": "task",
+          "name": "gym session today",
+          "schedule": {
+            "type": "daily",
+            "times": [
+              "09:00"
+            ]
+          },
+          "priority": "normal",
+          "dosage": null,
+          "instructions": null,
+          "pillsRemaining": null,
+          "pillsPerDose": null,
+          "refillReminderDays": null,
+          "rxcui": null,
+          "unparsedTokens": [],
+          "isSavable": true
+        }
+      }
+    },
+    {
+      "name": "readPhrase: gym session today now",
+      "input": {
+        "call": "readPhrase",
+        "phrase": "gym session today now",
+        "now": 1768478400000
+      },
+      "output": {
+        "understood": true,
+        "reasons": [],
+        "draft": {
+          "kind": "medication",
+          "name": "gym session today now",
+          "schedule": {
+            "type": "daily",
+            "times": [
+              "09:00"
+            ]
+          },
+          "priority": "normal",
+          "dosage": null,
+          "instructions": null,
+          "pillsRemaining": null,
+          "pillsPerDose": null,
+          "refillReminderDays": null,
+          "rxcui": null,
+          "unparsedTokens": [],
+          "isSavable": true
+        }
+      }
+    },
+    {
+      "name": "readPhrase: call the dentist",
+      "input": {
+        "call": "readPhrase",
+        "phrase": "call the dentist",
+        "now": 1768478400000
+      },
+      "output": {
+        "understood": true,
+        "reasons": [],
+        "draft": {
+          "kind": "task",
+          "name": "call dentist",
+          "schedule": {
+            "type": "daily",
+            "times": [
+              "09:00"
+            ]
+          },
+          "priority": "normal",
+          "dosage": null,
+          "instructions": null,
+          "pillsRemaining": null,
+          "pillsPerDose": null,
+          "refillReminderDays": null,
+          "rxcui": null,
+          "unparsedTokens": [],
+          "isSavable": true
+        }
+      }
+    },
+    {
+      "name": "readPhrase: take out the trash every two weeks",
+      "input": {
+        "call": "readPhrase",
+        "phrase": "take out the trash every two weeks",
+        "now": 1768478400000
+      },
+      "output": {
+        "understood": true,
+        "reasons": [],
+        "draft": {
+          "kind": "task",
+          "name": "take out trash",
+          "schedule": {
+            "type": "interval",
+            "hours": 336,
+            "startAt": 1768478400000
+          },
+          "priority": "normal",
+          "dosage": null,
+          "instructions": null,
+          "pillsRemaining": null,
+          "pillsPerDose": null,
+          "refillReminderDays": null,
+          "rxcui": null,
+          "unparsedTokens": [],
+          "isSavable": true
+        }
+      }
+    },
+    {
+      "name": "readPhrase: water the plants downstairs",
+      "input": {
+        "call": "readPhrase",
+        "phrase": "water the plants downstairs",
+        "now": 1768478400000
+      },
+      "output": {
+        "understood": true,
+        "reasons": [],
+        "draft": {
+          "kind": "task",
+          "name": "water plants downstairs",
+          "schedule": {
+            "type": "daily",
+            "times": [
+              "09:00"
+            ]
+          },
+          "priority": "normal",
+          "dosage": null,
+          "instructions": null,
+          "pillsRemaining": null,
+          "pillsPerDose": null,
+          "refillReminderDays": null,
+          "rxcui": null,
+          "unparsedTokens": [],
+          "isSavable": true
+        }
+      }
+    },
+    {
+      "name": "readPhrase: pick up the recycling bins",
+      "input": {
+        "call": "readPhrase",
+        "phrase": "pick up the recycling bins",
+        "now": 1768478400000
+      },
+      "output": {
+        "understood": true,
+        "reasons": [],
+        "draft": {
+          "kind": "task",
+          "name": "pick up recycling bins",
+          "schedule": {
+            "type": "daily",
+            "times": [
+              "09:00"
+            ]
+          },
+          "priority": "normal",
+          "dosage": null,
+          "instructions": null,
+          "pillsRemaining": null,
+          "pillsPerDose": null,
+          "refillReminderDays": null,
+          "rxcui": null,
+          "unparsedTokens": [],
+          "isSavable": true
+        }
+      }
+    },
+    {
+      "name": "readPhrase: put the bins out",
+      "input": {
+        "call": "readPhrase",
+        "phrase": "put the bins out",
+        "now": 1768478400000
+      },
+      "output": {
+        "understood": true,
+        "reasons": [],
+        "draft": {
+          "kind": "task",
+          "name": "put bins out",
+          "schedule": {
+            "type": "daily",
+            "times": [
+              "09:00"
+            ]
+          },
+          "priority": "normal",
+          "dosage": null,
+          "instructions": null,
+          "pillsRemaining": null,
+          "pillsPerDose": null,
+          "refillReminderDays": null,
+          "rxcui": null,
+          "unparsedTokens": [],
+          "isSavable": true
+        }
+      }
+    },
+    {
+      "name": "readPhrase: Water the plants downstairs",
+      "input": {
+        "call": "readPhrase",
+        "phrase": "Water the plants downstairs",
+        "now": 1768478400000
+      },
+      "output": {
+        "understood": true,
+        "reasons": [],
+        "draft": {
+          "kind": "task",
+          "name": "Water plants downstairs",
+          "schedule": {
+            "type": "daily",
+            "times": [
+              "09:00"
+            ]
+          },
+          "priority": "normal",
+          "dosage": null,
+          "instructions": null,
+          "pillsRemaining": null,
+          "pillsPerDose": null,
+          "refillReminderDays": null,
+          "rxcui": null,
+          "unparsedTokens": [],
+          "isSavable": true
+        }
+      }
+    },
+    {
+      "name": "readPhrase: take out the trash",
+      "input": {
+        "call": "readPhrase",
+        "phrase": "take out the trash",
+        "now": 1768478400000
+      },
+      "output": {
+        "understood": true,
+        "reasons": [],
+        "draft": {
+          "kind": "task",
+          "name": "take out trash",
+          "schedule": {
+            "type": "daily",
+            "times": [
+              "09:00"
+            ]
+          },
+          "priority": "normal",
+          "dosage": null,
+          "instructions": null,
+          "pillsRemaining": null,
+          "pillsPerDose": null,
+          "refillReminderDays": null,
+          "rxcui": null,
+          "unparsedTokens": [],
+          "isSavable": true
+        }
+      }
+    },
+    {
+      "name": "readPhrase: pick the up bins",
+      "input": {
+        "call": "readPhrase",
+        "phrase": "pick the up bins",
+        "now": 1768478400000
+      },
+      "output": {
+        "understood": true,
+        "reasons": [],
+        "draft": {
+          "kind": "task",
+          "name": "pick up bins",
+          "schedule": {
+            "type": "daily",
+            "times": [
+              "09:00"
+            ]
+          },
+          "priority": "normal",
+          "dosage": null,
+          "instructions": null,
+          "pillsRemaining": null,
+          "pillsPerDose": null,
+          "refillReminderDays": null,
+          "rxcui": null,
+          "unparsedTokens": [],
+          "isSavable": true
+        }
+      }
+    },
+    {
+      "name": "readPhrase: take the",
+      "input": {
+        "call": "readPhrase",
+        "phrase": "take the",
+        "now": 1768478400000
+      },
+      "output": {
+        "understood": true,
+        "reasons": [],
+        "draft": {
+          "kind": "task",
+          "name": "take",
+          "schedule": {
+            "type": "daily",
+            "times": [
+              "09:00"
+            ]
+          },
+          "priority": "normal",
+          "dosage": null,
+          "instructions": null,
+          "pillsRemaining": null,
+          "pillsPerDose": null,
+          "refillReminderDays": null,
+          "rxcui": null,
+          "unparsedTokens": [],
+          "isSavable": true
+        }
+      }
+    },
+    {
+      "name": "readPhrase: the trash",
+      "input": {
+        "call": "readPhrase",
+        "phrase": "the trash",
+        "now": 1768478400000
+      },
+      "output": {
+        "understood": true,
+        "reasons": [],
+        "draft": {
+          "kind": "task",
+          "name": "trash",
+          "schedule": {
+            "type": "daily",
+            "times": [
+              "09:00"
+            ]
+          },
+          "priority": "normal",
+          "dosage": null,
+          "instructions": null,
+          "pillsRemaining": null,
+          "pillsPerDose": null,
+          "refillReminderDays": null,
+          "rxcui": null,
+          "unparsedTokens": [],
+          "isSavable": true
+        }
+      }
+    },
+    {
+      "name": "readPhrase: take laundry at 9am",
+      "input": {
+        "call": "readPhrase",
+        "phrase": "take laundry at 9am",
+        "now": 1768478400000
+      },
+      "output": {
+        "understood": true,
+        "reasons": [],
+        "draft": {
+          "kind": "task",
+          "name": "take laundry",
+          "schedule": {
+            "type": "daily",
+            "times": [
+              "09:00"
+            ]
+          },
+          "priority": "normal",
+          "dosage": null,
+          "instructions": null,
+          "pillsRemaining": null,
+          "pillsPerDose": null,
+          "refillReminderDays": null,
+          "rxcui": null,
+          "unparsedTokens": [],
+          "isSavable": true
+        }
+      }
+    },
+    {
+      "name": "readPhrase: take ibuprofen 200mg every 8 hours",
+      "input": {
+        "call": "readPhrase",
+        "phrase": "take ibuprofen 200mg every 8 hours",
+        "now": 1768478400000
+      },
+      "output": {
+        "understood": true,
+        "reasons": [],
+        "draft": {
+          "kind": "medication",
+          "name": "ibuprofen",
+          "schedule": {
+            "type": "interval",
+            "hours": 8,
+            "startAt": 1768478400000
+          },
+          "priority": "normal",
+          "dosage": "200mg",
+          "instructions": null,
+          "pillsRemaining": null,
+          "pillsPerDose": null,
+          "refillReminderDays": null,
+          "rxcui": null,
+          "unparsedTokens": [],
+          "isSavable": true
+        }
+      }
+    },
+    {
+      "name": "readPhrase: important call mom",
+      "input": {
+        "call": "readPhrase",
+        "phrase": "important call mom",
+        "now": 1768478400000
+      },
+      "output": {
+        "understood": true,
+        "reasons": [],
+        "draft": {
+          "kind": "task",
+          "name": "call mom",
+          "schedule": {
+            "type": "daily",
+            "times": [
+              "09:00"
+            ]
+          },
+          "priority": "high",
+          "dosage": null,
+          "instructions": null,
+          "pillsRemaining": null,
+          "pillsPerDose": null,
+          "refillReminderDays": null,
+          "rxcui": null,
+          "unparsedTokens": [],
+          "isSavable": true
+        }
+      }
+    },
+    {
+      "name": "readPhrase: call plumber low priority",
+      "input": {
+        "call": "readPhrase",
+        "phrase": "call plumber low priority",
+        "now": 1768478400000
+      },
+      "output": {
+        "understood": true,
+        "reasons": [],
+        "draft": {
+          "kind": "task",
+          "name": "call plumber",
+          "schedule": {
+            "type": "daily",
+            "times": [
+              "09:00"
+            ]
+          },
+          "priority": "low",
+          "dosage": null,
+          "instructions": null,
+          "pillsRemaining": null,
+          "pillsPerDose": null,
+          "refillReminderDays": null,
+          "rxcui": null,
+          "unparsedTokens": [],
+          "isSavable": true
+        }
+      }
+    },
+    {
+      "name": "readPhrase: call plumber low bridge",
+      "input": {
+        "call": "readPhrase",
+        "phrase": "call plumber low bridge",
+        "now": 1768478400000
+      },
+      "output": {
+        "understood": true,
+        "reasons": [],
+        "draft": {
+          "kind": "task",
+          "name": "call plumber low bridge",
+          "schedule": {
+            "type": "daily",
+            "times": [
+              "09:00"
+            ]
+          },
+          "priority": "normal",
+          "dosage": null,
+          "instructions": null,
+          "pillsRemaining": null,
+          "pillsPerDose": null,
+          "refillReminderDays": null,
+          "rxcui": null,
+          "unparsedTokens": [],
+          "isSavable": true
+        }
+      }
+    },
+    {
+      "name": "readPhrase: call plumber low",
+      "input": {
+        "call": "readPhrase",
+        "phrase": "call plumber low",
+        "now": 1768478400000
+      },
+      "output": {
+        "understood": true,
+        "reasons": [],
+        "draft": {
+          "kind": "task",
+          "name": "call plumber low",
+          "schedule": {
+            "type": "daily",
+            "times": [
+              "09:00"
+            ]
+          },
+          "priority": "normal",
+          "dosage": null,
+          "instructions": null,
+          "pillsRemaining": null,
+          "pillsPerDose": null,
+          "refillReminderDays": null,
+          "rxcui": null,
+          "unparsedTokens": [],
+          "isSavable": true
+        }
+      }
+    },
+    {
+      "name": "readPhrase: vitamin d 1000units every 3 days",
+      "input": {
+        "call": "readPhrase",
+        "phrase": "vitamin d 1000units every 3 days",
+        "now": 1768478400000
+      },
+      "output": {
+        "understood": true,
+        "reasons": [],
+        "draft": {
+          "kind": "medication",
+          "name": "vitamin d",
+          "schedule": {
+            "type": "interval",
+            "hours": 72,
+            "startAt": 1768478400000
+          },
+          "priority": "normal",
+          "dosage": "1000units",
+          "instructions": null,
+          "pillsRemaining": null,
+          "pillsPerDose": null,
+          "refillReminderDays": null,
+          "rxcui": null,
+          "unparsedTokens": [],
+          "isSavable": true
+        }
+      }
+    },
+    {
+      "name": "readPhrase: water the plants every 2 weeks",
+      "input": {
+        "call": "readPhrase",
+        "phrase": "water the plants every 2 weeks",
+        "now": 1768478400000
+      },
+      "output": {
+        "understood": true,
+        "reasons": [],
+        "draft": {
+          "kind": "task",
+          "name": "water plants",
+          "schedule": {
+            "type": "interval",
+            "hours": 336,
+            "startAt": 1768478400000
+          },
+          "priority": "normal",
+          "dosage": null,
+          "instructions": null,
+          "pillsRemaining": null,
+          "pillsPerDose": null,
+          "refillReminderDays": null,
+          "rxcui": null,
+          "unparsedTokens": [],
+          "isSavable": true
+        }
+      }
+    },
+    {
+      "name": "readPhrase: Take out the trash every two weeks",
+      "input": {
+        "call": "readPhrase",
+        "phrase": "Take out the trash every two weeks",
+        "now": 1768478400000
+      },
+      "output": {
+        "understood": true,
+        "reasons": [],
+        "draft": {
+          "kind": "task",
+          "name": "Take out trash",
+          "schedule": {
+            "type": "interval",
+            "hours": 336,
+            "startAt": 1768478400000
+          },
+          "priority": "normal",
+          "dosage": null,
+          "instructions": null,
+          "pillsRemaining": null,
+          "pillsPerDose": null,
+          "refillReminderDays": null,
+          "rxcui": null,
+          "unparsedTokens": [],
+          "isSavable": true
+        }
+      }
+    },
+    {
+      "name": "readPhrase: aspirin 81mg every eight hours",
+      "input": {
+        "call": "readPhrase",
+        "phrase": "aspirin 81mg every eight hours",
+        "now": 1768478400000
+      },
+      "output": {
+        "understood": true,
+        "reasons": [],
+        "draft": {
+          "kind": "medication",
+          "name": "aspirin",
+          "schedule": {
+            "type": "interval",
+            "hours": 8,
+            "startAt": 1768478400000
+          },
+          "priority": "normal",
+          "dosage": "81mg",
+          "instructions": null,
+          "pillsRemaining": null,
+          "pillsPerDose": null,
+          "refillReminderDays": null,
+          "rxcui": null,
+          "unparsedTokens": [],
+          "isSavable": true
+        }
+      }
+    },
+    {
+      "name": "readPhrase: vitamin d 1000units every three days",
+      "input": {
+        "call": "readPhrase",
+        "phrase": "vitamin d 1000units every three days",
+        "now": 1768478400000
+      },
+      "output": {
+        "understood": true,
+        "reasons": [],
+        "draft": {
+          "kind": "medication",
+          "name": "vitamin d",
+          "schedule": {
+            "type": "interval",
+            "hours": 72,
+            "startAt": 1768478400000
+          },
+          "priority": "normal",
+          "dosage": "1000units",
+          "instructions": null,
+          "pillsRemaining": null,
+          "pillsPerDose": null,
+          "refillReminderDays": null,
+          "rxcui": null,
+          "unparsedTokens": [],
+          "isSavable": true
+        }
+      }
+    },
+    {
+      "name": "readPhrase: aspirin 81mg every a minute",
+      "input": {
+        "call": "readPhrase",
+        "phrase": "aspirin 81mg every a minute",
+        "now": 1768478400000
+      },
+      "output": {
+        "understood": true,
+        "reasons": [],
+        "draft": {
+          "kind": "medication",
+          "name": "aspirin",
+          "schedule": {
+            "type": "interval",
+            "hours": 1,
+            "startAt": 1768478400000
+          },
+          "priority": "normal",
+          "dosage": "81mg",
+          "instructions": null,
+          "pillsRemaining": null,
+          "pillsPerDose": null,
+          "refillReminderDays": null,
+          "rxcui": null,
+          "unparsedTokens": [],
+          "isSavable": true
+        }
+      }
+    },
+    {
+      "name": "readPhrase: aspirin 81mg every one week",
+      "input": {
+        "call": "readPhrase",
+        "phrase": "aspirin 81mg every one week",
+        "now": 1768478400000
+      },
+      "output": {
+        "understood": true,
+        "reasons": [],
+        "draft": {
+          "kind": "medication",
+          "name": "aspirin",
+          "schedule": {
+            "type": "interval",
+            "hours": 168,
+            "startAt": 1768478400000
+          },
+          "priority": "normal",
+          "dosage": "81mg",
+          "instructions": null,
+          "pillsRemaining": null,
+          "pillsPerDose": null,
+          "refillReminderDays": null,
+          "rxcui": null,
+          "unparsedTokens": [],
+          "isSavable": true
+        }
+      }
+    },
+    {
+      "name": "readPhrase: aspirin 81mg every thirty minutes",
+      "input": {
+        "call": "readPhrase",
+        "phrase": "aspirin 81mg every thirty minutes",
+        "now": 1768478400000
+      },
+      "output": {
+        "understood": true,
+        "reasons": [],
+        "draft": {
+          "kind": "medication",
+          "name": "aspirin",
+          "schedule": {
+            "type": "interval",
+            "hours": 1,
+            "startAt": 1768478400000
+          },
+          "priority": "normal",
+          "dosage": "81mg",
+          "instructions": null,
+          "pillsRemaining": null,
+          "pillsPerDose": null,
+          "refillReminderDays": null,
+          "rxcui": null,
+          "unparsedTokens": [],
+          "isSavable": true
+        }
+      }
+    },
+    {
+      "name": "readPhrase: aspirin 81mg every 15 mins",
+      "input": {
+        "call": "readPhrase",
+        "phrase": "aspirin 81mg every 15 mins",
+        "now": 1768478400000
+      },
+      "output": {
+        "understood": true,
+        "reasons": [],
+        "draft": {
+          "kind": "medication",
+          "name": "aspirin",
+          "schedule": {
+            "type": "interval",
+            "hours": 1,
+            "startAt": 1768478400000
+          },
+          "priority": "normal",
+          "dosage": "81mg",
+          "instructions": null,
+          "pillsRemaining": null,
+          "pillsPerDose": null,
+          "refillReminderDays": null,
+          "rxcui": null,
+          "unparsedTokens": [],
+          "isSavable": true
+        }
+      }
+    },
+    {
+      "name": "readPhrase: aspirin 81mg every ninety minutes",
+      "input": {
+        "call": "readPhrase",
+        "phrase": "aspirin 81mg every ninety minutes",
+        "now": 1768478400000
+      },
+      "output": {
+        "understood": true,
+        "reasons": [],
+        "draft": {
+          "kind": "medication",
+          "name": "aspirin",
+          "schedule": {
+            "type": "interval",
+            "hours": 2,
+            "startAt": 1768478400000
+          },
+          "priority": "normal",
+          "dosage": "81mg",
+          "instructions": null,
+          "pillsRemaining": null,
+          "pillsPerDose": null,
+          "refillReminderDays": null,
+          "rxcui": null,
+          "unparsedTokens": [],
+          "isSavable": true
+        }
+      }
+    },
+    {
+      "name": "readPhrase: aspirin 81mg every 2 hrs",
+      "input": {
+        "call": "readPhrase",
+        "phrase": "aspirin 81mg every 2 hrs",
+        "now": 1768478400000
+      },
+      "output": {
+        "understood": true,
+        "reasons": [],
+        "draft": {
+          "kind": "medication",
+          "name": "aspirin",
+          "schedule": {
+            "type": "interval",
+            "hours": 2,
+            "startAt": 1768478400000
+          },
+          "priority": "normal",
+          "dosage": "81mg",
+          "instructions": null,
+          "pillsRemaining": null,
+          "pillsPerDose": null,
+          "refillReminderDays": null,
+          "rxcui": null,
+          "unparsedTokens": [],
+          "isSavable": true
+        }
+      }
+    },
+    {
+      "name": "readPhrase: water the plants every fortnight",
+      "input": {
+        "call": "readPhrase",
+        "phrase": "water the plants every fortnight",
+        "now": 1768478400000
+      },
+      "output": {
+        "understood": true,
+        "reasons": [],
+        "draft": {
+          "kind": "task",
+          "name": "water plants",
+          "schedule": {
+            "type": "interval",
+            "hours": 336,
+            "startAt": 1768478400000
+          },
+          "priority": "normal",
+          "dosage": null,
+          "instructions": null,
+          "pillsRemaining": null,
+          "pillsPerDose": null,
+          "refillReminderDays": null,
+          "rxcui": null,
+          "unparsedTokens": [],
+          "isSavable": true
+        }
+      }
+    },
+    {
+      "name": "readPhrase: water the plants every one fortnight",
+      "input": {
+        "call": "readPhrase",
+        "phrase": "water the plants every one fortnight",
+        "now": 1768478400000
+      },
+      "output": {
+        "understood": true,
+        "reasons": [],
+        "draft": {
+          "kind": "task",
+          "name": "water plants",
+          "schedule": {
+            "type": "interval",
+            "hours": 336,
+            "startAt": 1768478400000
+          },
+          "priority": "normal",
+          "dosage": null,
+          "instructions": null,
+          "pillsRemaining": null,
+          "pillsPerDose": null,
+          "refillReminderDays": null,
+          "rxcui": null,
+          "unparsedTokens": [],
+          "isSavable": true
+        }
+      }
+    },
+    {
+      "name": "readPhrase: water the plants every two fortnights",
+      "input": {
+        "call": "readPhrase",
+        "phrase": "water the plants every two fortnights",
+        "now": 1768478400000
+      },
+      "output": {
+        "understood": true,
+        "reasons": [],
+        "draft": {
+          "kind": "task",
+          "name": "water plants",
+          "schedule": {
+            "type": "interval",
+            "hours": 672,
+            "startAt": 1768478400000
+          },
+          "priority": "normal",
+          "dosage": null,
+          "instructions": null,
+          "pillsRemaining": null,
+          "pillsPerDose": null,
+          "refillReminderDays": null,
+          "rxcui": null,
+          "unparsedTokens": [],
+          "isSavable": true
+        }
+      }
+    },
+    {
+      "name": "readPhrase: water the plants every 2 wks",
+      "input": {
+        "call": "readPhrase",
+        "phrase": "water the plants every 2 wks",
+        "now": 1768478400000
+      },
+      "output": {
+        "understood": true,
+        "reasons": [],
+        "draft": {
+          "kind": "task",
+          "name": "water plants",
+          "schedule": {
+            "type": "interval",
+            "hours": 336,
+            "startAt": 1768478400000
+          },
+          "priority": "normal",
+          "dosage": null,
+          "instructions": null,
+          "pillsRemaining": null,
+          "pillsPerDose": null,
+          "refillReminderDays": null,
+          "rxcui": null,
+          "unparsedTokens": [],
+          "isSavable": true
+        }
+      }
+    },
+    {
+      "name": "readPhrase: aspirin 81mg every 4 days",
+      "input": {
+        "call": "readPhrase",
+        "phrase": "aspirin 81mg every 4 days",
+        "now": 1768478400000
+      },
+      "output": {
+        "understood": true,
+        "reasons": [],
+        "draft": {
+          "kind": "medication",
+          "name": "aspirin",
+          "schedule": {
+            "type": "interval",
+            "hours": 96,
+            "startAt": 1768478400000
+          },
+          "priority": "normal",
+          "dosage": "81mg",
+          "instructions": null,
+          "pillsRemaining": null,
+          "pillsPerDose": null,
+          "refillReminderDays": null,
+          "rxcui": null,
+          "unparsedTokens": [],
+          "isSavable": true
+        }
+      }
+    },
+    {
+      "name": "readPhrase: aspirin 81mg every 0 hours",
+      "input": {
+        "call": "readPhrase",
+        "phrase": "aspirin 81mg every 0 hours",
+        "now": 1768478400000
+      },
+      "output": {
+        "understood": true,
+        "reasons": [],
+        "draft": {
+          "kind": "medication",
+          "name": "aspirin",
+          "schedule": {
+            "type": "daily",
+            "times": [
+              "09:00"
+            ]
+          },
+          "priority": "normal",
+          "dosage": "81mg",
+          "instructions": null,
+          "pillsRemaining": null,
+          "pillsPerDose": null,
+          "refillReminderDays": null,
+          "rxcui": null,
+          "unparsedTokens": [
+            "0",
+            "hours"
+          ],
+          "isSavable": true
+        }
+      }
+    },
+    {
+      "name": "readPhrase: aspirin 81mg every twelve weeks",
+      "input": {
+        "call": "readPhrase",
+        "phrase": "aspirin 81mg every twelve weeks",
+        "now": 1768478400000
+      },
+      "output": {
+        "understood": true,
+        "reasons": [],
+        "draft": {
+          "kind": "medication",
+          "name": "aspirin",
+          "schedule": {
+            "type": "interval",
+            "hours": 2016,
+            "startAt": 1768478400000
+          },
+          "priority": "normal",
+          "dosage": "81mg",
+          "instructions": null,
+          "pillsRemaining": null,
+          "pillsPerDose": null,
+          "refillReminderDays": null,
+          "rxcui": null,
+          "unparsedTokens": [],
+          "isSavable": true
+        }
+      }
+    },
+    {
+      "name": "readPhrase: vitamin d 1000units every 2147483647 days",
+      "input": {
+        "call": "readPhrase",
+        "phrase": "vitamin d 1000units every 2147483647 days",
+        "now": 1768478400000
+      },
+      "output": {
+        "understood": true,
+        "reasons": [],
+        "draft": {
+          "kind": "medication",
+          "name": "vitamin d",
+          "schedule": {
+            "type": "interval",
+            "hours": 2147483647,
+            "startAt": 1768478400000
+          },
+          "priority": "normal",
+          "dosage": "1000units",
+          "instructions": null,
+          "pillsRemaining": null,
+          "pillsPerDose": null,
+          "refillReminderDays": null,
+          "rxcui": null,
+          "unparsedTokens": [],
+          "isSavable": true
+        }
+      }
+    },
+    {
+      "name": "readPhrase: aspirin 81mg every 8 bananas",
+      "input": {
+        "call": "readPhrase",
+        "phrase": "aspirin 81mg every 8 bananas",
+        "now": 1768478400000
+      },
+      "output": {
+        "understood": true,
+        "reasons": [],
+        "draft": {
+          "kind": "medication",
+          "name": "aspirin",
+          "schedule": {
+            "type": "daily",
+            "times": [
+              "09:00"
+            ]
+          },
+          "priority": "normal",
+          "dosage": "81mg",
+          "instructions": null,
+          "pillsRemaining": null,
+          "pillsPerDose": null,
+          "refillReminderDays": null,
+          "rxcui": null,
+          "unparsedTokens": [
+            "8",
+            "bananas"
+          ],
+          "isSavable": true
+        }
+      }
+    },
+    {
+      "name": "readPhrase: aspirin 81mg every 8",
+      "input": {
+        "call": "readPhrase",
+        "phrase": "aspirin 81mg every 8",
+        "now": 1768478400000
+      },
+      "output": {
+        "understood": true,
+        "reasons": [],
+        "draft": {
+          "kind": "medication",
+          "name": "aspirin",
+          "schedule": {
+            "type": "daily",
+            "times": [
+              "09:00"
+            ]
+          },
+          "priority": "normal",
+          "dosage": "81mg",
+          "instructions": null,
+          "pillsRemaining": null,
+          "pillsPerDose": null,
+          "refillReminderDays": null,
+          "rxcui": null,
+          "unparsedTokens": [
+            "8"
+          ],
+          "isSavable": true
+        }
+      }
+    },
+    {
+      "name": "readPhrase: aspirin 81mg every 99999999999 hours",
+      "input": {
+        "call": "readPhrase",
+        "phrase": "aspirin 81mg every 99999999999 hours",
+        "now": 1768478400000
+      },
+      "output": {
+        "understood": true,
+        "reasons": [],
+        "draft": {
+          "kind": "medication",
+          "name": "aspirin",
+          "schedule": {
+            "type": "daily",
+            "times": [
+              "09:00"
+            ]
+          },
+          "priority": "normal",
+          "dosage": "81mg",
+          "instructions": null,
+          "pillsRemaining": null,
+          "pillsPerDose": null,
+          "refillReminderDays": null,
+          "rxcui": null,
+          "unparsedTokens": [
+            "99999999999",
+            "hours"
+          ],
+          "isSavable": true
+        }
+      }
+    },
+    {
+      "name": "readPhrase: aspirin 81mg every purple",
+      "input": {
+        "call": "readPhrase",
+        "phrase": "aspirin 81mg every purple",
+        "now": 1768478400000
+      },
+      "output": {
+        "understood": true,
+        "reasons": [],
+        "draft": {
+          "kind": "medication",
+          "name": "aspirin",
+          "schedule": {
+            "type": "daily",
+            "times": [
+              "09:00"
+            ]
+          },
+          "priority": "normal",
+          "dosage": "81mg",
+          "instructions": null,
+          "pillsRemaining": null,
+          "pillsPerDose": null,
+          "refillReminderDays": null,
+          "rxcui": null,
+          "unparsedTokens": [
+            "purple"
+          ],
+          "isSavable": true
+        }
+      }
+    },
+    {
+      "name": "readPhrase: atorvastatin 20mg every",
+      "input": {
+        "call": "readPhrase",
+        "phrase": "atorvastatin 20mg every",
+        "now": 1768478400000
+      },
+      "output": {
+        "understood": true,
+        "reasons": [],
+        "draft": {
+          "kind": "medication",
+          "name": "atorvastatin",
+          "schedule": {
+            "type": "daily",
+            "times": [
+              "09:00"
+            ]
+          },
+          "priority": "normal",
+          "dosage": "20mg",
+          "instructions": null,
+          "pillsRemaining": null,
+          "pillsPerDose": null,
+          "refillReminderDays": null,
+          "rxcui": null,
+          "unparsedTokens": [],
+          "isSavable": true
+        }
+      }
+    },
+    {
+      "name": "readPhrase: pay rent monthly on the 15th at 9am",
+      "input": {
+        "call": "readPhrase",
+        "phrase": "pay rent monthly on the 15th at 9am",
+        "now": 1768478400000
+      },
+      "output": {
+        "understood": true,
+        "reasons": [],
+        "draft": {
+          "kind": "task",
+          "name": "pay rent",
+          "schedule": {
+            "type": "monthly",
+            "daysOfMonth": [
+              15
+            ],
+            "times": [
+              "09:00"
+            ]
+          },
+          "priority": "normal",
+          "dosage": null,
+          "instructions": null,
+          "pillsRemaining": null,
+          "pillsPerDose": null,
+          "refillReminderDays": null,
+          "rxcui": null,
+          "unparsedTokens": [],
+          "isSavable": true
+        }
+      }
+    },
+    {
+      "name": "readPhrase: call landlord monthly",
+      "input": {
+        "call": "readPhrase",
+        "phrase": "call landlord monthly",
+        "now": 1768478400000
+      },
+      "output": {
+        "understood": true,
+        "reasons": [],
+        "draft": {
+          "kind": "task",
+          "name": "call landlord",
+          "schedule": {
+            "type": "monthly",
+            "daysOfMonth": [],
+            "times": []
+          },
+          "priority": "normal",
+          "dosage": null,
+          "instructions": null,
+          "pillsRemaining": null,
+          "pillsPerDose": null,
+          "refillReminderDays": null,
+          "rxcui": null,
+          "unparsedTokens": [],
+          "isSavable": false
+        }
+      }
+    },
+    {
+      "name": "readPhrase: pay rent every month",
+      "input": {
+        "call": "readPhrase",
+        "phrase": "pay rent every month",
+        "now": 1768478400000
+      },
+      "output": {
+        "understood": true,
+        "reasons": [],
+        "draft": {
+          "kind": "task",
+          "name": "pay rent",
+          "schedule": {
+            "type": "monthly",
+            "daysOfMonth": [],
+            "times": []
+          },
+          "priority": "normal",
+          "dosage": null,
+          "instructions": null,
+          "pillsRemaining": null,
+          "pillsPerDose": null,
+          "refillReminderDays": null,
+          "rxcui": null,
+          "unparsedTokens": [],
+          "isSavable": false
+        }
+      }
+    },
+    {
+      "name": "readPhrase: pay this month's rent",
+      "input": {
+        "call": "readPhrase",
+        "phrase": "pay this month's rent",
+        "now": 1768478400000
+      },
+      "output": {
+        "understood": true,
+        "reasons": [],
+        "draft": {
+          "kind": "task",
+          "name": "pay this month s rent",
+          "schedule": {
+            "type": "daily",
+            "times": [
+              "09:00"
+            ]
+          },
+          "priority": "normal",
+          "dosage": null,
+          "instructions": null,
+          "pillsRemaining": null,
+          "pillsPerDose": null,
+          "refillReminderDays": null,
+          "rxcui": null,
+          "unparsedTokens": [],
+          "isSavable": true
+        }
+      }
+    },
+    {
+      "name": "readPhrase: pay rent monthly on the 9th at 9",
+      "input": {
+        "call": "readPhrase",
+        "phrase": "pay rent monthly on the 9th at 9",
+        "now": 1768478400000
+      },
+      "output": {
+        "understood": true,
+        "reasons": [],
+        "draft": {
+          "kind": "task",
+          "name": "pay rent",
+          "schedule": {
+            "type": "monthly",
+            "daysOfMonth": [
+              9
+            ],
+            "times": [
+              "09:00"
+            ]
+          },
+          "priority": "normal",
+          "dosage": null,
+          "instructions": null,
+          "pillsRemaining": null,
+          "pillsPerDose": null,
+          "refillReminderDays": null,
+          "rxcui": null,
+          "unparsedTokens": [],
+          "isSavable": true
+        }
+      }
+    },
+    {
+      "name": "readPhrase: pay rent monthly 9 at 09:00",
+      "input": {
+        "call": "readPhrase",
+        "phrase": "pay rent monthly 9 at 09:00",
+        "now": 1768478400000
+      },
+      "output": {
+        "understood": true,
+        "reasons": [],
+        "draft": {
+          "kind": "task",
+          "name": "pay rent",
+          "schedule": {
+            "type": "monthly",
+            "daysOfMonth": [
+              9
+            ],
+            "times": [
+              "09:00"
+            ]
+          },
+          "priority": "normal",
+          "dosage": null,
+          "instructions": null,
+          "pillsRemaining": null,
+          "pillsPerDose": null,
+          "refillReminderDays": null,
+          "rxcui": null,
+          "unparsedTokens": [],
+          "isSavable": true
+        }
+      }
+    },
+    {
+      "name": "readPhrase: pay rent monthly at 9",
+      "input": {
+        "call": "readPhrase",
+        "phrase": "pay rent monthly at 9",
+        "now": 1768478400000
+      },
+      "output": {
+        "understood": true,
+        "reasons": [],
+        "draft": {
+          "kind": "task",
+          "name": "pay rent",
+          "schedule": {
+            "type": "monthly",
+            "daysOfMonth": [
+              9
+            ],
+            "times": [
+              "09:00"
+            ]
+          },
+          "priority": "normal",
+          "dosage": null,
+          "instructions": null,
+          "pillsRemaining": null,
+          "pillsPerDose": null,
+          "refillReminderDays": null,
+          "rxcui": null,
+          "unparsedTokens": [],
+          "isSavable": true
+        }
+      }
+    },
+    {
+      "name": "readPhrase: pay rent monthly on the 99th",
+      "input": {
+        "call": "readPhrase",
+        "phrase": "pay rent monthly on the 99th",
+        "now": 1768478400000
+      },
+      "output": {
+        "understood": true,
+        "reasons": [],
+        "draft": {
+          "kind": "task",
+          "name": "pay rent",
+          "schedule": {
+            "type": "monthly",
+            "daysOfMonth": [],
+            "times": []
+          },
+          "priority": "normal",
+          "dosage": null,
+          "instructions": null,
+          "pillsRemaining": null,
+          "pillsPerDose": null,
+          "refillReminderDays": null,
+          "rxcui": null,
+          "unparsedTokens": [],
+          "isSavable": false
+        }
+      }
+    },
+    {
+      "name": "readPhrase: pay rent every month on the 15th and the 1st at 9am and 8pm",
+      "input": {
+        "call": "readPhrase",
+        "phrase": "pay rent every month on the 15th and the 1st at 9am and 8pm",
+        "now": 1768478400000
+      },
+      "output": {
+        "understood": true,
+        "reasons": [],
+        "draft": {
+          "kind": "task",
+          "name": "pay rent",
+          "schedule": {
+            "type": "monthly",
+            "daysOfMonth": [
+              1,
+              15
+            ],
+            "times": [
+              "09:00",
+              "20:00"
+            ]
+          },
+          "priority": "normal",
+          "dosage": null,
+          "instructions": null,
+          "pillsRemaining": null,
+          "pillsPerDose": null,
+          "refillReminderDays": null,
+          "rxcui": null,
+          "unparsedTokens": [],
+          "isSavable": true
+        }
+      }
+    },
+    {
+      "name": "readPhrase: pay rent at 15 monthly on the 1st",
+      "input": {
+        "call": "readPhrase",
+        "phrase": "pay rent at 15 monthly on the 1st",
+        "now": 1768478400000
+      },
+      "output": {
+        "understood": true,
+        "reasons": [],
+        "draft": {
+          "kind": "task",
+          "name": "pay rent 15",
+          "schedule": {
+            "type": "monthly",
+            "daysOfMonth": [
+              1,
+              15
+            ],
+            "times": []
+          },
+          "priority": "normal",
+          "dosage": null,
+          "instructions": null,
+          "pillsRemaining": null,
+          "pillsPerDose": null,
+          "refillReminderDays": null,
+          "rxcui": null,
+          "unparsedTokens": [],
+          "isSavable": false
+        }
+      }
+    },
+    {
+      "name": "readPhrase: pay rent monthly twice daily",
+      "input": {
+        "call": "readPhrase",
+        "phrase": "pay rent monthly twice daily",
+        "now": 1768478400000
+      },
+      "output": {
+        "understood": true,
+        "reasons": [],
+        "draft": {
+          "kind": "task",
+          "name": "pay rent",
+          "schedule": {
+            "type": "monthly",
+            "daysOfMonth": [],
+            "times": []
+          },
+          "priority": "normal",
+          "dosage": null,
+          "instructions": null,
+          "pillsRemaining": null,
+          "pillsPerDose": null,
+          "refillReminderDays": null,
+          "rxcui": null,
+          "unparsedTokens": [],
+          "isSavable": false
+        }
+      }
+    },
+    {
+      "name": "readPhrase: pay rent monthly on the 15th Monday",
+      "input": {
+        "call": "readPhrase",
+        "phrase": "pay rent monthly on the 15th Monday",
+        "now": 1768478400000
+      },
+      "output": {
+        "understood": true,
+        "reasons": [],
+        "draft": {
+          "kind": "task",
+          "name": "pay rent",
+          "schedule": {
+            "type": "monthly",
+            "daysOfMonth": [
+              15
+            ],
+            "times": []
+          },
+          "priority": "normal",
+          "dosage": null,
+          "instructions": null,
+          "pillsRemaining": null,
+          "pillsPerDose": null,
+          "refillReminderDays": null,
+          "rxcui": null,
+          "unparsedTokens": [],
+          "isSavable": false
+        }
+      }
+    },
+    {
+      "name": "readPhrase: pay rent monthly on the 15th at 9am Monday",
+      "input": {
+        "call": "readPhrase",
+        "phrase": "pay rent monthly on the 15th at 9am Monday",
+        "now": 1768478400000
+      },
+      "output": {
+        "understood": true,
+        "reasons": [],
+        "draft": {
+          "kind": "task",
+          "name": "pay rent",
+          "schedule": {
+            "type": "monthly",
+            "daysOfMonth": [
+              15
+            ],
+            "times": [
+              "09:00"
+            ]
+          },
+          "priority": "normal",
+          "dosage": null,
+          "instructions": null,
+          "pillsRemaining": null,
+          "pillsPerDose": null,
+          "refillReminderDays": null,
+          "rxcui": null,
+          "unparsedTokens": [],
+          "isSavable": true
+        }
+      }
+    },
+    {
+      "name": "readPhrase: pay rent monthly at noon",
+      "input": {
+        "call": "readPhrase",
+        "phrase": "pay rent monthly at noon",
+        "now": 1768478400000
+      },
+      "output": {
+        "understood": true,
+        "reasons": [],
+        "draft": {
+          "kind": "task",
+          "name": "pay rent",
+          "schedule": {
+            "type": "monthly",
+            "daysOfMonth": [],
+            "times": [
+              "12:00"
+            ]
+          },
+          "priority": "normal",
+          "dosage": null,
+          "instructions": null,
+          "pillsRemaining": null,
+          "pillsPerDose": null,
+          "refillReminderDays": null,
+          "rxcui": null,
+          "unparsedTokens": [],
+          "isSavable": false
+        }
+      }
+    },
+    {
+      "name": "readPhrase: pay rent monthly at 8pm",
+      "input": {
+        "call": "readPhrase",
+        "phrase": "pay rent monthly at 8pm",
+        "now": 1768478400000
+      },
+      "output": {
+        "understood": true,
+        "reasons": [],
+        "draft": {
+          "kind": "task",
+          "name": "pay rent",
+          "schedule": {
+            "type": "monthly",
+            "daysOfMonth": [],
+            "times": [
+              "20:00"
+            ]
+          },
+          "priority": "normal",
+          "dosage": null,
+          "instructions": null,
+          "pillsRemaining": null,
+          "pillsPerDose": null,
+          "refillReminderDays": null,
+          "rxcui": null,
+          "unparsedTokens": [],
+          "isSavable": false
+        }
+      }
+    },
+    {
+      "name": "readPhrase: pay rent monthly the 1st at 24",
+      "input": {
+        "call": "readPhrase",
+        "phrase": "pay rent monthly the 1st at 24",
+        "now": 1768478400000
+      },
+      "output": {
+        "understood": true,
+        "reasons": [],
+        "draft": {
+          "kind": "task",
+          "name": "pay rent",
+          "schedule": {
+            "type": "monthly",
+            "daysOfMonth": [
+              1,
+              24
+            ],
+            "times": []
+          },
+          "priority": "normal",
+          "dosage": null,
+          "instructions": null,
+          "pillsRemaining": null,
+          "pillsPerDose": null,
+          "refillReminderDays": null,
+          "rxcui": null,
+          "unparsedTokens": [],
+          "isSavable": false
+        }
+      }
+    },
+    {
+      "name": "readPhrase: pay rent monthly at 12:30",
+      "input": {
+        "call": "readPhrase",
+        "phrase": "pay rent monthly at 12:30",
+        "now": 1768478400000
+      },
+      "output": {
+        "understood": true,
+        "reasons": [],
+        "draft": {
+          "kind": "task",
+          "name": "pay rent",
+          "schedule": {
+            "type": "monthly",
+            "daysOfMonth": [],
+            "times": [
+              "12:30"
+            ]
+          },
+          "priority": "normal",
+          "dosage": null,
+          "instructions": null,
+          "pillsRemaining": null,
+          "pillsPerDose": null,
+          "refillReminderDays": null,
+          "rxcui": null,
+          "unparsedTokens": [],
+          "isSavable": false
+        }
+      }
+    },
+    {
+      "name": "readPhrase: take out the trash the 1st at 9am monthly",
+      "input": {
+        "call": "readPhrase",
+        "phrase": "take out the trash the 1st at 9am monthly",
+        "now": 1768478400000
+      },
+      "output": {
+        "understood": true,
+        "reasons": [],
+        "draft": {
+          "kind": "task",
+          "name": "take out trash 1st",
+          "schedule": {
+            "type": "monthly",
+            "daysOfMonth": [
+              1
+            ],
+            "times": [
+              "09:00"
+            ]
+          },
+          "priority": "normal",
+          "dosage": null,
+          "instructions": null,
+          "pillsRemaining": null,
+          "pillsPerDose": null,
+          "refillReminderDays": null,
+          "rxcui": null,
+          "unparsedTokens": [],
+          "isSavable": true
+        }
+      }
+    },
+    {
+      "name": "readPhrase: pay rent every month on the 15th and the 1st at 09:00",
+      "input": {
+        "call": "readPhrase",
+        "phrase": "pay rent every month on the 15th and the 1st at 09:00",
+        "now": 1768478400000
+      },
+      "output": {
+        "understood": true,
+        "reasons": [],
+        "draft": {
+          "kind": "task",
+          "name": "pay rent",
+          "schedule": {
+            "type": "monthly",
+            "daysOfMonth": [
+              1,
+              15
+            ],
+            "times": [
+              "09:00"
+            ]
+          },
+          "priority": "normal",
+          "dosage": null,
+          "instructions": null,
+          "pillsRemaining": null,
+          "pillsPerDose": null,
+          "refillReminderDays": null,
+          "rxcui": null,
+          "unparsedTokens": [],
+          "isSavable": true
+        }
+      }
+    },
+    {
+      "name": "readPhrase: pay rent monthly 3 at 9am",
+      "input": {
+        "call": "readPhrase",
+        "phrase": "pay rent monthly 3 at 9am",
+        "now": 1768478400000
+      },
+      "output": {
+        "understood": true,
+        "reasons": [],
+        "draft": {
+          "kind": "task",
+          "name": "pay rent",
+          "schedule": {
+            "type": "monthly",
+            "daysOfMonth": [
+              3
+            ],
+            "times": [
+              "09:00"
+            ]
+          },
+          "priority": "normal",
+          "dosage": null,
+          "instructions": null,
+          "pillsRemaining": null,
+          "pillsPerDose": null,
+          "refillReminderDays": null,
+          "rxcui": null,
+          "unparsedTokens": [],
+          "isSavable": true
+        }
+      }
+    },
+    {
+      "name": "readPhrase: pay rent monthly the 21st at 9am",
+      "input": {
+        "call": "readPhrase",
+        "phrase": "pay rent monthly the 21st at 9am",
+        "now": 1768478400000
+      },
+      "output": {
+        "understood": true,
+        "reasons": [],
+        "draft": {
+          "kind": "task",
+          "name": "pay rent",
+          "schedule": {
+            "type": "monthly",
+            "daysOfMonth": [
+              21
+            ],
+            "times": [
+              "09:00"
+            ]
+          },
+          "priority": "normal",
+          "dosage": null,
+          "instructions": null,
+          "pillsRemaining": null,
+          "pillsPerDose": null,
+          "refillReminderDays": null,
+          "rxcui": null,
+          "unparsedTokens": [],
+          "isSavable": true
+        }
+      }
+    },
+    {
+      "name": "readPhrase: pay rent monthly on the 1st at 8am and 8pm",
+      "input": {
+        "call": "readPhrase",
+        "phrase": "pay rent monthly on the 1st at 8am and 8pm",
+        "now": 1768478400000
+      },
+      "output": {
+        "understood": true,
+        "reasons": [],
+        "draft": {
+          "kind": "task",
+          "name": "pay rent",
+          "schedule": {
+            "type": "monthly",
+            "daysOfMonth": [
+              1
+            ],
+            "times": [
+              "08:00",
+              "20:00"
+            ]
+          },
+          "priority": "normal",
+          "dosage": null,
+          "instructions": null,
+          "pillsRemaining": null,
+          "pillsPerDose": null,
+          "refillReminderDays": null,
+          "rxcui": null,
+          "unparsedTokens": [],
+          "isSavable": true
+        }
+      }
+    },
+    {
+      "name": "readPhrase: pay rent monthly",
+      "input": {
+        "call": "readPhrase",
+        "phrase": "pay rent monthly",
+        "now": 1768478400000
+      },
+      "output": {
+        "understood": true,
+        "reasons": [],
+        "draft": {
+          "kind": "task",
+          "name": "pay rent",
+          "schedule": {
+            "type": "monthly",
+            "daysOfMonth": [],
+            "times": []
+          },
+          "priority": "normal",
+          "dosage": null,
+          "instructions": null,
+          "pillsRemaining": null,
+          "pillsPerDose": null,
+          "refillReminderDays": null,
+          "rxcui": null,
+          "unparsedTokens": [],
+          "isSavable": false
+        }
+      }
+    },
+    {
+      "name": "readPhrase: atorvastatin 20mg 8:30pm",
+      "input": {
+        "call": "readPhrase",
+        "phrase": "atorvastatin 20mg 8:30pm",
+        "now": 1768478400000
+      },
+      "output": {
+        "understood": true,
+        "reasons": [],
+        "draft": {
+          "kind": "medication",
+          "name": "atorvastatin",
+          "schedule": {
+            "type": "daily",
+            "times": [
+              "20:30"
+            ]
+          },
+          "priority": "normal",
+          "dosage": "20mg",
+          "instructions": null,
+          "pillsRemaining": null,
+          "pillsPerDose": null,
+          "refillReminderDays": null,
+          "rxcui": null,
+          "unparsedTokens": [],
+          "isSavable": true
+        }
+      }
+    },
+    {
+      "name": "readPhrase: atorvastatin 20mg at 18:30",
+      "input": {
+        "call": "readPhrase",
+        "phrase": "atorvastatin 20mg at 18:30",
+        "now": 1768478400000
+      },
+      "output": {
+        "understood": true,
+        "reasons": [],
+        "draft": {
+          "kind": "medication",
+          "name": "atorvastatin",
+          "schedule": {
+            "type": "daily",
+            "times": [
+              "18:30"
+            ]
+          },
+          "priority": "normal",
+          "dosage": "20mg",
+          "instructions": null,
+          "pillsRemaining": null,
+          "pillsPerDose": null,
+          "refillReminderDays": null,
+          "rxcui": null,
+          "unparsedTokens": [],
+          "isSavable": true
+        }
+      }
+    },
+    {
+      "name": "readPhrase: atorvastatin 20mg at 8:00:00",
+      "input": {
+        "call": "readPhrase",
+        "phrase": "atorvastatin 20mg at 8:00:00",
+        "now": 1768478400000
+      },
+      "output": {
+        "understood": true,
+        "reasons": [],
+        "draft": {
+          "kind": "medication",
+          "name": "atorvastatin",
+          "schedule": {
+            "type": "daily",
+            "times": [
+              "08:00"
+            ]
+          },
+          "priority": "normal",
+          "dosage": "20mg",
+          "instructions": null,
+          "pillsRemaining": null,
+          "pillsPerDose": null,
+          "refillReminderDays": null,
+          "rxcui": null,
+          "unparsedTokens": [],
+          "isSavable": true
+        }
+      }
+    },
+    {
+      "name": "readPhrase: atorvastatin 20mg at 12am",
+      "input": {
+        "call": "readPhrase",
+        "phrase": "atorvastatin 20mg at 12am",
+        "now": 1768478400000
+      },
+      "output": {
+        "understood": true,
+        "reasons": [],
+        "draft": {
+          "kind": "medication",
+          "name": "atorvastatin",
+          "schedule": {
+            "type": "daily",
+            "times": [
+              "00:00"
+            ]
+          },
+          "priority": "normal",
+          "dosage": "20mg",
+          "instructions": null,
+          "pillsRemaining": null,
+          "pillsPerDose": null,
+          "refillReminderDays": null,
+          "rxcui": null,
+          "unparsedTokens": [],
+          "isSavable": true
+        }
+      }
+    },
+    {
+      "name": "readPhrase: atorvastatin 20mg at 12pm",
+      "input": {
+        "call": "readPhrase",
+        "phrase": "atorvastatin 20mg at 12pm",
+        "now": 1768478400000
+      },
+      "output": {
+        "understood": true,
+        "reasons": [],
+        "draft": {
+          "kind": "medication",
+          "name": "atorvastatin",
+          "schedule": {
+            "type": "daily",
+            "times": [
+              "12:00"
+            ]
+          },
+          "priority": "normal",
+          "dosage": "20mg",
+          "instructions": null,
+          "pillsRemaining": null,
+          "pillsPerDose": null,
+          "refillReminderDays": null,
+          "rxcui": null,
+          "unparsedTokens": [],
+          "isSavable": true
+        }
+      }
+    },
+    {
+      "name": "readPhrase: atorvastatin 20mg at 25:00",
+      "input": {
+        "call": "readPhrase",
+        "phrase": "atorvastatin 20mg at 25:00",
+        "now": 1768478400000
+      },
+      "output": {
+        "understood": true,
+        "reasons": [],
+        "draft": {
+          "kind": "medication",
+          "name": "atorvastatin",
+          "schedule": {
+            "type": "daily",
+            "times": [
+              "09:00"
+            ]
+          },
+          "priority": "normal",
+          "dosage": "20mg",
+          "instructions": null,
+          "pillsRemaining": null,
+          "pillsPerDose": null,
+          "refillReminderDays": null,
+          "rxcui": null,
+          "unparsedTokens": [
+            "25:00"
+          ],
+          "isSavable": true
+        }
+      }
+    },
+    {
+      "name": "readPhrase: atorvastatin 20mg at 23:59",
+      "input": {
+        "call": "readPhrase",
+        "phrase": "atorvastatin 20mg at 23:59",
+        "now": 1768478400000
+      },
+      "output": {
+        "understood": true,
+        "reasons": [],
+        "draft": {
+          "kind": "medication",
+          "name": "atorvastatin",
+          "schedule": {
+            "type": "daily",
+            "times": [
+              "23:59"
+            ]
+          },
+          "priority": "normal",
+          "dosage": "20mg",
+          "instructions": null,
+          "pillsRemaining": null,
+          "pillsPerDose": null,
+          "refillReminderDays": null,
+          "rxcui": null,
+          "unparsedTokens": [],
+          "isSavable": true
+        }
+      }
+    },
+    {
+      "name": "readPhrase: atorvastatin 20mg at 24:00",
+      "input": {
+        "call": "readPhrase",
+        "phrase": "atorvastatin 20mg at 24:00",
+        "now": 1768478400000
+      },
+      "output": {
+        "understood": true,
+        "reasons": [],
+        "draft": {
+          "kind": "medication",
+          "name": "atorvastatin",
+          "schedule": {
+            "type": "daily",
+            "times": [
+              "09:00"
+            ]
+          },
+          "priority": "normal",
+          "dosage": "20mg",
+          "instructions": null,
+          "pillsRemaining": null,
+          "pillsPerDose": null,
+          "refillReminderDays": null,
+          "rxcui": null,
+          "unparsedTokens": [
+            "24:00"
+          ],
+          "isSavable": true
+        }
+      }
+    },
+    {
+      "name": "readPhrase: atorvastatin 20mg at 8:60",
+      "input": {
+        "call": "readPhrase",
+        "phrase": "atorvastatin 20mg at 8:60",
+        "now": 1768478400000
+      },
+      "output": {
+        "understood": true,
+        "reasons": [],
+        "draft": {
+          "kind": "medication",
+          "name": "atorvastatin",
+          "schedule": {
+            "type": "daily",
+            "times": [
+              "09:00"
+            ]
+          },
+          "priority": "normal",
+          "dosage": "20mg",
+          "instructions": null,
+          "pillsRemaining": null,
+          "pillsPerDose": null,
+          "refillReminderDays": null,
+          "rxcui": null,
+          "unparsedTokens": [
+            "8:60"
+          ],
+          "isSavable": true
+        }
+      }
+    },
+    {
+      "name": "readPhrase: atorvastatin 20mg at 8:70",
+      "input": {
+        "call": "readPhrase",
+        "phrase": "atorvastatin 20mg at 8:70",
+        "now": 1768478400000
+      },
+      "output": {
+        "understood": true,
+        "reasons": [],
+        "draft": {
+          "kind": "medication",
+          "name": "atorvastatin",
+          "schedule": {
+            "type": "daily",
+            "times": [
+              "09:00"
+            ]
+          },
+          "priority": "normal",
+          "dosage": "20mg",
+          "instructions": null,
+          "pillsRemaining": null,
+          "pillsPerDose": null,
+          "refillReminderDays": null,
+          "rxcui": null,
+          "unparsedTokens": [
+            "8:70"
+          ],
+          "isSavable": true
+        }
+      }
+    },
+    {
+      "name": "readPhrase: atorvastatin 20mg at 13pm",
+      "input": {
+        "call": "readPhrase",
+        "phrase": "atorvastatin 20mg at 13pm",
+        "now": 1768478400000
+      },
+      "output": {
+        "understood": true,
+        "reasons": [],
+        "draft": {
+          "kind": "medication",
+          "name": "atorvastatin",
+          "schedule": {
+            "type": "daily",
+            "times": [
+              "09:00"
+            ]
+          },
+          "priority": "normal",
+          "dosage": "20mg",
+          "instructions": null,
+          "pillsRemaining": null,
+          "pillsPerDose": null,
+          "refillReminderDays": null,
+          "rxcui": null,
+          "unparsedTokens": [
+            "13pm"
+          ],
+          "isSavable": true
+        }
+      }
+    },
+    {
+      "name": "readPhrase: atorvastatin 20mg at 0am",
+      "input": {
+        "call": "readPhrase",
+        "phrase": "atorvastatin 20mg at 0am",
+        "now": 1768478400000
+      },
+      "output": {
+        "understood": true,
+        "reasons": [],
+        "draft": {
+          "kind": "medication",
+          "name": "atorvastatin",
+          "schedule": {
+            "type": "daily",
+            "times": [
+              "09:00"
+            ]
+          },
+          "priority": "normal",
+          "dosage": "20mg",
+          "instructions": null,
+          "pillsRemaining": null,
+          "pillsPerDose": null,
+          "refillReminderDays": null,
+          "rxcui": null,
+          "unparsedTokens": [
+            "0am"
+          ],
+          "isSavable": true
+        }
+      }
+    },
+    {
+      "name": "readPhrase: atorvastatin 20mg at 8",
+      "input": {
+        "call": "readPhrase",
+        "phrase": "atorvastatin 20mg at 8",
+        "now": 1768478400000
+      },
+      "output": {
+        "understood": true,
+        "reasons": [],
+        "draft": {
+          "kind": "medication",
+          "name": "atorvastatin",
+          "schedule": {
+            "type": "daily",
+            "times": [
+              "09:00"
+            ]
+          },
+          "priority": "normal",
+          "dosage": "20mg",
+          "instructions": null,
+          "pillsRemaining": null,
+          "pillsPerDose": null,
+          "refillReminderDays": null,
+          "rxcui": null,
+          "unparsedTokens": [
+            "8"
+          ],
+          "isSavable": true
+        }
+      }
+    },
+    {
+      "name": "readPhrase: atorvastatin 20mg at",
+      "input": {
+        "call": "readPhrase",
+        "phrase": "atorvastatin 20mg at",
+        "now": 1768478400000
+      },
+      "output": {
+        "understood": true,
+        "reasons": [],
+        "draft": {
+          "kind": "medication",
+          "name": "atorvastatin",
+          "schedule": {
+            "type": "daily",
+            "times": [
+              "09:00"
+            ]
+          },
+          "priority": "normal",
+          "dosage": "20mg",
+          "instructions": null,
+          "pillsRemaining": null,
+          "pillsPerDose": null,
+          "refillReminderDays": null,
+          "rxcui": null,
+          "unparsedTokens": [],
+          "isSavable": true
+        }
+      }
+    },
+    {
+      "name": "readPhrase: atorvastatin 20mg bedtime",
+      "input": {
+        "call": "readPhrase",
+        "phrase": "atorvastatin 20mg bedtime",
+        "now": 1768478400000
+      },
+      "output": {
+        "understood": true,
+        "reasons": [],
+        "draft": {
+          "kind": "medication",
+          "name": "atorvastatin",
+          "schedule": {
+            "type": "daily",
+            "times": [
+              "21:00"
+            ]
+          },
+          "priority": "normal",
+          "dosage": "20mg",
+          "instructions": null,
+          "pillsRemaining": null,
+          "pillsPerDose": null,
+          "refillReminderDays": null,
+          "rxcui": null,
+          "unparsedTokens": [],
+          "isSavable": true
+        }
+      }
+    },
+    {
+      "name": "readPhrase: atorvastatin 20mg daily at 9pm",
+      "input": {
+        "call": "readPhrase",
+        "phrase": "atorvastatin 20mg daily at 9pm",
+        "now": 1768478400000
+      },
+      "output": {
+        "understood": true,
+        "reasons": [],
+        "draft": {
+          "kind": "medication",
+          "name": "atorvastatin",
+          "schedule": {
+            "type": "daily",
+            "times": [
+              "09:00",
+              "21:00"
+            ]
+          },
+          "priority": "normal",
+          "dosage": "20mg",
+          "instructions": null,
+          "pillsRemaining": null,
+          "pillsPerDose": null,
+          "refillReminderDays": null,
+          "rxcui": null,
+          "unparsedTokens": [],
+          "isSavable": true
+        }
+      }
+    },
+    {
+      "name": "readPhrase: atorvastatin 20mg every morning at 8am",
+      "input": {
+        "call": "readPhrase",
+        "phrase": "atorvastatin 20mg every morning at 8am",
+        "now": 1768478400000
+      },
+      "output": {
+        "understood": true,
+        "reasons": [],
+        "draft": {
+          "kind": "medication",
+          "name": "atorvastatin",
+          "schedule": {
+            "type": "daily",
+            "times": [
+              "08:00"
+            ]
+          },
+          "priority": "normal",
+          "dosage": "20mg",
+          "instructions": null,
+          "pillsRemaining": null,
+          "pillsPerDose": null,
+          "refillReminderDays": null,
+          "rxcui": null,
+          "unparsedTokens": [],
+          "isSavable": true
+        }
+      }
+    },
+    {
+      "name": "readPhrase: aspirin 81mg every 8 hours at 9am",
+      "input": {
+        "call": "readPhrase",
+        "phrase": "aspirin 81mg every 8 hours at 9am",
+        "now": 1768478400000
+      },
+      "output": {
+        "understood": true,
+        "reasons": [],
+        "draft": {
+          "kind": "medication",
+          "name": "aspirin",
+          "schedule": {
+            "type": "daily",
+            "times": [
+              "09:00"
+            ]
+          },
+          "priority": "normal",
+          "dosage": "81mg",
+          "instructions": null,
+          "pillsRemaining": null,
+          "pillsPerDose": null,
+          "refillReminderDays": null,
+          "rxcui": null,
+          "unparsedTokens": [],
+          "isSavable": true
+        }
+      }
+    },
+    {
+      "name": "readPhrase: call mom monday at 9pm at 9am",
+      "input": {
+        "call": "readPhrase",
+        "phrase": "call mom monday at 9pm at 9am",
+        "now": 1768478400000
+      },
+      "output": {
+        "understood": true,
+        "reasons": [],
+        "draft": {
+          "kind": "task",
+          "name": "call mom",
+          "schedule": {
+            "type": "weekly",
+            "daysOfWeek": [
+              1
+            ],
+            "times": [
+              "09:00",
+              "21:00"
+            ]
+          },
+          "priority": "normal",
+          "dosage": null,
+          "instructions": null,
+          "pillsRemaining": null,
+          "pillsPerDose": null,
+          "refillReminderDays": null,
+          "rxcui": null,
+          "unparsedTokens": [],
+          "isSavable": true
+        }
+      }
+    },
+    {
+      "name": "readPhrase: call mom monday",
+      "input": {
+        "call": "readPhrase",
+        "phrase": "call mom monday",
+        "now": 1768478400000
+      },
+      "output": {
+        "understood": true,
+        "reasons": [],
+        "draft": {
+          "kind": "task",
+          "name": "call mom",
+          "schedule": {
+            "type": "weekly",
+            "daysOfWeek": [
+              1
+            ],
+            "times": []
+          },
+          "priority": "normal",
+          "dosage": null,
+          "instructions": null,
+          "pillsRemaining": null,
+          "pillsPerDose": null,
+          "refillReminderDays": null,
+          "rxcui": null,
+          "unparsedTokens": [],
+          "isSavable": false
+        }
+      }
+    },
+    {
+      "name": "readPhrase: call mom friday monday monday",
+      "input": {
+        "call": "readPhrase",
+        "phrase": "call mom friday monday monday",
+        "now": 1768478400000
+      },
+      "output": {
+        "understood": true,
+        "reasons": [],
+        "draft": {
+          "kind": "task",
+          "name": "call mom",
+          "schedule": {
+            "type": "weekly",
+            "daysOfWeek": [
+              1,
+              5
+            ],
+            "times": []
+          },
+          "priority": "normal",
+          "dosage": null,
+          "instructions": null,
+          "pillsRemaining": null,
+          "pillsPerDose": null,
+          "refillReminderDays": null,
+          "rxcui": null,
+          "unparsedTokens": [],
+          "isSavable": false
+        }
+      }
+    },
+    {
+      "name": "readPhrase: call mom tues thurs",
+      "input": {
+        "call": "readPhrase",
+        "phrase": "call mom tues thurs",
+        "now": 1768478400000
+      },
+      "output": {
+        "understood": true,
+        "reasons": [],
+        "draft": {
+          "kind": "task",
+          "name": "call mom",
+          "schedule": {
+            "type": "weekly",
+            "daysOfWeek": [
+              2,
+              4
+            ],
+            "times": []
+          },
+          "priority": "normal",
+          "dosage": null,
+          "instructions": null,
+          "pillsRemaining": null,
+          "pillsPerDose": null,
+          "refillReminderDays": null,
+          "rxcui": null,
+          "unparsedTokens": [],
+          "isSavable": false
+        }
+      }
+    },
+    {
+      "name": "readPhrase: call mom monday weekly",
+      "input": {
+        "call": "readPhrase",
+        "phrase": "call mom monday weekly",
+        "now": 1768478400000
+      },
+      "output": {
+        "understood": true,
+        "reasons": [],
+        "draft": {
+          "kind": "task",
+          "name": "call mom",
+          "schedule": {
+            "type": "weekly",
+            "daysOfWeek": [
+              1
+            ],
+            "times": []
+          },
+          "priority": "normal",
+          "dosage": null,
+          "instructions": null,
+          "pillsRemaining": null,
+          "pillsPerDose": null,
+          "refillReminderDays": null,
+          "rxcui": null,
+          "unparsedTokens": [],
+          "isSavable": false
+        }
+      }
+    },
+    {
+      "name": "readPhrase: atorvastatin 20mg 30 pills",
+      "input": {
+        "call": "readPhrase",
+        "phrase": "atorvastatin 20mg 30 pills",
+        "now": 1768478400000
+      },
+      "output": {
+        "understood": true,
+        "reasons": [],
+        "draft": {
+          "kind": "medication",
+          "name": "atorvastatin",
+          "schedule": {
+            "type": "daily",
+            "times": [
+              "09:00"
+            ]
+          },
+          "priority": "normal",
+          "dosage": "20mg",
+          "instructions": null,
+          "pillsRemaining": 30.0,
+          "pillsPerDose": null,
+          "refillReminderDays": null,
+          "rxcui": null,
+          "unparsedTokens": [],
+          "isSavable": true
+        }
+      }
+    },
+    {
+      "name": "readPhrase: atorvastatin 20mg per dose",
+      "input": {
+        "call": "readPhrase",
+        "phrase": "atorvastatin 20mg per dose",
+        "now": 1768478400000
+      },
+      "output": {
+        "understood": true,
+        "reasons": [],
+        "draft": {
+          "kind": "medication",
+          "name": "atorvastatin",
+          "schedule": {
+            "type": "daily",
+            "times": [
+              "09:00"
+            ]
+          },
+          "priority": "normal",
+          "dosage": "20mg",
+          "instructions": null,
+          "pillsRemaining": null,
+          "pillsPerDose": null,
+          "refillReminderDays": null,
+          "rxcui": null,
+          "unparsedTokens": [],
+          "isSavable": true
+        }
+      }
+    },
+    {
+      "name": "readPhrase: atorvastatin 20mg 1.5 per dose",
+      "input": {
+        "call": "readPhrase",
+        "phrase": "atorvastatin 20mg 1.5 per dose",
+        "now": 1768478400000
+      },
+      "output": {
+        "understood": true,
+        "reasons": [],
+        "draft": {
+          "kind": "medication",
+          "name": "atorvastatin",
+          "schedule": {
+            "type": "daily",
+            "times": [
+              "09:00"
+            ]
+          },
+          "priority": "normal",
+          "dosage": "20mg",
+          "instructions": null,
+          "pillsRemaining": null,
+          "pillsPerDose": 1.5,
+          "refillReminderDays": null,
+          "rxcui": null,
+          "unparsedTokens": [
+            "1.5"
+          ],
+          "isSavable": true
+        }
+      }
+    },
+    {
+      "name": "readPhrase: atorvastatin 20mg 30 pills per dose",
+      "input": {
+        "call": "readPhrase",
+        "phrase": "atorvastatin 20mg 30 pills per dose",
+        "now": 1768478400000
+      },
+      "output": {
+        "understood": true,
+        "reasons": [],
+        "draft": {
+          "kind": "medication",
+          "name": "atorvastatin",
+          "schedule": {
+            "type": "daily",
+            "times": [
+              "09:00"
+            ]
+          },
+          "priority": "normal",
+          "dosage": "20mg",
+          "instructions": null,
+          "pillsRemaining": null,
+          "pillsPerDose": null,
+          "refillReminderDays": null,
+          "rxcui": null,
+          "unparsedTokens": [
+            "30",
+            "pills"
+          ],
+          "isSavable": true
+        }
+      }
+    },
+    {
+      "name": "readPhrase: atorvastatin 20mg 30 bananas",
+      "input": {
+        "call": "readPhrase",
+        "phrase": "atorvastatin 20mg 30 bananas",
+        "now": 1768478400000
+      },
+      "output": {
+        "understood": true,
+        "reasons": [],
+        "draft": {
+          "kind": "medication",
+          "name": "atorvastatin",
+          "schedule": {
+            "type": "daily",
+            "times": [
+              "09:00"
+            ]
+          },
+          "priority": "normal",
+          "dosage": "20mg",
+          "instructions": null,
+          "pillsRemaining": null,
+          "pillsPerDose": null,
+          "refillReminderDays": null,
+          "rxcui": null,
+          "unparsedTokens": [
+            "30",
+            "bananas"
+          ],
+          "isSavable": true
+        }
+      }
+    },
+    {
+      "name": "readPhrase: atorvastatin 20mg refill in 7",
+      "input": {
+        "call": "readPhrase",
+        "phrase": "atorvastatin 20mg refill in 7",
+        "now": 1768478400000
+      },
+      "output": {
+        "understood": true,
+        "reasons": [],
+        "draft": {
+          "kind": "medication",
+          "name": "atorvastatin",
+          "schedule": {
+            "type": "daily",
+            "times": [
+              "09:00"
+            ]
+          },
+          "priority": "normal",
+          "dosage": "20mg",
+          "instructions": null,
+          "pillsRemaining": null,
+          "pillsPerDose": null,
+          "refillReminderDays": 7,
+          "rxcui": null,
+          "unparsedTokens": [],
+          "isSavable": true
+        }
+      }
+    },
+    {
+      "name": "readPhrase: atorvastatin 20mg refill in soon",
+      "input": {
+        "call": "readPhrase",
+        "phrase": "atorvastatin 20mg refill in soon",
+        "now": 1768478400000
+      },
+      "output": {
+        "understood": true,
+        "reasons": [],
+        "draft": {
+          "kind": "medication",
+          "name": "atorvastatin",
+          "schedule": {
+            "type": "daily",
+            "times": [
+              "09:00"
+            ]
+          },
+          "priority": "normal",
+          "dosage": "20mg",
+          "instructions": null,
+          "pillsRemaining": null,
+          "pillsPerDose": null,
+          "refillReminderDays": null,
+          "rxcui": null,
+          "unparsedTokens": [
+            "refill",
+            "soon"
+          ],
+          "isSavable": true
+        }
+      }
+    },
+    {
+      "name": "readPhrase: atorvastatin 20mg refill",
+      "input": {
+        "call": "readPhrase",
+        "phrase": "atorvastatin 20mg refill",
+        "now": 1768478400000
+      },
+      "output": {
+        "understood": true,
+        "reasons": [],
+        "draft": {
+          "kind": "medication",
+          "name": "atorvastatin",
+          "schedule": {
+            "type": "daily",
+            "times": [
+              "09:00"
+            ]
+          },
+          "priority": "normal",
+          "dosage": "20mg",
+          "instructions": null,
+          "pillsRemaining": null,
+          "pillsPerDose": null,
+          "refillReminderDays": null,
+          "rxcui": null,
+          "unparsedTokens": [
+            "refill"
+          ],
+          "isSavable": true
+        }
+      }
+    },
+    {
+      "name": "readPhrase: atorvastatin 20mg 30",
+      "input": {
+        "call": "readPhrase",
+        "phrase": "atorvastatin 20mg 30",
+        "now": 1768478400000
+      },
+      "output": {
+        "understood": true,
+        "reasons": [],
+        "draft": {
+          "kind": "medication",
+          "name": "atorvastatin",
+          "schedule": {
+            "type": "daily",
+            "times": [
+              "09:00"
+            ]
+          },
+          "priority": "normal",
+          "dosage": "20mg",
+          "instructions": null,
+          "pillsRemaining": null,
+          "pillsPerDose": null,
+          "refillReminderDays": null,
+          "rxcui": null,
+          "unparsedTokens": [
+            "30"
+          ],
+          "isSavable": true
+        }
+      }
+    },
+    {
+      "name": "readPhrase: atorvastatin 20mg with juice",
+      "input": {
+        "call": "readPhrase",
+        "phrase": "atorvastatin 20mg with juice",
+        "now": 1768478400000
+      },
+      "output": {
+        "understood": true,
+        "reasons": [],
+        "draft": {
+          "kind": "medication",
+          "name": "atorvastatin",
+          "schedule": {
+            "type": "daily",
+            "times": [
+              "09:00"
+            ]
+          },
+          "priority": "normal",
+          "dosage": "20mg",
+          "instructions": null,
+          "pillsRemaining": null,
+          "pillsPerDose": null,
+          "refillReminderDays": null,
+          "rxcui": null,
+          "unparsedTokens": [
+            "juice"
+          ],
+          "isSavable": true
+        }
+      }
+    },
+    {
+      "name": "readPhrase: atorvastatin 20mg with",
+      "input": {
+        "call": "readPhrase",
+        "phrase": "atorvastatin 20mg with",
+        "now": 1768478400000
+      },
+      "output": {
+        "understood": true,
+        "reasons": [],
+        "draft": {
+          "kind": "medication",
+          "name": "atorvastatin",
+          "schedule": {
+            "type": "daily",
+            "times": [
+              "09:00"
+            ]
+          },
+          "priority": "normal",
+          "dosage": "20mg",
+          "instructions": null,
+          "pillsRemaining": null,
+          "pillsPerDose": null,
+          "refillReminderDays": null,
+          "rxcui": null,
+          "unparsedTokens": [],
+          "isSavable": true
+        }
+      }
+    },
+    {
+      "name": "readPhrase: atorvastatin 20mg 30 pills per day",
+      "input": {
+        "call": "readPhrase",
+        "phrase": "atorvastatin 20mg 30 pills per day",
+        "now": 1768478400000
+      },
+      "output": {
+        "understood": true,
+        "reasons": [],
+        "draft": {
+          "kind": "medication",
+          "name": "atorvastatin",
+          "schedule": {
+            "type": "daily",
+            "times": [
+              "09:00"
+            ]
+          },
+          "priority": "normal",
+          "dosage": "20mg",
+          "instructions": null,
+          "pillsRemaining": 30.0,
+          "pillsPerDose": null,
+          "refillReminderDays": null,
+          "rxcui": null,
+          "unparsedTokens": [
+            "per",
+            "day"
+          ],
+          "isSavable": true
+        }
+      }
+    },
+    {
+      "name": "readPhrase: atorvastatin 20mg 30 per day",
+      "input": {
+        "call": "readPhrase",
+        "phrase": "atorvastatin 20mg 30 per day",
+        "now": 1768478400000
+      },
+      "output": {
+        "understood": true,
+        "reasons": [],
+        "draft": {
+          "kind": "medication",
+          "name": "atorvastatin",
+          "schedule": {
+            "type": "daily",
+            "times": [
+              "09:00"
+            ]
+          },
+          "priority": "normal",
+          "dosage": "20mg",
+          "instructions": null,
+          "pillsRemaining": null,
+          "pillsPerDose": null,
+          "refillReminderDays": null,
+          "rxcui": null,
+          "unparsedTokens": [
+            "30",
+            "per",
+            "day"
+          ],
+          "isSavable": true
+        }
+      }
+    },
+    {
+      "name": "readPhrase: atorvastatin 20mg per day",
+      "input": {
+        "call": "readPhrase",
+        "phrase": "atorvastatin 20mg per day",
+        "now": 1768478400000
+      },
+      "output": {
+        "understood": true,
+        "reasons": [],
+        "draft": {
+          "kind": "medication",
+          "name": "atorvastatin",
+          "schedule": {
+            "type": "daily",
+            "times": [
+              "09:00"
+            ]
+          },
+          "priority": "normal",
+          "dosage": "20mg",
+          "instructions": null,
+          "pillsRemaining": null,
+          "pillsPerDose": null,
+          "refillReminderDays": null,
+          "rxcui": null,
+          "unparsedTokens": [
+            "per",
+            "day"
+          ],
+          "isSavable": true
+        }
+      }
+    },
+    {
+      "name": "readPhrase: atorvastatin 20mg 1.5 per day",
+      "input": {
+        "call": "readPhrase",
+        "phrase": "atorvastatin 20mg 1.5 per day",
+        "now": 1768478400000
+      },
+      "output": {
+        "understood": true,
+        "reasons": [],
+        "draft": {
+          "kind": "medication",
+          "name": "atorvastatin",
+          "schedule": {
+            "type": "daily",
+            "times": [
+              "09:00"
+            ]
+          },
+          "priority": "normal",
+          "dosage": "20mg",
+          "instructions": null,
+          "pillsRemaining": null,
+          "pillsPerDose": null,
+          "refillReminderDays": null,
+          "rxcui": null,
+          "unparsedTokens": [
+            "1.5",
+            "per",
+            "day"
+          ],
+          "isSavable": true
+        }
+      }
+    },
+    {
+      "name": "readPhrase: call pharmacy friday 2pm",
+      "input": {
+        "call": "readPhrase",
+        "phrase": "call pharmacy friday 2pm",
+        "now": 1768478400000
+      },
+      "output": {
+        "understood": true,
+        "reasons": [],
+        "draft": {
+          "kind": "task",
+          "name": "call pharmacy",
+          "schedule": {
+            "type": "weekly",
+            "daysOfWeek": [
+              5
+            ],
+            "times": [
+              "14:00"
+            ]
+          },
+          "priority": "normal",
+          "dosage": null,
+          "instructions": null,
+          "pillsRemaining": null,
+          "pillsPerDose": null,
+          "refillReminderDays": null,
+          "rxcui": null,
+          "unparsedTokens": [],
+          "isSavable": true
+        }
+      }
+    },
+    {
+      "name": "readPhrase: metformin 500mg daily 30 pills 1 per dose refill in 7",
+      "input": {
+        "call": "readPhrase",
+        "phrase": "metformin 500mg daily 30 pills 1 per dose refill in 7",
+        "now": 1768478400000
+      },
+      "output": {
+        "understood": true,
+        "reasons": [],
+        "draft": {
+          "kind": "medication",
+          "name": "metformin",
+          "schedule": {
+            "type": "daily",
+            "times": [
+              "09:00"
+            ]
+          },
+          "priority": "normal",
+          "dosage": "500mg",
+          "instructions": null,
+          "pillsRemaining": 30.0,
+          "pillsPerDose": 1.0,
+          "refillReminderDays": 7,
+          "rxcui": null,
+          "unparsedTokens": [],
+          "isSavable": true
+        }
+      }
+    },
+    {
+      "name": "readPhrase: urgent call the surgery",
+      "input": {
+        "call": "readPhrase",
+        "phrase": "urgent call the surgery",
+        "now": 1768478400000
+      },
+      "output": {
+        "understood": true,
+        "reasons": [],
+        "draft": {
+          "kind": "task",
+          "name": "call surgery",
+          "schedule": {
+            "type": "daily",
+            "times": [
+              "09:00"
+            ]
+          },
+          "priority": "critical",
+          "dosage": null,
+          "instructions": null,
+          "pillsRemaining": null,
+          "pillsPerDose": null,
+          "refillReminderDays": null,
+          "rxcui": null,
+          "unparsedTokens": [],
+          "isSavable": true
+        }
+      }
+    },
+    {
+      "name": "readPhrase: atorvastatin 20mg every morning",
+      "input": {
+        "call": "readPhrase",
+        "phrase": "atorvastatin 20mg every morning",
+        "now": 1768478400000
+      },
+      "output": {
+        "understood": true,
+        "reasons": [],
+        "draft": {
+          "kind": "medication",
+          "name": "atorvastatin",
+          "schedule": {
+            "type": "daily",
+            "times": [
+              "08:00"
+            ]
+          },
+          "priority": "normal",
+          "dosage": "20mg",
+          "instructions": null,
+          "pillsRemaining": null,
+          "pillsPerDose": null,
+          "refillReminderDays": null,
+          "rxcui": null,
+          "unparsedTokens": [],
+          "isSavable": true
+        }
+      }
+    },
+    {
+      "name": "readPhrase: aspirin 81mg daily wibble",
+      "input": {
+        "call": "readPhrase",
+        "phrase": "aspirin 81mg daily wibble",
+        "now": 1768478400000
+      },
+      "output": {
+        "understood": true,
+        "reasons": [],
+        "draft": {
+          "kind": "medication",
+          "name": "aspirin",
+          "schedule": {
+            "type": "daily",
+            "times": [
+              "09:00"
+            ]
+          },
+          "priority": "normal",
+          "dosage": "81mg",
+          "instructions": null,
+          "pillsRemaining": null,
+          "pillsPerDose": null,
+          "refillReminderDays": null,
+          "rxcui": null,
+          "unparsedTokens": [
+            "wibble"
+          ],
+          "isSavable": true
+        }
+      }
+    },
+    {
+      "name": "readPhrase: 9am",
+      "input": {
+        "call": "readPhrase",
+        "phrase": "9am",
+        "now": 1768478400000
+      },
+      "output": {
+        "understood": false,
+        "reasons": [
+          "Could not determine a name for the reminder."
+        ],
+        "draft": {
+          "kind": "task",
+          "name": "9am",
+          "schedule": {
+            "type": "none"
+          },
+          "priority": "normal",
+          "dosage": null,
+          "instructions": null,
+          "pillsRemaining": null,
+          "pillsPerDose": null,
+          "refillReminderDays": null,
+          "rxcui": null,
+          "unparsedTokens": [],
+          "isSavable": true
+        }
+      }
+    },
+    {
+      "name": "readPhrase: (blank: 3 chars)",
+      "input": {
+        "call": "readPhrase",
+        "phrase": "   ",
+        "now": 1768478400000
+      },
+      "output": {
+        "understood": false,
+        "reasons": [
+          "Input is empty."
+        ],
+        "draft": {
+          "kind": "task",
+          "name": "",
+          "schedule": {
+            "type": "none"
+          },
+          "priority": "normal",
+          "dosage": null,
+          "instructions": null,
+          "pillsRemaining": null,
+          "pillsPerDose": null,
+          "refillReminderDays": null,
+          "rxcui": null,
+          "unparsedTokens": [],
+          "isSavable": false
+        }
+      }
+    },
+    {
+      "name": "readPhrase: tylenol 500mg daily",
+      "input": {
+        "call": "readPhrase",
+        "phrase": "tylenol 500mg daily",
+        "now": 1768478400000
+      },
+      "output": {
+        "understood": true,
+        "reasons": [],
+        "draft": {
+          "kind": "medication",
+          "name": "tylenol",
+          "schedule": {
+            "type": "daily",
+            "times": [
+              "09:00"
+            ]
+          },
+          "priority": "normal",
+          "dosage": "500mg",
+          "instructions": null,
+          "pillsRemaining": null,
+          "pillsPerDose": null,
+          "refillReminderDays": null,
+          "rxcui": null,
+          "unparsedTokens": [],
+          "isSavable": true
+        }
+      }
+    },
+    {
+      "name": "readPhrase: metformin 500mg daily",
+      "input": {
+        "call": "readPhrase",
+        "phrase": "metformin 500mg daily",
+        "now": 1768478400000
+      },
+      "output": {
+        "understood": true,
+        "reasons": [],
+        "draft": {
+          "kind": "medication",
+          "name": "metformin",
+          "schedule": {
+            "type": "daily",
+            "times": [
+              "09:00"
+            ]
+          },
+          "priority": "normal",
+          "dosage": "500mg",
+          "instructions": null,
+          "pillsRemaining": null,
+          "pillsPerDose": null,
+          "refillReminderDays": null,
+          "rxcui": null,
+          "unparsedTokens": [],
+          "isSavable": true
+        }
+      }
+    },
+    {
+      "name": "readPhrase: aspirin 81mg daily",
+      "input": {
+        "call": "readPhrase",
+        "phrase": "aspirin 81mg daily",
+        "now": 1768478400000
+      },
+      "output": {
+        "understood": true,
+        "reasons": [],
+        "draft": {
+          "kind": "medication",
+          "name": "aspirin",
+          "schedule": {
+            "type": "daily",
+            "times": [
+              "09:00"
+            ]
+          },
+          "priority": "normal",
+          "dosage": "81mg",
+          "instructions": null,
+          "pillsRemaining": null,
+          "pillsPerDose": null,
+          "refillReminderDays": null,
+          "rxcui": null,
+          "unparsedTokens": [],
+          "isSavable": true
+        }
+      }
+    },
+    {
+      "name": "readPhrase: ﻿!!!﻿",
+      "input": {
+        "call": "readPhrase",
+        "phrase": "﻿!!!﻿",
+        "now": 1768478400000
+      },
+      "output": {
+        "understood": false,
+        "reasons": [
+          "Input is empty."
+        ],
+        "draft": {
+          "kind": "task",
+          "name": "!!!",
+          "schedule": {
+            "type": "none"
+          },
+          "priority": "normal",
+          "dosage": null,
+          "instructions": null,
+          "pillsRemaining": null,
+          "pillsPerDose": null,
+          "refillReminderDays": null,
+          "rxcui": null,
+          "unparsedTokens": [],
+          "isSavable": true
+        }
+      }
+    },
+    {
+      "name": "readPhrase: (blank: 1 chars)",
+      "input": {
+        "call": "readPhrase",
+        "phrase": "\u001f",
+        "now": 1768478400000
+      },
+      "output": {
+        "understood": false,
+        "reasons": [
+          "Input is empty."
+        ],
+        "draft": {
+          "kind": "task",
+          "name": "\u001f",
+          "schedule": {
+            "type": "none"
+          },
+          "priority": "normal",
+          "dosage": null,
+          "instructions": null,
+          "pillsRemaining": null,
+          "pillsPerDose": null,
+          "refillReminderDays": null,
+          "rxcui": null,
+          "unparsedTokens": [],
+          "isSavable": true
+        }
+      }
+    },
+    {
+      "name": "readPhrase: take vitamin d on the 1st and 15th at 9am",
+      "input": {
+        "call": "readPhrase",
+        "phrase": "take vitamin d on the 1st and 15th at 9am",
+        "now": 1768478400000
+      },
+      "output": {
+        "understood": true,
+        "reasons": [],
+        "draft": {
+          "kind": "task",
+          "name": "take vitamin d 1st and 15th",
+          "schedule": {
+            "type": "daily",
+            "times": [
+              "09:00"
+            ]
+          },
+          "priority": "normal",
+          "dosage": null,
+          "instructions": null,
+          "pillsRemaining": null,
+          "pillsPerDose": null,
+          "refillReminderDays": null,
+          "rxcui": null,
+          "unparsedTokens": [],
+          "isSavable": true
+        }
+      }
+    },
+    {
+      "name": "readPhrase: pay rent monthly on the 1st",
+      "input": {
+        "call": "readPhrase",
+        "phrase": "pay rent monthly on the 1st",
+        "now": 1768478400000
+      },
+      "output": {
+        "understood": true,
+        "reasons": [],
+        "draft": {
+          "kind": "task",
+          "name": "pay rent",
+          "schedule": {
+            "type": "monthly",
+            "daysOfMonth": [
+              1
+            ],
+            "times": []
+          },
+          "priority": "normal",
+          "dosage": null,
+          "instructions": null,
+          "pillsRemaining": null,
+          "pillsPerDose": null,
+          "refillReminderDays": null,
+          "rxcui": null,
+          "unparsedTokens": [],
+          "isSavable": false
+        }
+      }
+    },
+    {
+      "name": "readPhrase: water plants every 2 days",
+      "input": {
+        "call": "readPhrase",
+        "phrase": "water plants every 2 days",
+        "now": 1768478400000
+      },
+      "output": {
+        "understood": true,
+        "reasons": [],
+        "draft": {
+          "kind": "task",
+          "name": "water plants",
+          "schedule": {
+            "type": "interval",
+            "hours": 48,
+            "startAt": 1768478400000
+          },
+          "priority": "normal",
+          "dosage": null,
+          "instructions": null,
+          "pillsRemaining": null,
+          "pillsPerDose": null,
+          "refillReminderDays": null,
+          "rxcui": null,
+          "unparsedTokens": [],
+          "isSavable": true
+        }
+      }
+    },
+    {
+      "name": "readPhrase: call mom sunday 6pm",
+      "input": {
+        "call": "readPhrase",
+        "phrase": "call mom sunday 6pm",
+        "now": 1768478400000
+      },
+      "output": {
+        "understood": true,
+        "reasons": [],
+        "draft": {
+          "kind": "task",
+          "name": "call mom",
+          "schedule": {
+            "type": "weekly",
+            "daysOfWeek": [
+              0
+            ],
+            "times": [
+              "18:00"
+            ]
+          },
+          "priority": "normal",
+          "dosage": null,
+          "instructions": null,
+          "pillsRemaining": null,
+          "pillsPerDose": null,
+          "refillReminderDays": null,
+          "rxcui": null,
+          "unparsedTokens": [],
+          "isSavable": true
+        }
+      }
+    },
+    {
+      "name": "readPhrase: ibuprofen 200mg as needed",
+      "input": {
+        "call": "readPhrase",
+        "phrase": "ibuprofen 200mg as needed",
+        "now": 1768478400000
+      },
+      "output": {
+        "understood": true,
+        "reasons": [],
+        "draft": {
+          "kind": "medication",
+          "name": "ibuprofen",
+          "schedule": {
+            "type": "daily",
+            "times": [
+              "09:00"
+            ]
+          },
+          "priority": "normal",
+          "dosage": "200mg",
+          "instructions": null,
+          "pillsRemaining": null,
+          "pillsPerDose": null,
+          "refillReminderDays": null,
+          "rxcui": null,
+          "unparsedTokens": [
+            "as",
+            "needed"
+          ],
+          "isSavable": true
+        }
+      }
+    },
+    {
+      "name": "readPhrase: metformin 500mg twice daily 60 pills 2 per dose",
+      "input": {
+        "call": "readPhrase",
+        "phrase": "metformin 500mg twice daily 60 pills 2 per dose",
+        "now": 1768478400000
+      },
+      "output": {
+        "understood": true,
+        "reasons": [],
+        "draft": {
+          "kind": "medication",
+          "name": "metformin",
+          "schedule": {
+            "type": "daily",
+            "times": [
+              "08:00",
+              "18:00"
+            ]
+          },
+          "priority": "normal",
+          "dosage": "500mg",
+          "instructions": null,
+          "pillsRemaining": 60.0,
+          "pillsPerDose": 2.0,
+          "refillReminderDays": null,
+          "rxcui": null,
+          "unparsedTokens": [],
+          "isSavable": true
+        }
+      }
+    },
+    {
+      "name": "readPhrase: stretch every 8 hours starting now",
+      "input": {
+        "call": "readPhrase",
+        "phrase": "stretch every 8 hours starting now",
+        "now": 1768478400000
+      },
+      "output": {
+        "understood": true,
+        "reasons": [],
+        "draft": {
+          "kind": "medication",
+          "name": "stretch",
+          "schedule": {
+            "type": "interval",
+            "hours": 8,
+            "startAt": 1768478400000
+          },
+          "priority": "normal",
+          "dosage": null,
+          "instructions": null,
+          "pillsRemaining": null,
+          "pillsPerDose": null,
+          "refillReminderDays": null,
+          "rxcui": null,
+          "unparsedTokens": [
+            "starting",
+            "now"
+          ],
+          "isSavable": true
+        }
+      }
+    },
+    {
+      "name": "readPhrase: dentist tomorrow 3pm",
+      "input": {
+        "call": "readPhrase",
+        "phrase": "dentist tomorrow 3pm",
+        "now": 1768478400000
+      },
+      "output": {
+        "understood": true,
+        "reasons": [],
+        "draft": {
+          "kind": "task",
+          "name": "dentist tomorrow",
+          "schedule": {
+            "type": "daily",
+            "times": [
+              "15:00"
+            ]
+          },
+          "priority": "normal",
+          "dosage": null,
+          "instructions": null,
+          "pillsRemaining": null,
+          "pillsPerDose": null,
+          "refillReminderDays": null,
+          "rxcui": null,
+          "unparsedTokens": [],
+          "isSavable": true
+        }
+      }
+    },
+    {
+      "name": "readPhrase: high priority renew passport",
+      "input": {
+        "call": "readPhrase",
+        "phrase": "high priority renew passport",
+        "now": 1768478400000
+      },
+      "output": {
+        "understood": true,
+        "reasons": [],
+        "draft": {
+          "kind": "medication",
+          "name": "high priority renew passport",
+          "schedule": {
+            "type": "daily",
+            "times": [
+              "09:00"
+            ]
+          },
+          "priority": "normal",
+          "dosage": null,
+          "instructions": null,
+          "pillsRemaining": null,
+          "pillsPerDose": null,
+          "refillReminderDays": null,
+          "rxcui": null,
+          "unparsedTokens": [],
+          "isSavable": true
+        }
+      }
+    },
+    {
+      "name": "readPhrase: take 2 tablets lisinopril 10mg every evening",
+      "input": {
+        "call": "readPhrase",
+        "phrase": "take 2 tablets lisinopril 10mg every evening",
+        "now": 1768478400000
+      },
+      "output": {
+        "understood": true,
+        "reasons": [],
+        "draft": {
+          "kind": "medication",
+          "name": "lisinopril",
+          "schedule": {
+            "type": "daily",
+            "times": [
+              "18:00"
+            ]
+          },
+          "priority": "normal",
+          "dosage": "10mg",
+          "instructions": null,
+          "pillsRemaining": 2.0,
+          "pillsPerDose": null,
+          "refillReminderDays": null,
+          "rxcui": null,
+          "unparsedTokens": [],
+          "isSavable": true
+        }
+      }
+    },
+    {
+      "name": "withKind medication: metformin 500mg daily 30 pills 1 per dose refill in 7",
+      "input": {
+        "phrase": "metformin 500mg daily 30 pills 1 per dose refill in 7",
+        "now": 1768478400000,
+        "draft": {
+          "kind": "medication",
+          "name": "metformin",
+          "schedule": {
+            "type": "daily",
+            "times": [
+              "09:00"
+            ]
+          },
+          "priority": "normal",
+          "dosage": "500mg",
+          "instructions": null,
+          "pillsRemaining": 30.0,
+          "pillsPerDose": 1.0,
+          "refillReminderDays": 7,
+          "rxcui": "860975",
+          "unparsedTokens": [],
+          "isSavable": true
+        },
+        "call": "withKind",
+        "kind": "medication"
+      },
+      "output": {
+        "kind": "medication",
+        "name": "metformin",
+        "schedule": {
+          "type": "daily",
+          "times": [
+            "09:00"
+          ]
+        },
+        "priority": "normal",
+        "dosage": "500mg",
+        "instructions": null,
+        "pillsRemaining": 30.0,
+        "pillsPerDose": 1.0,
+        "refillReminderDays": 7,
+        "rxcui": "860975",
+        "unparsedTokens": [],
+        "isSavable": true
+      }
+    },
+    {
+      "name": "withKind task: metformin 500mg daily 30 pills 1 per dose refill in 7",
+      "input": {
+        "phrase": "metformin 500mg daily 30 pills 1 per dose refill in 7",
+        "now": 1768478400000,
+        "draft": {
+          "kind": "medication",
+          "name": "metformin",
+          "schedule": {
+            "type": "daily",
+            "times": [
+              "09:00"
+            ]
+          },
+          "priority": "normal",
+          "dosage": "500mg",
+          "instructions": null,
+          "pillsRemaining": 30.0,
+          "pillsPerDose": 1.0,
+          "refillReminderDays": 7,
+          "rxcui": "860975",
+          "unparsedTokens": [],
+          "isSavable": true
+        },
+        "call": "withKind",
+        "kind": "task"
+      },
+      "output": {
+        "kind": "task",
+        "name": "metformin",
+        "schedule": {
+          "type": "daily",
+          "times": [
+            "09:00"
+          ]
+        },
+        "priority": "normal",
+        "dosage": null,
+        "instructions": null,
+        "pillsRemaining": null,
+        "pillsPerDose": null,
+        "refillReminderDays": null,
+        "rxcui": null,
+        "unparsedTokens": [],
+        "isSavable": true
+      }
+    },
+    {
+      "name": "withName \"Metformin\": metformin 500mg daily 30 pills 1 per dose refill in 7",
+      "input": {
+        "phrase": "metformin 500mg daily 30 pills 1 per dose refill in 7",
+        "now": 1768478400000,
+        "draft": {
+          "kind": "medication",
+          "name": "metformin",
+          "schedule": {
+            "type": "daily",
+            "times": [
+              "09:00"
+            ]
+          },
+          "priority": "normal",
+          "dosage": "500mg",
+          "instructions": null,
+          "pillsRemaining": 30.0,
+          "pillsPerDose": 1.0,
+          "refillReminderDays": 7,
+          "rxcui": "860975",
+          "unparsedTokens": [],
+          "isSavable": true
+        },
+        "call": "withName",
+        "name": "Metformin"
+      },
+      "output": {
+        "kind": "medication",
+        "name": "Metformin",
+        "schedule": {
+          "type": "daily",
+          "times": [
+            "09:00"
+          ]
+        },
+        "priority": "normal",
+        "dosage": "500mg",
+        "instructions": null,
+        "pillsRemaining": 30.0,
+        "pillsPerDose": 1.0,
+        "refillReminderDays": 7,
+        "rxcui": null,
+        "unparsedTokens": [],
+        "isSavable": true
+      }
+    },
+    {
+      "name": "withName \"   \": metformin 500mg daily 30 pills 1 per dose refill in 7",
+      "input": {
+        "phrase": "metformin 500mg daily 30 pills 1 per dose refill in 7",
+        "now": 1768478400000,
+        "draft": {
+          "kind": "medication",
+          "name": "metformin",
+          "schedule": {
+            "type": "daily",
+            "times": [
+              "09:00"
+            ]
+          },
+          "priority": "normal",
+          "dosage": "500mg",
+          "instructions": null,
+          "pillsRemaining": 30.0,
+          "pillsPerDose": 1.0,
+          "refillReminderDays": 7,
+          "rxcui": "860975",
+          "unparsedTokens": [],
+          "isSavable": true
+        },
+        "call": "withName",
+        "name": "   "
+      },
+      "output": {
+        "kind": "medication",
+        "name": "   ",
+        "schedule": {
+          "type": "daily",
+          "times": [
+            "09:00"
+          ]
+        },
+        "priority": "normal",
+        "dosage": "500mg",
+        "instructions": null,
+        "pillsRemaining": 30.0,
+        "pillsPerDose": 1.0,
+        "refillReminderDays": 7,
+        "rxcui": null,
+        "unparsedTokens": [],
+        "isSavable": false
+      }
+    },
+    {
+      "name": "withKind medication: ibuprofen 200mg as needed",
+      "input": {
+        "phrase": "ibuprofen 200mg as needed",
+        "now": 1768478400000,
+        "draft": {
+          "kind": "medication",
+          "name": "ibuprofen",
+          "schedule": {
+            "type": "daily",
+            "times": [
+              "09:00"
+            ]
+          },
+          "priority": "normal",
+          "dosage": "200mg",
+          "instructions": null,
+          "pillsRemaining": null,
+          "pillsPerDose": null,
+          "refillReminderDays": null,
+          "rxcui": "860975",
+          "unparsedTokens": [
+            "as",
+            "needed"
+          ],
+          "isSavable": true
+        },
+        "call": "withKind",
+        "kind": "medication"
+      },
+      "output": {
+        "kind": "medication",
+        "name": "ibuprofen",
+        "schedule": {
+          "type": "daily",
+          "times": [
+            "09:00"
+          ]
+        },
+        "priority": "normal",
+        "dosage": "200mg",
+        "instructions": null,
+        "pillsRemaining": null,
+        "pillsPerDose": null,
+        "refillReminderDays": null,
+        "rxcui": "860975",
+        "unparsedTokens": [
+          "as",
+          "needed"
+        ],
+        "isSavable": true
+      }
+    },
+    {
+      "name": "withKind task: ibuprofen 200mg as needed",
+      "input": {
+        "phrase": "ibuprofen 200mg as needed",
+        "now": 1768478400000,
+        "draft": {
+          "kind": "medication",
+          "name": "ibuprofen",
+          "schedule": {
+            "type": "daily",
+            "times": [
+              "09:00"
+            ]
+          },
+          "priority": "normal",
+          "dosage": "200mg",
+          "instructions": null,
+          "pillsRemaining": null,
+          "pillsPerDose": null,
+          "refillReminderDays": null,
+          "rxcui": "860975",
+          "unparsedTokens": [
+            "as",
+            "needed"
+          ],
+          "isSavable": true
+        },
+        "call": "withKind",
+        "kind": "task"
+      },
+      "output": {
+        "kind": "task",
+        "name": "ibuprofen",
+        "schedule": {
+          "type": "daily",
+          "times": [
+            "09:00"
+          ]
+        },
+        "priority": "normal",
+        "dosage": null,
+        "instructions": null,
+        "pillsRemaining": null,
+        "pillsPerDose": null,
+        "refillReminderDays": null,
+        "rxcui": null,
+        "unparsedTokens": [
+          "as",
+          "needed"
+        ],
+        "isSavable": true
+      }
+    },
+    {
+      "name": "withName \"Metformin\": ibuprofen 200mg as needed",
+      "input": {
+        "phrase": "ibuprofen 200mg as needed",
+        "now": 1768478400000,
+        "draft": {
+          "kind": "medication",
+          "name": "ibuprofen",
+          "schedule": {
+            "type": "daily",
+            "times": [
+              "09:00"
+            ]
+          },
+          "priority": "normal",
+          "dosage": "200mg",
+          "instructions": null,
+          "pillsRemaining": null,
+          "pillsPerDose": null,
+          "refillReminderDays": null,
+          "rxcui": "860975",
+          "unparsedTokens": [
+            "as",
+            "needed"
+          ],
+          "isSavable": true
+        },
+        "call": "withName",
+        "name": "Metformin"
+      },
+      "output": {
+        "kind": "medication",
+        "name": "Metformin",
+        "schedule": {
+          "type": "daily",
+          "times": [
+            "09:00"
+          ]
+        },
+        "priority": "normal",
+        "dosage": "200mg",
+        "instructions": null,
+        "pillsRemaining": null,
+        "pillsPerDose": null,
+        "refillReminderDays": null,
+        "rxcui": null,
+        "unparsedTokens": [
+          "as",
+          "needed"
+        ],
+        "isSavable": true
+      }
+    },
+    {
+      "name": "withName \"   \": ibuprofen 200mg as needed",
+      "input": {
+        "phrase": "ibuprofen 200mg as needed",
+        "now": 1768478400000,
+        "draft": {
+          "kind": "medication",
+          "name": "ibuprofen",
+          "schedule": {
+            "type": "daily",
+            "times": [
+              "09:00"
+            ]
+          },
+          "priority": "normal",
+          "dosage": "200mg",
+          "instructions": null,
+          "pillsRemaining": null,
+          "pillsPerDose": null,
+          "refillReminderDays": null,
+          "rxcui": "860975",
+          "unparsedTokens": [
+            "as",
+            "needed"
+          ],
+          "isSavable": true
+        },
+        "call": "withName",
+        "name": "   "
+      },
+      "output": {
+        "kind": "medication",
+        "name": "   ",
+        "schedule": {
+          "type": "daily",
+          "times": [
+            "09:00"
+          ]
+        },
+        "priority": "normal",
+        "dosage": "200mg",
+        "instructions": null,
+        "pillsRemaining": null,
+        "pillsPerDose": null,
+        "refillReminderDays": null,
+        "rxcui": null,
+        "unparsedTokens": [
+          "as",
+          "needed"
+        ],
+        "isSavable": false
+      }
+    },
+    {
+      "name": "withKind medication: call pharmacy friday 2pm",
+      "input": {
+        "phrase": "call pharmacy friday 2pm",
+        "now": 1768478400000,
+        "draft": {
+          "kind": "task",
+          "name": "call pharmacy",
+          "schedule": {
+            "type": "weekly",
+            "daysOfWeek": [
+              5
+            ],
+            "times": [
+              "14:00"
+            ]
+          },
+          "priority": "normal",
+          "dosage": null,
+          "instructions": null,
+          "pillsRemaining": null,
+          "pillsPerDose": null,
+          "refillReminderDays": null,
+          "rxcui": "860975",
+          "unparsedTokens": [],
+          "isSavable": true
+        },
+        "call": "withKind",
+        "kind": "medication"
+      },
+      "output": {
+        "kind": "medication",
+        "name": "call pharmacy",
+        "schedule": {
+          "type": "weekly",
+          "daysOfWeek": [
+            5
+          ],
+          "times": [
+            "14:00"
+          ]
+        },
+        "priority": "normal",
+        "dosage": null,
+        "instructions": null,
+        "pillsRemaining": null,
+        "pillsPerDose": null,
+        "refillReminderDays": null,
+        "rxcui": "860975",
+        "unparsedTokens": [],
+        "isSavable": true
+      }
+    },
+    {
+      "name": "withKind task: call pharmacy friday 2pm",
+      "input": {
+        "phrase": "call pharmacy friday 2pm",
+        "now": 1768478400000,
+        "draft": {
+          "kind": "task",
+          "name": "call pharmacy",
+          "schedule": {
+            "type": "weekly",
+            "daysOfWeek": [
+              5
+            ],
+            "times": [
+              "14:00"
+            ]
+          },
+          "priority": "normal",
+          "dosage": null,
+          "instructions": null,
+          "pillsRemaining": null,
+          "pillsPerDose": null,
+          "refillReminderDays": null,
+          "rxcui": "860975",
+          "unparsedTokens": [],
+          "isSavable": true
+        },
+        "call": "withKind",
+        "kind": "task"
+      },
+      "output": {
+        "kind": "task",
+        "name": "call pharmacy",
+        "schedule": {
+          "type": "weekly",
+          "daysOfWeek": [
+            5
+          ],
+          "times": [
+            "14:00"
+          ]
+        },
+        "priority": "normal",
+        "dosage": null,
+        "instructions": null,
+        "pillsRemaining": null,
+        "pillsPerDose": null,
+        "refillReminderDays": null,
+        "rxcui": null,
+        "unparsedTokens": [],
+        "isSavable": true
+      }
+    },
+    {
+      "name": "withName \"Metformin\": call pharmacy friday 2pm",
+      "input": {
+        "phrase": "call pharmacy friday 2pm",
+        "now": 1768478400000,
+        "draft": {
+          "kind": "task",
+          "name": "call pharmacy",
+          "schedule": {
+            "type": "weekly",
+            "daysOfWeek": [
+              5
+            ],
+            "times": [
+              "14:00"
+            ]
+          },
+          "priority": "normal",
+          "dosage": null,
+          "instructions": null,
+          "pillsRemaining": null,
+          "pillsPerDose": null,
+          "refillReminderDays": null,
+          "rxcui": "860975",
+          "unparsedTokens": [],
+          "isSavable": true
+        },
+        "call": "withName",
+        "name": "Metformin"
+      },
+      "output": {
+        "kind": "task",
+        "name": "Metformin",
+        "schedule": {
+          "type": "weekly",
+          "daysOfWeek": [
+            5
+          ],
+          "times": [
+            "14:00"
+          ]
+        },
+        "priority": "normal",
+        "dosage": null,
+        "instructions": null,
+        "pillsRemaining": null,
+        "pillsPerDose": null,
+        "refillReminderDays": null,
+        "rxcui": null,
+        "unparsedTokens": [],
+        "isSavable": true
+      }
+    },
+    {
+      "name": "withName \"   \": call pharmacy friday 2pm",
+      "input": {
+        "phrase": "call pharmacy friday 2pm",
+        "now": 1768478400000,
+        "draft": {
+          "kind": "task",
+          "name": "call pharmacy",
+          "schedule": {
+            "type": "weekly",
+            "daysOfWeek": [
+              5
+            ],
+            "times": [
+              "14:00"
+            ]
+          },
+          "priority": "normal",
+          "dosage": null,
+          "instructions": null,
+          "pillsRemaining": null,
+          "pillsPerDose": null,
+          "refillReminderDays": null,
+          "rxcui": "860975",
+          "unparsedTokens": [],
+          "isSavable": true
+        },
+        "call": "withName",
+        "name": "   "
+      },
+      "output": {
+        "kind": "task",
+        "name": "   ",
+        "schedule": {
+          "type": "weekly",
+          "daysOfWeek": [
+            5
+          ],
+          "times": [
+            "14:00"
+          ]
+        },
+        "priority": "normal",
+        "dosage": null,
+        "instructions": null,
+        "pillsRemaining": null,
+        "pillsPerDose": null,
+        "refillReminderDays": null,
+        "rxcui": null,
+        "unparsedTokens": [],
+        "isSavable": false
+      }
+    }
+  ]
+}

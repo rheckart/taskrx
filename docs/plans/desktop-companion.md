@@ -37,7 +37,7 @@ because two writers are unsafe until one Occurrence can only ever be one Instanc
         same 34 functions)
   - [x] Release the phone build (v0.11.0, 2026-11-17; installed over 0.10.0 by ADB first:
         signs in, syncs, alarms set. A dose answered on it is still to be watched)
-- [ ] Golden fixtures: a `:core` task writes JSON cases for every rule the desktop ports
+- [x] Golden fixtures: a `:core` task writes JSON cases for every rule the desktop ports
       (list in ADR 0017). The files are checked in, and the Gradle gate fails when
       regenerated output differs from them.
   - [x] The mechanism, inside `:core:test` (fails on a changed, missing or orphaned file)
@@ -52,7 +52,8 @@ because two writers are unsafe until one Occurrence can only ever be one Instanc
         missed), the one invented row at a task's latest moment, and which rows offer Undo.
         Until then the desktop would port them from a view model with no reference
   - [x] `backlog`, `catchup`, `refill` projection (`backlog` 5, `catch-up` 5, `refill` 22)
-  - [ ] `parser`, `notices`
+  - [x] `parser` (155: every phrase the parser tests read, and kind and name corrections),
+        `notices` (103)
 - [ ] Phone catch-up (ADR 0016):
   - [ ] A periodic WorkManager pull (15 min) that reschedules
   - [ ] A fire-time check before a dose posts: short timeout, fails open. Unverified until

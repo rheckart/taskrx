@@ -1,0 +1,3629 @@
+{
+  "rule": "notices",
+  "about": "readNoticeDate(text, now, zone), noticeSentences(body), keptNoticeSentence(body, title, now, zone), NoticeRule.matches(notice), noticeText(notice), proposalsFor(notice, reminders, instances, now, zone), occurrenceOptionsAround(reminder, around, zone)",
+  "generatedBy": "apps/android/core/src/test/kotlin/com/taskrx/core/golden (./gradlew :core:test -PupdateGoldens)",
+  "cases": [
+    {
+      "name": "readNoticeDate: \"Sept 3\" at 2026-01-01T12:00:00Z",
+      "input": {
+        "call": "readNoticeDate",
+        "text": "Sept 3",
+        "now": 1767268800000,
+        "zone": "UTC"
+      },
+      "output": {
+        "date": "2026-09-03",
+        "time": null,
+        "matchedText": "Sept 3"
+      }
+    },
+    {
+      "name": "readNoticeDate: \"November 18\" at 2026-11-14T12:00:00Z",
+      "input": {
+        "call": "readNoticeDate",
+        "text": "November 18",
+        "now": 1794657600000,
+        "zone": "UTC"
+      },
+      "output": {
+        "date": "2026-11-18",
+        "time": null,
+        "matchedText": "November 18"
+      }
+    },
+    {
+      "name": "readNoticeDate: \"November 18\" at 2026-11-20T12:00:00Z",
+      "input": {
+        "call": "readNoticeDate",
+        "text": "November 18",
+        "now": 1795176000000,
+        "zone": "UTC"
+      },
+      "output": {
+        "date": "2027-11-18",
+        "time": null,
+        "matchedText": "November 18"
+      }
+    },
+    {
+      "name": "readNoticeDate: \"November 18\" at 2026-11-18T12:00:00Z",
+      "input": {
+        "call": "readNoticeDate",
+        "text": "November 18",
+        "now": 1795003200000,
+        "zone": "UTC"
+      },
+      "output": {
+        "date": "2026-11-18",
+        "time": null,
+        "matchedText": "November 18"
+      }
+    },
+    {
+      "name": "readNoticeDate: \"November 18, 2024\" at 2026-11-14T12:00:00Z",
+      "input": {
+        "call": "readNoticeDate",
+        "text": "November 18, 2024",
+        "now": 1794657600000,
+        "zone": "UTC"
+      },
+      "output": {
+        "date": "2024-11-18",
+        "time": null,
+        "matchedText": "November 18, 2024"
+      }
+    },
+    {
+      "name": "readNoticeDate: \"18 November 2024\" at 2026-11-14T12:00:00Z",
+      "input": {
+        "call": "readNoticeDate",
+        "text": "18 November 2024",
+        "now": 1794657600000,
+        "zone": "UTC"
+      },
+      "output": {
+        "date": "2024-11-18",
+        "time": null,
+        "matchedText": "18 November 2024"
+      }
+    },
+    {
+      "name": "readNoticeDate: \"Feb 29\" at 2026-11-14T12:00:00Z",
+      "input": {
+        "call": "readNoticeDate",
+        "text": "Feb 29",
+        "now": 1794657600000,
+        "zone": "UTC"
+      },
+      "output": {
+        "date": "2028-02-29",
+        "time": null,
+        "matchedText": "Feb 29"
+      }
+    },
+    {
+      "name": "readNoticeDate: \"Feb 28\" at 2026-01-01T12:00:00Z",
+      "input": {
+        "call": "readNoticeDate",
+        "text": "Feb 28",
+        "now": 1767268800000,
+        "zone": "UTC"
+      },
+      "output": {
+        "date": "2026-02-28",
+        "time": null,
+        "matchedText": "Feb 28"
+      }
+    },
+    {
+      "name": "readNoticeDate: \"on 2026-11-18 at noon\" at 2026-11-14T12:00:00Z",
+      "input": {
+        "call": "readNoticeDate",
+        "text": "on 2026-11-18 at noon",
+        "now": 1794657600000,
+        "zone": "UTC"
+      },
+      "output": {
+        "date": "2026-11-18",
+        "time": "12:00",
+        "matchedText": "2026-11-18"
+      }
+    },
+    {
+      "name": "readNoticeDate: \"2026-01-02\" at 2026-11-14T12:00:00Z",
+      "input": {
+        "call": "readNoticeDate",
+        "text": "2026-01-02",
+        "now": 1794657600000,
+        "zone": "UTC"
+      },
+      "output": {
+        "date": "2026-01-02",
+        "time": null,
+        "matchedText": "2026-01-02"
+      }
+    },
+    {
+      "name": "readNoticeDate: \"18/11\" at 2026-11-14T12:00:00Z",
+      "input": {
+        "call": "readNoticeDate",
+        "text": "18/11",
+        "now": 1794657600000,
+        "zone": "UTC"
+      },
+      "output": {
+        "date": "2026-11-18",
+        "time": null,
+        "matchedText": "18/11"
+      }
+    },
+    {
+      "name": "readNoticeDate: \"11/18\" at 2026-11-14T12:00:00Z",
+      "input": {
+        "call": "readNoticeDate",
+        "text": "11/18",
+        "now": 1794657600000,
+        "zone": "UTC"
+      },
+      "output": {
+        "date": "2026-11-18",
+        "time": null,
+        "matchedText": "11/18"
+      }
+    },
+    {
+      "name": "readNoticeDate: \"18.11\" at 2026-11-14T12:00:00Z",
+      "input": {
+        "call": "readNoticeDate",
+        "text": "18.11",
+        "now": 1794657600000,
+        "zone": "UTC"
+      },
+      "output": {
+        "date": "2026-11-18",
+        "time": null,
+        "matchedText": "18.11"
+      }
+    },
+    {
+      "name": "readNoticeDate: \"05/06\" at 2026-11-14T12:00:00Z",
+      "input": {
+        "call": "readNoticeDate",
+        "text": "05/06",
+        "now": 1794657600000,
+        "zone": "UTC"
+      },
+      "output": {
+        "unread": "ambiguous"
+      }
+    },
+    {
+      "name": "readNoticeDate: \"11/12\" at 2026-11-14T12:00:00Z",
+      "input": {
+        "call": "readNoticeDate",
+        "text": "11/12",
+        "now": 1794657600000,
+        "zone": "UTC"
+      },
+      "output": {
+        "unread": "ambiguous"
+      }
+    },
+    {
+      "name": "readNoticeDate: \"05-06\" at 2026-11-14T12:00:00Z",
+      "input": {
+        "call": "readNoticeDate",
+        "text": "05-06",
+        "now": 1794657600000,
+        "zone": "UTC"
+      },
+      "output": {
+        "unread": "ambiguous"
+      }
+    },
+    {
+      "name": "readNoticeDate: \"18/11/2026\" at 2026-11-14T12:00:00Z",
+      "input": {
+        "call": "readNoticeDate",
+        "text": "18/11/2026",
+        "now": 1794657600000,
+        "zone": "UTC"
+      },
+      "output": {
+        "unread": "ambiguous"
+      }
+    },
+    {
+      "name": "readNoticeDate: \"11/18/26\" at 2026-11-14T12:00:00Z",
+      "input": {
+        "call": "readNoticeDate",
+        "text": "11/18/26",
+        "now": 1794657600000,
+        "zone": "UTC"
+      },
+      "output": {
+        "unread": "ambiguous"
+      }
+    },
+    {
+      "name": "readNoticeDate: \"Feb 30\" at 2026-11-14T12:00:00Z",
+      "input": {
+        "call": "readNoticeDate",
+        "text": "Feb 30",
+        "now": 1794657600000,
+        "zone": "UTC"
+      },
+      "output": {
+        "unread": "impossible"
+      }
+    },
+    {
+      "name": "readNoticeDate: \"31/02\" at 2026-11-14T12:00:00Z",
+      "input": {
+        "call": "readNoticeDate",
+        "text": "31/02",
+        "now": 1794657600000,
+        "zone": "UTC"
+      },
+      "output": {
+        "unread": "impossible"
+      }
+    },
+    {
+      "name": "readNoticeDate: \"2026-13-01\" at 2026-11-14T12:00:00Z",
+      "input": {
+        "call": "readNoticeDate",
+        "text": "2026-13-01",
+        "now": 1794657600000,
+        "zone": "UTC"
+      },
+      "output": {
+        "unread": "impossible"
+      }
+    },
+    {
+      "name": "readNoticeDate: \"32/11\" at 2026-11-14T12:00:00Z",
+      "input": {
+        "call": "readNoticeDate",
+        "text": "32/11",
+        "now": 1794657600000,
+        "zone": "UTC"
+      },
+      "output": {
+        "unread": "impossible"
+      }
+    },
+    {
+      "name": "readNoticeDate: \"18/00\" at 2026-11-14T12:00:00Z",
+      "input": {
+        "call": "readNoticeDate",
+        "text": "18/00",
+        "now": 1794657600000,
+        "zone": "UTC"
+      },
+      "output": {
+        "unread": "impossible"
+      }
+    },
+    {
+      "name": "readNoticeDate: \"18/19\" at 2026-11-14T12:00:00Z",
+      "input": {
+        "call": "readNoticeDate",
+        "text": "18/19",
+        "now": 1794657600000,
+        "zone": "UTC"
+      },
+      "output": {
+        "unread": "impossible"
+      }
+    },
+    {
+      "name": "readNoticeDate: \"Nov 18 or Nov 20\" at 2026-11-14T12:00:00Z",
+      "input": {
+        "call": "readNoticeDate",
+        "text": "Nov 18 or Nov 20",
+        "now": 1794657600000,
+        "zone": "UTC"
+      },
+      "output": {
+        "unread": "competing"
+      }
+    },
+    {
+      "name": "readNoticeDate: \"2026-11-18 and December 1\" at 2026-11-14T12:00:00Z",
+      "input": {
+        "call": "readNoticeDate",
+        "text": "2026-11-18 and December 1",
+        "now": 1794657600000,
+        "zone": "UTC"
+      },
+      "output": {
+        "unread": "competing"
+      }
+    },
+    {
+      "name": "readNoticeDate: \"Nov 18 or 2026-11-18\" at 2026-11-14T12:00:00Z",
+      "input": {
+        "call": "readNoticeDate",
+        "text": "Nov 18 or 2026-11-18",
+        "now": 1794657600000,
+        "zone": "UTC"
+      },
+      "output": {
+        "date": "2026-11-18",
+        "time": null,
+        "matchedText": "Nov 18"
+      }
+    },
+    {
+      "name": "readNoticeDate: \"The bins were collected today.\" at 2026-11-14T12:00:00Z",
+      "input": {
+        "call": "readNoticeDate",
+        "text": "The bins were collected today.",
+        "now": 1794657600000,
+        "zone": "UTC"
+      },
+      "output": {
+        "unread": "noDate"
+      }
+    },
+    {
+      "name": "readNoticeDate: \"\" at 2026-11-14T12:00:00Z",
+      "input": {
+        "call": "readNoticeDate",
+        "text": "",
+        "now": 1794657600000,
+        "zone": "UTC"
+      },
+      "output": {
+        "unread": "noDate"
+      }
+    },
+    {
+      "name": "readNoticeDate: \"2026-11-18\" at 2026-11-14T12:00:00Z",
+      "input": {
+        "call": "readNoticeDate",
+        "text": "2026-11-18",
+        "now": 1794657600000,
+        "zone": "UTC"
+      },
+      "output": {
+        "date": "2026-11-18",
+        "time": null,
+        "matchedText": "2026-11-18"
+      }
+    },
+    {
+      "name": "readNoticeDate: \"Nov 18 at 5pm\" at 2026-11-14T12:00:00Z",
+      "input": {
+        "call": "readNoticeDate",
+        "text": "Nov 18 at 5pm",
+        "now": 1794657600000,
+        "zone": "UTC"
+      },
+      "output": {
+        "date": "2026-11-18",
+        "time": "17:00",
+        "matchedText": "Nov 18"
+      }
+    },
+    {
+      "name": "readNoticeDate: \"Nov 18 at 5:30 pm\" at 2026-11-14T12:00:00Z",
+      "input": {
+        "call": "readNoticeDate",
+        "text": "Nov 18 at 5:30 pm",
+        "now": 1794657600000,
+        "zone": "UTC"
+      },
+      "output": {
+        "date": "2026-11-18",
+        "time": "17:30",
+        "matchedText": "Nov 18"
+      }
+    },
+    {
+      "name": "readNoticeDate: \"Nov 18 at 17:00\" at 2026-11-14T12:00:00Z",
+      "input": {
+        "call": "readNoticeDate",
+        "text": "Nov 18 at 17:00",
+        "now": 1794657600000,
+        "zone": "UTC"
+      },
+      "output": {
+        "date": "2026-11-18",
+        "time": "17:00",
+        "matchedText": "Nov 18"
+      }
+    },
+    {
+      "name": "readNoticeDate: \"Nov 18 at noon\" at 2026-11-14T12:00:00Z",
+      "input": {
+        "call": "readNoticeDate",
+        "text": "Nov 18 at noon",
+        "now": 1794657600000,
+        "zone": "UTC"
+      },
+      "output": {
+        "date": "2026-11-18",
+        "time": "12:00",
+        "matchedText": "Nov 18"
+      }
+    },
+    {
+      "name": "readNoticeDate: \"Nov 18 at midnight\" at 2026-11-14T12:00:00Z",
+      "input": {
+        "call": "readNoticeDate",
+        "text": "Nov 18 at midnight",
+        "now": 1794657600000,
+        "zone": "UTC"
+      },
+      "output": {
+        "date": "2026-11-18",
+        "time": "00:00",
+        "matchedText": "Nov 18"
+      }
+    },
+    {
+      "name": "readNoticeDate: \"Nov 18 at 12am\" at 2026-11-14T12:00:00Z",
+      "input": {
+        "call": "readNoticeDate",
+        "text": "Nov 18 at 12am",
+        "now": 1794657600000,
+        "zone": "UTC"
+      },
+      "output": {
+        "date": "2026-11-18",
+        "time": "00:00",
+        "matchedText": "Nov 18"
+      }
+    },
+    {
+      "name": "readNoticeDate: \"Nov 18 at 12pm\" at 2026-11-14T12:00:00Z",
+      "input": {
+        "call": "readNoticeDate",
+        "text": "Nov 18 at 12pm",
+        "now": 1794657600000,
+        "zone": "UTC"
+      },
+      "output": {
+        "date": "2026-11-18",
+        "time": "12:00",
+        "matchedText": "Nov 18"
+      }
+    },
+    {
+      "name": "readNoticeDate: \"Nov 18 at 5 pm\" at 2026-11-14T12:00:00Z",
+      "input": {
+        "call": "readNoticeDate",
+        "text": "Nov 18 at 5 pm",
+        "now": 1794657600000,
+        "zone": "UTC"
+      },
+      "output": {
+        "date": "2026-11-18",
+        "time": "17:00",
+        "matchedText": "Nov 18"
+      }
+    },
+    {
+      "name": "readNoticeDate: \"Nov 18\" at 2026-11-14T12:00:00Z",
+      "input": {
+        "call": "readNoticeDate",
+        "text": "Nov 18",
+        "now": 1794657600000,
+        "zone": "UTC"
+      },
+      "output": {
+        "date": "2026-11-18",
+        "time": null,
+        "matchedText": "Nov 18"
+      }
+    },
+    {
+      "name": "readNoticeDate: \"Nov 18 at noon or 5pm\" at 2026-11-14T12:00:00Z",
+      "input": {
+        "call": "readNoticeDate",
+        "text": "Nov 18 at noon or 5pm",
+        "now": 1794657600000,
+        "zone": "UTC"
+      },
+      "output": {
+        "date": "2026-11-18",
+        "time": "12:00",
+        "matchedText": "Nov 18"
+      }
+    },
+    {
+      "name": "readNoticeDate: \"Nov 18 at 13pm\" at 2026-11-14T12:00:00Z",
+      "input": {
+        "call": "readNoticeDate",
+        "text": "Nov 18 at 13pm",
+        "now": 1794657600000,
+        "zone": "UTC"
+      },
+      "output": {
+        "date": "2026-11-18",
+        "time": null,
+        "matchedText": "Nov 18"
+      }
+    },
+    {
+      "name": "readNoticeDate: \"Nov 18 at 5:60 pm\" at 2026-11-14T12:00:00Z",
+      "input": {
+        "call": "readNoticeDate",
+        "text": "Nov 18 at 5:60 pm",
+        "now": 1794657600000,
+        "zone": "UTC"
+      },
+      "output": {
+        "date": "2026-11-18",
+        "time": null,
+        "matchedText": "Nov 18"
+      }
+    },
+    {
+      "name": "readNoticeDate: \"Nov 18 at 25:00\" at 2026-11-14T12:00:00Z",
+      "input": {
+        "call": "readNoticeDate",
+        "text": "Nov 18 at 25:00",
+        "now": 1794657600000,
+        "zone": "UTC"
+      },
+      "output": {
+        "date": "2026-11-18",
+        "time": null,
+        "matchedText": "Nov 18"
+      }
+    },
+    {
+      "name": "readNoticeDate: \"Nov 18 at 10:60\" at 2026-11-14T12:00:00Z",
+      "input": {
+        "call": "readNoticeDate",
+        "text": "Nov 18 at 10:60",
+        "now": 1794657600000,
+        "zone": "UTC"
+      },
+      "output": {
+        "date": "2026-11-18",
+        "time": null,
+        "matchedText": "Nov 18"
+      }
+    },
+    {
+      "name": "readNoticeDate: \"Nov 18 at 12:30 am\" (extra)",
+      "input": {
+        "call": "readNoticeDate",
+        "text": "Nov 18 at 12:30 am",
+        "now": 1794657600000,
+        "zone": "UTC"
+      },
+      "output": {
+        "date": "2026-11-18",
+        "time": "00:30",
+        "matchedText": "Nov 18"
+      }
+    },
+    {
+      "name": "readNoticeDate: \"Nov 18 at 11 am\" (extra)",
+      "input": {
+        "call": "readNoticeDate",
+        "text": "Nov 18 at 11 am",
+        "now": 1794657600000,
+        "zone": "UTC"
+      },
+      "output": {
+        "date": "2026-11-18",
+        "time": "11:00",
+        "matchedText": "Nov 18"
+      }
+    },
+    {
+      "name": "readNoticeDate: \"Smarch 5\" (extra)",
+      "input": {
+        "call": "readNoticeDate",
+        "text": "Smarch 5",
+        "now": 1794657600000,
+        "zone": "UTC"
+      },
+      "output": {
+        "unread": "noDate"
+      }
+    },
+    {
+      "name": "readNoticeDate: \"December 1st\" (extra)",
+      "input": {
+        "call": "readNoticeDate",
+        "text": "December 1st",
+        "now": 1794657600000,
+        "zone": "UTC"
+      },
+      "output": {
+        "date": "2026-12-01",
+        "time": null,
+        "matchedText": "December 1st"
+      }
+    },
+    {
+      "name": "readNoticeDate: \"on 18 nov.\" (extra)",
+      "input": {
+        "call": "readNoticeDate",
+        "text": "on 18 nov.",
+        "now": 1794657600000,
+        "zone": "UTC"
+      },
+      "output": {
+        "date": "2026-11-18",
+        "time": null,
+        "matchedText": "18 nov"
+      }
+    },
+    {
+      "name": "readNoticeDate: \"Sept 31\" (extra)",
+      "input": {
+        "call": "readNoticeDate",
+        "text": "Sept 31",
+        "now": 1794657600000,
+        "zone": "UTC"
+      },
+      "output": {
+        "unread": "impossible"
+      }
+    },
+    {
+      "name": "readNoticeDate: \"12/25/2026\" (extra)",
+      "input": {
+        "call": "readNoticeDate",
+        "text": "12/25/2026",
+        "now": 1794657600000,
+        "zone": "UTC"
+      },
+      "output": {
+        "unread": "ambiguous"
+      }
+    },
+    {
+      "name": "readNoticeDate: \"2026-11-18 at 7:05\" (extra)",
+      "input": {
+        "call": "readNoticeDate",
+        "text": "2026-11-18 at 7:05",
+        "now": 1794657600000,
+        "zone": "UTC"
+      },
+      "output": {
+        "date": "2026-11-18",
+        "time": "07:05",
+        "matchedText": "2026-11-18"
+      }
+    },
+    {
+      "name": "readNoticeDate: \"Nov 18 2026-11-18\" (extra)",
+      "input": {
+        "call": "readNoticeDate",
+        "text": "Nov 18 2026-11-18",
+        "now": 1794657600000,
+        "zone": "UTC"
+      },
+      "output": {
+        "date": "2026-11-18",
+        "time": null,
+        "matchedText": "Nov 18 2026"
+      }
+    },
+    {
+      "name": "readNoticeDate: \"Nov 18 at 0:00\" (extra)",
+      "input": {
+        "call": "readNoticeDate",
+        "text": "Nov 18 at 0:00",
+        "now": 1794657600000,
+        "zone": "UTC"
+      },
+      "output": {
+        "date": "2026-11-18",
+        "time": "00:00",
+        "matchedText": "Nov 18"
+      }
+    },
+    {
+      "name": "readNoticeDate: \"18 November 2026 or 18/11/2026\" (extra)",
+      "input": {
+        "call": "readNoticeDate",
+        "text": "18 November 2026 or 18/11/2026",
+        "now": 1794657600000,
+        "zone": "UTC"
+      },
+      "output": {
+        "date": "2026-11-18",
+        "time": null,
+        "matchedText": "18 November 2026"
+      }
+    },
+    {
+      "name": "readNoticeDate: today is the zone's day: late evening in New York",
+      "input": {
+        "call": "readNoticeDate",
+        "text": "Nov 15",
+        "now": 1794711600000,
+        "zone": "America/New_York"
+      },
+      "output": {
+        "date": "2026-11-15",
+        "time": null,
+        "matchedText": "Nov 15"
+      }
+    },
+    {
+      "name": "readNoticeDate: today is the zone's day: the same moment in UTC",
+      "input": {
+        "call": "readNoticeDate",
+        "text": "Nov 15",
+        "now": 1794711600000,
+        "zone": "UTC"
+      },
+      "output": {
+        "date": "2026-11-15",
+        "time": null,
+        "matchedText": "Nov 15"
+      }
+    },
+    {
+      "name": "readNoticeDate: next year when the date has passed, in Sydney",
+      "input": {
+        "call": "readNoticeDate",
+        "text": "Nov 14",
+        "now": 1794664800000,
+        "zone": "Australia/Sydney"
+      },
+      "output": {
+        "date": "2027-11-14",
+        "time": null,
+        "matchedText": "Nov 14"
+      }
+    },
+    {
+      "name": "noticeSentences: \"The bins move. Please put them out. Than\"",
+      "input": {
+        "call": "noticeSentences",
+        "body": "The bins move. Please put them out. Thanks."
+      },
+      "output": [
+        "The bins move.",
+        "Please put them out.",
+        "Thanks."
+      ]
+    },
+    {
+      "name": "noticeSentences: \"Is it Tuesday? Yes!\"",
+      "input": {
+        "call": "noticeSentences",
+        "body": "Is it Tuesday? Yes!"
+      },
+      "output": [
+        "Is it Tuesday?",
+        "Yes!"
+      ]
+    },
+    {
+      "name": "noticeSentences: \"Wow...\"",
+      "input": {
+        "call": "noticeSentences",
+        "body": "Wow..."
+      },
+      "output": [
+        "Wow..."
+      ]
+    },
+    {
+      "name": "noticeSentences: \"Bin day changed\n\nCollection moves to Wed\"",
+      "input": {
+        "call": "noticeSentences",
+        "body": "Bin day changed\n\nCollection moves to Wednesday."
+      },
+      "output": [
+        "Bin day changed",
+        "Collection moves to Wednesday."
+      ]
+    },
+    {
+      "name": "noticeSentences: \"one long line with no punctuation at all\"",
+      "input": {
+        "call": "noticeSentences",
+        "body": "one long line with no punctuation at all"
+      },
+      "output": [
+        "one long line with no punctuation at all"
+      ]
+    },
+    {
+      "name": "noticeSentences: \"\"",
+      "input": {
+        "call": "noticeSentences",
+        "body": ""
+      },
+      "output": []
+    },
+    {
+      "name": "noticeSentences: \"   \n\t\n  \"",
+      "input": {
+        "call": "noticeSentences",
+        "body": "   \n\t\n  "
+      },
+      "output": []
+    },
+    {
+      "name": "noticeSentences: \"Hi.\"",
+      "input": {
+        "call": "noticeSentences",
+        "body": "Hi."
+      },
+      "output": [
+        "Hi."
+      ]
+    },
+    {
+      "name": "noticeSentences: \"Mr. Smith says hi. Dr. Who agrees!\"",
+      "input": {
+        "call": "noticeSentences",
+        "body": "Mr. Smith says hi. Dr. Who agrees!"
+      },
+      "output": [
+        "Mr.",
+        "Smith says hi.",
+        "Dr.",
+        "Who agrees!"
+      ]
+    },
+    {
+      "name": "noticeSentences: \"Line one\nline two\n\nline three.\"",
+      "input": {
+        "call": "noticeSentences",
+        "body": "Line one\nline two\n\nline three."
+      },
+      "output": [
+        "Line one line two",
+        "line three."
+      ]
+    },
+    {
+      "name": "noticeSentences: \"Wait?! Really... yes.\"",
+      "input": {
+        "call": "noticeSentences",
+        "body": "Wait?! Really... yes."
+      },
+      "output": [
+        "Wait?!",
+        "Really...",
+        "yes."
+      ]
+    },
+    {
+      "name": "keptNoticeSentence: \"There is a change to your bin day. Collection move\"",
+      "input": {
+        "call": "keptNoticeSentence",
+        "body": "There is a change to your bin day. Collection moves to Wednesday 18 November. Thank you.",
+        "title": "Bins",
+        "now": 1794657600000,
+        "zone": "UTC"
+      },
+      "output": "Collection moves to Wednesday 18 November."
+    },
+    {
+      "name": "keptNoticeSentence: \"There is a change to your bin day. collection move\"",
+      "input": {
+        "call": "keptNoticeSentence",
+        "body": "There is a change to your bin day. collection moves to Wednesday 18 November. Thank you.",
+        "title": "Bins",
+        "now": 1794657600000,
+        "zone": "UTC"
+      },
+      "output": "There is a change to your bin day. collection moves to Wednesday 18 November."
+    },
+    {
+      "name": "keptNoticeSentence: \"Your bin collection moves to 18 November. Please p\"",
+      "input": {
+        "call": "keptNoticeSentence",
+        "body": "Your bin collection moves to 18 November. Please put them out the night before.",
+        "title": "Bins",
+        "now": 1794657600000,
+        "zone": "UTC"
+      },
+      "output": "Your bin collection moves to 18 November."
+    },
+    {
+      "name": "keptNoticeSentence: \"Bin day is changing. 18 November is the new collec\"",
+      "input": {
+        "call": "keptNoticeSentence",
+        "body": "Bin day is changing. 18 November is the new collection day.",
+        "title": "Bins",
+        "now": 1794657600000,
+        "zone": "UTC"
+      },
+      "output": "18 November is the new collection day."
+    },
+    {
+      "name": "keptNoticeSentence: \"Thank you for your patience. There have been delay\"",
+      "input": {
+        "call": "keptNoticeSentence",
+        "body": "Thank you for your patience. There have been delays.",
+        "title": "Bins",
+        "now": 1794657600000,
+        "zone": "UTC"
+      },
+      "output": "Thank you for your patience."
+    },
+    {
+      "name": "keptNoticeSentence: \"Collection moves to 18 November. A reminder will f\"",
+      "input": {
+        "call": "keptNoticeSentence",
+        "body": "Collection moves to 18 November. A reminder will follow on 20 November.",
+        "title": "Bins",
+        "now": 1794657600000,
+        "zone": "UTC"
+      },
+      "output": "Collection moves to 18 November."
+    },
+    {
+      "name": "keptNoticeSentence: \"collection moves to 18 November. Thanks.\"",
+      "input": {
+        "call": "keptNoticeSentence",
+        "body": "collection moves to 18 November. Thanks.",
+        "title": "Bins",
+        "now": 1794657600000,
+        "zone": "UTC"
+      },
+      "output": "collection moves to 18 November."
+    },
+    {
+      "name": "keptNoticeSentence: \"Please note. collection moves to 18 November. See \"",
+      "input": {
+        "call": "keptNoticeSentence",
+        "body": "Please note. collection moves to 18 November. See you then.",
+        "title": "Bins",
+        "now": 1794657600000,
+        "zone": "UTC"
+      },
+      "output": "Please note. collection moves to 18 November."
+    },
+    {
+      "name": "keptNoticeSentence: \"\"",
+      "input": {
+        "call": "keptNoticeSentence",
+        "body": "",
+        "title": "Bins",
+        "now": 1794657600000,
+        "zone": "UTC"
+      },
+      "output": "Bins"
+    },
+    {
+      "name": "keptNoticeSentence: \"   \n  \"",
+      "input": {
+        "call": "keptNoticeSentence",
+        "body": "   \n  ",
+        "title": "Bins",
+        "now": 1794657600000,
+        "zone": "UTC"
+      },
+      "output": "Bins"
+    },
+    {
+      "name": "keptNoticeSentence: \"   leading space. Then 18 November.\"",
+      "input": {
+        "call": "keptNoticeSentence",
+        "body": "   leading space. Then 18 November.",
+        "title": "Bins",
+        "now": 1794657600000,
+        "zone": "UTC"
+      },
+      "output": "Then 18 November."
+    },
+    {
+      "name": "keptNoticeSentence: \"18 November\"",
+      "input": {
+        "call": "keptNoticeSentence",
+        "body": "18 November",
+        "title": "Bins",
+        "now": 1794657600000,
+        "zone": "UTC"
+      },
+      "output": "18 November"
+    },
+    {
+      "name": "matches: an email rule matches case-insensitively, with no words",
+      "input": {
+        "call": "matches",
+        "rule": {
+          "sourceKind": "email",
+          "sourceValue": "  council@EXAMPLE.gov ",
+          "terms": []
+        },
+        "notice": {
+          "_id": "j77notice-1",
+          "localId": "notice-1",
+          "userId": "user_golden",
+          "sourceKind": "email",
+          "sourceValue": "Council@Example.gov",
+          "title": "Bin collection change",
+          "sentence": "Collection moves to Wednesday 18 November.",
+          "receivedAt": 1794654000000,
+          "resolution": "none",
+          "createdAt": 1794654000000,
+          "updatedAt": 1794654000000
+        }
+      },
+      "output": {
+        "matches": true,
+        "noticeText": "Bin collection change Collection moves to Wednesday 18 November."
+      }
+    },
+    {
+      "name": "matches: a word in the sentence",
+      "input": {
+        "call": "matches",
+        "rule": {
+          "sourceKind": "email",
+          "sourceValue": "council@example.gov",
+          "terms": [
+            "collection"
+          ]
+        },
+        "notice": {
+          "_id": "j77notice-1",
+          "localId": "notice-1",
+          "userId": "user_golden",
+          "sourceKind": "email",
+          "sourceValue": "Council@Example.gov",
+          "title": "Bin collection change",
+          "sentence": "Collection moves to Wednesday 18 November.",
+          "receivedAt": 1794654000000,
+          "resolution": "none",
+          "createdAt": 1794654000000,
+          "updatedAt": 1794654000000
+        }
+      },
+      "output": {
+        "matches": true,
+        "noticeText": "Bin collection change Collection moves to Wednesday 18 November."
+      }
+    },
+    {
+      "name": "matches: a word in the title, any case",
+      "input": {
+        "call": "matches",
+        "rule": {
+          "sourceKind": "email",
+          "sourceValue": "council@example.gov",
+          "terms": [
+            "BIN"
+          ]
+        },
+        "notice": {
+          "_id": "j77notice-1",
+          "localId": "notice-1",
+          "userId": "user_golden",
+          "sourceKind": "email",
+          "sourceValue": "Council@Example.gov",
+          "title": "Bin collection change",
+          "sentence": "Collection moves to Wednesday 18 November.",
+          "receivedAt": 1794654000000,
+          "resolution": "none",
+          "createdAt": 1794654000000,
+          "updatedAt": 1794654000000
+        }
+      },
+      "output": {
+        "matches": true,
+        "noticeText": "Bin collection change Collection moves to Wednesday 18 November."
+      }
+    },
+    {
+      "name": "matches: none of the words",
+      "input": {
+        "call": "matches",
+        "rule": {
+          "sourceKind": "email",
+          "sourceValue": "council@example.gov",
+          "terms": [
+            "water",
+            "rent"
+          ]
+        },
+        "notice": {
+          "_id": "j77notice-1",
+          "localId": "notice-1",
+          "userId": "user_golden",
+          "sourceKind": "email",
+          "sourceValue": "Council@Example.gov",
+          "title": "Bin collection change",
+          "sentence": "Collection moves to Wednesday 18 November.",
+          "receivedAt": 1794654000000,
+          "resolution": "none",
+          "createdAt": 1794654000000,
+          "updatedAt": 1794654000000
+        }
+      },
+      "output": {
+        "matches": false,
+        "noticeText": "Bin collection change Collection moves to Wednesday 18 November."
+      }
+    },
+    {
+      "name": "matches: another sender",
+      "input": {
+        "call": "matches",
+        "rule": {
+          "sourceKind": "email",
+          "sourceValue": "school@example.org",
+          "terms": []
+        },
+        "notice": {
+          "_id": "j77notice-1",
+          "localId": "notice-1",
+          "userId": "user_golden",
+          "sourceKind": "email",
+          "sourceValue": "Council@Example.gov",
+          "title": "Bin collection change",
+          "sentence": "Collection moves to Wednesday 18 November.",
+          "receivedAt": 1794654000000,
+          "resolution": "none",
+          "createdAt": 1794654000000,
+          "updatedAt": 1794654000000
+        }
+      },
+      "output": {
+        "matches": false,
+        "noticeText": "Bin collection change Collection moves to Wednesday 18 November."
+      }
+    },
+    {
+      "name": "matches: another source kind",
+      "input": {
+        "call": "matches",
+        "rule": {
+          "sourceKind": "app",
+          "sourceValue": "council@example.gov",
+          "terms": []
+        },
+        "notice": {
+          "_id": "j77notice-1",
+          "localId": "notice-1",
+          "userId": "user_golden",
+          "sourceKind": "email",
+          "sourceValue": "Council@Example.gov",
+          "title": "Bin collection change",
+          "sentence": "Collection moves to Wednesday 18 November.",
+          "receivedAt": 1794654000000,
+          "resolution": "none",
+          "createdAt": 1794654000000,
+          "updatedAt": 1794654000000
+        }
+      },
+      "output": {
+        "matches": false,
+        "noticeText": "Bin collection change Collection moves to Wednesday 18 November."
+      }
+    },
+    {
+      "name": "matches: an address with no @ never matches",
+      "input": {
+        "call": "matches",
+        "rule": {
+          "sourceKind": "email",
+          "sourceValue": "council",
+          "terms": []
+        },
+        "notice": {
+          "_id": "j77notice-1",
+          "localId": "notice-1",
+          "userId": "user_golden",
+          "sourceKind": "email",
+          "sourceValue": "Council@Example.gov",
+          "title": "Bin collection change",
+          "sentence": "Collection moves to Wednesday 18 November.",
+          "receivedAt": 1794654000000,
+          "resolution": "none",
+          "createdAt": 1794654000000,
+          "updatedAt": 1794654000000
+        }
+      },
+      "output": {
+        "matches": false,
+        "noticeText": "Bin collection change Collection moves to Wednesday 18 November."
+      }
+    },
+    {
+      "name": "matches: a blank value never matches",
+      "input": {
+        "call": "matches",
+        "rule": {
+          "sourceKind": "email",
+          "sourceValue": "   ",
+          "terms": []
+        },
+        "notice": {
+          "_id": "j77notice-1",
+          "localId": "notice-1",
+          "userId": "user_golden",
+          "sourceKind": "email",
+          "sourceValue": "Council@Example.gov",
+          "title": "Bin collection change",
+          "sentence": "Collection moves to Wednesday 18 November.",
+          "receivedAt": 1794654000000,
+          "resolution": "none",
+          "createdAt": 1794654000000,
+          "updatedAt": 1794654000000
+        }
+      },
+      "output": {
+        "matches": false,
+        "noticeText": "Bin collection change Collection moves to Wednesday 18 November."
+      }
+    },
+    {
+      "name": "matches: an app rule matches its package exactly",
+      "input": {
+        "call": "matches",
+        "rule": {
+          "sourceKind": "app",
+          "sourceValue": "com.Courier.App",
+          "terms": []
+        },
+        "notice": {
+          "_id": "j77notice-1",
+          "localId": "notice-1",
+          "userId": "user_golden",
+          "sourceKind": "app",
+          "sourceValue": "com.Courier.App",
+          "title": "Delivery update",
+          "sentence": "Your parcel now arrives Friday.",
+          "receivedAt": 1794654000000,
+          "resolution": "none",
+          "createdAt": 1794654000000,
+          "updatedAt": 1794654000000
+        }
+      },
+      "output": {
+        "matches": true,
+        "noticeText": "Delivery update Your parcel now arrives Friday."
+      }
+    },
+    {
+      "name": "matches: an app rule is case-sensitive",
+      "input": {
+        "call": "matches",
+        "rule": {
+          "sourceKind": "app",
+          "sourceValue": "com.courier.app",
+          "terms": []
+        },
+        "notice": {
+          "_id": "j77notice-1",
+          "localId": "notice-1",
+          "userId": "user_golden",
+          "sourceKind": "app",
+          "sourceValue": "com.Courier.App",
+          "title": "Delivery update",
+          "sentence": "Your parcel now arrives Friday.",
+          "receivedAt": 1794654000000,
+          "resolution": "none",
+          "createdAt": 1794654000000,
+          "updatedAt": 1794654000000
+        }
+      },
+      "output": {
+        "matches": false,
+        "noticeText": "Delivery update Your parcel now arrives Friday."
+      }
+    },
+    {
+      "name": "proposalsFor: a date with no time keeps the task's own time",
+      "input": {
+        "call": "proposalsFor",
+        "notice": {
+          "_id": "j77notice-1",
+          "localId": "notice-1",
+          "userId": "user_golden",
+          "sourceKind": "email",
+          "sourceValue": "Council@Example.gov",
+          "title": "Bin collection change",
+          "sentence": "Collection moves to Wednesday 18 November.",
+          "receivedAt": 1794654000000,
+          "resolution": "none",
+          "createdAt": 1794654000000,
+          "updatedAt": 1794654000000
+        },
+        "reminders": [
+          {
+            "_id": "j97doctask-bin",
+            "localId": "task-bins",
+            "userId": "user_golden",
+            "kind": "task",
+            "name": "Put the bins out",
+            "schedule": {
+              "type": "weekly",
+              "daysOfWeek": [
+                2
+              ],
+              "times": [
+                "07:00"
+              ]
+            },
+            "priority": "normal",
+            "tags": [],
+            "caregiverIds": [],
+            "active": true,
+            "createdAt": 1786899600000,
+            "updatedAt": 1786899600000,
+            "noticeRules": [
+              {
+                "sourceKind": "email",
+                "sourceValue": "council@example.gov",
+                "terms": [
+                  "bin",
+                  "collection"
+                ]
+              }
+            ]
+          },
+          {
+            "_id": "j97doctask-rec",
+            "localId": "task-recycling",
+            "userId": "user_golden",
+            "kind": "task",
+            "name": "Recycling",
+            "schedule": {
+              "type": "weekly",
+              "daysOfWeek": [
+                3
+              ],
+              "times": [
+                "07:00"
+              ]
+            },
+            "priority": "normal",
+            "tags": [],
+            "caregiverIds": [],
+            "active": true,
+            "createdAt": 1786899600000,
+            "updatedAt": 1786899600000,
+            "noticeRules": [
+              {
+                "sourceKind": "email",
+                "sourceValue": "council@example.gov",
+                "terms": [
+                  "bin",
+                  "collection"
+                ]
+              }
+            ]
+          },
+          {
+            "_id": "j97doctask-sto",
+            "localId": "task-stopped",
+            "userId": "user_golden",
+            "kind": "task",
+            "name": "Old bins",
+            "schedule": {
+              "type": "weekly",
+              "daysOfWeek": [
+                2
+              ],
+              "times": [
+                "07:00"
+              ]
+            },
+            "priority": "normal",
+            "tags": [],
+            "caregiverIds": [],
+            "active": false,
+            "createdAt": 1786899600000,
+            "updatedAt": 1786899600000,
+            "noticeRules": [
+              {
+                "sourceKind": "email",
+                "sourceValue": "council@example.gov",
+                "terms": [
+                  "bin",
+                  "collection"
+                ]
+              }
+            ]
+          },
+          {
+            "_id": "j97doctask-unr",
+            "localId": "task-unruled",
+            "userId": "user_golden",
+            "kind": "task",
+            "name": "Water the plants",
+            "schedule": {
+              "type": "weekly",
+              "daysOfWeek": [
+                2
+              ],
+              "times": [
+                "07:00"
+              ]
+            },
+            "priority": "normal",
+            "tags": [],
+            "caregiverIds": [],
+            "active": true,
+            "createdAt": 1786899600000,
+            "updatedAt": 1786899600000,
+            "noticeRules": []
+          },
+          {
+            "_id": "j97doctask-bac",
+            "localId": "task-backlog",
+            "userId": "user_golden",
+            "kind": "task",
+            "name": "Garden waste",
+            "schedule": {
+              "type": "none"
+            },
+            "priority": "normal",
+            "tags": [],
+            "caregiverIds": [],
+            "active": true,
+            "createdAt": 1786899600000,
+            "updatedAt": 1786899600000,
+            "noticeRules": [
+              {
+                "sourceKind": "email",
+                "sourceValue": "council@example.gov",
+                "terms": [
+                  "bin",
+                  "collection"
+                ]
+              }
+            ]
+          },
+          {
+            "_id": "j97doctask-pau",
+            "localId": "task-paused",
+            "userId": "user_golden",
+            "kind": "task",
+            "name": "Bulky waste",
+            "schedule": {
+              "type": "weekly",
+              "daysOfWeek": [
+                4
+              ],
+              "times": [
+                "07:00"
+              ]
+            },
+            "priority": "normal",
+            "tags": [],
+            "caregiverIds": [],
+            "active": true,
+            "createdAt": 1786899600000,
+            "updatedAt": 1786899600000,
+            "pauses": [
+              {
+                "from": 1794891600000
+              }
+            ],
+            "noticeRules": [
+              {
+                "sourceKind": "email",
+                "sourceValue": "council@example.gov",
+                "terms": [
+                  "bin",
+                  "collection"
+                ]
+              }
+            ]
+          },
+          {
+            "_id": "j97docmed-1",
+            "localId": "med-1",
+            "userId": "user_golden",
+            "kind": "medication",
+            "name": "Atorvastatin",
+            "dosage": "20mg",
+            "schedule": {
+              "type": "weekly",
+              "daysOfWeek": [
+                2
+              ],
+              "times": [
+                "07:00"
+              ]
+            },
+            "priority": "normal",
+            "tags": [],
+            "caregiverIds": [],
+            "active": true,
+            "createdAt": 1700000000000,
+            "updatedAt": 1700000000000,
+            "noticeRules": [
+              {
+                "sourceKind": "email",
+                "sourceValue": "council@example.gov",
+                "terms": [
+                  "bin",
+                  "collection"
+                ]
+              }
+            ]
+          }
+        ],
+        "instances": [],
+        "now": 1794675600000,
+        "zone": "America/New_York"
+      },
+      "output": [
+        {
+          "reminderId": "task-bins",
+          "from": 1794916800000,
+          "to": 1795003200000,
+          "date": "2026-11-18",
+          "time": null,
+          "matchedText": "18 November",
+          "refusal": null,
+          "applies": true
+        },
+        {
+          "reminderId": "task-recycling",
+          "from": 1795003200000,
+          "to": 1795003200000,
+          "date": "2026-11-18",
+          "time": null,
+          "matchedText": "18 November",
+          "refusal": "notAfter",
+          "applies": false
+        },
+        {
+          "reminderId": "task-backlog",
+          "from": null,
+          "to": 1795010400000,
+          "date": "2026-11-18",
+          "time": null,
+          "matchedText": "18 November",
+          "refusal": "noOccurrence",
+          "applies": false
+        },
+        {
+          "reminderId": "task-paused",
+          "from": null,
+          "to": 1795010400000,
+          "date": "2026-11-18",
+          "time": null,
+          "matchedText": "18 November",
+          "refusal": "noOccurrence",
+          "applies": false
+        }
+      ]
+    },
+    {
+      "name": "proposalsFor: a date with a time",
+      "input": {
+        "call": "proposalsFor",
+        "notice": {
+          "_id": "j77notice-1",
+          "localId": "notice-1",
+          "userId": "user_golden",
+          "sourceKind": "email",
+          "sourceValue": "Council@Example.gov",
+          "title": "Bin collection change",
+          "sentence": "Collection moves to 18 November at 6pm.",
+          "receivedAt": 1794654000000,
+          "resolution": "none",
+          "createdAt": 1794654000000,
+          "updatedAt": 1794654000000
+        },
+        "reminders": [
+          {
+            "_id": "j97doctask-bin",
+            "localId": "task-bins",
+            "userId": "user_golden",
+            "kind": "task",
+            "name": "Put the bins out",
+            "schedule": {
+              "type": "weekly",
+              "daysOfWeek": [
+                2
+              ],
+              "times": [
+                "07:00"
+              ]
+            },
+            "priority": "normal",
+            "tags": [],
+            "caregiverIds": [],
+            "active": true,
+            "createdAt": 1786899600000,
+            "updatedAt": 1786899600000,
+            "noticeRules": [
+              {
+                "sourceKind": "email",
+                "sourceValue": "council@example.gov",
+                "terms": [
+                  "bin",
+                  "collection"
+                ]
+              }
+            ]
+          },
+          {
+            "_id": "j97doctask-rec",
+            "localId": "task-recycling",
+            "userId": "user_golden",
+            "kind": "task",
+            "name": "Recycling",
+            "schedule": {
+              "type": "weekly",
+              "daysOfWeek": [
+                3
+              ],
+              "times": [
+                "07:00"
+              ]
+            },
+            "priority": "normal",
+            "tags": [],
+            "caregiverIds": [],
+            "active": true,
+            "createdAt": 1786899600000,
+            "updatedAt": 1786899600000,
+            "noticeRules": [
+              {
+                "sourceKind": "email",
+                "sourceValue": "council@example.gov",
+                "terms": [
+                  "bin",
+                  "collection"
+                ]
+              }
+            ]
+          },
+          {
+            "_id": "j97doctask-sto",
+            "localId": "task-stopped",
+            "userId": "user_golden",
+            "kind": "task",
+            "name": "Old bins",
+            "schedule": {
+              "type": "weekly",
+              "daysOfWeek": [
+                2
+              ],
+              "times": [
+                "07:00"
+              ]
+            },
+            "priority": "normal",
+            "tags": [],
+            "caregiverIds": [],
+            "active": false,
+            "createdAt": 1786899600000,
+            "updatedAt": 1786899600000,
+            "noticeRules": [
+              {
+                "sourceKind": "email",
+                "sourceValue": "council@example.gov",
+                "terms": [
+                  "bin",
+                  "collection"
+                ]
+              }
+            ]
+          },
+          {
+            "_id": "j97doctask-unr",
+            "localId": "task-unruled",
+            "userId": "user_golden",
+            "kind": "task",
+            "name": "Water the plants",
+            "schedule": {
+              "type": "weekly",
+              "daysOfWeek": [
+                2
+              ],
+              "times": [
+                "07:00"
+              ]
+            },
+            "priority": "normal",
+            "tags": [],
+            "caregiverIds": [],
+            "active": true,
+            "createdAt": 1786899600000,
+            "updatedAt": 1786899600000,
+            "noticeRules": []
+          },
+          {
+            "_id": "j97doctask-bac",
+            "localId": "task-backlog",
+            "userId": "user_golden",
+            "kind": "task",
+            "name": "Garden waste",
+            "schedule": {
+              "type": "none"
+            },
+            "priority": "normal",
+            "tags": [],
+            "caregiverIds": [],
+            "active": true,
+            "createdAt": 1786899600000,
+            "updatedAt": 1786899600000,
+            "noticeRules": [
+              {
+                "sourceKind": "email",
+                "sourceValue": "council@example.gov",
+                "terms": [
+                  "bin",
+                  "collection"
+                ]
+              }
+            ]
+          },
+          {
+            "_id": "j97doctask-pau",
+            "localId": "task-paused",
+            "userId": "user_golden",
+            "kind": "task",
+            "name": "Bulky waste",
+            "schedule": {
+              "type": "weekly",
+              "daysOfWeek": [
+                4
+              ],
+              "times": [
+                "07:00"
+              ]
+            },
+            "priority": "normal",
+            "tags": [],
+            "caregiverIds": [],
+            "active": true,
+            "createdAt": 1786899600000,
+            "updatedAt": 1786899600000,
+            "pauses": [
+              {
+                "from": 1794891600000
+              }
+            ],
+            "noticeRules": [
+              {
+                "sourceKind": "email",
+                "sourceValue": "council@example.gov",
+                "terms": [
+                  "bin",
+                  "collection"
+                ]
+              }
+            ]
+          },
+          {
+            "_id": "j97docmed-1",
+            "localId": "med-1",
+            "userId": "user_golden",
+            "kind": "medication",
+            "name": "Atorvastatin",
+            "dosage": "20mg",
+            "schedule": {
+              "type": "weekly",
+              "daysOfWeek": [
+                2
+              ],
+              "times": [
+                "07:00"
+              ]
+            },
+            "priority": "normal",
+            "tags": [],
+            "caregiverIds": [],
+            "active": true,
+            "createdAt": 1700000000000,
+            "updatedAt": 1700000000000,
+            "noticeRules": [
+              {
+                "sourceKind": "email",
+                "sourceValue": "council@example.gov",
+                "terms": [
+                  "bin",
+                  "collection"
+                ]
+              }
+            ]
+          }
+        ],
+        "instances": [],
+        "now": 1794675600000,
+        "zone": "America/New_York"
+      },
+      "output": [
+        {
+          "reminderId": "task-bins",
+          "from": 1794916800000,
+          "to": 1795042800000,
+          "date": "2026-11-18",
+          "time": "18:00",
+          "matchedText": "18 November",
+          "refusal": null,
+          "applies": true
+        },
+        {
+          "reminderId": "task-recycling",
+          "from": 1795003200000,
+          "to": 1795042800000,
+          "date": "2026-11-18",
+          "time": "18:00",
+          "matchedText": "18 November",
+          "refusal": null,
+          "applies": true
+        },
+        {
+          "reminderId": "task-backlog",
+          "from": null,
+          "to": 1795042800000,
+          "date": "2026-11-18",
+          "time": "18:00",
+          "matchedText": "18 November",
+          "refusal": "noOccurrence",
+          "applies": false
+        },
+        {
+          "reminderId": "task-paused",
+          "from": null,
+          "to": 1795042800000,
+          "date": "2026-11-18",
+          "time": "18:00",
+          "matchedText": "18 November",
+          "refusal": "noOccurrence",
+          "applies": false
+        }
+      ]
+    },
+    {
+      "name": "proposalsFor: a date already past reads as next year",
+      "input": {
+        "call": "proposalsFor",
+        "notice": {
+          "_id": "j77notice-1",
+          "localId": "notice-1",
+          "userId": "user_golden",
+          "sourceKind": "email",
+          "sourceValue": "Council@Example.gov",
+          "title": "Bin collection change",
+          "sentence": "Collection moved to 10 November.",
+          "receivedAt": 1794654000000,
+          "resolution": "none",
+          "createdAt": 1794654000000,
+          "updatedAt": 1794654000000
+        },
+        "reminders": [
+          {
+            "_id": "j97doctask-bin",
+            "localId": "task-bins",
+            "userId": "user_golden",
+            "kind": "task",
+            "name": "Put the bins out",
+            "schedule": {
+              "type": "weekly",
+              "daysOfWeek": [
+                2
+              ],
+              "times": [
+                "07:00"
+              ]
+            },
+            "priority": "normal",
+            "tags": [],
+            "caregiverIds": [],
+            "active": true,
+            "createdAt": 1786899600000,
+            "updatedAt": 1786899600000,
+            "noticeRules": [
+              {
+                "sourceKind": "email",
+                "sourceValue": "council@example.gov",
+                "terms": [
+                  "bin",
+                  "collection"
+                ]
+              }
+            ]
+          },
+          {
+            "_id": "j97doctask-rec",
+            "localId": "task-recycling",
+            "userId": "user_golden",
+            "kind": "task",
+            "name": "Recycling",
+            "schedule": {
+              "type": "weekly",
+              "daysOfWeek": [
+                3
+              ],
+              "times": [
+                "07:00"
+              ]
+            },
+            "priority": "normal",
+            "tags": [],
+            "caregiverIds": [],
+            "active": true,
+            "createdAt": 1786899600000,
+            "updatedAt": 1786899600000,
+            "noticeRules": [
+              {
+                "sourceKind": "email",
+                "sourceValue": "council@example.gov",
+                "terms": [
+                  "bin",
+                  "collection"
+                ]
+              }
+            ]
+          },
+          {
+            "_id": "j97doctask-sto",
+            "localId": "task-stopped",
+            "userId": "user_golden",
+            "kind": "task",
+            "name": "Old bins",
+            "schedule": {
+              "type": "weekly",
+              "daysOfWeek": [
+                2
+              ],
+              "times": [
+                "07:00"
+              ]
+            },
+            "priority": "normal",
+            "tags": [],
+            "caregiverIds": [],
+            "active": false,
+            "createdAt": 1786899600000,
+            "updatedAt": 1786899600000,
+            "noticeRules": [
+              {
+                "sourceKind": "email",
+                "sourceValue": "council@example.gov",
+                "terms": [
+                  "bin",
+                  "collection"
+                ]
+              }
+            ]
+          },
+          {
+            "_id": "j97doctask-unr",
+            "localId": "task-unruled",
+            "userId": "user_golden",
+            "kind": "task",
+            "name": "Water the plants",
+            "schedule": {
+              "type": "weekly",
+              "daysOfWeek": [
+                2
+              ],
+              "times": [
+                "07:00"
+              ]
+            },
+            "priority": "normal",
+            "tags": [],
+            "caregiverIds": [],
+            "active": true,
+            "createdAt": 1786899600000,
+            "updatedAt": 1786899600000,
+            "noticeRules": []
+          },
+          {
+            "_id": "j97doctask-bac",
+            "localId": "task-backlog",
+            "userId": "user_golden",
+            "kind": "task",
+            "name": "Garden waste",
+            "schedule": {
+              "type": "none"
+            },
+            "priority": "normal",
+            "tags": [],
+            "caregiverIds": [],
+            "active": true,
+            "createdAt": 1786899600000,
+            "updatedAt": 1786899600000,
+            "noticeRules": [
+              {
+                "sourceKind": "email",
+                "sourceValue": "council@example.gov",
+                "terms": [
+                  "bin",
+                  "collection"
+                ]
+              }
+            ]
+          },
+          {
+            "_id": "j97doctask-pau",
+            "localId": "task-paused",
+            "userId": "user_golden",
+            "kind": "task",
+            "name": "Bulky waste",
+            "schedule": {
+              "type": "weekly",
+              "daysOfWeek": [
+                4
+              ],
+              "times": [
+                "07:00"
+              ]
+            },
+            "priority": "normal",
+            "tags": [],
+            "caregiverIds": [],
+            "active": true,
+            "createdAt": 1786899600000,
+            "updatedAt": 1786899600000,
+            "pauses": [
+              {
+                "from": 1794891600000
+              }
+            ],
+            "noticeRules": [
+              {
+                "sourceKind": "email",
+                "sourceValue": "council@example.gov",
+                "terms": [
+                  "bin",
+                  "collection"
+                ]
+              }
+            ]
+          },
+          {
+            "_id": "j97docmed-1",
+            "localId": "med-1",
+            "userId": "user_golden",
+            "kind": "medication",
+            "name": "Atorvastatin",
+            "dosage": "20mg",
+            "schedule": {
+              "type": "weekly",
+              "daysOfWeek": [
+                2
+              ],
+              "times": [
+                "07:00"
+              ]
+            },
+            "priority": "normal",
+            "tags": [],
+            "caregiverIds": [],
+            "active": true,
+            "createdAt": 1700000000000,
+            "updatedAt": 1700000000000,
+            "noticeRules": [
+              {
+                "sourceKind": "email",
+                "sourceValue": "council@example.gov",
+                "terms": [
+                  "bin",
+                  "collection"
+                ]
+              }
+            ]
+          }
+        ],
+        "instances": [],
+        "now": 1794675600000,
+        "zone": "America/New_York"
+      },
+      "output": [
+        {
+          "reminderId": "task-bins",
+          "from": 1825761600000,
+          "to": 1825848000000,
+          "date": "2027-11-10",
+          "time": null,
+          "matchedText": "10 November",
+          "refusal": null,
+          "applies": true
+        },
+        {
+          "reminderId": "task-recycling",
+          "from": 1825848000000,
+          "to": 1825848000000,
+          "date": "2027-11-10",
+          "time": null,
+          "matchedText": "10 November",
+          "refusal": "notAfter",
+          "applies": false
+        },
+        {
+          "reminderId": "task-backlog",
+          "from": null,
+          "to": 1825855200000,
+          "date": "2027-11-10",
+          "time": null,
+          "matchedText": "10 November",
+          "refusal": "noOccurrence",
+          "applies": false
+        },
+        {
+          "reminderId": "task-paused",
+          "from": null,
+          "to": 1825855200000,
+          "date": "2027-11-10",
+          "time": null,
+          "matchedText": "10 November",
+          "refusal": "noOccurrence",
+          "applies": false
+        }
+      ]
+    },
+    {
+      "name": "proposalsFor: today at a time already gone is in the past",
+      "input": {
+        "call": "proposalsFor",
+        "notice": {
+          "_id": "j77notice-1",
+          "localId": "notice-1",
+          "userId": "user_golden",
+          "sourceKind": "email",
+          "sourceValue": "Council@Example.gov",
+          "title": "Bin collection change",
+          "sentence": "Collection moves to 14 November at 9am.",
+          "receivedAt": 1794654000000,
+          "resolution": "none",
+          "createdAt": 1794654000000,
+          "updatedAt": 1794654000000
+        },
+        "reminders": [
+          {
+            "_id": "j97doctask-bin",
+            "localId": "task-bins",
+            "userId": "user_golden",
+            "kind": "task",
+            "name": "Put the bins out",
+            "schedule": {
+              "type": "weekly",
+              "daysOfWeek": [
+                2
+              ],
+              "times": [
+                "07:00"
+              ]
+            },
+            "priority": "normal",
+            "tags": [],
+            "caregiverIds": [],
+            "active": true,
+            "createdAt": 1786899600000,
+            "updatedAt": 1786899600000,
+            "noticeRules": [
+              {
+                "sourceKind": "email",
+                "sourceValue": "council@example.gov",
+                "terms": [
+                  "bin",
+                  "collection"
+                ]
+              }
+            ]
+          },
+          {
+            "_id": "j97doctask-rec",
+            "localId": "task-recycling",
+            "userId": "user_golden",
+            "kind": "task",
+            "name": "Recycling",
+            "schedule": {
+              "type": "weekly",
+              "daysOfWeek": [
+                3
+              ],
+              "times": [
+                "07:00"
+              ]
+            },
+            "priority": "normal",
+            "tags": [],
+            "caregiverIds": [],
+            "active": true,
+            "createdAt": 1786899600000,
+            "updatedAt": 1786899600000,
+            "noticeRules": [
+              {
+                "sourceKind": "email",
+                "sourceValue": "council@example.gov",
+                "terms": [
+                  "bin",
+                  "collection"
+                ]
+              }
+            ]
+          },
+          {
+            "_id": "j97doctask-sto",
+            "localId": "task-stopped",
+            "userId": "user_golden",
+            "kind": "task",
+            "name": "Old bins",
+            "schedule": {
+              "type": "weekly",
+              "daysOfWeek": [
+                2
+              ],
+              "times": [
+                "07:00"
+              ]
+            },
+            "priority": "normal",
+            "tags": [],
+            "caregiverIds": [],
+            "active": false,
+            "createdAt": 1786899600000,
+            "updatedAt": 1786899600000,
+            "noticeRules": [
+              {
+                "sourceKind": "email",
+                "sourceValue": "council@example.gov",
+                "terms": [
+                  "bin",
+                  "collection"
+                ]
+              }
+            ]
+          },
+          {
+            "_id": "j97doctask-unr",
+            "localId": "task-unruled",
+            "userId": "user_golden",
+            "kind": "task",
+            "name": "Water the plants",
+            "schedule": {
+              "type": "weekly",
+              "daysOfWeek": [
+                2
+              ],
+              "times": [
+                "07:00"
+              ]
+            },
+            "priority": "normal",
+            "tags": [],
+            "caregiverIds": [],
+            "active": true,
+            "createdAt": 1786899600000,
+            "updatedAt": 1786899600000,
+            "noticeRules": []
+          },
+          {
+            "_id": "j97doctask-bac",
+            "localId": "task-backlog",
+            "userId": "user_golden",
+            "kind": "task",
+            "name": "Garden waste",
+            "schedule": {
+              "type": "none"
+            },
+            "priority": "normal",
+            "tags": [],
+            "caregiverIds": [],
+            "active": true,
+            "createdAt": 1786899600000,
+            "updatedAt": 1786899600000,
+            "noticeRules": [
+              {
+                "sourceKind": "email",
+                "sourceValue": "council@example.gov",
+                "terms": [
+                  "bin",
+                  "collection"
+                ]
+              }
+            ]
+          },
+          {
+            "_id": "j97doctask-pau",
+            "localId": "task-paused",
+            "userId": "user_golden",
+            "kind": "task",
+            "name": "Bulky waste",
+            "schedule": {
+              "type": "weekly",
+              "daysOfWeek": [
+                4
+              ],
+              "times": [
+                "07:00"
+              ]
+            },
+            "priority": "normal",
+            "tags": [],
+            "caregiverIds": [],
+            "active": true,
+            "createdAt": 1786899600000,
+            "updatedAt": 1786899600000,
+            "pauses": [
+              {
+                "from": 1794891600000
+              }
+            ],
+            "noticeRules": [
+              {
+                "sourceKind": "email",
+                "sourceValue": "council@example.gov",
+                "terms": [
+                  "bin",
+                  "collection"
+                ]
+              }
+            ]
+          },
+          {
+            "_id": "j97docmed-1",
+            "localId": "med-1",
+            "userId": "user_golden",
+            "kind": "medication",
+            "name": "Atorvastatin",
+            "dosage": "20mg",
+            "schedule": {
+              "type": "weekly",
+              "daysOfWeek": [
+                2
+              ],
+              "times": [
+                "07:00"
+              ]
+            },
+            "priority": "normal",
+            "tags": [],
+            "caregiverIds": [],
+            "active": true,
+            "createdAt": 1700000000000,
+            "updatedAt": 1700000000000,
+            "noticeRules": [
+              {
+                "sourceKind": "email",
+                "sourceValue": "council@example.gov",
+                "terms": [
+                  "bin",
+                  "collection"
+                ]
+              }
+            ]
+          }
+        ],
+        "instances": [],
+        "now": 1794675600000,
+        "zone": "America/New_York"
+      },
+      "output": [
+        {
+          "reminderId": "task-bins",
+          "from": 1794916800000,
+          "to": 1794664800000,
+          "date": "2026-11-14",
+          "time": "09:00",
+          "matchedText": "14 November",
+          "refusal": "inThePast",
+          "applies": false
+        },
+        {
+          "reminderId": "task-recycling",
+          "from": 1795003200000,
+          "to": 1794664800000,
+          "date": "2026-11-14",
+          "time": "09:00",
+          "matchedText": "14 November",
+          "refusal": "inThePast",
+          "applies": false
+        },
+        {
+          "reminderId": "task-backlog",
+          "from": null,
+          "to": 1794664800000,
+          "date": "2026-11-14",
+          "time": "09:00",
+          "matchedText": "14 November",
+          "refusal": "noOccurrence",
+          "applies": false
+        },
+        {
+          "reminderId": "task-paused",
+          "from": null,
+          "to": 1794664800000,
+          "date": "2026-11-14",
+          "time": "09:00",
+          "matchedText": "14 November",
+          "refusal": "noOccurrence",
+          "applies": false
+        }
+      ]
+    },
+    {
+      "name": "proposalsFor: an answered occurrence is not moved",
+      "input": {
+        "call": "proposalsFor",
+        "notice": {
+          "_id": "j77notice-1",
+          "localId": "notice-1",
+          "userId": "user_golden",
+          "sourceKind": "email",
+          "sourceValue": "Council@Example.gov",
+          "title": "Bin collection change",
+          "sentence": "Collection moves to 19 November.",
+          "receivedAt": 1794654000000,
+          "resolution": "none",
+          "createdAt": 1794654000000,
+          "updatedAt": 1794654000000
+        },
+        "reminders": [
+          {
+            "_id": "j97doctask-bin",
+            "localId": "task-bins",
+            "userId": "user_golden",
+            "kind": "task",
+            "name": "Put the bins out",
+            "schedule": {
+              "type": "weekly",
+              "daysOfWeek": [
+                2
+              ],
+              "times": [
+                "07:00"
+              ]
+            },
+            "priority": "normal",
+            "tags": [],
+            "caregiverIds": [],
+            "active": true,
+            "createdAt": 1786899600000,
+            "updatedAt": 1786899600000,
+            "noticeRules": [
+              {
+                "sourceKind": "email",
+                "sourceValue": "council@example.gov",
+                "terms": [
+                  "bin",
+                  "collection"
+                ]
+              }
+            ]
+          },
+          {
+            "_id": "j97doctask-rec",
+            "localId": "task-recycling",
+            "userId": "user_golden",
+            "kind": "task",
+            "name": "Recycling",
+            "schedule": {
+              "type": "weekly",
+              "daysOfWeek": [
+                3
+              ],
+              "times": [
+                "07:00"
+              ]
+            },
+            "priority": "normal",
+            "tags": [],
+            "caregiverIds": [],
+            "active": true,
+            "createdAt": 1786899600000,
+            "updatedAt": 1786899600000,
+            "noticeRules": [
+              {
+                "sourceKind": "email",
+                "sourceValue": "council@example.gov",
+                "terms": [
+                  "bin",
+                  "collection"
+                ]
+              }
+            ]
+          },
+          {
+            "_id": "j97doctask-sto",
+            "localId": "task-stopped",
+            "userId": "user_golden",
+            "kind": "task",
+            "name": "Old bins",
+            "schedule": {
+              "type": "weekly",
+              "daysOfWeek": [
+                2
+              ],
+              "times": [
+                "07:00"
+              ]
+            },
+            "priority": "normal",
+            "tags": [],
+            "caregiverIds": [],
+            "active": false,
+            "createdAt": 1786899600000,
+            "updatedAt": 1786899600000,
+            "noticeRules": [
+              {
+                "sourceKind": "email",
+                "sourceValue": "council@example.gov",
+                "terms": [
+                  "bin",
+                  "collection"
+                ]
+              }
+            ]
+          },
+          {
+            "_id": "j97doctask-unr",
+            "localId": "task-unruled",
+            "userId": "user_golden",
+            "kind": "task",
+            "name": "Water the plants",
+            "schedule": {
+              "type": "weekly",
+              "daysOfWeek": [
+                2
+              ],
+              "times": [
+                "07:00"
+              ]
+            },
+            "priority": "normal",
+            "tags": [],
+            "caregiverIds": [],
+            "active": true,
+            "createdAt": 1786899600000,
+            "updatedAt": 1786899600000,
+            "noticeRules": []
+          },
+          {
+            "_id": "j97doctask-bac",
+            "localId": "task-backlog",
+            "userId": "user_golden",
+            "kind": "task",
+            "name": "Garden waste",
+            "schedule": {
+              "type": "none"
+            },
+            "priority": "normal",
+            "tags": [],
+            "caregiverIds": [],
+            "active": true,
+            "createdAt": 1786899600000,
+            "updatedAt": 1786899600000,
+            "noticeRules": [
+              {
+                "sourceKind": "email",
+                "sourceValue": "council@example.gov",
+                "terms": [
+                  "bin",
+                  "collection"
+                ]
+              }
+            ]
+          },
+          {
+            "_id": "j97doctask-pau",
+            "localId": "task-paused",
+            "userId": "user_golden",
+            "kind": "task",
+            "name": "Bulky waste",
+            "schedule": {
+              "type": "weekly",
+              "daysOfWeek": [
+                4
+              ],
+              "times": [
+                "07:00"
+              ]
+            },
+            "priority": "normal",
+            "tags": [],
+            "caregiverIds": [],
+            "active": true,
+            "createdAt": 1786899600000,
+            "updatedAt": 1786899600000,
+            "pauses": [
+              {
+                "from": 1794891600000
+              }
+            ],
+            "noticeRules": [
+              {
+                "sourceKind": "email",
+                "sourceValue": "council@example.gov",
+                "terms": [
+                  "bin",
+                  "collection"
+                ]
+              }
+            ]
+          },
+          {
+            "_id": "j97docmed-1",
+            "localId": "med-1",
+            "userId": "user_golden",
+            "kind": "medication",
+            "name": "Atorvastatin",
+            "dosage": "20mg",
+            "schedule": {
+              "type": "weekly",
+              "daysOfWeek": [
+                2
+              ],
+              "times": [
+                "07:00"
+              ]
+            },
+            "priority": "normal",
+            "tags": [],
+            "caregiverIds": [],
+            "active": true,
+            "createdAt": 1700000000000,
+            "updatedAt": 1700000000000,
+            "noticeRules": [
+              {
+                "sourceKind": "email",
+                "sourceValue": "council@example.gov",
+                "terms": [
+                  "bin",
+                  "collection"
+                ]
+              }
+            ]
+          }
+        ],
+        "instances": [
+          {
+            "_id": "j57inst1795003200000",
+            "localId": "inst-1795003200000-completed",
+            "userId": "user_golden",
+            "reminderId": "task-recycling",
+            "reminderKind": "task",
+            "scheduledTime": 1795003200000,
+            "status": "completed",
+            "completedAt": 1795003200000,
+            "snoozeCount": 0,
+            "createdAt": 1795003200000,
+            "updatedAt": 1795003200000
+          }
+        ],
+        "now": 1794675600000,
+        "zone": "America/New_York"
+      },
+      "output": [
+        {
+          "reminderId": "task-bins",
+          "from": 1794916800000,
+          "to": 1795089600000,
+          "date": "2026-11-19",
+          "time": null,
+          "matchedText": "19 November",
+          "refusal": null,
+          "applies": true
+        },
+        {
+          "reminderId": "task-recycling",
+          "from": 1795608000000,
+          "to": 1795089600000,
+          "date": "2026-11-19",
+          "time": null,
+          "matchedText": "19 November",
+          "refusal": "notAfter",
+          "applies": false
+        },
+        {
+          "reminderId": "task-backlog",
+          "from": null,
+          "to": 1795096800000,
+          "date": "2026-11-19",
+          "time": null,
+          "matchedText": "19 November",
+          "refusal": "noOccurrence",
+          "applies": false
+        },
+        {
+          "reminderId": "task-paused",
+          "from": null,
+          "to": 1795096800000,
+          "date": "2026-11-19",
+          "time": null,
+          "matchedText": "19 November",
+          "refusal": "noOccurrence",
+          "applies": false
+        }
+      ]
+    },
+    {
+      "name": "proposalsFor: no date, no proposals",
+      "input": {
+        "call": "proposalsFor",
+        "notice": {
+          "_id": "j77notice-1",
+          "localId": "notice-1",
+          "userId": "user_golden",
+          "sourceKind": "email",
+          "sourceValue": "Council@Example.gov",
+          "title": "Bin collection change",
+          "sentence": "There have been delays.",
+          "receivedAt": 1794654000000,
+          "resolution": "none",
+          "createdAt": 1794654000000,
+          "updatedAt": 1794654000000
+        },
+        "reminders": [
+          {
+            "_id": "j97doctask-bin",
+            "localId": "task-bins",
+            "userId": "user_golden",
+            "kind": "task",
+            "name": "Put the bins out",
+            "schedule": {
+              "type": "weekly",
+              "daysOfWeek": [
+                2
+              ],
+              "times": [
+                "07:00"
+              ]
+            },
+            "priority": "normal",
+            "tags": [],
+            "caregiverIds": [],
+            "active": true,
+            "createdAt": 1786899600000,
+            "updatedAt": 1786899600000,
+            "noticeRules": [
+              {
+                "sourceKind": "email",
+                "sourceValue": "council@example.gov",
+                "terms": [
+                  "bin",
+                  "collection"
+                ]
+              }
+            ]
+          },
+          {
+            "_id": "j97doctask-rec",
+            "localId": "task-recycling",
+            "userId": "user_golden",
+            "kind": "task",
+            "name": "Recycling",
+            "schedule": {
+              "type": "weekly",
+              "daysOfWeek": [
+                3
+              ],
+              "times": [
+                "07:00"
+              ]
+            },
+            "priority": "normal",
+            "tags": [],
+            "caregiverIds": [],
+            "active": true,
+            "createdAt": 1786899600000,
+            "updatedAt": 1786899600000,
+            "noticeRules": [
+              {
+                "sourceKind": "email",
+                "sourceValue": "council@example.gov",
+                "terms": [
+                  "bin",
+                  "collection"
+                ]
+              }
+            ]
+          },
+          {
+            "_id": "j97doctask-sto",
+            "localId": "task-stopped",
+            "userId": "user_golden",
+            "kind": "task",
+            "name": "Old bins",
+            "schedule": {
+              "type": "weekly",
+              "daysOfWeek": [
+                2
+              ],
+              "times": [
+                "07:00"
+              ]
+            },
+            "priority": "normal",
+            "tags": [],
+            "caregiverIds": [],
+            "active": false,
+            "createdAt": 1786899600000,
+            "updatedAt": 1786899600000,
+            "noticeRules": [
+              {
+                "sourceKind": "email",
+                "sourceValue": "council@example.gov",
+                "terms": [
+                  "bin",
+                  "collection"
+                ]
+              }
+            ]
+          },
+          {
+            "_id": "j97doctask-unr",
+            "localId": "task-unruled",
+            "userId": "user_golden",
+            "kind": "task",
+            "name": "Water the plants",
+            "schedule": {
+              "type": "weekly",
+              "daysOfWeek": [
+                2
+              ],
+              "times": [
+                "07:00"
+              ]
+            },
+            "priority": "normal",
+            "tags": [],
+            "caregiverIds": [],
+            "active": true,
+            "createdAt": 1786899600000,
+            "updatedAt": 1786899600000,
+            "noticeRules": []
+          },
+          {
+            "_id": "j97doctask-bac",
+            "localId": "task-backlog",
+            "userId": "user_golden",
+            "kind": "task",
+            "name": "Garden waste",
+            "schedule": {
+              "type": "none"
+            },
+            "priority": "normal",
+            "tags": [],
+            "caregiverIds": [],
+            "active": true,
+            "createdAt": 1786899600000,
+            "updatedAt": 1786899600000,
+            "noticeRules": [
+              {
+                "sourceKind": "email",
+                "sourceValue": "council@example.gov",
+                "terms": [
+                  "bin",
+                  "collection"
+                ]
+              }
+            ]
+          },
+          {
+            "_id": "j97doctask-pau",
+            "localId": "task-paused",
+            "userId": "user_golden",
+            "kind": "task",
+            "name": "Bulky waste",
+            "schedule": {
+              "type": "weekly",
+              "daysOfWeek": [
+                4
+              ],
+              "times": [
+                "07:00"
+              ]
+            },
+            "priority": "normal",
+            "tags": [],
+            "caregiverIds": [],
+            "active": true,
+            "createdAt": 1786899600000,
+            "updatedAt": 1786899600000,
+            "pauses": [
+              {
+                "from": 1794891600000
+              }
+            ],
+            "noticeRules": [
+              {
+                "sourceKind": "email",
+                "sourceValue": "council@example.gov",
+                "terms": [
+                  "bin",
+                  "collection"
+                ]
+              }
+            ]
+          },
+          {
+            "_id": "j97docmed-1",
+            "localId": "med-1",
+            "userId": "user_golden",
+            "kind": "medication",
+            "name": "Atorvastatin",
+            "dosage": "20mg",
+            "schedule": {
+              "type": "weekly",
+              "daysOfWeek": [
+                2
+              ],
+              "times": [
+                "07:00"
+              ]
+            },
+            "priority": "normal",
+            "tags": [],
+            "caregiverIds": [],
+            "active": true,
+            "createdAt": 1700000000000,
+            "updatedAt": 1700000000000,
+            "noticeRules": [
+              {
+                "sourceKind": "email",
+                "sourceValue": "council@example.gov",
+                "terms": [
+                  "bin",
+                  "collection"
+                ]
+              }
+            ]
+          }
+        ],
+        "instances": [],
+        "now": 1794675600000,
+        "zone": "America/New_York"
+      },
+      "output": []
+    },
+    {
+      "name": "proposalsFor: a sender with no rule",
+      "input": {
+        "call": "proposalsFor",
+        "notice": {
+          "_id": "j77notice-1",
+          "localId": "notice-1",
+          "userId": "user_golden",
+          "sourceKind": "email",
+          "sourceValue": "someone@example.com",
+          "title": "Bin collection change",
+          "sentence": "Collection moves to 18 November.",
+          "receivedAt": 1794654000000,
+          "resolution": "none",
+          "createdAt": 1794654000000,
+          "updatedAt": 1794654000000
+        },
+        "reminders": [
+          {
+            "_id": "j97doctask-bin",
+            "localId": "task-bins",
+            "userId": "user_golden",
+            "kind": "task",
+            "name": "Put the bins out",
+            "schedule": {
+              "type": "weekly",
+              "daysOfWeek": [
+                2
+              ],
+              "times": [
+                "07:00"
+              ]
+            },
+            "priority": "normal",
+            "tags": [],
+            "caregiverIds": [],
+            "active": true,
+            "createdAt": 1786899600000,
+            "updatedAt": 1786899600000,
+            "noticeRules": [
+              {
+                "sourceKind": "email",
+                "sourceValue": "council@example.gov",
+                "terms": [
+                  "bin",
+                  "collection"
+                ]
+              }
+            ]
+          },
+          {
+            "_id": "j97doctask-rec",
+            "localId": "task-recycling",
+            "userId": "user_golden",
+            "kind": "task",
+            "name": "Recycling",
+            "schedule": {
+              "type": "weekly",
+              "daysOfWeek": [
+                3
+              ],
+              "times": [
+                "07:00"
+              ]
+            },
+            "priority": "normal",
+            "tags": [],
+            "caregiverIds": [],
+            "active": true,
+            "createdAt": 1786899600000,
+            "updatedAt": 1786899600000,
+            "noticeRules": [
+              {
+                "sourceKind": "email",
+                "sourceValue": "council@example.gov",
+                "terms": [
+                  "bin",
+                  "collection"
+                ]
+              }
+            ]
+          },
+          {
+            "_id": "j97doctask-sto",
+            "localId": "task-stopped",
+            "userId": "user_golden",
+            "kind": "task",
+            "name": "Old bins",
+            "schedule": {
+              "type": "weekly",
+              "daysOfWeek": [
+                2
+              ],
+              "times": [
+                "07:00"
+              ]
+            },
+            "priority": "normal",
+            "tags": [],
+            "caregiverIds": [],
+            "active": false,
+            "createdAt": 1786899600000,
+            "updatedAt": 1786899600000,
+            "noticeRules": [
+              {
+                "sourceKind": "email",
+                "sourceValue": "council@example.gov",
+                "terms": [
+                  "bin",
+                  "collection"
+                ]
+              }
+            ]
+          },
+          {
+            "_id": "j97doctask-unr",
+            "localId": "task-unruled",
+            "userId": "user_golden",
+            "kind": "task",
+            "name": "Water the plants",
+            "schedule": {
+              "type": "weekly",
+              "daysOfWeek": [
+                2
+              ],
+              "times": [
+                "07:00"
+              ]
+            },
+            "priority": "normal",
+            "tags": [],
+            "caregiverIds": [],
+            "active": true,
+            "createdAt": 1786899600000,
+            "updatedAt": 1786899600000,
+            "noticeRules": []
+          },
+          {
+            "_id": "j97doctask-bac",
+            "localId": "task-backlog",
+            "userId": "user_golden",
+            "kind": "task",
+            "name": "Garden waste",
+            "schedule": {
+              "type": "none"
+            },
+            "priority": "normal",
+            "tags": [],
+            "caregiverIds": [],
+            "active": true,
+            "createdAt": 1786899600000,
+            "updatedAt": 1786899600000,
+            "noticeRules": [
+              {
+                "sourceKind": "email",
+                "sourceValue": "council@example.gov",
+                "terms": [
+                  "bin",
+                  "collection"
+                ]
+              }
+            ]
+          },
+          {
+            "_id": "j97doctask-pau",
+            "localId": "task-paused",
+            "userId": "user_golden",
+            "kind": "task",
+            "name": "Bulky waste",
+            "schedule": {
+              "type": "weekly",
+              "daysOfWeek": [
+                4
+              ],
+              "times": [
+                "07:00"
+              ]
+            },
+            "priority": "normal",
+            "tags": [],
+            "caregiverIds": [],
+            "active": true,
+            "createdAt": 1786899600000,
+            "updatedAt": 1786899600000,
+            "pauses": [
+              {
+                "from": 1794891600000
+              }
+            ],
+            "noticeRules": [
+              {
+                "sourceKind": "email",
+                "sourceValue": "council@example.gov",
+                "terms": [
+                  "bin",
+                  "collection"
+                ]
+              }
+            ]
+          },
+          {
+            "_id": "j97docmed-1",
+            "localId": "med-1",
+            "userId": "user_golden",
+            "kind": "medication",
+            "name": "Atorvastatin",
+            "dosage": "20mg",
+            "schedule": {
+              "type": "weekly",
+              "daysOfWeek": [
+                2
+              ],
+              "times": [
+                "07:00"
+              ]
+            },
+            "priority": "normal",
+            "tags": [],
+            "caregiverIds": [],
+            "active": true,
+            "createdAt": 1700000000000,
+            "updatedAt": 1700000000000,
+            "noticeRules": [
+              {
+                "sourceKind": "email",
+                "sourceValue": "council@example.gov",
+                "terms": [
+                  "bin",
+                  "collection"
+                ]
+              }
+            ]
+          }
+        ],
+        "instances": [],
+        "now": 1794675600000,
+        "zone": "America/New_York"
+      },
+      "output": []
+    },
+    {
+      "name": "proposalsFor: no word the rules ask for",
+      "input": {
+        "call": "proposalsFor",
+        "notice": {
+          "_id": "j77notice-1",
+          "localId": "notice-1",
+          "userId": "user_golden",
+          "sourceKind": "email",
+          "sourceValue": "Council@Example.gov",
+          "title": "Water outage",
+          "sentence": "Supply returns 18 November.",
+          "receivedAt": 1794654000000,
+          "resolution": "none",
+          "createdAt": 1794654000000,
+          "updatedAt": 1794654000000
+        },
+        "reminders": [
+          {
+            "_id": "j97doctask-bin",
+            "localId": "task-bins",
+            "userId": "user_golden",
+            "kind": "task",
+            "name": "Put the bins out",
+            "schedule": {
+              "type": "weekly",
+              "daysOfWeek": [
+                2
+              ],
+              "times": [
+                "07:00"
+              ]
+            },
+            "priority": "normal",
+            "tags": [],
+            "caregiverIds": [],
+            "active": true,
+            "createdAt": 1786899600000,
+            "updatedAt": 1786899600000,
+            "noticeRules": [
+              {
+                "sourceKind": "email",
+                "sourceValue": "council@example.gov",
+                "terms": [
+                  "bin",
+                  "collection"
+                ]
+              }
+            ]
+          },
+          {
+            "_id": "j97doctask-rec",
+            "localId": "task-recycling",
+            "userId": "user_golden",
+            "kind": "task",
+            "name": "Recycling",
+            "schedule": {
+              "type": "weekly",
+              "daysOfWeek": [
+                3
+              ],
+              "times": [
+                "07:00"
+              ]
+            },
+            "priority": "normal",
+            "tags": [],
+            "caregiverIds": [],
+            "active": true,
+            "createdAt": 1786899600000,
+            "updatedAt": 1786899600000,
+            "noticeRules": [
+              {
+                "sourceKind": "email",
+                "sourceValue": "council@example.gov",
+                "terms": [
+                  "bin",
+                  "collection"
+                ]
+              }
+            ]
+          },
+          {
+            "_id": "j97doctask-sto",
+            "localId": "task-stopped",
+            "userId": "user_golden",
+            "kind": "task",
+            "name": "Old bins",
+            "schedule": {
+              "type": "weekly",
+              "daysOfWeek": [
+                2
+              ],
+              "times": [
+                "07:00"
+              ]
+            },
+            "priority": "normal",
+            "tags": [],
+            "caregiverIds": [],
+            "active": false,
+            "createdAt": 1786899600000,
+            "updatedAt": 1786899600000,
+            "noticeRules": [
+              {
+                "sourceKind": "email",
+                "sourceValue": "council@example.gov",
+                "terms": [
+                  "bin",
+                  "collection"
+                ]
+              }
+            ]
+          },
+          {
+            "_id": "j97doctask-unr",
+            "localId": "task-unruled",
+            "userId": "user_golden",
+            "kind": "task",
+            "name": "Water the plants",
+            "schedule": {
+              "type": "weekly",
+              "daysOfWeek": [
+                2
+              ],
+              "times": [
+                "07:00"
+              ]
+            },
+            "priority": "normal",
+            "tags": [],
+            "caregiverIds": [],
+            "active": true,
+            "createdAt": 1786899600000,
+            "updatedAt": 1786899600000,
+            "noticeRules": []
+          },
+          {
+            "_id": "j97doctask-bac",
+            "localId": "task-backlog",
+            "userId": "user_golden",
+            "kind": "task",
+            "name": "Garden waste",
+            "schedule": {
+              "type": "none"
+            },
+            "priority": "normal",
+            "tags": [],
+            "caregiverIds": [],
+            "active": true,
+            "createdAt": 1786899600000,
+            "updatedAt": 1786899600000,
+            "noticeRules": [
+              {
+                "sourceKind": "email",
+                "sourceValue": "council@example.gov",
+                "terms": [
+                  "bin",
+                  "collection"
+                ]
+              }
+            ]
+          },
+          {
+            "_id": "j97doctask-pau",
+            "localId": "task-paused",
+            "userId": "user_golden",
+            "kind": "task",
+            "name": "Bulky waste",
+            "schedule": {
+              "type": "weekly",
+              "daysOfWeek": [
+                4
+              ],
+              "times": [
+                "07:00"
+              ]
+            },
+            "priority": "normal",
+            "tags": [],
+            "caregiverIds": [],
+            "active": true,
+            "createdAt": 1786899600000,
+            "updatedAt": 1786899600000,
+            "pauses": [
+              {
+                "from": 1794891600000
+              }
+            ],
+            "noticeRules": [
+              {
+                "sourceKind": "email",
+                "sourceValue": "council@example.gov",
+                "terms": [
+                  "bin",
+                  "collection"
+                ]
+              }
+            ]
+          },
+          {
+            "_id": "j97docmed-1",
+            "localId": "med-1",
+            "userId": "user_golden",
+            "kind": "medication",
+            "name": "Atorvastatin",
+            "dosage": "20mg",
+            "schedule": {
+              "type": "weekly",
+              "daysOfWeek": [
+                2
+              ],
+              "times": [
+                "07:00"
+              ]
+            },
+            "priority": "normal",
+            "tags": [],
+            "caregiverIds": [],
+            "active": true,
+            "createdAt": 1700000000000,
+            "updatedAt": 1700000000000,
+            "noticeRules": [
+              {
+                "sourceKind": "email",
+                "sourceValue": "council@example.gov",
+                "terms": [
+                  "bin",
+                  "collection"
+                ]
+              }
+            ]
+          }
+        ],
+        "instances": [],
+        "now": 1794675600000,
+        "zone": "America/New_York"
+      },
+      "output": []
+    },
+    {
+      "name": "occurrenceOptionsAround: three either side of a weekly task's moment",
+      "input": {
+        "call": "occurrenceOptionsAround",
+        "reminder": {
+          "_id": "j97doctask-bin",
+          "localId": "task-bins",
+          "userId": "user_golden",
+          "kind": "task",
+          "name": "Put the bins out",
+          "schedule": {
+            "type": "weekly",
+            "daysOfWeek": [
+              2
+            ],
+            "times": [
+              "07:00"
+            ]
+          },
+          "priority": "normal",
+          "tags": [],
+          "caregiverIds": [],
+          "active": true,
+          "createdAt": 1786899600000,
+          "updatedAt": 1786899600000,
+          "noticeRules": [
+            {
+              "sourceKind": "email",
+              "sourceValue": "council@example.gov",
+              "terms": [
+                "bin",
+                "collection"
+              ]
+            }
+          ]
+        },
+        "around": 1794916800000,
+        "zone": "America/New_York"
+      },
+      "output": [
+        1793707200000,
+        1794312000000,
+        1794916800000,
+        1795521600000,
+        1796126400000
+      ]
+    },
+    {
+      "name": "occurrenceOptionsAround: between two moments",
+      "input": {
+        "call": "occurrenceOptionsAround",
+        "reminder": {
+          "_id": "j97doctask-bin",
+          "localId": "task-bins",
+          "userId": "user_golden",
+          "kind": "task",
+          "name": "Put the bins out",
+          "schedule": {
+            "type": "weekly",
+            "daysOfWeek": [
+              2
+            ],
+            "times": [
+              "07:00"
+            ]
+          },
+          "priority": "normal",
+          "tags": [],
+          "caregiverIds": [],
+          "active": true,
+          "createdAt": 1786899600000,
+          "updatedAt": 1786899600000,
+          "noticeRules": [
+            {
+              "sourceKind": "email",
+              "sourceValue": "council@example.gov",
+              "terms": [
+                "bin",
+                "collection"
+              ]
+            }
+          ]
+        },
+        "around": 1795150800000,
+        "zone": "America/New_York"
+      },
+      "output": [
+        1793707200000,
+        1794312000000,
+        1794916800000,
+        1795521600000,
+        1796126400000,
+        1796731200000
+      ]
+    },
+    {
+      "name": "occurrenceOptionsAround: a Backlog task has none",
+      "input": {
+        "call": "occurrenceOptionsAround",
+        "reminder": {
+          "_id": "j97doctask-bac",
+          "localId": "task-backlog",
+          "userId": "user_golden",
+          "kind": "task",
+          "name": "Garden waste",
+          "schedule": {
+            "type": "none"
+          },
+          "priority": "normal",
+          "tags": [],
+          "caregiverIds": [],
+          "active": true,
+          "createdAt": 1786899600000,
+          "updatedAt": 1786899600000,
+          "noticeRules": [
+            {
+              "sourceKind": "email",
+              "sourceValue": "council@example.gov",
+              "terms": [
+                "bin",
+                "collection"
+              ]
+            }
+          ]
+        },
+        "around": 1794675600000,
+        "zone": "America/New_York"
+      },
+      "output": []
+    },
+    {
+      "name": "occurrenceOptionsAround: a medication has none",
+      "input": {
+        "call": "occurrenceOptionsAround",
+        "reminder": {
+          "_id": "j97docmed-1",
+          "localId": "med-1",
+          "userId": "user_golden",
+          "kind": "medication",
+          "name": "Atorvastatin",
+          "dosage": "20mg",
+          "schedule": {
+            "type": "weekly",
+            "daysOfWeek": [
+              2
+            ],
+            "times": [
+              "07:00"
+            ]
+          },
+          "priority": "normal",
+          "tags": [],
+          "caregiverIds": [],
+          "active": true,
+          "createdAt": 1700000000000,
+          "updatedAt": 1700000000000,
+          "noticeRules": [
+            {
+              "sourceKind": "email",
+              "sourceValue": "council@example.gov",
+              "terms": [
+                "bin",
+                "collection"
+              ]
+            }
+          ]
+        },
+        "around": 1794675600000,
+        "zone": "America/New_York"
+      },
+      "output": []
+    }
+  ]
+}
