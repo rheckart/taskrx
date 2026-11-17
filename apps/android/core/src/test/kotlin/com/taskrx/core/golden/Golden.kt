@@ -55,6 +55,8 @@ val goldenSets: List<GoldenSet> =
         ScheduleGolden,
         ServerScheduleGolden,
         DomainGolden,
+        TodayGolden,
+        AnswerGolden,
     )
 
 // ---- input helpers ------------------------------------------------------------------------

@@ -1,0 +1,764 @@
+{
+  "rule": "answer",
+  "about": "asNeededStatus/showsOnToday/takings/asNeededOf, and snoozeMinutesOrDefault/snoozeUntil/rescheduleInstant/canPickATimeToday with SNOOZE_CHOICES_MINUTES and DEFAULT_SNOOZE_MINUTES",
+  "generatedBy": "apps/android/core/src/test/kotlin/com/taskrx/core/golden (./gradlew :core:test -PupdateGoldens)",
+  "cases": [
+    {
+      "name": "asNeededStatus: nothing taken yet",
+      "input": {
+        "call": "asNeededStatus",
+        "schedule": {
+          "type": "asNeeded",
+          "minGapMinutes": 240,
+          "maxPer24h": 4
+        },
+        "takings": [],
+        "now": 1783353600000
+      },
+      "output": {
+        "lastTakenAt": null,
+        "takenIn24h": 0,
+        "readyAt": null,
+        "wait": null,
+        "openedAt": null,
+        "isReady": true,
+        "showsOnToday": false
+      }
+    },
+    {
+      "name": "asNeededStatus: inside the gap",
+      "input": {
+        "call": "asNeededStatus",
+        "schedule": {
+          "type": "asNeeded",
+          "minGapMinutes": 240,
+          "maxPer24h": 4
+        },
+        "takings": [
+          1783342800000
+        ],
+        "now": 1783353600000
+      },
+      "output": {
+        "lastTakenAt": 1783342800000,
+        "takenIn24h": 1,
+        "readyAt": 1783357200000,
+        "wait": "gap",
+        "openedAt": null,
+        "isReady": false,
+        "showsOnToday": false
+      }
+    },
+    {
+      "name": "asNeededStatus: the gap ran out half an hour ago",
+      "input": {
+        "call": "asNeededStatus",
+        "schedule": {
+          "type": "asNeeded",
+          "minGapMinutes": 240,
+          "maxPer24h": 4
+        },
+        "takings": [
+          1783337400000
+        ],
+        "now": 1783353600000
+      },
+      "output": {
+        "lastTakenAt": 1783337400000,
+        "takenIn24h": 1,
+        "readyAt": 1783351800000,
+        "wait": "gap",
+        "openedAt": 1783351800000,
+        "isReady": true,
+        "showsOnToday": true
+      }
+    },
+    {
+      "name": "asNeededStatus: the gap runs out exactly now",
+      "input": {
+        "call": "asNeededStatus",
+        "schedule": {
+          "type": "asNeeded",
+          "minGapMinutes": 240,
+          "maxPer24h": 4
+        },
+        "takings": [
+          1783339200000
+        ],
+        "now": 1783353600000
+      },
+      "output": {
+        "lastTakenAt": 1783339200000,
+        "takenIn24h": 1,
+        "readyAt": 1783353600000,
+        "wait": "gap",
+        "openedAt": 1783353600000,
+        "isReady": true,
+        "showsOnToday": true
+      }
+    },
+    {
+      "name": "asNeededStatus: the gap ran out over an hour ago",
+      "input": {
+        "call": "asNeededStatus",
+        "schedule": {
+          "type": "asNeeded",
+          "minGapMinutes": 240,
+          "maxPer24h": 4
+        },
+        "takings": [
+          1783332000000
+        ],
+        "now": 1783353600000
+      },
+      "output": {
+        "lastTakenAt": 1783332000000,
+        "takenIn24h": 1,
+        "readyAt": 1783346400000,
+        "wait": "gap",
+        "openedAt": 1783346400000,
+        "isReady": true,
+        "showsOnToday": false
+      }
+    },
+    {
+      "name": "asNeededStatus: at the daily limit, the limit decides",
+      "input": {
+        "call": "asNeededStatus",
+        "schedule": {
+          "type": "asNeeded",
+          "minGapMinutes": 60,
+          "maxPer24h": 3
+        },
+        "takings": [
+          1783281600000,
+          1783317600000,
+          1783346400000
+        ],
+        "now": 1783353600000
+      },
+      "output": {
+        "lastTakenAt": 1783346400000,
+        "takenIn24h": 3,
+        "readyAt": 1783368000000,
+        "wait": "limit",
+        "openedAt": null,
+        "isReady": false,
+        "showsOnToday": false
+      }
+    },
+    {
+      "name": "asNeededStatus: at the limit but the gap is longer",
+      "input": {
+        "call": "asNeededStatus",
+        "schedule": {
+          "type": "asNeeded",
+          "minGapMinutes": 600,
+          "maxPer24h": 2
+        },
+        "takings": [
+          1783270800000,
+          1783350000000
+        ],
+        "now": 1783353600000
+      },
+      "output": {
+        "lastTakenAt": 1783350000000,
+        "takenIn24h": 2,
+        "readyAt": 1783386000000,
+        "wait": "gap",
+        "openedAt": null,
+        "isReady": false,
+        "showsOnToday": false
+      }
+    },
+    {
+      "name": "asNeededStatus: a taking exactly 24 hours old is out of the window",
+      "input": {
+        "call": "asNeededStatus",
+        "schedule": {
+          "type": "asNeeded",
+          "minGapMinutes": 60,
+          "maxPer24h": 2
+        },
+        "takings": [
+          1783267200000,
+          1783335600000
+        ],
+        "now": 1783353600000
+      },
+      "output": {
+        "lastTakenAt": 1783335600000,
+        "takenIn24h": 1,
+        "readyAt": 1783339200000,
+        "wait": "gap",
+        "openedAt": 1783353600000,
+        "isReady": true,
+        "showsOnToday": true
+      }
+    },
+    {
+      "name": "asNeededStatus: over the limit, the oldest extra must leave",
+      "input": {
+        "call": "asNeededStatus",
+        "schedule": {
+          "type": "asNeeded",
+          "minGapMinutes": 30,
+          "maxPer24h": 2
+        },
+        "takings": [
+          1783274400000,
+          1783278000000,
+          1783342800000
+        ],
+        "now": 1783353600000
+      },
+      "output": {
+        "lastTakenAt": 1783342800000,
+        "takenIn24h": 3,
+        "readyAt": 1783364400000,
+        "wait": "limit",
+        "openedAt": null,
+        "isReady": false,
+        "showsOnToday": false
+      }
+    },
+    {
+      "name": "asNeededStatus: the limit holds until the older dose leaves the window",
+      "input": {
+        "call": "asNeededStatus",
+        "schedule": {
+          "type": "asNeeded",
+          "minGapMinutes": 60,
+          "maxPer24h": 2
+        },
+        "takings": [
+          1783266000000,
+          1783267800000,
+          1783346400000
+        ],
+        "now": 1783353600000
+      },
+      "output": {
+        "lastTakenAt": 1783346400000,
+        "takenIn24h": 2,
+        "readyAt": 1783354200000,
+        "wait": "limit",
+        "openedAt": null,
+        "isReady": false,
+        "showsOnToday": false
+      }
+    },
+    {
+      "name": "asNeededStatus: no daily limit",
+      "input": {
+        "call": "asNeededStatus",
+        "schedule": {
+          "type": "asNeeded",
+          "minGapMinutes": 120
+        },
+        "takings": [
+          1783342800000,
+          1783335600000,
+          1783328400000
+        ],
+        "now": 1783353600000
+      },
+      "output": {
+        "lastTakenAt": 1783342800000,
+        "takenIn24h": 3,
+        "readyAt": 1783350000000,
+        "wait": "gap",
+        "openedAt": 1783350000000,
+        "isReady": true,
+        "showsOnToday": false
+      }
+    },
+    {
+      "name": "asNeededStatus: takings in any order",
+      "input": {
+        "call": "asNeededStatus",
+        "schedule": {
+          "type": "asNeeded",
+          "minGapMinutes": 240,
+          "maxPer24h": 4
+        },
+        "takings": [
+          1783346400000,
+          1783321200000,
+          1783335600000
+        ],
+        "now": 1783353600000
+      },
+      "output": {
+        "lastTakenAt": 1783346400000,
+        "takenIn24h": 3,
+        "readyAt": 1783360800000,
+        "wait": "gap",
+        "openedAt": null,
+        "isReady": false,
+        "showsOnToday": false
+      }
+    },
+    {
+      "name": "asNeededStatus: one taking in the future",
+      "input": {
+        "call": "asNeededStatus",
+        "schedule": {
+          "type": "asNeeded",
+          "minGapMinutes": 240,
+          "maxPer24h": 4
+        },
+        "takings": [
+          1783357200000
+        ],
+        "now": 1783353600000
+      },
+      "output": {
+        "lastTakenAt": 1783357200000,
+        "takenIn24h": 1,
+        "readyAt": 1783371600000,
+        "wait": "gap",
+        "openedAt": null,
+        "isReady": false,
+        "showsOnToday": false
+      }
+    },
+    {
+      "name": "takings: completed doses with a completion time, of that reminder only",
+      "input": {
+        "call": "takings",
+        "instances": [
+          {
+            "_id": "j57inst1783346400000",
+            "localId": "inst-1783346400000-completed",
+            "userId": "user_golden",
+            "reminderId": "med-ibuprofen",
+            "reminderKind": "medication",
+            "scheduledTime": 1783346400000,
+            "status": "completed",
+            "completedAt": 1783346700000,
+            "snoozeCount": 0,
+            "createdAt": 1783346400000,
+            "updatedAt": 1783346400000
+          },
+          {
+            "_id": "j57inst1783324800000",
+            "localId": "inst-1783324800000-completed",
+            "userId": "user_golden",
+            "reminderId": "med-ibuprofen",
+            "reminderKind": "medication",
+            "scheduledTime": 1783324800000,
+            "status": "completed",
+            "completedAt": 1783324800000,
+            "snoozeCount": 0,
+            "createdAt": 1783324800000,
+            "updatedAt": 1783324800000
+          },
+          {
+            "_id": "j57inst1783332000000",
+            "localId": "inst-1783332000000-skipped",
+            "userId": "user_golden",
+            "reminderId": "med-ibuprofen",
+            "reminderKind": "medication",
+            "scheduledTime": 1783332000000,
+            "status": "skipped",
+            "snoozeCount": 0,
+            "createdAt": 1783332000000,
+            "updatedAt": 1783332000000
+          },
+          {
+            "_id": "j57inst1783335600000",
+            "localId": "inst-1783335600000-snoozed",
+            "userId": "user_golden",
+            "reminderId": "med-ibuprofen",
+            "reminderKind": "medication",
+            "scheduledTime": 1783335600000,
+            "status": "snoozed",
+            "snoozedUntil": 1783336500000,
+            "snoozeCount": 0,
+            "createdAt": 1783335600000,
+            "updatedAt": 1783335600000
+          },
+          {
+            "_id": "j57inst1783339200000",
+            "localId": "inst-1783339200000-completed",
+            "userId": "user_golden",
+            "reminderId": "med-ibuprofen",
+            "reminderKind": "medication",
+            "scheduledTime": 1783339200000,
+            "status": "completed",
+            "snoozeCount": 0,
+            "createdAt": 1783339200000,
+            "updatedAt": 1783339200000
+          },
+          {
+            "_id": "j57inst1783342800000",
+            "localId": "inst-1783342800000-completed",
+            "userId": "user_golden",
+            "reminderId": "med-other",
+            "reminderKind": "medication",
+            "scheduledTime": 1783342800000,
+            "status": "completed",
+            "completedAt": 1783342800000,
+            "snoozeCount": 0,
+            "createdAt": 1783342800000,
+            "updatedAt": 1783342800000
+          }
+        ],
+        "reminderId": "med-ibuprofen"
+      },
+      "output": [
+        1783346700000,
+        1783324800000
+      ]
+    },
+    {
+      "name": "asNeededOf: an as-needed medication",
+      "input": {
+        "call": "asNeededOf",
+        "reminder": {
+          "_id": "j97docmed-ibup",
+          "localId": "med-ibuprofen",
+          "userId": "user_golden",
+          "kind": "medication",
+          "name": "Atorvastatin",
+          "dosage": "20mg",
+          "schedule": {
+            "type": "asNeeded",
+            "minGapMinutes": 240,
+            "maxPer24h": 4
+          },
+          "priority": "normal",
+          "tags": [],
+          "caregiverIds": [],
+          "active": true,
+          "createdAt": 1700000000000,
+          "updatedAt": 1700000000000
+        }
+      },
+      "output": {
+        "type": "asNeeded",
+        "minGapMinutes": 240,
+        "maxPer24h": 4
+      }
+    },
+    {
+      "name": "asNeededOf: a daily medication",
+      "input": {
+        "call": "asNeededOf",
+        "reminder": {
+          "_id": "j97docmed-ibup",
+          "localId": "med-ibuprofen",
+          "userId": "user_golden",
+          "kind": "medication",
+          "name": "Atorvastatin",
+          "dosage": "20mg",
+          "schedule": {
+            "type": "daily",
+            "times": [
+              "09:00"
+            ]
+          },
+          "priority": "normal",
+          "tags": [],
+          "caregiverIds": [],
+          "active": true,
+          "createdAt": 1700000000000,
+          "updatedAt": 1700000000000
+        }
+      },
+      "output": null
+    },
+    {
+      "name": "snooze choices and default",
+      "input": {
+        "call": "constants"
+      },
+      "output": {
+        "choices": [
+          5,
+          10,
+          15,
+          30,
+          60
+        ],
+        "default": 15
+      }
+    },
+    {
+      "name": "snoozeMinutesOrDefault: nothing stored",
+      "input": {
+        "call": "snoozeMinutesOrDefault",
+        "stored": null
+      },
+      "output": 15
+    },
+    {
+      "name": "snoozeMinutesOrDefault: 5",
+      "input": {
+        "call": "snoozeMinutesOrDefault",
+        "stored": 5
+      },
+      "output": 5
+    },
+    {
+      "name": "snoozeMinutesOrDefault: 10",
+      "input": {
+        "call": "snoozeMinutesOrDefault",
+        "stored": 10
+      },
+      "output": 10
+    },
+    {
+      "name": "snoozeMinutesOrDefault: 15",
+      "input": {
+        "call": "snoozeMinutesOrDefault",
+        "stored": 15
+      },
+      "output": 15
+    },
+    {
+      "name": "snoozeMinutesOrDefault: 30",
+      "input": {
+        "call": "snoozeMinutesOrDefault",
+        "stored": 30
+      },
+      "output": 30
+    },
+    {
+      "name": "snoozeMinutesOrDefault: 60",
+      "input": {
+        "call": "snoozeMinutesOrDefault",
+        "stored": 60
+      },
+      "output": 60
+    },
+    {
+      "name": "snoozeMinutesOrDefault: 0",
+      "input": {
+        "call": "snoozeMinutesOrDefault",
+        "stored": 0
+      },
+      "output": 15
+    },
+    {
+      "name": "snoozeMinutesOrDefault: 7",
+      "input": {
+        "call": "snoozeMinutesOrDefault",
+        "stored": 7
+      },
+      "output": 15
+    },
+    {
+      "name": "snoozeMinutesOrDefault: 45",
+      "input": {
+        "call": "snoozeMinutesOrDefault",
+        "stored": 45
+      },
+      "output": 15
+    },
+    {
+      "name": "snoozeMinutesOrDefault: 120",
+      "input": {
+        "call": "snoozeMinutesOrDefault",
+        "stored": 120
+      },
+      "output": 15
+    },
+    {
+      "name": "snoozeMinutesOrDefault: -5",
+      "input": {
+        "call": "snoozeMinutesOrDefault",
+        "stored": -5
+      },
+      "output": 15
+    },
+    {
+      "name": "snoozeUntil: 5 minutes",
+      "input": {
+        "call": "snoozeUntil",
+        "now": 1783353600000,
+        "minutes": 5
+      },
+      "output": 1783353900000
+    },
+    {
+      "name": "snoozeUntil: 15 minutes",
+      "input": {
+        "call": "snoozeUntil",
+        "now": 1783353600000,
+        "minutes": 15
+      },
+      "output": 1783354500000
+    },
+    {
+      "name": "snoozeUntil: 60 minutes",
+      "input": {
+        "call": "snoozeUntil",
+        "now": 1783353600000,
+        "minutes": 60
+      },
+      "output": 1783357200000
+    },
+    {
+      "name": "rescheduleInstant: later today",
+      "input": {
+        "call": "rescheduleInstant",
+        "now": 1783353600000,
+        "hour": 18,
+        "minute": 30,
+        "zone": "America/New_York"
+      },
+      "output": 1783377000000
+    },
+    {
+      "name": "rescheduleInstant: a time already past today",
+      "input": {
+        "call": "rescheduleInstant",
+        "now": 1783353600000,
+        "hour": 9,
+        "minute": 0,
+        "zone": "America/New_York"
+      },
+      "output": null
+    },
+    {
+      "name": "rescheduleInstant: exactly now is not later",
+      "input": {
+        "call": "rescheduleInstant",
+        "now": 1783353600000,
+        "hour": 12,
+        "minute": 0,
+        "zone": "America/New_York"
+      },
+      "output": null
+    },
+    {
+      "name": "rescheduleInstant: a minute from now",
+      "input": {
+        "call": "rescheduleInstant",
+        "now": 1783353600000,
+        "hour": 12,
+        "minute": 1,
+        "zone": "America/New_York"
+      },
+      "output": 1783353660000
+    },
+    {
+      "name": "rescheduleInstant: hour 24 is refused",
+      "input": {
+        "call": "rescheduleInstant",
+        "now": 1783353600000,
+        "hour": 24,
+        "minute": 0,
+        "zone": "America/New_York"
+      },
+      "output": null
+    },
+    {
+      "name": "rescheduleInstant: minute 60 is refused",
+      "input": {
+        "call": "rescheduleInstant",
+        "now": 1783353600000,
+        "hour": 13,
+        "minute": 60,
+        "zone": "America/New_York"
+      },
+      "output": null
+    },
+    {
+      "name": "rescheduleInstant: a negative hour is refused",
+      "input": {
+        "call": "rescheduleInstant",
+        "now": 1783353600000,
+        "hour": -1,
+        "minute": 0,
+        "zone": "America/New_York"
+      },
+      "output": null
+    },
+    {
+      "name": "rescheduleInstant: a negative minute is refused",
+      "input": {
+        "call": "rescheduleInstant",
+        "now": 1783353600000,
+        "hour": 13,
+        "minute": -1,
+        "zone": "America/New_York"
+      },
+      "output": null
+    },
+    {
+      "name": "rescheduleInstant: 23:59 at 23:58",
+      "input": {
+        "call": "rescheduleInstant",
+        "now": 1783396680000,
+        "hour": 23,
+        "minute": 59,
+        "zone": "America/New_York"
+      },
+      "output": 1783396740000
+    },
+    {
+      "name": "rescheduleInstant: on the spring-forward day, inside the gap",
+      "input": {
+        "call": "rescheduleInstant",
+        "now": 1772949600000,
+        "hour": 2,
+        "minute": 30,
+        "zone": "America/New_York"
+      },
+      "output": 1772955000000
+    },
+    {
+      "name": "rescheduleInstant: on the fall-back day, inside the overlap",
+      "input": {
+        "call": "rescheduleInstant",
+        "now": 1793507400000,
+        "hour": 1,
+        "minute": 30,
+        "zone": "America/New_York"
+      },
+      "output": 1793511000000
+    },
+    {
+      "name": "rescheduleInstant: the local day is the zone's, not UTC's",
+      "input": {
+        "call": "rescheduleInstant",
+        "now": 1783342800000,
+        "hour": 23,
+        "minute": 30,
+        "zone": "Australia/Sydney"
+      },
+      "output": 1783344600000
+    },
+    {
+      "name": "canPickATimeToday: midday",
+      "input": {
+        "call": "canPickATimeToday",
+        "now": 1783353600000,
+        "zone": "America/New_York"
+      },
+      "output": true
+    },
+    {
+      "name": "canPickATimeToday: 23:58",
+      "input": {
+        "call": "canPickATimeToday",
+        "now": 1783396680000,
+        "zone": "America/New_York"
+      },
+      "output": true
+    },
+    {
+      "name": "canPickATimeToday: 23:59",
+      "input": {
+        "call": "canPickATimeToday",
+        "now": 1783396740000,
+        "zone": "America/New_York"
+      },
+      "output": false
+    }
+  ]
+}

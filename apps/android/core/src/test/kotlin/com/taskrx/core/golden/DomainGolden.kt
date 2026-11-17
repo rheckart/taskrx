@@ -86,6 +86,7 @@ fun instanceDoc(
     completedAt: Long? = null,
     snoozedUntil: Long? = null,
     localId: String = "inst-$scheduledTime-$status",
+    updatedAt: Long = scheduledTime,
 ): JsonObject =
     buildJsonObject {
         put("_id", "j57inst$scheduledTime")
@@ -99,7 +100,7 @@ fun instanceDoc(
         snoozedUntil?.let { put("snoozedUntil", it) }
         put("snoozeCount", 0)
         put("createdAt", scheduledTime)
-        put("updatedAt", scheduledTime)
+        put("updatedAt", updatedAt)
     }
 
 /** The phone's `ServerDocs.toPulled` for an instance, with `reminderId` already the parent's local id. */

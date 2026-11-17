@@ -45,7 +45,12 @@ because two writers are unsafe until one Occurrence can only ever be one Instanc
         four zones), `server-schedule` (the writer moved into `:core` as `scheduleToServer`)
   - [x] `domain` lifecycles, pause and stop (137 cases; the transition message is not part of
         the contract)
-  - [ ] `tasks`, `timeline`, `batch`, `asneeded`, `snooze`, `undo`, `sweep`
+  - [x] `tasks`, `timeline`, `batch`, `asneeded`, `snooze`, `undo`, `sweep` (`today`, 50
+        cases over one week of data; `answer`, 46)
+  - [ ] Move the Tasks tab's assembly out of `:app`'s `TodayViewModel` into `:core`, with
+        fixtures: the stored task rows older than the fortnight (a run-out snooze read as
+        missed), the one invented row at a task's latest moment, and which rows offer Undo.
+        Until then the desktop would port them from a view model with no reference
   - [ ] `backlog`, `catchup`, `refill` projection
   - [ ] `parser`, `notices`
 - [ ] Phone catch-up (ADR 0016):
