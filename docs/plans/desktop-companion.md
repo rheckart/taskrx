@@ -83,7 +83,7 @@ because two writers are unsafe until one Occurrence can only ever be one Instanc
         fails on any file not handled or listed as pending:
     - [x] `instance-id`, `local-day` (jiff, zones bundled), `server-schedule`, `server-docs`
           (119 cases)
-    - [ ] `schedule` (the Occurrence engine, pauses, overrides)
+    - [x] `schedule` (the Occurrence engine, pauses, overrides; 92 cases)
     - [ ] `domain` (the lifecycles)
     - [ ] `today`, `answer`
     - [ ] `backlog`, `catch-up`, `refill`

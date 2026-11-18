@@ -5,5 +5,6 @@
 //! `cargo test` must reproduce each case exactly. Pure: no clock, no I/O.
 
 pub mod domain;
+pub mod schedule;
 pub mod sync;
 pub mod time;

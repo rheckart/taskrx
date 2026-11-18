@@ -108,6 +108,13 @@ pub fn whole(value: Option<&Value>) -> Option<i64> {
     }
 }
 
+/// Whether `instant` falls inside any of `windows`: the start counts, the end does not.
+pub fn is_paused_at(windows: &[PauseWindow], instant: i64) -> bool {
+    windows
+        .iter()
+        .any(|w| instant >= w.from && w.until.is_none_or(|u| instant < u))
+}
+
 pub fn pauses_to_json(windows: &[PauseWindow]) -> Value {
     Value::Array(
         windows

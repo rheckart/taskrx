@@ -19,8 +19,7 @@ use serde_json::Value;
 
 /// The fixture files whose rules are not ported yet.
 const PENDING: &[&str] = &[
-    "answer", "backlog", "catch-up", "domain", "notices", "parser", "push", "refill", "schedule",
-    "today",
+    "answer", "backlog", "catch-up", "domain", "notices", "parser", "push", "refill", "today",
 ];
 
 /// One rule set's file. The envelope is strict; the documents inside are not.
@@ -53,6 +52,7 @@ fn handlers() -> BTreeMap<&'static str, Handler> {
         ("local-day", local_day::case as Handler),
         ("server-schedule", schedule::server_schedule as Handler),
         ("server-docs", docs::case as Handler),
+        ("schedule", schedule::occurrences as Handler),
     ])
 }
 
