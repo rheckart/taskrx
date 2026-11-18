@@ -78,7 +78,17 @@ because two writers are unsafe until one Occurrence can only ever be one Instanc
         bound (`read of … attempt N`)
 - [ ] Desktop, `apps/desktop`:
   - [ ] Cargo workspace: `taskrx-desktop-core` (rules, Convex, screen state) and the Rune crate
-  - [ ] Rules ported to Rust against the fixtures
+        (`taskrx-desktop-core` exists; `cargo test` is the third gate in `CLAUDE.md`)
+  - [ ] Rules ported to Rust against the fixtures. `tests/golden.rs` reads them in place and
+        fails on any file not handled or listed as pending:
+    - [x] `instance-id`, `local-day` (jiff, zones bundled), `server-schedule`, `server-docs`
+          (119 cases)
+    - [ ] `schedule` (the Occurrence engine, pauses, overrides)
+    - [ ] `domain` (the lifecycles)
+    - [ ] `today`, `answer`
+    - [ ] `backlog`, `catch-up`, `refill`
+    - [ ] `parser`, `notices`
+    - [ ] `push`
   - [ ] Sign-in through the browser, session token in the keyring
   - [ ] Today, Tasks, add and edit, Backlog, Catch up, Proposals
   - [ ] Omarchy theme (accent from `colors.toml`, watched; `hyprctl` rounding)

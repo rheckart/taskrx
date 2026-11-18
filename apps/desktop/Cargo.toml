@@ -1,0 +1,7 @@
+[workspace]
+resolver = "3"
+members = ["crates/taskrx-desktop-core"]
+
+[workspace.package]
+edition = "2024"
+publish = false
