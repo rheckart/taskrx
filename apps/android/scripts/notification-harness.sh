@@ -2303,7 +2303,7 @@ case14_notice_intake() {
     "a notice was stored, the same one was a duplicate, and a different one was stored. first=[${first}] second=[${second}] third=[${third}]"
 }
 
-# ── Cases 15-18: the check at fire time (ADR 0016) ─────────────────────────
+# ── Cases 15-19: the check at fire time (ADR 0016) ─────────────────────────
 #
 # Before a dose posts, AlarmReceiver asks the server whether the moment was
 # already answered on another device, and stays quiet only on that positive
@@ -2324,6 +2324,10 @@ case14_notice_intake() {
 #       bound -> posts, TimedOut. Run 15 first: it is this case's control.
 #   18  backup: as 17, and the process is killed with SIGKILL inside the bound
 #       -> the backup alarm posts the dose ~15 s later, without asking
+#   19  two doses at one minute, offline: Android hands the app their alarms one
+#       after the other, so a bound per dose would post the second a whole bound
+#       late. The bound is per moment -> both post, one near the bound and the
+#       other within a second of it
 #
 # EMULATOR ONLY. They reconfigure `adb reverse`, toggle airplane mode, and 18
 # needs `adb root`. They refuse to run on anything that is not an emulator.
@@ -2337,10 +2341,12 @@ FIRE_GRACE_S="${FIRE_GRACE_S:-45}"
 FIRE_SLOW_DELAY_S="${FIRE_SLOW_DELAY_S:-10}"
 FIRE_PROXY_PORT="${FIRE_PROXY_PORT:-3299}"
 FIRE_BACKUP_WAIT_S="${FIRE_BACKUP_WAIT_S:-40}"
+# FireGate.TIMEOUT_MS.
+FIRE_BOUND_MS="${FIRE_BOUND_MS:-4000}"
 # The first sync after a fresh install or update can take over a minute.
 FIRE_SYNC_BUDGET_S="${FIRE_SYNC_BUDGET_S:-120}"
 
-FT_RID=""; FT_FIRE_AT=""; FT_SERVER_ID=""; FT_IDENTITY=""; FT_PROXY_PID=""
+FT_RID=""; FT_FIRE_AT=""; FT_SERVER_ID=""; FT_IDENTITY=""; FT_PROXY_PID=""; FT_RID2=""
 
 require_emulator() {
   local n="$1" name="$2"
@@ -2379,9 +2385,10 @@ fire_answer_on_server() {
 }
 
 # Seeds the dose, waits for it on the server, then leaves no process behind.
+# Given a second label, seeds a second dose due at the same minute (FT_RID2).
 # Returns non-zero after recording why the case could not be set up.
 fire_setup() {
-  local n="$1" name="$2" label="$3" seeded deadline
+  local n="$1" name="$2" label="$3" label2="${4:-}" seeded deadline at2
   require_emulator "$n" "$name" || return 1
   require_reachable "$n" "$name" || return 1
   require_signed_in "$n" "$name" || return 1
@@ -2399,15 +2406,27 @@ fire_setup() {
     add_unevaluated "$n" "$name" setup_failed "SETUP FAILED (not a product failure): nothing was seeded or armed. The app answered: ${seeded:-<nothing>}"
     return 1
   fi
+  FT_RID2=""
+  if [[ -n "$label2" ]]; then
+    seeded="$(harness_once seed-due-reminder "$label2" "$FIRE_LEAD_MS" "$HARNESS_SLOW_BUDGET_S")"
+    FT_RID2="$(printf '%s' "$seeded" | grep -oE 'reminder_id=[0-9a-fA-F-]+' | head -1 | cut -d= -f2)"
+    at2="$(printf '%s' "$seeded" | grep -oE 'fire_at=[0-9]+' | head -1 | cut -d= -f2)"
+    if [[ -z "$FT_RID2" || "$at2" != "$FT_FIRE_AT" ]]; then
+      add_unevaluated "$n" "$name" setup_failed "SETUP FAILED (not a product failure): the second dose did not land on the first's minute ($FT_FIRE_AT, ${at2:-none}); a minute turned between the seeds. Run again."
+      return 1
+    fi
+  fi
   deadline=$(( $(date +%s) + FIRE_SYNC_BUDGET_S ))
   FT_SERVER_ID=""
+  local second_on_server="${FT_RID2:+no}"
   while (( $(date +%s) < deadline )); do
-    FT_SERVER_ID="$(fire_server_reminder_id "$FT_RID")"
-    [[ -n "$FT_SERVER_ID" ]] && break
+    [[ -z "$FT_SERVER_ID" ]] && FT_SERVER_ID="$(fire_server_reminder_id "$FT_RID")"
+    [[ "$second_on_server" == no && -n "$(fire_server_reminder_id "$FT_RID2")" ]] && second_on_server=yes
+    [[ -n "$FT_SERVER_ID" && "$second_on_server" != no ]] && break
     sleep 3
   done
-  if [[ -z "$FT_SERVER_ID" ]]; then
-    add_unevaluated "$n" "$name" setup_failed "SETUP FAILED (not a product failure): the seeded reminder $FT_RID never reached the local deployment within ${FIRE_SYNC_BUDGET_S}s, so the server could not hold an answer for it."
+  if [[ -z "$FT_SERVER_ID" || "$second_on_server" == no ]]; then
+    add_unevaluated "$n" "$name" setup_failed "SETUP FAILED (not a product failure): the seeded reminders ($FT_RID ${FT_RID2}) did not all reach the local deployment within ${FIRE_SYNC_BUDGET_S}s; a dose the server has never seen is not checked, so nothing would be read."
     return 1
   fi
   adb_shell input keyevent KEYCODE_HOME >/dev/null 2>&1
@@ -2425,12 +2444,13 @@ fire_setup() {
   adb_run logcat -c >/dev/null 2>&1
 }
 
-# The receiver's line for this dose, once it has fired (empty if it never did).
+# The receiver's line for this dose (or the dose of the reminder given third),
+# once it has fired (empty if it never did).
 fire_wait_log() {
-  local pattern="$1" wait_s="$2" deadline line
+  local pattern="$1" wait_s="$2" rid="${3:-$FT_RID}" deadline line
   deadline=$(( FT_FIRE_AT / 1000 + wait_s ))
   while (( $(date +%s) < deadline )); do
-    line="$(adb_run logcat -d -s alarm 2>/dev/null | grep -F "$FT_RID-$FT_FIRE_AT" | grep -E "$pattern" | tail -1)"
+    line="$(adb_run logcat -d -s alarm 2>/dev/null | grep -F "$rid-$FT_FIRE_AT" | grep -E "$pattern" | tail -1)"
     [[ -n "$line" ]] && { printf '%s' "$line"; return 0; }
     sleep 2
   done
@@ -2510,6 +2530,36 @@ case16_fire_offline_posts() {
     add_unevaluated 16 fire_offline_posts unreachable "UNEVALUATED: no receiver line within ${FIRE_GRACE_S}s of $FT_FIRE_AT (posted=$posted)."
   else
     add_result 16 fire_offline_posts false "offline should time out or fail and post, got: ${line} (posted=$posted)"
+  fi
+}
+
+# The "in N ms" of a receiver line.
+fire_took_ms() { printf '%s' "$1" | grep -oE 'in [0-9]+ ms' | grep -oE '[0-9]+'; }
+
+case19_fire_pair_offline() {
+  local stamp label label2 line line2 took took2 posted posted2 first_ms last_ms
+  stamp="$(date +%s)"
+  label="fire-pair-a-$stamp"; label2="fire-pair-b-$stamp"
+  fire_setup 19 fire_pair_offline "$label" "$label2" || return
+  airplane_on
+  adb_run reverse --remove tcp:3210 >/dev/null 2>&1
+  line="$(fire_wait_log "fire-time check|answered on another device" "$FIRE_GRACE_S")"
+  line2="$(fire_wait_log "fire-time check|answered on another device" "$FIRE_GRACE_S" "$FT_RID2")"
+  sleep 3
+  posted="$(fire_posted "$label")"; posted2="$(fire_posted "$label2")"
+  fire_cleanup
+  if [[ -z "$line" || -z "$line2" ]]; then
+    add_unevaluated 19 fire_pair_offline unreachable "UNEVALUATED: not both receiver lines within ${FIRE_GRACE_S}s of $FT_FIRE_AT (a: ${line:-none}; b: ${line2:-none})."
+    return
+  fi
+  took="$(fire_took_ms "$line")"; took2="$(fire_took_ms "$line2")"
+  # Android delivers the two alarms one after the other: the one it handed over second must
+  # not wait a bound of its own.
+  if (( took < took2 )); then first_ms=$took; last_ms=$took2; else first_ms=$took2; last_ms=$took; fi
+  if [[ "$posted" -ge 1 && "$posted2" -ge 1 ]] && (( first_ms <= 1500 && last_ms <= FIRE_BOUND_MS + 1000 )); then
+    add_result 19 fire_pair_offline true "two doses at one minute, offline, both posted within one bound: ${line##*: } / ${line2##*: }"
+  else
+    add_result 19 fire_pair_offline false "two doses at one minute, offline, should both post within one bound (one near ${FIRE_BOUND_MS} ms, the other near none), got: ${line##*: } / ${line2##*: } (posted=$posted/$posted2)"
   fi
 }
 
@@ -2596,6 +2646,7 @@ run_case() {
     16) case16_fire_offline_posts ;;
     17) case17_fire_slow_server_posts ;;
     18) case18_fire_backup_after_kill ;;
+    19) case19_fire_pair_offline ;;
     *) echo "unknown case: $1" >&2; return 2 ;;
   esac
 }
@@ -2606,14 +2657,14 @@ notification-harness.sh — adb-driven notification test harness
 
   --list          List cases
   --purge         Hard-delete every row cases 8 and 9 seeded (Convex, then device)
-  --case N        Run case N (1..18)
+  --case N        Run case N (1..19)
   --all           Run cases 1-7, 10-11: the local-only delivery baseline
   --auth          Run cases 8-9: need a signed-in app and a reachable Convex.
                   Prefer `--case 8` then `--case 9` as separate invocations —
                   case 8 fires a notification, after which the app's SQLite
                   writes fail with "database is locked" and case 9 cannot set
                   itself up. See constraint 6a.
-  --fire          Run cases 15-18: the check at fire time. Signed in, EMULATOR
+  --fire          Run cases 15-19: the check at fire time. Signed in, EMULATOR
                   only, against the local deployment (`npx convex dev`).
   --output PATH   JSON report destination
 
@@ -2726,6 +2777,7 @@ list_cases() {
 16 fire_offline_posts       [signed in, emulator] Offline at fire time: the check fails open and the dose posts
 17 fire_slow_server_posts   [signed in, emulator] Answered but slow: the check times out and the dose posts
 18 fire_backup_after_kill   [signed in, emulator] Process killed mid-check: the backup alarm posts the dose
+19 fire_pair_offline        [signed in, emulator] Two doses at one minute, offline: both post within one bound, not one each
 EOF
 }
 
@@ -2756,7 +2808,7 @@ while [[ $# -gt 0 ]]; do
     --case) cases_to_run+=("$2"); shift 2 ;;
     --all) cases_to_run=(1 2 3 4 5 6 7 10 11); shift ;;
     --auth) cases_to_run+=(8 9); shift ;;
-    --fire) cases_to_run+=(15 16 17 18); shift ;;
+    --fire) cases_to_run+=(15 16 17 18 19); shift ;;
     --output) output="$2"; shift 2 ;;
     *) echo "unknown arg: $1" >&2; usage; exit 2 ;;
   esac

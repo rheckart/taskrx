@@ -84,4 +84,20 @@ class FireTimeCheckTest {
             assertEquals(FireCheck.NotOnServer, check(listOf(row(status = "completed")), onServer = false))
             assertTrue(gateway.calls.isEmpty())
         }
+
+    @Test
+    fun `two reminders due at one instant share one read and keep their own answers`() =
+        withFixture(AT) {
+            container.reminders.create(CreateReminderInput(id = "med", userId = USER, kind = ReminderKind.Medication, name = "Metformin", schedule = onceTimes(AT)))
+            container.reminders.create(CreateReminderInput(id = "other", userId = USER, kind = ReminderKind.Medication, name = "Lisinopril", schedule = onceTimes(AT)))
+            container.reminders.setConvexId("med", "cr-med")
+            container.reminders.setConvexId("other", "cr-other")
+            gateway.onQuery = { _, _ -> Json.parseToJsonElement("[${row(status = "completed")},${row(reminderId = "cr-other", status = "pending")}]") }
+            val check = FireTimeCheck(FakeAuth(initial = AuthStatus.SignedIn(USER)), MutableStateFlow(true), gateway, container.reminders)
+            val gate = FireGate()
+
+            assertEquals(FireCheck.Answered, gate.decide(AT) { check.check("med", AT, it) })
+            assertEquals(FireCheck.Open, gate.decide(AT) { check.check("other", AT, it) })
+            assertEquals(1, gateway.calls.size)
+        }
 }

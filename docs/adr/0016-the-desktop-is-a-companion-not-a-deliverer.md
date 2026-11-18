@@ -63,6 +63,16 @@ arms a backup alarm holding the same dose, 15 seconds out on the same primitive,
 once the dose has posted or the server has answered. The backup posts without asking. The price
 is a dose up to 15 seconds late in the rare case it is needed.
 
+The timeout is per moment, not per dose. Android hands a process its alarms one at a time and
+holds the next until the last one's receiver is done, so on a phone with five doses at 07:30
+and no network, a timeout per dose would post the fifth twenty seconds late, where the build
+before the check posted all five at once. The doses of one instant share one read of that
+instant and one timeout, counted from the first alarm; a dose that arrives after it still gets a
+quarter second to match its rows, so a read that lands after the first dose gave up answers a
+later dose only if it lands within that quarter second. This removes the stacking, not the
+timeout: on the phone a process woken from a long freeze took about 6 s to reach the server, so
+a dose answered elsewhere can still ring after an idle wake until that reconnect is shortened.
+
 The check runs on the Medication Tier's path, which ADR 0003's device evidence covers. It
 needs its own harness cases: offline posts, answered elsewhere stays silent, and a slow
 server posts within the timeout. Server push (FCM) was rejected for now: it brings a

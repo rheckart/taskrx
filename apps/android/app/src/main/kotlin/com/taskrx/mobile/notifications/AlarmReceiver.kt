@@ -9,6 +9,7 @@ import com.taskrx.core.notifications.NotificationSpec
 import com.taskrx.mobile.TaskRxApplication
 import com.taskrx.mobile.sync.FireCheck
 import com.taskrx.mobile.sync.FireGate
+import com.taskrx.mobile.sync.MomentRead
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -17,8 +18,8 @@ import kotlinx.coroutines.launch
 
 /**
  * Posts the notification for a medication alarm that has just fired, unless the server says the
- * moment was already answered on another device (ADR 0016). The check is bounded by [FireGate]
- * and fails open, so the dose posts whenever there is no positive answer in time, and a
+ * moment was already answered on another device (ADR 0016). The check is bounded by [FireGate],
+ * once for all the doses due at an instant, and fails open, so the dose posts whenever there is no positive answer in time, and a
  * [DoseBackup] posts it if the process dies before either.
  */
 class AlarmReceiver : BroadcastReceiver() {
@@ -39,7 +40,8 @@ class AlarmReceiver : BroadcastReceiver() {
         timeoutMs: Long = FireGate.TIMEOUT_MS,
         backup: DoseBackup = DoseBackup(context),
         now: () -> Long = System::currentTimeMillis,
-        check: suspend (NotificationSpec) -> FireCheck = { spec -> serverCheck(context, spec) },
+        gate: FireGate = FireGate.process,
+        check: suspend (NotificationSpec, MomentRead) -> FireCheck = { spec, moment -> serverCheck(context, spec, moment) },
     ): Job {
         val spec = SpecCodec.decode(intent.getStringExtra(EXTRA_SPEC))
         if (spec == null) {
@@ -62,7 +64,7 @@ class AlarmReceiver : BroadcastReceiver() {
         }
         return scope.launch {
             val started = SystemClock.elapsedRealtime()
-            val outcome = FireGate.decide(timeoutMs) { check(spec) }
+            val outcome = gate.decide(spec.scheduledTime, timeoutMs) { moment -> check(spec, moment) }
             // The time it took, so real doses show whether the bound holds.
             val took = SystemClock.elapsedRealtime() - started
             if (outcome == FireCheck.Answered) {
@@ -76,10 +78,10 @@ class AlarmReceiver : BroadcastReceiver() {
         }
     }
 
-    private suspend fun serverCheck(context: Context, spec: NotificationSpec): FireCheck {
+    private suspend fun serverCheck(context: Context, spec: NotificationSpec, moment: MomentRead): FireCheck {
         val app = context.applicationContext as? TaskRxApplication ?: return FireCheck.LocalOnly
         val check = app.container.fireTimeCheck ?: return FireCheck.LocalOnly
-        return check.check(spec.reminderId, spec.scheduledTime)
+        return check.check(spec.reminderId, spec.scheduledTime, moment)
     }
 
     companion object {

@@ -64,8 +64,13 @@ because two writers are unsafe until one Occurrence can only ever be one Instanc
         `FireGate`, 4 s; `DoseBackup` posts if the process dies mid-check). Harness cases 15-18
         pass on an API 34 emulator against a local backend: answered elsewhere stays quiet (461 ms
         cold, on the same machine as the server, so not the phone's number), offline and a slow
-        server post at the bound, and a SIGKILL mid-check is posted by the backup. Still to see:
-        a real dose's `alarm` line on the phone against the VPS
+        server post at the bound, and a SIGKILL mid-check is posted by the backup. On the phone
+        against the VPS (0.13.0, 2026-11-18 08:30): one dose `Open in 2587 ms`, but the one before
+        it `TimedOut` on a wake from a frozen process (the connection took about 6 s back), and
+        the second waited for the first: the bound was per dose. Now per moment, one shared read
+        (case 19). That removes the stacking, not the timeout: an idle wake still takes about 6 s
+        to reach the server, so expect `TimedOut` there until the `read of` and Clerk failure
+        lines show where the time goes. Still to see: those lines from a phone dose
 - [ ] Desktop, `apps/desktop`:
   - [ ] Cargo workspace: `taskrx-desktop-core` (rules, Convex, screen state) and the Rune crate
   - [ ] Rules ported to Rust against the fixtures

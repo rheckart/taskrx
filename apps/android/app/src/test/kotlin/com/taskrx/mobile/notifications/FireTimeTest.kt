@@ -29,8 +29,13 @@ class FireTimeTest {
     private val context = ApplicationProvider.getApplicationContext<android.app.Application>()
     private val manager = context.getSystemService(NotificationManager::class.java)
 
-    private fun fire(spec: NotificationSpec = DOSE, timeoutMs: Long = 300, check: suspend (NotificationSpec) -> FireCheck) =
-        runBlocking { AlarmReceiver().handle(context, Intent().putExtra(AlarmReceiver.EXTRA_SPEC, SpecCodec.encode(spec)), timeoutMs, check = check).join() }
+    /** Each alarm through a gate of its own, unless a test hands one over: the process gate would carry a moment between tests. */
+    private fun fire(spec: NotificationSpec = DOSE, timeoutMs: Long = 300, gate: FireGate = FireGate(), check: suspend (NotificationSpec) -> FireCheck) =
+        runBlocking {
+            AlarmReceiver()
+                .handle(context, Intent().putExtra(AlarmReceiver.EXTRA_SPEC, SpecCodec.encode(spec)), timeoutMs, gate = gate, check = { s, _ -> check(s) })
+                .join()
+        }
 
     private fun posted() = shadowOf(manager).getNotification(DOSE.id, 0)
 
@@ -161,7 +166,7 @@ class FireTimeTest {
 
         var asked = false
         runBlocking {
-            AlarmReceiver().handle(context, backup, check = {
+            AlarmReceiver().handle(context, backup, check = { _, _ ->
                 asked = true
                 FireCheck.Answered
             }).join()
@@ -174,5 +179,28 @@ class FireTimeTest {
     fun `a take-another-dose prompt arms no backup`() {
         fire(spec = DOSE.copy(asNeeded = true)) { FireCheck.Open }
         assertEquals(emptyList(), backups())
+    }
+
+    @Test
+    fun `two doses due together with no network post within one wait, not one each`() {
+        // A clock that moves: Robolectric's SystemClock stands still, and the bound is measured on it.
+        val gate = FireGate { System.nanoTime() / 1_000_000 }
+        val other = DOSE.copy(id = "med2-1000", reminderId = "med2", title = "Lisinopril")
+        val started = System.nanoTime()
+        for (spec in listOf(DOSE, other)) {
+            runBlocking {
+                // One after the other, as Android delivers a process's alarms.
+                AlarmReceiver()
+                    .handle(context, Intent().putExtra(AlarmReceiver.EXTRA_SPEC, SpecCodec.encode(spec)), timeoutMs = 1_000, gate = gate, check = { _, moment ->
+                        moment { awaitCancellation() }
+                        FireCheck.Open
+                    })
+                    .join()
+            }
+        }
+        val took = (System.nanoTime() - started) / 1_000_000
+        assertNotNull(posted())
+        assertNotNull(shadowOf(manager).getNotification(other.id, 0))
+        assertTrue(took < 1_000 + FireGate.LATE_FLOOR_MS + 500, "both posted in about one wait: $took ms")
     }
 }
