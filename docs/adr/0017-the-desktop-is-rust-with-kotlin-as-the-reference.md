@@ -8,8 +8,11 @@ reproduce it.
 
 ## The shape
 
-- **`taskrx-desktop-core`** (toolkit-free): the ported rules, the Convex connection and the
-  screen state. Everything that can be tested is here.
+- **`taskrx-desktop-core`** (toolkit-free, pure): the ported rules, with no clock and no I/O,
+  so the golden gate stays fast.
+- **`taskrx-desktop-service`** (toolkit-free): sign-in, the keyring, the Convex connection and
+  the screen state, as pure functions of the data, the clock and the zone where they can be.
+  Everything else that can be tested without a window is here.
 - **The Rune crate** only draws that state and forwards input. It holds no rule.
 - **Golden fixtures.** A `:core` test task writes input→output cases as JSON, run at a fixed
   TZ with the DST cases included. `cargo test` must reproduce every one exactly. A rule

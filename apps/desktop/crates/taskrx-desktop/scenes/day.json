@@ -1,0 +1,125 @@
+{
+  "about": "Made-up data for the headless scenes: no person's record. The clock is 2026-11-24 14:30 in America/New_York.",
+  "now": 1795548600000,
+  "zone": "America/New_York",
+  "reminders": [
+    {
+      "_id": "srv_r1",
+      "localId": "r1",
+      "userId": "user_scene",
+      "kind": "medication",
+      "name": "Lisinopril",
+      "dosage": "10 mg",
+      "schedule": { "type": "daily", "times": ["08:00", "20:00"] },
+      "priority": "normal",
+      "active": true,
+      "createdAt": 1793000000000,
+      "updatedAt": 1793000000000
+    },
+    {
+      "_id": "srv_r2",
+      "localId": "r2",
+      "userId": "user_scene",
+      "kind": "medication",
+      "name": "Vitamin D",
+      "dosage": "1000 IU",
+      "schedule": { "type": "daily", "times": ["09:00"] },
+      "priority": "normal",
+      "active": true,
+      "createdAt": 1793000000000,
+      "updatedAt": 1793000000000
+    },
+    {
+      "_id": "srv_r3",
+      "localId": "r3",
+      "userId": "user_scene",
+      "kind": "medication",
+      "name": "Ibuprofen",
+      "dosage": "200 mg",
+      "schedule": { "type": "asNeeded", "minGapMinutes": 360, "maxPer24h": 4 },
+      "priority": "normal",
+      "active": true,
+      "createdAt": 1793000000000,
+      "updatedAt": 1793000000000
+    },
+    {
+      "_id": "srv_r4",
+      "localId": "r4",
+      "userId": "user_scene",
+      "kind": "medication",
+      "name": "Metformin",
+      "dosage": "500 mg",
+      "schedule": { "type": "daily", "times": ["12:00", "18:00"] },
+      "priority": "normal",
+      "active": true,
+      "createdAt": 1793000000000,
+      "updatedAt": 1793000000000
+    },
+    {
+      "_id": "srv_r5",
+      "localId": "r5",
+      "userId": "user_scene",
+      "kind": "task",
+      "name": "Water the plants",
+      "schedule": { "type": "daily", "times": ["10:00"] },
+      "priority": "normal",
+      "active": true,
+      "createdAt": 1793000000000,
+      "updatedAt": 1793000000000
+    },
+    {
+      "_id": "srv_r6",
+      "localId": "r6",
+      "userId": "user_scene",
+      "kind": "task",
+      "name": "Take out recycling",
+      "schedule": { "type": "weekly", "daysOfWeek": [4], "times": ["19:00"] },
+      "priority": "normal",
+      "active": true,
+      "createdAt": 1793000000000,
+      "updatedAt": 1793000000000
+    }
+  ],
+  "instances": [
+    {
+      "_id": "srv_i1",
+      "localId": "i1",
+      "userId": "user_scene",
+      "reminderId": "srv_r1",
+      "reminderKind": "medication",
+      "scheduledTime": 1795525200000,
+      "status": "completed",
+      "completedAt": 1795525500000,
+      "snoozeCount": 0,
+      "createdAt": 1795525200000,
+      "updatedAt": 1795525500000
+    },
+    {
+      "_id": "srv_i2",
+      "localId": "i2",
+      "userId": "user_scene",
+      "reminderId": "srv_r3",
+      "reminderKind": "medication",
+      "scheduledTime": 1795540000000,
+      "status": "completed",
+      "completedAt": 1795540000000,
+      "snoozeCount": 0,
+      "createdAt": 1795540000000,
+      "updatedAt": 1795540000000
+    },
+    {
+      "_id": "srv_i3",
+      "localId": "i3",
+      "userId": "user_scene",
+      "reminderId": "srv_r4",
+      "reminderKind": "medication",
+      "scheduledTime": 1795539600000,
+      "status": "snoozed",
+      "snoozedUntil": 1795551000000,
+      "snoozeCount": 1,
+      "createdAt": 1795539600000,
+      "updatedAt": 1795540000000
+    }
+  ],
+  "notices": []
+}

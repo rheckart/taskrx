@@ -1,0 +1,22 @@
+[package]
+name = "taskrx-desktop"
+version = "0.1.0"
+edition.workspace = true
+publish.workspace = true
+description = "The desktop Companion's window: draws the service crate's state with Rune and forwards input. Holds no rule (ADR 0017)."
+
+[[bin]]
+name = "taskrx-desktop"
+path = "src/main.rs"
+
+[dependencies]
+taskrx-desktop-core = { path = "../taskrx-desktop-core" }
+taskrx-desktop-service = { path = "../taskrx-desktop-service" }
+jiff = { version = "0.2", features = ["tzdb-bundle-always"] }
+reqwest = { version = "0.12", default-features = false, features = ["rustls-tls"] }
+serde_json = "1"
+tokio = { version = "1", features = ["rt-multi-thread"] }
+# Pre-release: pinned to the `dev` revision checked on Hyprland (ADR 0017). Its patch table is
+# copied into the workspace root at the same revision. `tooling` keeps the headless scenes
+# (--snap, --tree, --script) in release builds.
+rune = { git = "https://github.com/anomalyco/rune", rev = "cca5df6fafb4721d96fe105f126ebfd2ec351bb6", features = ["tooling"] }

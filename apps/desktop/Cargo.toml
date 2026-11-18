@@ -1,7 +1,20 @@
 [workspace]
 resolver = "3"
-members = ["crates/taskrx-desktop-core", "crates/taskrx-desktop-service"]
+members = [
+    "crates/taskrx-desktop-core",
+    "crates/taskrx-desktop-service",
+    "crates/taskrx-desktop",
+]
 
 [workspace.package]
 edition = "2024"
 publish = false
+
+# Rune's own patches, at the revision `crates/taskrx-desktop` pins. Cargo does not inherit a
+# dependency's patches, so they are repeated here; update them with the rev.
+[patch.crates-io]
+winit = { git = "https://github.com/anomalyco/rune", rev = "cca5df6fafb4721d96fe105f126ebfd2ec351bb6" }
+parley_engine = { git = "https://github.com/anomalyco/rune", rev = "cca5df6fafb4721d96fe105f126ebfd2ec351bb6" }
+wgpu-hal = { git = "https://github.com/anomalyco/rune", rev = "cca5df6fafb4721d96fe105f126ebfd2ec351bb6" }
+accesskit_windows = { git = "https://github.com/anomalyco/rune", rev = "cca5df6fafb4721d96fe105f126ebfd2ec351bb6" }
+accesskit_macos = { git = "https://github.com/anomalyco/rune", rev = "cca5df6fafb4721d96fe105f126ebfd2ec351bb6" }
