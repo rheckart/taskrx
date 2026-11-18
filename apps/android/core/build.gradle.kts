@@ -92,6 +92,9 @@ kover {
             "com.taskrx.core.sync.PushKt*",
             "com.taskrx.core.sync.PushCall",
             "com.taskrx.core.sync.PushRejected",
+            // The documents read and the payloads written, shared with the desktop (ADR 0017).
+            "com.taskrx.core.sync.ServerDocs",
+            "com.taskrx.core.sync.SyncPayloads",
             // backlog/completion.ts
             "com.taskrx.core.backlog.CompletionKt*",
             "com.taskrx.core.backlog.BacklogCompletion",

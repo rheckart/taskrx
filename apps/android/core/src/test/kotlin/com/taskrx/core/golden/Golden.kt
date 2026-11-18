@@ -56,6 +56,8 @@ val goldenSets: List<GoldenSet> =
         InstanceIdGolden,
         ScheduleGolden,
         ServerScheduleGolden,
+        ServerDocsGolden,
+        PushGolden,
         LocalDayGolden,
         DomainGolden,
         TodayGolden,

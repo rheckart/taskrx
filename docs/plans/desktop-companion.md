@@ -51,9 +51,10 @@ because two writers are unsafe until one Occurrence can only ever be one Instanc
         fixtures: the stored task rows older than the fortnight (a run-out snooze read as
         missed), the one invented row at a task's latest moment, and which rows offer Undo
         (`assembleTasksTab`, `taskWindow`, `undoableInstanceIds`; in `today`, 5 cases)
-  - [ ] Move the Convex document decoders (`ServerDocs.toPulled`) and the write call shapes
+  - [x] Move the Convex document decoders (`ServerDocs.toPulled`) and the write call shapes
         (`Push.kt`'s callers in `SyncPayloads`) into `:core` with fixtures, including
         resolving an instance's Convex `reminderId` to the parent's `localId`
+        (`ServerDocs.parentLocalIds`; `server-docs` 19 cases, `push` 21)
   - [x] `backlog`, `catchup`, `refill` projection (`backlog` 5, `catch-up` 5, `refill` 22)
   - [x] `parser` (157: every phrase the parser tests read, and kind and name corrections),
         `notices` (112)

@@ -17,6 +17,7 @@ import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.withTimeoutOrNull
+import com.taskrx.core.sync.ServerInstance
 
 /** What the check at fire time found. Only [Answered] keeps a dose quiet; every other outcome posts it. */
 enum class FireCheck {

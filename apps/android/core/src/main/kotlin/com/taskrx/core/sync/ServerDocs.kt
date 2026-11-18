@@ -1,4 +1,4 @@
-package com.taskrx.mobile.sync
+package com.taskrx.core.sync
 
 import com.taskrx.core.domain.InstanceStatus
 import com.taskrx.core.domain.NoneTimes
@@ -13,11 +13,6 @@ import com.taskrx.core.domain.ReminderInstance
 import com.taskrx.core.domain.ReminderKind
 import com.taskrx.core.domain.SourceKind
 import com.taskrx.core.domain.WatchedSource
-import com.taskrx.core.sync.scheduleFromServer
-import com.taskrx.mobile.data.PulledNotice
-import com.taskrx.mobile.data.PulledReminder
-import com.taskrx.mobile.data.PulledReminderInstance
-import com.taskrx.mobile.data.PulledWatchedSource
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
@@ -25,8 +20,10 @@ import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.decodeFromJsonElement
 
 /*
- * The documents `reminders.list` and `reminderInstances.list` return, as the Convex client
- * library delivers them (`jsonApi` in convex-mobile: ignoreUnknownKeys, special floats allowed).
+ * The documents `reminders.list`, `reminderInstances.list`, `notices.list` and `watchSources.list`
+ * return, as a Convex client delivers them (ignoreUnknownKeys, special floats allowed), and the
+ * local rows they become. Shared by the phone's pull and the desktop Companion (ADR 0017), and
+ * pinned by the `server-docs` golden fixtures.
  *
  * Two things differ from the domain types and are handled HERE, once:
  *
@@ -37,8 +34,31 @@ import kotlinx.serialization.json.decodeFromJsonElement
  *    number is read as a Double and narrowed explicitly in the mapping below.
  */
 
+/** A pulled Reminder, with the server's id for it and the RxNorm id the domain type does not carry. */
+data class PulledReminder(
+    val reminder: Reminder,
+    val convexId: String,
+    val rxcui: String?,
+)
+
+/** A pulled Instance, its `reminderId` already the parent's LOCAL id. */
+data class PulledReminderInstance(
+    val instance: ReminderInstance,
+    val convexId: String,
+)
+
+data class PulledNotice(
+    val notice: Notice,
+    val convexId: String,
+)
+
+data class PulledWatchedSource(
+    val source: WatchedSource,
+    val convexId: String,
+)
+
 @Serializable
-internal data class ServerReminder(
+data class ServerReminder(
     @SerialName("_id") val id: String,
     @SerialName("_creationTime") val creationTime: Double = 0.0,
     val localId: String,
@@ -68,7 +88,7 @@ internal data class ServerReminder(
 )
 
 @Serializable
-internal data class ServerInstance(
+data class ServerInstance(
     @SerialName("_id") val id: String,
     @SerialName("_creationTime") val creationTime: Double = 0.0,
     val localId: String,
@@ -87,7 +107,7 @@ internal data class ServerInstance(
 )
 
 @Serializable
-internal data class ServerNotice(
+data class ServerNotice(
     @SerialName("_id") val id: String,
     val localId: String,
     val userId: String,
@@ -104,7 +124,7 @@ internal data class ServerNotice(
 )
 
 @Serializable
-internal data class ServerWatchedSource(
+data class ServerWatchedSource(
     @SerialName("_id") val id: String,
     val localId: String,
     val userId: String,
@@ -115,7 +135,7 @@ internal data class ServerWatchedSource(
     val updatedAt: Double,
 )
 
-internal object ServerDocs {
+object ServerDocs {
     private val json = Json { ignoreUnknownKeys = true }
 
     fun reminders(list: JsonElement): List<ServerReminder> = json.decodeFromJsonElement(list)
@@ -162,6 +182,16 @@ internal object ServerDocs {
             rxcui = doc.rxcui,
         )
     }
+
+    /**
+     * Each server reminder id to the reminder's local id, for a reader that holds the documents
+     * rather than a table (the desktop). An instance names its parent by the server id; the rows
+     * the rules read join on the local one. The phone looks the same thing up in `reminders`.
+     */
+    fun parentLocalIds(reminders: List<ServerReminder>): Map<String, String> = reminders.associate { it.id to it.localId }
+
+    /** An instance whose parent is in [parents] ([parentLocalIds]), or null: its parent was not pulled, or [toPulled] refused it. */
+    fun toPulled(doc: ServerInstance, parents: Map<String, String>): PulledReminderInstance? = parents[doc.reminderId]?.let { toPulled(doc, it) }
 
     /** As [toPulled]; [localReminderId] is the parent's LOCAL id, which the caller resolved. */
     fun toPulled(doc: ServerInstance, localReminderId: String): PulledReminderInstance? {

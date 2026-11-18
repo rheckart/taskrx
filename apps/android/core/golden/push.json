@@ -1,0 +1,783 @@
+{
+  "rule": "push",
+  "about": "SyncPayloads then Push: `payload` is the fields of a write (enums as wire strings, the schedule in the server's shape, absent values null), `call` the Convex function and arguments sent for it. Every number in `args` is a float64. An update or delete names the document by its server id; an instance's create names its parent's.",
+  "generatedBy": "apps/android/core/src/test/kotlin/com/taskrx/core/golden (./gradlew :core:test -PupdateGoldens)",
+  "cases": [
+    {
+      "name": "reminders:create, every field",
+      "input": {
+        "entity": "reminder",
+        "operation": "create",
+        "payload": {
+          "localId": "rem-1",
+          "userId": "user_golden",
+          "kind": "medication",
+          "name": "Atorvastatin",
+          "rxcui": "617312",
+          "dosage": "20mg",
+          "instructions": "with food",
+          "schedule": {
+            "type": "daily",
+            "times": [
+              "09:00",
+              "21:00"
+            ]
+          },
+          "priority": "high",
+          "tags": [
+            "heart"
+          ],
+          "pillsRemaining": 28.0,
+          "pillsPerDose": 1.5,
+          "refillReminderDays": 7,
+          "caregiverIds": [
+            "cg-1"
+          ],
+          "active": true,
+          "createdAt": 1780000000000,
+          "updatedAt": 1780000060000,
+          "pauses": [
+            {
+              "from": 1780086400000,
+              "until": 1780172800000
+            }
+          ],
+          "overrides": [
+            {
+              "from": 1780003600000,
+              "to": 1780007200000
+            }
+          ],
+          "noticeRules": [
+            {
+              "sourceKind": "email",
+              "sourceValue": "pharmacy@example.com",
+              "terms": [
+                "refill"
+              ]
+            }
+          ]
+        }
+      },
+      "output": {
+        "function": "reminders:create",
+        "args": {
+          "localId": "rem-1",
+          "userId": "user_golden",
+          "kind": "medication",
+          "name": "Atorvastatin",
+          "schedule": {
+            "type": "daily",
+            "times": [
+              "09:00",
+              "21:00"
+            ]
+          },
+          "active": true,
+          "createdAt": 1.78E12,
+          "updatedAt": 1.78000006E12,
+          "priority": "high",
+          "tags": [
+            "heart"
+          ],
+          "caregiverIds": [
+            "cg-1"
+          ],
+          "rxcui": "617312",
+          "dosage": "20mg",
+          "instructions": "with food",
+          "pillsRemaining": 28.0,
+          "pillsPerDose": 1.5,
+          "refillReminderDays": 7.0,
+          "pauses": [
+            {
+              "from": 1.7800864E12,
+              "until": 1.7801728E12
+            }
+          ],
+          "overrides": [
+            {
+              "from": 1.7800036E12,
+              "to": 1.7800072E12
+            }
+          ],
+          "noticeRules": [
+            {
+              "sourceKind": "email",
+              "sourceValue": "pharmacy@example.com",
+              "terms": [
+                "refill"
+              ]
+            }
+          ]
+        }
+      }
+    },
+    {
+      "name": "reminders:create, nothing optional (nulls are left out)",
+      "input": {
+        "entity": "reminder",
+        "operation": "create",
+        "payload": {
+          "localId": "rem-2",
+          "userId": "user_golden",
+          "kind": "task",
+          "name": "Call the pharmacy",
+          "rxcui": null,
+          "dosage": null,
+          "instructions": null,
+          "schedule": {
+            "type": "once",
+            "at": 1780086400000
+          },
+          "priority": null,
+          "tags": null,
+          "pillsRemaining": null,
+          "pillsPerDose": null,
+          "refillReminderDays": null,
+          "caregiverIds": null,
+          "active": false,
+          "createdAt": 1780000000000,
+          "updatedAt": 1780000000000,
+          "pauses": null,
+          "overrides": null,
+          "noticeRules": null
+        }
+      },
+      "output": {
+        "function": "reminders:create",
+        "args": {
+          "localId": "rem-2",
+          "userId": "user_golden",
+          "kind": "task",
+          "name": "Call the pharmacy",
+          "schedule": {
+            "type": "once",
+            "at": 1.7800864E12
+          },
+          "active": false,
+          "createdAt": 1.78E12,
+          "updatedAt": 1.78E12
+        }
+      }
+    },
+    {
+      "name": "reminders:update, every field",
+      "input": {
+        "entity": "reminder",
+        "operation": "update",
+        "payload": {
+          "localId": "rem-1",
+          "userId": "user_golden",
+          "kind": "medication",
+          "name": "Atorvastatin",
+          "rxcui": "617312",
+          "dosage": "20mg",
+          "instructions": "with food",
+          "schedule": {
+            "type": "daily",
+            "times": [
+              "09:00",
+              "21:00"
+            ]
+          },
+          "priority": "high",
+          "tags": [
+            "heart"
+          ],
+          "pillsRemaining": 28.0,
+          "pillsPerDose": 1.5,
+          "refillReminderDays": 7,
+          "caregiverIds": [
+            "cg-1"
+          ],
+          "active": true,
+          "createdAt": 1780000000000,
+          "updatedAt": 1780000060000,
+          "pauses": [
+            {
+              "from": 1780086400000,
+              "until": 1780172800000
+            }
+          ],
+          "overrides": [
+            {
+              "from": 1780003600000,
+              "to": 1780007200000
+            }
+          ],
+          "noticeRules": [
+            {
+              "sourceKind": "email",
+              "sourceValue": "pharmacy@example.com",
+              "terms": [
+                "refill"
+              ]
+            }
+          ]
+        },
+        "convexId": "j97rem1"
+      },
+      "output": {
+        "function": "reminders:update",
+        "args": {
+          "id": "j97rem1",
+          "name": "Atorvastatin",
+          "schedule": {
+            "type": "daily",
+            "times": [
+              "09:00",
+              "21:00"
+            ]
+          },
+          "active": true,
+          "updatedAt": 1.78000006E12,
+          "priority": "high",
+          "tags": [
+            "heart"
+          ],
+          "caregiverIds": [
+            "cg-1"
+          ],
+          "rxcui": "617312",
+          "dosage": "20mg",
+          "instructions": "with food",
+          "pillsRemaining": 28.0,
+          "pillsPerDose": 1.5,
+          "refillReminderDays": 7.0,
+          "pauses": [
+            {
+              "from": 1.7800864E12,
+              "until": 1.7801728E12
+            }
+          ],
+          "overrides": [
+            {
+              "from": 1.7800036E12,
+              "to": 1.7800072E12
+            }
+          ],
+          "noticeRules": [
+            {
+              "sourceKind": "email",
+              "sourceValue": "pharmacy@example.com",
+              "terms": [
+                "refill"
+              ]
+            }
+          ]
+        }
+      }
+    },
+    {
+      "name": "reminders:update, nothing optional",
+      "input": {
+        "entity": "reminder",
+        "operation": "update",
+        "payload": {
+          "localId": "rem-2",
+          "userId": "user_golden",
+          "kind": "task",
+          "name": "Call the pharmacy",
+          "rxcui": null,
+          "dosage": null,
+          "instructions": null,
+          "schedule": {
+            "type": "once",
+            "at": 1780086400000
+          },
+          "priority": null,
+          "tags": null,
+          "pillsRemaining": null,
+          "pillsPerDose": null,
+          "refillReminderDays": null,
+          "caregiverIds": null,
+          "active": false,
+          "createdAt": 1780000000000,
+          "updatedAt": 1780000000000,
+          "pauses": null,
+          "overrides": null,
+          "noticeRules": null
+        },
+        "convexId": "j97rem2"
+      },
+      "output": {
+        "function": "reminders:update",
+        "args": {
+          "id": "j97rem2",
+          "name": "Call the pharmacy",
+          "schedule": {
+            "type": "once",
+            "at": 1.7800864E12
+          },
+          "active": false,
+          "updatedAt": 1.78E12
+        }
+      }
+    },
+    {
+      "name": "reminders:softDelete",
+      "input": {
+        "entity": "reminder",
+        "operation": "delete",
+        "payload": {
+          "localId": "rem-1",
+          "userId": "user_golden",
+          "deletedAt": 1780000120000
+        },
+        "convexId": "j97rem1"
+      },
+      "output": {
+        "function": "reminders:softDelete",
+        "args": {
+          "id": "j97rem1"
+        }
+      }
+    },
+    {
+      "name": "reminderInstances:create, a taking (the parent named by its server id)",
+      "input": {
+        "entity": "instance",
+        "operation": "create",
+        "payload": {
+          "localId": "inst-1",
+          "userId": "user_golden",
+          "reminderId": "rem-1",
+          "reminderKind": "medication",
+          "scheduledTime": 1780000000000,
+          "status": "completed",
+          "completedAt": 1780000300000,
+          "snoozedUntil": null,
+          "snoozeCount": 0,
+          "notes": "after lunch",
+          "createdAt": 1780000000000,
+          "updatedAt": 1780000300000
+        },
+        "parentConvexId": "j97rem1"
+      },
+      "output": {
+        "function": "reminderInstances:create",
+        "args": {
+          "localId": "inst-1",
+          "userId": "user_golden",
+          "scheduledTime": 1.78E12,
+          "status": "completed",
+          "snoozeCount": 0.0,
+          "createdAt": 1.78E12,
+          "updatedAt": 1.7800003E12,
+          "reminderId": "j97rem1",
+          "completedAt": 1.7800003E12,
+          "notes": "after lunch"
+        }
+      }
+    },
+    {
+      "name": "reminderInstances:create, a skip",
+      "input": {
+        "entity": "instance",
+        "operation": "create",
+        "payload": {
+          "localId": "inst-1",
+          "userId": "user_golden",
+          "reminderId": "rem-1",
+          "reminderKind": "medication",
+          "scheduledTime": 1780000000000,
+          "status": "skipped",
+          "completedAt": null,
+          "snoozedUntil": null,
+          "snoozeCount": 0,
+          "notes": null,
+          "createdAt": 1780000000000,
+          "updatedAt": 1780000300000
+        },
+        "parentConvexId": "j97rem1"
+      },
+      "output": {
+        "function": "reminderInstances:create",
+        "args": {
+          "localId": "inst-1",
+          "userId": "user_golden",
+          "scheduledTime": 1.78E12,
+          "status": "skipped",
+          "snoozeCount": 0.0,
+          "createdAt": 1.78E12,
+          "updatedAt": 1.7800003E12,
+          "reminderId": "j97rem1"
+        }
+      }
+    },
+    {
+      "name": "reminderInstances update, a snooze",
+      "input": {
+        "entity": "instance",
+        "operation": "update",
+        "payload": {
+          "localId": "inst-1",
+          "userId": "user_golden",
+          "reminderId": "rem-1",
+          "reminderKind": "medication",
+          "scheduledTime": 1780000000000,
+          "status": "snoozed",
+          "completedAt": null,
+          "snoozedUntil": 1780000900000,
+          "snoozeCount": 1,
+          "notes": null,
+          "createdAt": 1780000000000,
+          "updatedAt": 1780000300000
+        },
+        "convexId": "j57inst1"
+      },
+      "output": {
+        "function": "reminderInstances:snooze",
+        "args": {
+          "id": "j57inst1",
+          "snoozedUntil": 1.7800009E12
+        }
+      }
+    },
+    {
+      "name": "reminderInstances update, a taking",
+      "input": {
+        "entity": "instance",
+        "operation": "update",
+        "payload": {
+          "localId": "inst-1",
+          "userId": "user_golden",
+          "reminderId": "rem-1",
+          "reminderKind": "medication",
+          "scheduledTime": 1780000000000,
+          "status": "completed",
+          "completedAt": 1780000300000,
+          "snoozedUntil": null,
+          "snoozeCount": 0,
+          "notes": "after lunch",
+          "createdAt": 1780000000000,
+          "updatedAt": 1780000300000
+        },
+        "convexId": "j57inst1"
+      },
+      "output": {
+        "function": "reminderInstances:markCompleted",
+        "args": {
+          "id": "j57inst1",
+          "completedAt": 1.7800003E12
+        }
+      }
+    },
+    {
+      "name": "reminderInstances update, a skip",
+      "input": {
+        "entity": "instance",
+        "operation": "update",
+        "payload": {
+          "localId": "inst-1",
+          "userId": "user_golden",
+          "reminderId": "rem-1",
+          "reminderKind": "medication",
+          "scheduledTime": 1780000000000,
+          "status": "skipped",
+          "completedAt": null,
+          "snoozedUntil": null,
+          "snoozeCount": 0,
+          "notes": null,
+          "createdAt": 1780000000000,
+          "updatedAt": 1780000300000
+        },
+        "convexId": "j57inst1"
+      },
+      "output": {
+        "function": "reminderInstances:markSkipped",
+        "args": {
+          "id": "j57inst1"
+        }
+      }
+    },
+    {
+      "name": "reminderInstances update, reopened",
+      "input": {
+        "entity": "instance",
+        "operation": "update",
+        "payload": {
+          "localId": "inst-1",
+          "userId": "user_golden",
+          "reminderId": "rem-1",
+          "reminderKind": "medication",
+          "scheduledTime": 1780000000000,
+          "status": "pending",
+          "completedAt": null,
+          "snoozedUntil": null,
+          "snoozeCount": 0,
+          "notes": null,
+          "createdAt": 1780000000000,
+          "updatedAt": 1780000300000
+        },
+        "convexId": "j57inst1"
+      },
+      "output": {
+        "function": "reminderInstances:reopen",
+        "args": {
+          "id": "j57inst1"
+        }
+      }
+    },
+    {
+      "name": "reminderInstances update, missed",
+      "input": {
+        "entity": "instance",
+        "operation": "update",
+        "payload": {
+          "localId": "inst-1",
+          "userId": "user_golden",
+          "reminderId": "rem-1",
+          "reminderKind": "medication",
+          "scheduledTime": 1780000000000,
+          "status": "missed",
+          "completedAt": null,
+          "snoozedUntil": null,
+          "snoozeCount": 0,
+          "notes": null,
+          "createdAt": 1780000000000,
+          "updatedAt": 1780000300000
+        },
+        "convexId": "j57inst1"
+      },
+      "output": {
+        "function": "reminderInstances:markMissed",
+        "args": {
+          "id": "j57inst1"
+        }
+      }
+    },
+    {
+      "name": "notices:create, every field",
+      "input": {
+        "entity": "notice",
+        "operation": "create",
+        "payload": {
+          "localId": "notice-1",
+          "userId": "user_golden",
+          "sourceKind": "email",
+          "sourceValue": "pharmacy@example.com",
+          "title": "Your refill is ready",
+          "sentence": "Pick up Atorvastatin after 3pm Thursday",
+          "receivedAt": 1780000000000,
+          "externalId": "msg-42",
+          "resolution": "applied",
+          "resolvedAt": 1780000600000,
+          "createdAt": 1780000000000,
+          "updatedAt": 1780000600000
+        }
+      },
+      "output": {
+        "function": "notices:create",
+        "args": {
+          "localId": "notice-1",
+          "userId": "user_golden",
+          "sourceKind": "email",
+          "sourceValue": "pharmacy@example.com",
+          "title": "Your refill is ready",
+          "receivedAt": 1.78E12,
+          "resolution": "applied",
+          "createdAt": 1.78E12,
+          "updatedAt": 1.7800006E12,
+          "sentence": "Pick up Atorvastatin after 3pm Thursday",
+          "externalId": "msg-42",
+          "resolvedAt": 1.7800006E12
+        }
+      }
+    },
+    {
+      "name": "notices:create, nothing optional",
+      "input": {
+        "entity": "notice",
+        "operation": "create",
+        "payload": {
+          "localId": "notice-2",
+          "userId": "user_golden",
+          "sourceKind": "share",
+          "sourceValue": "share",
+          "title": "Shared text",
+          "sentence": null,
+          "receivedAt": 1780000000000,
+          "externalId": null,
+          "resolution": "none",
+          "resolvedAt": null,
+          "createdAt": 1780000000000,
+          "updatedAt": 1780000000000
+        }
+      },
+      "output": {
+        "function": "notices:create",
+        "args": {
+          "localId": "notice-2",
+          "userId": "user_golden",
+          "sourceKind": "share",
+          "sourceValue": "share",
+          "title": "Shared text",
+          "receivedAt": 1.78E12,
+          "resolution": "none",
+          "createdAt": 1.78E12,
+          "updatedAt": 1.78E12
+        }
+      }
+    },
+    {
+      "name": "notices:update",
+      "input": {
+        "entity": "notice",
+        "operation": "update",
+        "payload": {
+          "localId": "notice-1",
+          "userId": "user_golden",
+          "sourceKind": "email",
+          "sourceValue": "pharmacy@example.com",
+          "title": "Your refill is ready",
+          "sentence": "Pick up Atorvastatin after 3pm Thursday",
+          "receivedAt": 1780000000000,
+          "externalId": "msg-42",
+          "resolution": "applied",
+          "resolvedAt": 1780000600000,
+          "createdAt": 1780000000000,
+          "updatedAt": 1780000600000
+        },
+        "convexId": "j77notice1"
+      },
+      "output": {
+        "function": "notices:update",
+        "args": {
+          "id": "j77notice1",
+          "resolution": "applied",
+          "updatedAt": 1.7800006E12,
+          "resolvedAt": 1.7800006E12
+        }
+      }
+    },
+    {
+      "name": "notices:remove, the server id carried in the payload",
+      "input": {
+        "entity": "notice",
+        "operation": "delete",
+        "payload": {
+          "userId": "user_golden",
+          "deletedAt": 1780000700000,
+          "convexId": "j77notice1"
+        },
+        "convexId": "j77notice1"
+      },
+      "output": {
+        "function": "notices:remove",
+        "args": {
+          "id": "j77notice1"
+        }
+      }
+    },
+    {
+      "name": "notices:remove, the server id looked up",
+      "input": {
+        "entity": "notice",
+        "operation": "delete",
+        "payload": {
+          "userId": "user_golden",
+          "deletedAt": 1780000700000
+        },
+        "convexId": "j77notice2"
+      },
+      "output": {
+        "function": "notices:remove",
+        "args": {
+          "id": "j77notice2"
+        }
+      }
+    },
+    {
+      "name": "watchSources:create",
+      "input": {
+        "entity": "watchSource",
+        "operation": "create",
+        "payload": {
+          "localId": "src-1",
+          "userId": "user_golden",
+          "kind": "email",
+          "value": "pharmacy@example.com",
+          "label": "Pharmacy",
+          "createdAt": 1780000000000,
+          "updatedAt": 1780000060000
+        }
+      },
+      "output": {
+        "function": "watchSources:create",
+        "args": {
+          "localId": "src-1",
+          "userId": "user_golden",
+          "kind": "email",
+          "value": "pharmacy@example.com",
+          "label": "Pharmacy",
+          "createdAt": 1.78E12,
+          "updatedAt": 1.78000006E12
+        }
+      }
+    },
+    {
+      "name": "watchSources:update",
+      "input": {
+        "entity": "watchSource",
+        "operation": "update",
+        "payload": {
+          "localId": "src-1",
+          "userId": "user_golden",
+          "kind": "email",
+          "value": "pharmacy@example.com",
+          "label": "Pharmacy",
+          "createdAt": 1780000000000,
+          "updatedAt": 1780000060000
+        },
+        "convexId": "j87src1"
+      },
+      "output": {
+        "function": "watchSources:update",
+        "args": {
+          "id": "j87src1",
+          "label": "Pharmacy",
+          "updatedAt": 1.78000006E12
+        }
+      }
+    },
+    {
+      "name": "watchSources:remove, the server id carried in the payload",
+      "input": {
+        "entity": "watchSource",
+        "operation": "delete",
+        "payload": {
+          "userId": "user_golden",
+          "deletedAt": 1780000120000,
+          "convexId": "j87src1"
+        },
+        "convexId": "j87src1"
+      },
+      "output": {
+        "function": "watchSources:remove",
+        "args": {
+          "id": "j87src1"
+        }
+      }
+    },
+    {
+      "name": "watchSources:remove, the server id looked up",
+      "input": {
+        "entity": "watchSource",
+        "operation": "delete",
+        "payload": {
+          "userId": "user_golden",
+          "deletedAt": 1780000120000
+        },
+        "convexId": "j87src2"
+      },
+      "output": {
+        "function": "watchSources:remove",
+        "args": {
+          "id": "j87src2"
+        }
+      }
+    }
+  ]
+}

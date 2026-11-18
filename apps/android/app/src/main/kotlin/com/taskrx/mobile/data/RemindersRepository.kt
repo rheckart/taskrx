@@ -13,6 +13,7 @@ import com.taskrx.core.domain.resumePause
 import com.taskrx.mobile.data.db.ReminderEntity
 import com.taskrx.mobile.data.db.SyncStatus
 import com.taskrx.mobile.data.db.TaskRxDatabase
+import com.taskrx.core.sync.SyncPayloads
 
 /** One field of a patch: left alone, or set to a value (which may be null, clearing it). */
 sealed interface Change<out T> {
@@ -69,11 +70,7 @@ data class UpdateReminderPatch(
 )
 
 /** A reminder as it arrives from a remote pull: the domain shape plus the two columns it does not carry. */
-data class PulledReminder(
-    val reminder: Reminder,
-    val convexId: String,
-    val rxcui: String?,
-)
+typealias PulledReminder = com.taskrx.core.sync.PulledReminder
 
 private fun <T> Change<T>.resolve(current: T): T =
     when (this) {

@@ -1,4 +1,4 @@
-package com.taskrx.mobile.data
+package com.taskrx.core.sync
 
 import com.taskrx.core.domain.NoticeResolution
 import com.taskrx.core.domain.NoticeRule
@@ -12,7 +12,6 @@ import com.taskrx.core.domain.SourceKind
 import com.taskrx.core.domain.noticeRulesToJson
 import com.taskrx.core.domain.overridesToJson
 import com.taskrx.core.domain.pausesToJson
-import com.taskrx.core.sync.scheduleToServer
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonNull
 import kotlinx.serialization.json.JsonObject
@@ -31,11 +30,14 @@ import kotlinx.serialization.json.put
  * server's copy alone", which is why callers pass them only when the caller chose
  * a value.
  *
+ * Shared with the desktop Companion (ADR 0017), and pinned with the calls `Push.kt` makes of them
+ * by the `push` golden fixtures.
+ *
  * `schedule` is the Convex `scheduleTimesValidator` shape (`{ type: "daily", ... }`),
  * not the PascalCase wire JSON the `schedule` column holds: the column is :core's
  * format, this is the server's.
  */
-internal object SyncPayloads {
+object SyncPayloads {
     /** The Convex shape; the rule is `:core`'s, shared with the desktop Companion. */
     fun scheduleForServer(schedule: ScheduleTimes): JsonObject = scheduleToServer(schedule)
 
@@ -72,20 +74,20 @@ internal object SyncPayloads {
             put("instructions", instructions)
             put("schedule", scheduleForServer(schedule))
             put("priority", priority?.wire)
-            put("tags", tags?.let(::strings) ?: JsonNull)
+            put("tags", if (tags == null) JsonNull else strings(tags))
             put("pillsRemaining", pillsRemaining)
             put("pillsPerDose", pillsPerDose)
             put("refillReminderDays", refillReminderDays)
-            put("caregiverIds", caregiverIds?.let(::strings) ?: JsonNull)
+            put("caregiverIds", if (caregiverIds == null) JsonNull else strings(caregiverIds))
             put("active", active)
             put("createdAt", createdAt)
             put("updatedAt", updatedAt)
             // Null leaves the server's windows alone; an empty list clears them.
-            put("pauses", pauses?.let(::pausesToJson) ?: JsonNull)
+            put("pauses", if (pauses == null) JsonNull else pausesToJson(pauses))
             // Same rule for moved occurrences.
-            put("overrides", overrides?.let(::overridesToJson) ?: JsonNull)
+            put("overrides", if (overrides == null) JsonNull else overridesToJson(overrides))
             // And for the rules that let a notice be proposed against this Reminder.
-            put("noticeRules", noticeRules?.let(::noticeRulesToJson) ?: JsonNull)
+            put("noticeRules", if (noticeRules == null) JsonNull else noticeRulesToJson(noticeRules))
         }
 
     fun reminderDelete(localId: String, userId: String, deletedAt: Long): JsonObject =

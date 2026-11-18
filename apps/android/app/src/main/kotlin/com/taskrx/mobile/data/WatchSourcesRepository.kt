@@ -6,6 +6,7 @@ import com.taskrx.core.domain.WatchedSource
 import com.taskrx.mobile.data.db.SyncStatus
 import com.taskrx.mobile.data.db.TaskRxDatabase
 import com.taskrx.mobile.data.db.WatchedSourceEntity
+import com.taskrx.core.sync.SyncPayloads
 
 data class CreateWatchedSourceInput(
     val userId: String,
@@ -15,10 +16,7 @@ data class CreateWatchedSourceInput(
 )
 
 /** A watched source as it arrives from a remote pull. */
-data class PulledWatchedSource(
-    val source: WatchedSource,
-    val convexId: String,
-)
+typealias PulledWatchedSource = com.taskrx.core.sync.PulledWatchedSource
 
 /**
  * Local repository for Watched sources: the senders and apps whose notices may be kept at

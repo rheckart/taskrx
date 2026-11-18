@@ -19,6 +19,8 @@ import kotlinx.serialization.json.contentOrNull
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.put
+import com.taskrx.core.sync.ServerInstance
+import com.taskrx.core.sync.ServerDocs
 
 /**
  * Reads one instant from the server for the fire-time check (ADR 0016), over a request of its own

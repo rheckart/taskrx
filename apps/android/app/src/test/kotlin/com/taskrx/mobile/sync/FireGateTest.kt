@@ -9,6 +9,7 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.runBlocking
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
+import com.taskrx.core.sync.ServerInstance
 
 private const val AT = 1_780_000_100_000L
 

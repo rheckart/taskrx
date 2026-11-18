@@ -1,0 +1,992 @@
+{
+  "rule": "server-docs",
+  "about": "ServerDocs: one Convex document as a client delivers it, read into the local row, or null when this build does not know its kind, status, source kind or resolution. An instance's reminderId is the parent's server id, resolved to its localId through parentLocalIds of the reminder documents; an unknown parent is null too. Unknown fields are ignored; a schedule that cannot be read is `none`; an unknown priority is `normal`.",
+  "generatedBy": "apps/android/core/src/test/kotlin/com/taskrx/core/golden (./gradlew :core:test -PupdateGoldens)",
+  "cases": [
+    {
+      "name": "reminder: every field, numbers spelled as floats",
+      "input": {
+        "call": "reminder",
+        "doc": {
+          "_id": "j97rem1",
+          "_creationTime": 1.78E12,
+          "localId": "rem-1",
+          "userId": "user_golden",
+          "kind": "medication",
+          "name": "Atorvastatin",
+          "schedule": {
+            "type": "daily",
+            "times": [
+              "09:00",
+              "21:00"
+            ]
+          },
+          "priority": "high",
+          "active": true,
+          "createdAt": 1.78E12,
+          "updatedAt": 1.78000006E12,
+          "rxcui": "617312",
+          "dosage": "20mg",
+          "instructions": "with food",
+          "tags": [
+            "heart"
+          ],
+          "pillsRemaining": 28.0,
+          "pillsPerDose": 1.5,
+          "refillReminderDays": 7.0,
+          "caregiverIds": [
+            "cg-1"
+          ],
+          "pauses": [
+            {
+              "from": 1780086400000,
+              "until": 1780172800000
+            },
+            {
+              "from": 1780432000000
+            }
+          ],
+          "overrides": [
+            {
+              "from": 1780003600000,
+              "to": 1780007200000,
+              "noticeId": "notice-1"
+            }
+          ],
+          "noticeRules": [
+            {
+              "sourceKind": "email",
+              "sourceValue": "pharmacy@example.com",
+              "terms": [
+                "refill"
+              ]
+            }
+          ]
+        }
+      },
+      "output": {
+        "convexId": "j97rem1",
+        "rxcui": "617312",
+        "reminder": {
+          "id": "rem-1",
+          "userId": "user_golden",
+          "kind": "medication",
+          "name": "Atorvastatin",
+          "dosage": "20mg",
+          "instructions": "with food",
+          "schedule": {
+            "type": "daily",
+            "times": [
+              "09:00",
+              "21:00"
+            ]
+          },
+          "priority": "high",
+          "tags": [
+            "heart"
+          ],
+          "pillsRemaining": 28.0,
+          "pillsPerDose": 1.5,
+          "refillReminderDays": 7,
+          "caregiverIds": [
+            "cg-1"
+          ],
+          "active": true,
+          "createdAt": 1780000000000,
+          "updatedAt": 1780000060000,
+          "pauses": [
+            {
+              "from": 1780086400000,
+              "until": 1780172800000
+            },
+            {
+              "from": 1780432000000
+            }
+          ],
+          "overrides": [
+            {
+              "from": 1780003600000,
+              "to": 1780007200000,
+              "noticeId": "notice-1"
+            }
+          ],
+          "noticeRules": [
+            {
+              "sourceKind": "email",
+              "sourceValue": "pharmacy@example.com",
+              "terms": [
+                "refill"
+              ]
+            }
+          ]
+        }
+      }
+    },
+    {
+      "name": "reminder: only the required fields",
+      "input": {
+        "call": "reminder",
+        "doc": {
+          "_id": "j97rem1",
+          "_creationTime": 1.78E12,
+          "localId": "rem-1",
+          "userId": "user_golden",
+          "kind": "task",
+          "name": "Atorvastatin",
+          "schedule": {
+            "type": "daily",
+            "times": [
+              "09:00"
+            ]
+          },
+          "priority": "normal",
+          "active": true,
+          "createdAt": 1780000000000,
+          "updatedAt": 1780000000000
+        }
+      },
+      "output": {
+        "convexId": "j97rem1",
+        "rxcui": null,
+        "reminder": {
+          "id": "rem-1",
+          "userId": "user_golden",
+          "kind": "task",
+          "name": "Atorvastatin",
+          "dosage": null,
+          "instructions": null,
+          "schedule": {
+            "type": "daily",
+            "times": [
+              "09:00"
+            ]
+          },
+          "priority": "normal",
+          "tags": [],
+          "pillsRemaining": null,
+          "pillsPerDose": null,
+          "refillReminderDays": null,
+          "caregiverIds": [],
+          "active": true,
+          "createdAt": 1780000000000,
+          "updatedAt": 1780000000000,
+          "pauses": [],
+          "overrides": [],
+          "noticeRules": []
+        }
+      }
+    },
+    {
+      "name": "reminder: a field this build does not know is ignored",
+      "input": {
+        "call": "reminder",
+        "doc": {
+          "_id": "j97rem1",
+          "_creationTime": 1.78E12,
+          "localId": "rem-1",
+          "userId": "user_golden",
+          "kind": "medication",
+          "name": "Atorvastatin",
+          "schedule": {
+            "type": "daily",
+            "times": [
+              "09:00"
+            ]
+          },
+          "priority": "normal",
+          "active": true,
+          "createdAt": 1780000000000,
+          "updatedAt": 1780000000000,
+          "color": "teal"
+        }
+      },
+      "output": {
+        "convexId": "j97rem1",
+        "rxcui": null,
+        "reminder": {
+          "id": "rem-1",
+          "userId": "user_golden",
+          "kind": "medication",
+          "name": "Atorvastatin",
+          "dosage": null,
+          "instructions": null,
+          "schedule": {
+            "type": "daily",
+            "times": [
+              "09:00"
+            ]
+          },
+          "priority": "normal",
+          "tags": [],
+          "pillsRemaining": null,
+          "pillsPerDose": null,
+          "refillReminderDays": null,
+          "caregiverIds": [],
+          "active": true,
+          "createdAt": 1780000000000,
+          "updatedAt": 1780000000000,
+          "pauses": [],
+          "overrides": [],
+          "noticeRules": []
+        }
+      }
+    },
+    {
+      "name": "reminder: an unknown kind is skipped",
+      "input": {
+        "call": "reminder",
+        "doc": {
+          "_id": "j97rem1",
+          "_creationTime": 1.78E12,
+          "localId": "rem-1",
+          "userId": "user_golden",
+          "kind": "habit",
+          "name": "Atorvastatin",
+          "schedule": {
+            "type": "daily",
+            "times": [
+              "09:00"
+            ]
+          },
+          "priority": "normal",
+          "active": true,
+          "createdAt": 1780000000000,
+          "updatedAt": 1780000000000
+        }
+      },
+      "output": null
+    },
+    {
+      "name": "reminder: a schedule this build cannot read goes to the Backlog",
+      "input": {
+        "call": "reminder",
+        "doc": {
+          "_id": "j97rem1",
+          "_creationTime": 1.78E12,
+          "localId": "rem-1",
+          "userId": "user_golden",
+          "kind": "medication",
+          "name": "Atorvastatin",
+          "schedule": {
+            "type": "lunar"
+          },
+          "priority": "normal",
+          "active": true,
+          "createdAt": 1780000000000,
+          "updatedAt": 1780000000000
+        }
+      },
+      "output": {
+        "convexId": "j97rem1",
+        "rxcui": null,
+        "reminder": {
+          "id": "rem-1",
+          "userId": "user_golden",
+          "kind": "medication",
+          "name": "Atorvastatin",
+          "dosage": null,
+          "instructions": null,
+          "schedule": {
+            "type": "none"
+          },
+          "priority": "normal",
+          "tags": [],
+          "pillsRemaining": null,
+          "pillsPerDose": null,
+          "refillReminderDays": null,
+          "caregiverIds": [],
+          "active": true,
+          "createdAt": 1780000000000,
+          "updatedAt": 1780000000000,
+          "pauses": [],
+          "overrides": [],
+          "noticeRules": []
+        }
+      }
+    },
+    {
+      "name": "reminder: an unknown priority reads as normal",
+      "input": {
+        "call": "reminder",
+        "doc": {
+          "_id": "j97rem1",
+          "_creationTime": 1.78E12,
+          "localId": "rem-1",
+          "userId": "user_golden",
+          "kind": "medication",
+          "name": "Atorvastatin",
+          "schedule": {
+            "type": "daily",
+            "times": [
+              "09:00"
+            ]
+          },
+          "priority": "urgent",
+          "active": true,
+          "createdAt": 1780000000000,
+          "updatedAt": 1780000000000
+        }
+      },
+      "output": {
+        "convexId": "j97rem1",
+        "rxcui": null,
+        "reminder": {
+          "id": "rem-1",
+          "userId": "user_golden",
+          "kind": "medication",
+          "name": "Atorvastatin",
+          "dosage": null,
+          "instructions": null,
+          "schedule": {
+            "type": "daily",
+            "times": [
+              "09:00"
+            ]
+          },
+          "priority": "normal",
+          "tags": [],
+          "pillsRemaining": null,
+          "pillsPerDose": null,
+          "refillReminderDays": null,
+          "caregiverIds": [],
+          "active": true,
+          "createdAt": 1780000000000,
+          "updatedAt": 1780000000000,
+          "pauses": [],
+          "overrides": [],
+          "noticeRules": []
+        }
+      }
+    },
+    {
+      "name": "instance: a taking, numbers spelled as floats",
+      "input": {
+        "call": "instance",
+        "doc": {
+          "_id": "j57inst1",
+          "_creationTime": 1.78E12,
+          "localId": "inst-1",
+          "userId": "user_golden",
+          "reminderId": "j97rem1",
+          "reminderKind": "medication",
+          "scheduledTime": 1.78E12,
+          "status": "completed",
+          "createdAt": 1780000000000,
+          "updatedAt": 1.7800003E12,
+          "completedAt": 1.7800003E12,
+          "snoozeCount": 0.0
+        },
+        "reminders": [
+          {
+            "_id": "j97rem1",
+            "_creationTime": 1.78E12,
+            "localId": "rem-1",
+            "userId": "user_golden",
+            "kind": "medication",
+            "name": "Atorvastatin",
+            "schedule": {
+              "type": "daily",
+              "times": [
+                "09:00"
+              ]
+            },
+            "priority": "normal",
+            "active": true,
+            "createdAt": 1780000000000,
+            "updatedAt": 1780000000000
+          },
+          {
+            "_id": "j97rem2",
+            "_creationTime": 1.78E12,
+            "localId": "rem-2",
+            "userId": "user_golden",
+            "kind": "task",
+            "name": "Atorvastatin",
+            "schedule": {
+              "type": "daily",
+              "times": [
+                "09:00"
+              ]
+            },
+            "priority": "normal",
+            "active": true,
+            "createdAt": 1780000000000,
+            "updatedAt": 1780000000000
+          }
+        ]
+      },
+      "output": {
+        "convexId": "j57inst1",
+        "instance": {
+          "id": "inst-1",
+          "reminderId": "rem-1",
+          "userId": "user_golden",
+          "reminderKind": "medication",
+          "scheduledTime": 1780000000000,
+          "status": "completed",
+          "completedAt": 1780000300000,
+          "snoozedUntil": null,
+          "snoozeCount": 0,
+          "notes": null,
+          "createdAt": 1780000000000,
+          "updatedAt": 1780000300000
+        }
+      }
+    },
+    {
+      "name": "instance: a snooze with notes",
+      "input": {
+        "call": "instance",
+        "doc": {
+          "_id": "j57inst1",
+          "_creationTime": 1.78E12,
+          "localId": "inst-1",
+          "userId": "user_golden",
+          "reminderId": "j97rem1",
+          "reminderKind": "medication",
+          "scheduledTime": 1780000000000,
+          "status": "snoozed",
+          "createdAt": 1780000000000,
+          "updatedAt": 1780000000000,
+          "snoozedUntil": 1780000900000,
+          "snoozeCount": 2.0,
+          "notes": "after lunch"
+        },
+        "reminders": [
+          {
+            "_id": "j97rem1",
+            "_creationTime": 1.78E12,
+            "localId": "rem-1",
+            "userId": "user_golden",
+            "kind": "medication",
+            "name": "Atorvastatin",
+            "schedule": {
+              "type": "daily",
+              "times": [
+                "09:00"
+              ]
+            },
+            "priority": "normal",
+            "active": true,
+            "createdAt": 1780000000000,
+            "updatedAt": 1780000000000
+          },
+          {
+            "_id": "j97rem2",
+            "_creationTime": 1.78E12,
+            "localId": "rem-2",
+            "userId": "user_golden",
+            "kind": "task",
+            "name": "Atorvastatin",
+            "schedule": {
+              "type": "daily",
+              "times": [
+                "09:00"
+              ]
+            },
+            "priority": "normal",
+            "active": true,
+            "createdAt": 1780000000000,
+            "updatedAt": 1780000000000
+          }
+        ]
+      },
+      "output": {
+        "convexId": "j57inst1",
+        "instance": {
+          "id": "inst-1",
+          "reminderId": "rem-1",
+          "userId": "user_golden",
+          "reminderKind": "medication",
+          "scheduledTime": 1780000000000,
+          "status": "snoozed",
+          "completedAt": null,
+          "snoozedUntil": 1780000900000,
+          "snoozeCount": 2,
+          "notes": "after lunch",
+          "createdAt": 1780000000000,
+          "updatedAt": 1780000000000
+        }
+      }
+    },
+    {
+      "name": "instance: a task's row, its parent resolved to the local id",
+      "input": {
+        "call": "instance",
+        "doc": {
+          "_id": "j57inst1",
+          "_creationTime": 1.78E12,
+          "localId": "inst-1",
+          "userId": "user_golden",
+          "reminderId": "j97rem2",
+          "reminderKind": "task",
+          "scheduledTime": 1780000000000,
+          "status": "pending",
+          "createdAt": 1780000000000,
+          "updatedAt": 1780000000000
+        },
+        "reminders": [
+          {
+            "_id": "j97rem1",
+            "_creationTime": 1.78E12,
+            "localId": "rem-1",
+            "userId": "user_golden",
+            "kind": "medication",
+            "name": "Atorvastatin",
+            "schedule": {
+              "type": "daily",
+              "times": [
+                "09:00"
+              ]
+            },
+            "priority": "normal",
+            "active": true,
+            "createdAt": 1780000000000,
+            "updatedAt": 1780000000000
+          },
+          {
+            "_id": "j97rem2",
+            "_creationTime": 1.78E12,
+            "localId": "rem-2",
+            "userId": "user_golden",
+            "kind": "task",
+            "name": "Atorvastatin",
+            "schedule": {
+              "type": "daily",
+              "times": [
+                "09:00"
+              ]
+            },
+            "priority": "normal",
+            "active": true,
+            "createdAt": 1780000000000,
+            "updatedAt": 1780000000000
+          }
+        ]
+      },
+      "output": {
+        "convexId": "j57inst1",
+        "instance": {
+          "id": "inst-1",
+          "reminderId": "rem-2",
+          "userId": "user_golden",
+          "reminderKind": "task",
+          "scheduledTime": 1780000000000,
+          "status": "pending",
+          "completedAt": null,
+          "snoozedUntil": null,
+          "snoozeCount": 0,
+          "notes": null,
+          "createdAt": 1780000000000,
+          "updatedAt": 1780000000000
+        }
+      }
+    },
+    {
+      "name": "instance: only the required fields (no snoozeCount)",
+      "input": {
+        "call": "instance",
+        "doc": {
+          "_id": "j57inst1",
+          "_creationTime": 1.78E12,
+          "localId": "inst-1",
+          "userId": "user_golden",
+          "reminderId": "j97rem1",
+          "reminderKind": "medication",
+          "scheduledTime": 1780000000000,
+          "status": "pending",
+          "createdAt": 1780000000000,
+          "updatedAt": 1780000000000
+        },
+        "reminders": [
+          {
+            "_id": "j97rem1",
+            "_creationTime": 1.78E12,
+            "localId": "rem-1",
+            "userId": "user_golden",
+            "kind": "medication",
+            "name": "Atorvastatin",
+            "schedule": {
+              "type": "daily",
+              "times": [
+                "09:00"
+              ]
+            },
+            "priority": "normal",
+            "active": true,
+            "createdAt": 1780000000000,
+            "updatedAt": 1780000000000
+          },
+          {
+            "_id": "j97rem2",
+            "_creationTime": 1.78E12,
+            "localId": "rem-2",
+            "userId": "user_golden",
+            "kind": "task",
+            "name": "Atorvastatin",
+            "schedule": {
+              "type": "daily",
+              "times": [
+                "09:00"
+              ]
+            },
+            "priority": "normal",
+            "active": true,
+            "createdAt": 1780000000000,
+            "updatedAt": 1780000000000
+          }
+        ]
+      },
+      "output": {
+        "convexId": "j57inst1",
+        "instance": {
+          "id": "inst-1",
+          "reminderId": "rem-1",
+          "userId": "user_golden",
+          "reminderKind": "medication",
+          "scheduledTime": 1780000000000,
+          "status": "pending",
+          "completedAt": null,
+          "snoozedUntil": null,
+          "snoozeCount": 0,
+          "notes": null,
+          "createdAt": 1780000000000,
+          "updatedAt": 1780000000000
+        }
+      }
+    },
+    {
+      "name": "instance: a parent that was not pulled is skipped",
+      "input": {
+        "call": "instance",
+        "doc": {
+          "_id": "j57inst1",
+          "_creationTime": 1.78E12,
+          "localId": "inst-1",
+          "userId": "user_golden",
+          "reminderId": "j97gone",
+          "reminderKind": "medication",
+          "scheduledTime": 1780000000000,
+          "status": "pending",
+          "createdAt": 1780000000000,
+          "updatedAt": 1780000000000
+        },
+        "reminders": [
+          {
+            "_id": "j97rem1",
+            "_creationTime": 1.78E12,
+            "localId": "rem-1",
+            "userId": "user_golden",
+            "kind": "medication",
+            "name": "Atorvastatin",
+            "schedule": {
+              "type": "daily",
+              "times": [
+                "09:00"
+              ]
+            },
+            "priority": "normal",
+            "active": true,
+            "createdAt": 1780000000000,
+            "updatedAt": 1780000000000
+          },
+          {
+            "_id": "j97rem2",
+            "_creationTime": 1.78E12,
+            "localId": "rem-2",
+            "userId": "user_golden",
+            "kind": "task",
+            "name": "Atorvastatin",
+            "schedule": {
+              "type": "daily",
+              "times": [
+                "09:00"
+              ]
+            },
+            "priority": "normal",
+            "active": true,
+            "createdAt": 1780000000000,
+            "updatedAt": 1780000000000
+          }
+        ]
+      },
+      "output": null
+    },
+    {
+      "name": "instance: an unknown status is skipped",
+      "input": {
+        "call": "instance",
+        "doc": {
+          "_id": "j57inst1",
+          "_creationTime": 1.78E12,
+          "localId": "inst-1",
+          "userId": "user_golden",
+          "reminderId": "j97rem1",
+          "reminderKind": "medication",
+          "scheduledTime": 1780000000000,
+          "status": "deferred",
+          "createdAt": 1780000000000,
+          "updatedAt": 1780000000000
+        },
+        "reminders": [
+          {
+            "_id": "j97rem1",
+            "_creationTime": 1.78E12,
+            "localId": "rem-1",
+            "userId": "user_golden",
+            "kind": "medication",
+            "name": "Atorvastatin",
+            "schedule": {
+              "type": "daily",
+              "times": [
+                "09:00"
+              ]
+            },
+            "priority": "normal",
+            "active": true,
+            "createdAt": 1780000000000,
+            "updatedAt": 1780000000000
+          },
+          {
+            "_id": "j97rem2",
+            "_creationTime": 1.78E12,
+            "localId": "rem-2",
+            "userId": "user_golden",
+            "kind": "task",
+            "name": "Atorvastatin",
+            "schedule": {
+              "type": "daily",
+              "times": [
+                "09:00"
+              ]
+            },
+            "priority": "normal",
+            "active": true,
+            "createdAt": 1780000000000,
+            "updatedAt": 1780000000000
+          }
+        ]
+      },
+      "output": null
+    },
+    {
+      "name": "instance: an unknown kind is skipped",
+      "input": {
+        "call": "instance",
+        "doc": {
+          "_id": "j57inst1",
+          "_creationTime": 1.78E12,
+          "localId": "inst-1",
+          "userId": "user_golden",
+          "reminderId": "j97rem1",
+          "reminderKind": "habit",
+          "scheduledTime": 1780000000000,
+          "status": "pending",
+          "createdAt": 1780000000000,
+          "updatedAt": 1780000000000
+        },
+        "reminders": [
+          {
+            "_id": "j97rem1",
+            "_creationTime": 1.78E12,
+            "localId": "rem-1",
+            "userId": "user_golden",
+            "kind": "medication",
+            "name": "Atorvastatin",
+            "schedule": {
+              "type": "daily",
+              "times": [
+                "09:00"
+              ]
+            },
+            "priority": "normal",
+            "active": true,
+            "createdAt": 1780000000000,
+            "updatedAt": 1780000000000
+          },
+          {
+            "_id": "j97rem2",
+            "_creationTime": 1.78E12,
+            "localId": "rem-2",
+            "userId": "user_golden",
+            "kind": "task",
+            "name": "Atorvastatin",
+            "schedule": {
+              "type": "daily",
+              "times": [
+                "09:00"
+              ]
+            },
+            "priority": "normal",
+            "active": true,
+            "createdAt": 1780000000000,
+            "updatedAt": 1780000000000
+          }
+        ]
+      },
+      "output": null
+    },
+    {
+      "name": "notice: every field",
+      "input": {
+        "call": "notice",
+        "doc": {
+          "_id": "j77notice1",
+          "_creationTime": 1.78E12,
+          "localId": "notice-1",
+          "userId": "user_golden",
+          "sourceKind": "email",
+          "sourceValue": "pharmacy@example.com",
+          "title": "Your refill is ready",
+          "receivedAt": 1.78E12,
+          "resolution": "applied",
+          "createdAt": 1780000000000,
+          "updatedAt": 1780000000000,
+          "sentence": "Pick up Atorvastatin after 3pm Thursday",
+          "externalId": "msg-42",
+          "resolvedAt": 1.7800006E12
+        }
+      },
+      "output": {
+        "convexId": "j77notice1",
+        "notice": {
+          "id": "notice-1",
+          "userId": "user_golden",
+          "sourceKind": "email",
+          "sourceValue": "pharmacy@example.com",
+          "title": "Your refill is ready",
+          "sentence": "Pick up Atorvastatin after 3pm Thursday",
+          "receivedAt": 1780000000000,
+          "externalId": "msg-42",
+          "resolution": "applied",
+          "resolvedAt": 1780000600000,
+          "createdAt": 1780000000000,
+          "updatedAt": 1780000000000
+        }
+      }
+    },
+    {
+      "name": "notice: only the required fields",
+      "input": {
+        "call": "notice",
+        "doc": {
+          "_id": "j77notice1",
+          "_creationTime": 1.78E12,
+          "localId": "notice-1",
+          "userId": "user_golden",
+          "sourceKind": "app",
+          "sourceValue": "pharmacy@example.com",
+          "title": "Your refill is ready",
+          "receivedAt": 1.78E12,
+          "resolution": "none",
+          "createdAt": 1780000000000,
+          "updatedAt": 1780000000000
+        }
+      },
+      "output": {
+        "convexId": "j77notice1",
+        "notice": {
+          "id": "notice-1",
+          "userId": "user_golden",
+          "sourceKind": "app",
+          "sourceValue": "pharmacy@example.com",
+          "title": "Your refill is ready",
+          "sentence": null,
+          "receivedAt": 1780000000000,
+          "externalId": null,
+          "resolution": "none",
+          "resolvedAt": null,
+          "createdAt": 1780000000000,
+          "updatedAt": 1780000000000
+        }
+      }
+    },
+    {
+      "name": "notice: an unknown source kind is skipped",
+      "input": {
+        "call": "notice",
+        "doc": {
+          "_id": "j77notice1",
+          "_creationTime": 1.78E12,
+          "localId": "notice-1",
+          "userId": "user_golden",
+          "sourceKind": "fax",
+          "sourceValue": "pharmacy@example.com",
+          "title": "Your refill is ready",
+          "receivedAt": 1.78E12,
+          "resolution": "none",
+          "createdAt": 1780000000000,
+          "updatedAt": 1780000000000
+        }
+      },
+      "output": null
+    },
+    {
+      "name": "notice: an unknown resolution is skipped",
+      "input": {
+        "call": "notice",
+        "doc": {
+          "_id": "j77notice1",
+          "_creationTime": 1.78E12,
+          "localId": "notice-1",
+          "userId": "user_golden",
+          "sourceKind": "email",
+          "sourceValue": "pharmacy@example.com",
+          "title": "Your refill is ready",
+          "receivedAt": 1.78E12,
+          "resolution": "snoozed",
+          "createdAt": 1780000000000,
+          "updatedAt": 1780000000000
+        }
+      },
+      "output": null
+    },
+    {
+      "name": "watchSource: a watched sender",
+      "input": {
+        "call": "watchSource",
+        "doc": {
+          "_id": "j87src1",
+          "_creationTime": 1.78E12,
+          "localId": "src-1",
+          "userId": "user_golden",
+          "kind": "email",
+          "value": "pharmacy@example.com",
+          "label": "Pharmacy",
+          "createdAt": 1.78E12,
+          "updatedAt": 1780000000000
+        }
+      },
+      "output": {
+        "convexId": "j87src1",
+        "source": {
+          "id": "src-1",
+          "userId": "user_golden",
+          "kind": "email",
+          "value": "pharmacy@example.com",
+          "label": "Pharmacy",
+          "createdAt": 1780000000000,
+          "updatedAt": 1780000000000
+        }
+      }
+    },
+    {
+      "name": "watchSource: an unknown kind is skipped",
+      "input": {
+        "call": "watchSource",
+        "doc": {
+          "_id": "j87src1",
+          "_creationTime": 1.78E12,
+          "localId": "src-1",
+          "userId": "user_golden",
+          "kind": "pager",
+          "value": "pharmacy@example.com",
+          "label": "Pharmacy",
+          "createdAt": 1.78E12,
+          "updatedAt": 1780000000000
+        }
+      },
+      "output": null
+    }
+  ]
+}

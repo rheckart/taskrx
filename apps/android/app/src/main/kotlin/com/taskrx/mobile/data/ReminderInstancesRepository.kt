@@ -16,6 +16,7 @@ import com.taskrx.core.undo.UNDOABLE_STATUSES
 import com.taskrx.mobile.data.db.ReminderInstanceEntity
 import com.taskrx.mobile.data.db.SyncStatus
 import com.taskrx.mobile.data.db.TaskRxDatabase
+import com.taskrx.core.sync.SyncPayloads
 
 data class CreateReminderInstanceInput(
     val userId: String,
@@ -42,10 +43,7 @@ data class InstanceFilter(
 )
 
 /** An instance from a remote pull. `instance.reminderId` is already the LOCAL reminder id. */
-data class PulledReminderInstance(
-    val instance: ReminderInstance,
-    val convexId: String,
-)
+typealias PulledReminderInstance = com.taskrx.core.sync.PulledReminderInstance
 
 /**
  * Local repository for Reminder Instances: the record of what became of one Occurrence.

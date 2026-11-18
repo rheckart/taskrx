@@ -7,6 +7,7 @@ import com.taskrx.core.domain.SourceKind
 import com.taskrx.mobile.data.db.NoticeEntity
 import com.taskrx.mobile.data.db.SyncStatus
 import com.taskrx.mobile.data.db.TaskRxDatabase
+import com.taskrx.core.sync.SyncPayloads
 
 data class CreateNoticeInput(
     val userId: String,
@@ -21,10 +22,7 @@ data class CreateNoticeInput(
 )
 
 /** A notice as it arrives from a remote pull. */
-data class PulledNotice(
-    val notice: Notice,
-    val convexId: String,
-)
+typealias PulledNotice = com.taskrx.core.sync.PulledNotice
 
 /**
  * Local repository for Notices: outside messages a watched source admitted.
