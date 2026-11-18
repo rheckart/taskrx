@@ -77,8 +77,9 @@ because two writers are unsafe until one Occurrence can only ever be one Instanc
         reproduce the idle wake. Still to see: an idle-wake dose on the phone answered inside the
         bound (`read of … attempt N`)
 - [ ] Desktop, `apps/desktop`:
-  - [ ] Cargo workspace: `taskrx-desktop-core` (rules, Convex, screen state) and the Rune crate
-        (`taskrx-desktop-core` exists; `cargo test` is the third gate in `CLAUDE.md`)
+  - [x] Cargo workspace: `taskrx-desktop-core` (the rules, pure), `taskrx-desktop-service`
+        (sign-in, keyring, Convex, screen state) and `taskrx-desktop` (the Rune window, pinned
+        to `cca5df6`). `cargo test` is the third gate in `CLAUDE.md`
   - [x] Rules ported to Rust against the fixtures: all fourteen files, 779 cases, none
         pending (2026-11-18). `tests/golden.rs` reads them in place and fails on any file or
         call it does not handle:
@@ -94,9 +95,15 @@ because two writers are unsafe until one Occurrence can only ever be one Instanc
           `fancy-regex`, Java's ASCII classes spelled out)
     - [x] `push` (21 cases; call arguments are a wire type whose only number is a float64,
           so an Int64 cannot reach a `v.number()` validator)
-  - [ ] Sign-in through the browser, session token in the keyring
-  - [ ] Today, Tasks, add and edit, Backlog, Catch up, Proposals
-  - [ ] Omarchy theme (accent from `colors.toml`, watched; `hyprctl` rounding)
+  - [ ] Sign-in through the browser, session token in the keyring (built 2026-11-18: PKCE to a
+        loopback port, the rotated refresh token saved before use, refreshes serialized, the
+        keyring round trip checked against gnome-keyring. Not yet run against Clerk from the app)
+  - [ ] Today, Tasks, add and edit, Backlog, Catch up, Proposals (Today and Tasks drawn and
+        answering, checked headless on made-up data: an answer is the status call, or one create
+        under the moment's id; past-grace rows read Missed and are never recorded; offline rows
+        only show. Not yet run against the server. The other four screens are to come)
+  - [x] Omarchy theme (the palette from `colors.toml`, re-read when it changes; `hyprctl`
+        rounding)
   - [ ] PKGBUILD and `.desktop` entry. `cargo test` becomes a gate in `CLAUDE.md`
 - [ ] Docs: `architecture.md` moves the desktop out of Deferred, and the ADRs' open
       questions are closed

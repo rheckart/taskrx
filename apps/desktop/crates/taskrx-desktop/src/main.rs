@@ -68,10 +68,15 @@ fn poll(s: &mut Ui, clock: f64, tx: &mut Tx) -> bool {
     if s.theme.refresh(true) {
         changed = true;
     }
-    // The day moves on its own: re-run the view every half minute so NEXT, Missed and the
-    // as-needed countdown follow the clock.
+    // The day moves on its own: the view re-runs each half minute so NEXT, Missed and the
+    // as-needed countdown follow the clock, and not on every frame.
+    let tick = s.now() / 30_000;
+    if tick != s.drawn_tick {
+        s.drawn_tick = tick;
+        changed = true;
+    }
     tx.wake_after(Duration::from_secs(30));
-    changed || s.fixed_now.is_none()
+    changed
 }
 
 fn on_key(s: &mut Ui, ev: &KeyEvent, tx: &mut Tx) -> bool {

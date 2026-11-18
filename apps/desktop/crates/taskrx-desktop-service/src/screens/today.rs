@@ -119,7 +119,14 @@ pub fn today(input: &TodayInput) -> Today {
         max_occurrences_per_reminder: DEFAULT_MAX_OCCURRENCES_PER_REMINDER,
     });
 
+    // The phone's two reads: the Instances inside the fortnight, and the task rows before it.
     let window = task_window(now, zone);
+    let inside: Vec<_> = data
+        .instances
+        .iter()
+        .filter(|i| i.scheduled_time >= window.start && i.scheduled_time <= window.end)
+        .cloned()
+        .collect();
     let older: Vec<_> = data
         .instances
         .iter()
@@ -128,7 +135,7 @@ pub fn today(input: &TodayInput) -> Today {
         .collect();
     let sections = assemble_tasks_tab(&TasksTabInput {
         reminders,
-        instances: &data.instances,
+        instances: &inside,
         older_instances: &older,
         now,
         zone,

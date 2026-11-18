@@ -49,14 +49,22 @@ pub struct Ui {
     pub day_offset: i32,
     pub hide_done: bool,
     pub toast: Option<Toast>,
-    /// Writes sent and not yet answered: ticket to what the person did.
-    pub sending: HashMap<u64, String>,
+    /// Writes sent and not yet answered: ticket to the row's key and what to say when done. A
+    /// row with one in flight offers nothing, so a second press cannot record a second dose.
+    pub sending: HashMap<u64, (String, String)>,
     pub zone: TimeZone,
     /// A fixed clock for headless scenes; the wall clock otherwise.
     pub fixed_now: Option<i64>,
     pub theme: Followed,
     /// The app clock of the last poll, for toasts made outside a handler.
     pub clock: f64,
+    /// The half-minute last drawn, so the view re-runs as the day moves and not every frame.
+    pub drawn_tick: i64,
+}
+
+/// A row's identity on screen: its Reminder and moment.
+pub fn row_key(reminder_id: &str, scheduled_time: i64) -> String {
+    format!("row-{reminder_id}-{scheduled_time}")
 }
 
 pub const TOAST_SECONDS: f64 = 4.0;
@@ -80,7 +88,12 @@ impl Ui {
             fixed_now: None,
             theme: Followed::load(system_dark),
             clock: 0.0,
+            drawn_tick: 0,
         }
+    }
+
+    pub fn in_flight(&self, key: &str) -> bool {
+        self.sending.values().any(|(k, _)| k == key)
     }
 
     pub fn now(&self) -> i64 {
@@ -116,6 +129,8 @@ impl Ui {
         match event {
             Event::Connected(up) => self.connected = up,
             Event::List(table, value) => {
+                // An answer can only have come over a live socket.
+                self.connected = true;
                 match table {
                     Table::Reminders => self.lists.reminders = Some(value),
                     Table::Instances => self.lists.instances = Some(value),
@@ -126,11 +141,17 @@ impl Ui {
                 self.auth_problem = None;
                 self.decode();
             }
-            Event::ListFailed(_, message) => self.problem = Some(message),
+            Event::ListFailed(_, message) => {
+                self.problem = Some(if message.contains("Not authenticated") {
+                    "The server hasn't accepted the sign-in yet".to_string()
+                } else {
+                    message
+                })
+            }
             Event::SignedOut => self.signed_out(None),
             Event::AuthUnreachable(why) => self.auth_problem = Some(why),
             Event::Wrote { ticket, result } => {
-                let what = self.sending.remove(&ticket).unwrap_or_default();
+                let (_, what) = self.sending.remove(&ticket).unwrap_or_default();
                 match result {
                     Ok(()) => self.say(what, false),
                     Err(e) => self.say(format!("Couldn't save that: {e}"), true),
@@ -168,7 +189,8 @@ impl Ui {
             scheduled_time: row.row.scheduled_time,
             instance_id: row.row.instance_id.as_deref(),
         };
-        self.send(&moment, answer, done);
+        let key = row_key(moment.reminder_id, moment.scheduled_time);
+        self.send(&moment, answer, key, done);
     }
 
     /// Records an as-needed dose as taken now.
@@ -179,14 +201,19 @@ impl Ui {
             scheduled_time: now,
             instance_id: None,
         };
+        let key = format!("as-needed-{reminder_id}");
         self.send(
             &moment,
             Answer::Take { at: now },
+            key,
             format!("{name} recorded as taken"),
         );
     }
 
-    fn send(&mut self, moment: &Moment, answer: Answer, done: String) {
+    fn send(&mut self, moment: &Moment, answer: Answer, key: String, done: String) {
+        if self.in_flight(&key) {
+            return;
+        }
         let (Some(host), Some(data)) = (self.host.clone(), self.data.as_ref()) else {
             self.say("Not connected", true);
             return;
@@ -198,7 +225,7 @@ impl Ui {
         match answer_call(data, &user, moment, answer, self.now()) {
             Ok(call) => match host.write(call) {
                 Some(ticket) => {
-                    self.sending.insert(ticket, done);
+                    self.sending.insert(ticket, (key, done));
                 }
                 None => self.say("Not connected", true),
             },
@@ -265,19 +292,29 @@ mod tests {
     #[test]
     fn a_write_answered_is_said() {
         let mut ui = ui();
-        ui.sending.insert(3, "Flonase taken".into());
+        ui.sending
+            .insert(3, ("row-r1-1".into(), "Flonase taken".into()));
+        assert!(ui.in_flight("row-r1-1"));
         ui.on_event(Event::Wrote {
             ticket: 3,
             result: Ok(()),
         });
         assert_eq!(ui.toast.as_ref().unwrap().text, "Flonase taken");
-        ui.sending.insert(4, "x".into());
+        ui.sending.insert(4, ("row-r1-2".into(), "x".into()));
         ui.on_event(Event::Wrote {
             ticket: 4,
             result: Err("Timed out waiting for the server".into()),
         });
         assert!(ui.toast.as_ref().unwrap().failed);
         assert!(ui.sending.is_empty());
+        assert!(!ui.in_flight("row-r1-1"));
+    }
+
+    #[test]
+    fn a_list_arriving_means_connected() {
+        let mut ui = ui();
+        ui.on_event(Event::List(Table::Notices, json!([])));
+        assert!(ui.connected);
     }
 
     #[test]

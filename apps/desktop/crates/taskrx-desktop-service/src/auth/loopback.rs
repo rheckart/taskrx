@@ -14,6 +14,8 @@ use crate::config::Config;
 
 /// How long the browser has to come back.
 pub const SIGN_IN_WAIT: Duration = Duration::from_secs(5 * 60);
+/// How long one connection to the port has to send its request line.
+const REQUEST_WAIT: Duration = Duration::from_secs(2);
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum SignInError {
@@ -58,8 +60,14 @@ async fn wait_for_code(listener: &TcpListener, state: &str) -> Result<String, Si
             .await
             .map_err(|e| SignInError::Io(e.to_string()))?;
         let mut line = String::new();
-        let read = BufReader::new(&mut stream).read_line(&mut line).await;
-        if read.is_err() {
+        // A browser opens spare connections ahead of need; one that sends nothing is dropped
+        // rather than left holding the port while the real callback waits behind it.
+        let read = tokio::time::timeout(
+            REQUEST_WAIT,
+            BufReader::new(&mut stream).read_line(&mut line),
+        )
+        .await;
+        if !matches!(read, Ok(Ok(_))) {
             continue;
         }
         let callback = pkce::request_target(line.trim_end())
@@ -145,6 +153,20 @@ mod tests {
                 .await
                 .contains("404")
         );
+        assert!(
+            get(port, "/callback?code=good&state=s1")
+                .await
+                .contains("200")
+        );
+        assert_eq!(waiting.await.unwrap(), Ok("good".to_string()));
+    }
+
+    #[tokio::test]
+    async fn a_silent_connection_does_not_hold_the_callback() {
+        let listener = TcpListener::bind(("127.0.0.1", 0)).await.unwrap();
+        let port = listener.local_addr().unwrap().port();
+        let waiting = tokio::spawn(async move { wait_for_code(&listener, "s1").await });
+        let _idle = TcpStream::connect(("127.0.0.1", port)).await.unwrap();
         assert!(
             get(port, "/callback?code=good&state=s1")
                 .await

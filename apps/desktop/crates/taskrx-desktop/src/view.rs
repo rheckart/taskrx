@@ -8,7 +8,7 @@ use taskrx_desktop_service::screens::today::{AsNeeded, Row, Today};
 use taskrx_desktop_service::writes::Answer;
 
 use crate::theme::Palette;
-use crate::ui::{Phase, Ui};
+use crate::ui::{Phase, Ui, row_key};
 use crate::words;
 
 pub fn view(s: &Ui, _cx: &mut Cx<Ui>) -> El {
@@ -19,6 +19,14 @@ pub fn view(s: &Ui, _cx: &mut Cx<Ui>) -> El {
             p,
             "Finish signing in in your browser",
             "TaskRx is waiting for the browser to come back.",
+        )
+        .child(
+            button(p, "cancel-sign-in", "Cancel", false).on_press(|s: &mut Ui| {
+                if let Some(host) = s.host.clone() {
+                    host.cancel_sign_in();
+                }
+                s.phase = Phase::SignedOut { problem: None };
+            }),
         ),
         Phase::SignedOut { problem } => sign_in(p, problem.as_deref()),
         Phase::SignedIn => signed_in(s, p),
@@ -123,10 +131,24 @@ fn signed_in(s: &Ui, p: Palette) -> El {
             .child(centered(p, "Loading your day", &line));
     };
     let tab = s.tab(&today);
-    let list = match tab {
+    let mut list = match tab {
         ReminderKind::Medication => medications(s, p, &today),
         ReminderKind::Task => tasks(s, p, &today),
     };
+    // A list that failed after the day was drawn: the day shown may be out of date.
+    if let Some(problem) = &s.problem {
+        list = col()
+            .key("with-problem")
+            .w_full()
+            .gap(space::S2)
+            .child(
+                text(problem.clone())
+                    .key("problem")
+                    .font(type_::LABEL)
+                    .color(p.danger),
+            )
+            .child(list);
+    }
     col()
         .key("today")
         .w_full()
@@ -336,12 +358,8 @@ fn section(p: Palette, key: &str, title: &str) -> El {
         .color(p.text_secondary)
 }
 
-fn row_key(r: &Row) -> String {
-    format!("row-{}-{}", r.row.reminder_id, r.row.scheduled_time)
-}
-
 fn row_view(s: &Ui, p: Palette, r: &Row, task: bool) -> El {
-    let key = row_key(r);
+    let key = row_key(&r.row.reminder_id, r.row.scheduled_time);
     let status_word = if task {
         words::task_status(r.shown)
     } else {
@@ -416,6 +434,15 @@ fn row_view(s: &Ui, p: Palette, r: &Row, task: bool) -> El {
     if !s.connected {
         return line;
     }
+    // A row whose answer is on its way offers nothing until the server has it.
+    if s.in_flight(&key) {
+        return line.child(
+            text("Saving…")
+                .key("saving")
+                .font(type_::LABEL)
+                .color(p.text_secondary),
+        );
+    }
     if r.is_answerable() {
         let now_row = r.clone();
         let snooze_row = r.clone();
@@ -426,7 +453,13 @@ fn row_view(s: &Ui, p: Palette, r: &Row, task: bool) -> El {
         line = line.child(button(p, "take", take, true).on_press_tx(
             move |s: &mut Ui, tx: &mut Tx| {
                 s.clock = tx.clock();
-                let at = s.now();
+                // A task's Done is stamped with when it was due, as on the phone and in
+                // Catch up; a dose is taken now.
+                let at = if task {
+                    now_row.row.scheduled_time
+                } else {
+                    s.now()
+                };
                 s.answer(&now_row, Answer::Take { at }, format!("{name} {take_done}"));
             },
         ));
@@ -507,6 +540,14 @@ fn as_needed_row(s: &Ui, p: Palette, a: &AsNeeded) -> El {
         );
     if !s.connected {
         return r;
+    }
+    if s.in_flight(&format!("as-needed-{}", a.reminder_id)) {
+        return r.child(
+            text("Saving…")
+                .key("saving")
+                .font(type_::LABEL)
+                .color(p.text_secondary),
+        );
     }
     // Offered while waiting too: the wait is advice, and a dose already taken is recorded.
     r.child(

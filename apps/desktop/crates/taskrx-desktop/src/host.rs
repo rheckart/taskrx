@@ -19,6 +19,7 @@ pub struct Host {
     session: Arc<Session>,
     runtime: tokio::runtime::Runtime,
     link: Mutex<Option<Link>>,
+    signing_in: Mutex<Option<tokio::task::AbortHandle>>,
     handle: AppHandle<Ui>,
 }
 
@@ -52,6 +53,7 @@ impl Host {
             session,
             runtime,
             link: Mutex::new(None),
+            signing_in: Mutex::new(None),
             handle: handle.clone(),
         });
         let phase = match saved {
@@ -95,9 +97,16 @@ impl Host {
             .map(|l| l.write(call))
     }
 
+    pub fn cancel_sign_in(&self) {
+        if let Some(task) = self.signing_in.lock().expect("sign-in lock").take() {
+            task.abort();
+        }
+    }
+
     pub fn sign_in(self: &Arc<Self>) {
+        self.cancel_sign_in();
         let host = Arc::clone(self);
-        self.runtime.spawn(async move {
+        let task = self.runtime.spawn(async move {
             let result = loopback::sign_in(
                 &host.session,
                 &host.config,
@@ -118,6 +127,7 @@ impl Host {
                 }
             });
         });
+        *self.signing_in.lock().expect("sign-in lock") = Some(task.abort_handle());
     }
 
     pub fn sign_out(self: &Arc<Self>) {
