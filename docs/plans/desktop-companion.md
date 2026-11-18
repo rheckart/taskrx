@@ -88,7 +88,8 @@ because two writers are unsafe until one Occurrence can only ever be one Instanc
     - [x] `today`, `answer` (the timeline, the Tasks tab, batches, the sweep, undo, as-needed,
           snooze; 109 cases)
     - [x] `backlog`, `catch-up`, `refill` (32 cases; each catch-up case now names its call)
-    - [ ] `parser`, `notices`
+    - [x] `parser` (157 cases)
+    - [ ] `notices`
     - [x] `push` (21 cases; call arguments are a wire type whose only number is a float64,
           so an Int64 cannot reach a `v.number()` validator)
   - [ ] Sign-in through the browser, session token in the keyring

@@ -9,6 +9,7 @@ description = "TaskRx's rules for the desktop Companion: a port of the phone's :
 # The zone database is bundled, so a rule answers the same on every machine and the gate
 # does not depend on the system's tzdata.
 jiff = { version = "0.2", features = ["tzdb-bundle-always"] }
+regex = "1"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 uuid = { version = "1", features = ["v5"] }
