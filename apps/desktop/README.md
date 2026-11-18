@@ -8,6 +8,11 @@ the reference (ADR 0017). The plan is `docs/plans/desktop-companion.md`.
 - `crates/taskrx-desktop-core`: the rules, ported from `apps/android/core`. Pure: no clock, no
   I/O. Every rule is held to the golden fixtures `:core:test` writes to
   `apps/android/core/golden`, read in place by `tests/golden.rs`.
+- `crates/taskrx-desktop-service`: everything else that can be tested without a window. Sign-in
+  through the browser (Clerk OAuth, PKCE, a loopback port), the refresh token in the Secret
+  Service keyring, the Convex connection on its own thread and runtime, the data decoded as the
+  phone's pull decodes it, each screen's state, and which call an answer sends. Documents stay in
+  memory; the keyring entry is the only thing written to disk (ADR 0016).
 
 ## The gate
 

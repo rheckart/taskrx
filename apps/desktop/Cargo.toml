@@ -1,6 +1,6 @@
 [workspace]
 resolver = "3"
-members = ["crates/taskrx-desktop-core"]
+members = ["crates/taskrx-desktop-core", "crates/taskrx-desktop-service"]
 
 [workspace.package]
 edition = "2024"
