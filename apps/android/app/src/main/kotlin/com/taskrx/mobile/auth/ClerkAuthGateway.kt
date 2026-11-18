@@ -2,6 +2,7 @@ package com.taskrx.mobile.auth
 
 import android.content.Context
 import com.clerk.api.Clerk
+import com.clerk.api.ClerkConfigurationOptions
 import com.clerk.api.auth.types.VerificationType
 import com.clerk.api.network.serialization.ClerkResult
 import com.clerk.api.network.serialization.errorMessage
@@ -10,6 +11,7 @@ import com.clerk.api.signin.verifyCode
 import com.clerk.api.signup.SignUp
 import com.clerk.api.signup.sendEmailCode
 import com.clerk.api.signup.verifyCode
+import com.taskrx.mobile.BuildConfig
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -26,7 +28,7 @@ import kotlinx.coroutines.flow.stateIn
  */
 class ClerkAuthGateway(context: Context, publishableKey: String, scope: CoroutineScope) : AuthGateway {
     init {
-        Clerk.initialize(context.applicationContext, publishableKey)
+        Clerk.initialize(context.applicationContext, publishableKey, ClerkConfigurationOptions(enableDebugMode = BuildConfig.CLERK_DEBUG))
     }
 
     override val configured: Boolean = true

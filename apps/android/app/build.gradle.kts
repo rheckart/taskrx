@@ -32,6 +32,9 @@ android {
 
         buildConfigField("String", "CONVEX_URL", "\"${setting("CONVEX_URL")}\"")
         buildConfigField("String", "CLERK_PUBLISHABLE_KEY", "\"${setting("CLERK_PUBLISHABLE_KEY")}\"")
+        // Clerk's own request log (status and body; tokens, cookies and auth headers redacted, but
+        // account details are not). Debug builds only, and only on -PCLERK_DEBUG=true.
+        buildConfigField("boolean", "CLERK_DEBUG", "false")
     }
 
     // Upload key for release builds. All four values come from local.properties or the environment;
@@ -53,6 +56,9 @@ android {
     }
 
     buildTypes {
+        debug {
+            buildConfigField("boolean", "CLERK_DEBUG", "${findProperty("CLERK_DEBUG") == "true"}")
+        }
         release {
             isMinifyEnabled = true
             isShrinkResources = true
