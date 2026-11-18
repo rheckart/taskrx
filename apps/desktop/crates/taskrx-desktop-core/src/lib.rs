@@ -5,8 +5,11 @@
 //! `cargo test` must reproduce each case exactly. Pure: no clock, no I/O.
 
 pub mod asneeded;
+pub mod backlog;
 pub mod batch;
+pub mod catchup;
 pub mod domain;
+pub mod refill;
 pub mod schedule;
 pub mod snooze;
 pub mod sweep;

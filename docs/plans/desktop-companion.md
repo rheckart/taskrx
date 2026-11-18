@@ -87,7 +87,7 @@ because two writers are unsafe until one Occurrence can only ever be one Instanc
     - [x] `domain` (the lifecycles, pauses, moves; 137 cases)
     - [x] `today`, `answer` (the timeline, the Tasks tab, batches, the sweep, undo, as-needed,
           snooze; 109 cases)
-    - [ ] `backlog`, `catch-up`, `refill`
+    - [x] `backlog`, `catch-up`, `refill` (32 cases; each catch-up case now names its call)
     - [ ] `parser`, `notices`
     - [ ] `push`
   - [ ] Sign-in through the browser, session token in the keyring

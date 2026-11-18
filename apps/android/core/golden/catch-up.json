@@ -15,6 +15,7 @@
     {
       "name": "needsCatchUp: only misses",
       "input": {
+        "call": "needsCatchUp",
         "rows": [
           {
             "reminderId": "med-a",
@@ -124,8 +125,7 @@
             "isNext": false,
             "completedAt": null
           }
-        ],
-        "zone": "America/New_York"
+        ]
       },
       "output": [
         {
@@ -205,6 +205,7 @@
     {
       "name": "catchUpDays: the misses by local day, newest day first",
       "input": {
+        "call": "catchUpDays",
         "rows": [
           {
             "reminderId": "med-a",
@@ -243,18 +244,6 @@
             "completedAt": null
           },
           {
-            "reminderId": "med-a",
-            "instanceId": null,
-            "name": "Atorvastatin",
-            "dosage": "1 tablet",
-            "kind": "medication",
-            "scheduledTime": 1783342800000,
-            "status": "completed",
-            "snoozedUntil": null,
-            "isNext": false,
-            "completedAt": null
-          },
-          {
             "reminderId": "task-w",
             "instanceId": "inst-task-w-1783202400000",
             "name": "Water the plants",
@@ -262,30 +251,6 @@
             "kind": "task",
             "scheduledTime": 1783202400000,
             "status": "missed",
-            "snoozedUntil": null,
-            "isNext": false,
-            "completedAt": null
-          },
-          {
-            "reminderId": "med-b",
-            "instanceId": null,
-            "name": "Lisinopril",
-            "dosage": "1 tablet",
-            "kind": "medication",
-            "scheduledTime": 1783170000000,
-            "status": "skipped",
-            "snoozedUntil": null,
-            "isNext": false,
-            "completedAt": null
-          },
-          {
-            "reminderId": "med-c",
-            "instanceId": null,
-            "name": "Vitamin D",
-            "dosage": "1 tablet",
-            "kind": "medication",
-            "scheduledTime": 1783339200000,
-            "status": "snoozed",
             "snoozedUntil": null,
             "isNext": false,
             "completedAt": null
@@ -410,6 +375,7 @@
     {
       "name": "catchUpDays: the same misses seen from Sydney",
       "input": {
+        "call": "catchUpDays",
         "rows": [
           {
             "reminderId": "med-a",
@@ -448,18 +414,6 @@
             "completedAt": null
           },
           {
-            "reminderId": "med-a",
-            "instanceId": null,
-            "name": "Atorvastatin",
-            "dosage": "1 tablet",
-            "kind": "medication",
-            "scheduledTime": 1783342800000,
-            "status": "completed",
-            "snoozedUntil": null,
-            "isNext": false,
-            "completedAt": null
-          },
-          {
             "reminderId": "task-w",
             "instanceId": "inst-task-w-1783202400000",
             "name": "Water the plants",
@@ -467,30 +421,6 @@
             "kind": "task",
             "scheduledTime": 1783202400000,
             "status": "missed",
-            "snoozedUntil": null,
-            "isNext": false,
-            "completedAt": null
-          },
-          {
-            "reminderId": "med-b",
-            "instanceId": null,
-            "name": "Lisinopril",
-            "dosage": "1 tablet",
-            "kind": "medication",
-            "scheduledTime": 1783170000000,
-            "status": "skipped",
-            "snoozedUntil": null,
-            "isNext": false,
-            "completedAt": null
-          },
-          {
-            "reminderId": "med-c",
-            "instanceId": null,
-            "name": "Vitamin D",
-            "dosage": "1 tablet",
-            "kind": "medication",
-            "scheduledTime": 1783339200000,
-            "status": "snoozed",
             "snoozedUntil": null,
             "isNext": false,
             "completedAt": null
@@ -610,6 +540,7 @@
     {
       "name": "catchUpSlots: the misses by moment, in first-seen order",
       "input": {
+        "call": "catchUpSlots",
         "rows": [
           {
             "reminderId": "med-a",
@@ -648,18 +579,6 @@
             "completedAt": null
           },
           {
-            "reminderId": "med-a",
-            "instanceId": null,
-            "name": "Atorvastatin",
-            "dosage": "1 tablet",
-            "kind": "medication",
-            "scheduledTime": 1783342800000,
-            "status": "completed",
-            "snoozedUntil": null,
-            "isNext": false,
-            "completedAt": null
-          },
-          {
             "reminderId": "task-w",
             "instanceId": "inst-task-w-1783202400000",
             "name": "Water the plants",
@@ -667,30 +586,6 @@
             "kind": "task",
             "scheduledTime": 1783202400000,
             "status": "missed",
-            "snoozedUntil": null,
-            "isNext": false,
-            "completedAt": null
-          },
-          {
-            "reminderId": "med-b",
-            "instanceId": null,
-            "name": "Lisinopril",
-            "dosage": "1 tablet",
-            "kind": "medication",
-            "scheduledTime": 1783170000000,
-            "status": "skipped",
-            "snoozedUntil": null,
-            "isNext": false,
-            "completedAt": null
-          },
-          {
-            "reminderId": "med-c",
-            "instanceId": null,
-            "name": "Vitamin D",
-            "dosage": "1 tablet",
-            "kind": "medication",
-            "scheduledTime": 1783339200000,
-            "status": "snoozed",
             "snoozedUntil": null,
             "isNext": false,
             "completedAt": null
@@ -719,8 +614,7 @@
             "isNext": false,
             "completedAt": null
           }
-        ],
-        "zone": "America/New_York"
+        ]
       },
       "output": [
         {

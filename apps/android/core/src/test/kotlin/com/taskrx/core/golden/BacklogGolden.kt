@@ -112,17 +112,19 @@ object CatchUpGolden : GoldenSet {
                 row("med-e", "Early dose", ny(6, 0, 0), InstanceStatus.Missed),
             )
         val missed = needsCatchUp(rows)
-        val input =
+        // Each case is one call: the days and the slots are made from the misses alone.
+        fun input(call: String, of: List<TimelineRow>, zone: String? = null) =
             buildJsonObject {
-                put("rows", JsonArray(rows.map(::timelineRowJson)))
-                put("zone", NY)
+                put("call", call)
+                put("rows", JsonArray(of.map(::timelineRowJson)))
+                zone?.let { put("zone", it) }
             }
         return listOf(
             GoldenCase("the catch-up window", buildJsonObject { put("call", "constants") }, buildJsonObject { put("windowMs", CATCH_UP_WINDOW_MS) }),
-            GoldenCase("needsCatchUp: only misses", input, JsonArray(missed.map(::timelineRowJson))),
+            GoldenCase("needsCatchUp: only misses", input("needsCatchUp", rows), JsonArray(missed.map(::timelineRowJson))),
             GoldenCase(
                 "catchUpDays: the misses by local day, newest day first",
-                input,
+                input("catchUpDays", missed, NY),
                 JsonArray(
                     catchUpDays(missed, ZoneId.of(NY)).map { day ->
                         buildJsonObject {
@@ -134,10 +136,7 @@ object CatchUpGolden : GoldenSet {
             ),
             GoldenCase(
                 "catchUpDays: the same misses seen from Sydney",
-                buildJsonObject {
-                    put("rows", JsonArray(rows.map(::timelineRowJson)))
-                    put("zone", "Australia/Sydney")
-                },
+                input("catchUpDays", missed, "Australia/Sydney"),
                 JsonArray(
                     catchUpDays(missed, ZoneId.of("Australia/Sydney")).map { day ->
                         buildJsonObject {
@@ -149,7 +148,7 @@ object CatchUpGolden : GoldenSet {
             ),
             GoldenCase(
                 "catchUpSlots: the misses by moment, in first-seen order",
-                input,
+                input("catchUpSlots", missed),
                 JsonArray(
                     catchUpSlots(missed).map { (time, slot) ->
                         buildJsonObject {
