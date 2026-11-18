@@ -172,12 +172,14 @@ class PushWorker(
                 markSourceSynced(entry)
                 continue
             }
-            if (NOT_AUTHENTICATED in error) {
-                // The server refused the caller, not the entry: right after a reconnect the
-                // socket is back before the token is. Spending an attempt on that would let a
-                // slow re-authentication dead-letter a recorded dose. Nothing behind this entry
-                // would fare better, so the pass stops; the coordinator retries an Error drain,
-                // and [ReauthenticatingGateway] has already asked for a fresh login.
+            if (NOT_AUTHENTICATED in error || error == TIMED_OUT) {
+                // Not a verdict on the entry. A refused caller: right after a reconnect the
+                // socket is back before the token is. No answer at all: the connection is down,
+                // which on Android 17 is any stretch the app spent in the background, its
+                // network cut. Spending attempts on either let a dead connection dead-letter a
+                // recorded dose (the 9 a.m. Flonase answer, 2026-11-18). Nothing behind this
+                // entry would fare better, so the pass stops; the coordinator retries an Error
+                // drain, and [ReauthenticatingGateway] has already asked for a fresh login.
                 failed = true
                 state.value = SyncWorkerStatus.Error
                 pause(backoffMillis(1))
@@ -207,7 +209,7 @@ class PushWorker(
             withTimeout(pushTimeoutMs) { push(entry) }
             null
         } catch (e: TimeoutCancellationException) {
-            "Timed out waiting for the server"
+            TIMED_OUT
         } catch (e: CancellationException) {
             throw e
         } catch (e: Exception) {
@@ -354,6 +356,7 @@ class PushWorker(
     private companion object {
         const val TAG = "pushWorker"
         const val PUSH_TIMEOUT_MS = 30_000L
+        const val TIMED_OUT = "Timed out waiting for the server"
     }
 }
 

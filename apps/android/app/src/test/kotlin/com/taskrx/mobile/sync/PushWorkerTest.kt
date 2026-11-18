@@ -521,20 +521,24 @@ class PushWorkerTest {
         }
 
     @Test
-    fun `a push the server never answers times out, fails the attempt and frees the drain`() =
+    fun `a push the server never answers times out, spends no attempt and frees the drain`() =
         rig {
             fx.reminder("m1")
+            fx.reminder("m2")
             gateway.onMutation = { _, _ -> awaitCancellation() }
             val impatient =
                 PushWorker(fx.container.syncQueue, fx.container.reminders, fx.container.instances, fx.container.notices, fx.container.watchSources, gateway, connectivity, { user }, { pauses += it }, pushTimeoutMs = 50)
-            impatient.drain()
+            // More drains than the attempt limit: a dead connection must not dead-letter a dose.
+            repeat(8) { impatient.drain() }
             assertEquals(SyncWorkerStatus.Error, impatient.status.value)
-            val entry = fx.entries().single()
-            assertEquals(1, entry.attempts)
-            assertTrue(entry.lastError!!.contains("Timed out"))
-            // The guard is free: a second drain reaches the gateway again.
+            assertEquals(listOf(0, 0), fx.entries().map { it.attempts })
+            assertTrue(fx.container.syncQueue.deadLettered().isEmpty())
+            // The pass stopped at the first: nothing behind it would have fared better.
+            assertEquals(8, gateway.mutations.size)
+            // The guard is free, and once the server answers both go.
+            gateway.onMutation = { _, args -> JsonPrimitive("cid-${args["localId"]}") }
             impatient.drain()
-            assertEquals(2, gateway.mutations.size)
+            assertTrue(fx.entries().isEmpty())
         }
 
     @Test
