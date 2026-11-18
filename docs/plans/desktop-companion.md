@@ -89,7 +89,8 @@ because two writers are unsafe until one Occurrence can only ever be one Instanc
           snooze; 109 cases)
     - [x] `backlog`, `catch-up`, `refill` (32 cases; each catch-up case now names its call)
     - [ ] `parser`, `notices`
-    - [ ] `push`
+    - [x] `push` (21 cases; call arguments are a wire type whose only number is a float64,
+          so an Int64 cannot reach a `v.number()` validator)
   - [ ] Sign-in through the browser, session token in the keyring
   - [ ] Today, Tasks, add and edit, Backlog, Catch up, Proposals
   - [ ] Omarchy theme (accent from `colors.toml`, watched; `hyprctl` rounding)
