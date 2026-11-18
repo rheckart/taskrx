@@ -84,7 +84,7 @@ because two writers are unsafe until one Occurrence can only ever be one Instanc
     - [x] `instance-id`, `local-day` (jiff, zones bundled), `server-schedule`, `server-docs`
           (119 cases)
     - [x] `schedule` (the Occurrence engine, pauses, overrides; 92 cases)
-    - [ ] `domain` (the lifecycles)
+    - [x] `domain` (the lifecycles, pauses, moves; 137 cases)
     - [ ] `today`, `answer`
     - [ ] `backlog`, `catch-up`, `refill`
     - [ ] `parser`, `notices`

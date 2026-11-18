@@ -6,5 +6,6 @@
 
 pub mod domain;
 pub mod schedule;
+pub mod sweep;
 pub mod sync;
 pub mod time;
