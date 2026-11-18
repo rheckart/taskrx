@@ -52,7 +52,8 @@ class ClerkConvexAuthProvider : AuthProvider<String> {
             is ClerkResult.Failure -> {
                 val error = result.throwable ?: IllegalStateException("Clerk token request failed")
                 // Otherwise silent: the library swallows it and the server just says "Not authenticated".
-                Log.w(TAG, "Clerk token request failed: $error")
+                // All of it: a failure with no throwable says only what kind it was and what came back.
+                Log.w(TAG, "Clerk token request failed: ${result.errorType} ${result.code ?: "-"} ${result.error ?: "-"} ${result.throwable ?: ""}")
                 Result.failure(error)
             }
         }
