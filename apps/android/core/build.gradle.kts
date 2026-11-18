@@ -172,6 +172,9 @@ kover {
             "com.taskrx.core.tasks.TaskSectionsKt*",
             "com.taskrx.core.tasks.TaskSections",
             "com.taskrx.core.tasks.UpcomingDay",
+            // The Tasks tab's rows: what it reaches past its fortnight.
+            "com.taskrx.core.tasks.TasksTabKt*",
+            "com.taskrx.core.tasks.TasksTabInput",
         )
 
         filters {

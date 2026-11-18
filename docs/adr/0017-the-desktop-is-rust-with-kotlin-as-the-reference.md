@@ -16,8 +16,9 @@ reproduce it.
   changed in Kotlin without the Rust following fails a gate. Each v1 screen brings its
   packages:
   - Today: `schedule` (`nextOccurrences` with pauses, overrides, monthly clamping),
-    `timeline`, `tasks` (`sectionTasks`), `domain` (`InstanceLifecycle`,
-    `ReminderLifecycle`), `batch`, `asneeded`, `snooze`, `undo`, `sweep` (display only).
+    `timeline`, `tasks` (`sectionTasks`, `assembleTasksTab`, `undoableInstanceIds`),
+    `domain` (`InstanceLifecycle`, `ReminderLifecycle`), `batch`, `asneeded`, `snooze`,
+    `undo`, `sweep` (display only).
   - Add and edit: `parser`, plus `domain` for pause and stop.
   - Backlog and Catch up: `backlog`, `catchup`.
   - Proposals: `notices`. The date reader is meant to have one implementation, so this is

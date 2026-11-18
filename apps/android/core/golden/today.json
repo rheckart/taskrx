@@ -1,6 +1,6 @@
 {
   "rule": "today",
-  "about": "projectTimeline, sectionTasks, batchSlots/batchText/batchNotificationId, planMissedSweep, snoozeRanOut, undoVerdict/isScheduledOccurrence/undoWillBeMissed. Reminders and instances are Convex documents (an instance's reminderId already resolved to the parent's localId).",
+  "about": "projectTimeline, sectionTasks, batchSlots/batchText/batchNotificationId, planMissedSweep, snoozeRanOut, undoVerdict/isScheduledOccurrence/undoWillBeMissed, assembleTasksTab (the Tasks tab's rows: a fortnight's projection, the stored task rows before it, one row at the latest moment of a task with none), undoableInstanceIds. Reminders and instances are Convex documents (an instance's reminderId already resolved to the parent's localId).",
   "generatedBy": "apps/android/core/src/test/kotlin/com/taskrx/core/golden (./gradlew :core:test -PupdateGoldens)",
   "cases": [
     {
@@ -14959,6 +14959,5264 @@
         "gracePeriodMs": 7200000
       },
       "output": false
+    },
+    {
+      "name": "assembleTasksTab: Monday noon",
+      "input": {
+        "call": "assembleTasksTab",
+        "reminders": [
+          {
+            "_id": "j97docmed-ator",
+            "localId": "med-atorvastatin",
+            "userId": "user_golden",
+            "kind": "medication",
+            "name": "Atorvastatin",
+            "dosage": "1 tablet",
+            "schedule": {
+              "type": "daily",
+              "times": [
+                "09:00",
+                "21:00"
+              ]
+            },
+            "priority": "normal",
+            "tags": [],
+            "caregiverIds": [],
+            "active": true,
+            "createdAt": 1780286400000,
+            "updatedAt": 1780286400000
+          },
+          {
+            "_id": "j97docmed-lisi",
+            "localId": "med-lisinopril",
+            "userId": "user_golden",
+            "kind": "medication",
+            "name": "Lisinopril",
+            "dosage": "1 tablet",
+            "schedule": {
+              "type": "daily",
+              "times": [
+                "09:00"
+              ]
+            },
+            "priority": "normal",
+            "tags": [],
+            "caregiverIds": [],
+            "active": true,
+            "createdAt": 1780286400000,
+            "updatedAt": 1780286400000
+          },
+          {
+            "_id": "j97docmed-vita",
+            "localId": "med-vitamin-d",
+            "userId": "user_golden",
+            "kind": "medication",
+            "name": "Vitamin D",
+            "dosage": "1 tablet",
+            "schedule": {
+              "type": "weekly",
+              "daysOfWeek": [
+                1
+              ],
+              "times": [
+                "08:00"
+              ]
+            },
+            "priority": "normal",
+            "tags": [],
+            "caregiverIds": [],
+            "active": true,
+            "createdAt": 1780286400000,
+            "updatedAt": 1780286400000
+          },
+          {
+            "_id": "j97docmed-paus",
+            "localId": "med-paused",
+            "userId": "user_golden",
+            "kind": "medication",
+            "name": "Prednisone",
+            "dosage": "1 tablet",
+            "schedule": {
+              "type": "daily",
+              "times": [
+                "13:00"
+              ]
+            },
+            "priority": "normal",
+            "tags": [],
+            "caregiverIds": [],
+            "active": true,
+            "createdAt": 1780286400000,
+            "updatedAt": 1780286400000,
+            "pauses": [
+              {
+                "from": 1783350000000
+              }
+            ]
+          },
+          {
+            "_id": "j97docmed-stop",
+            "localId": "med-stopped",
+            "userId": "user_golden",
+            "kind": "medication",
+            "name": "Amoxicillin",
+            "dosage": "1 tablet",
+            "schedule": {
+              "type": "daily",
+              "times": [
+                "07:00"
+              ]
+            },
+            "priority": "normal",
+            "tags": [],
+            "caregiverIds": [],
+            "active": false,
+            "createdAt": 1780286400000,
+            "updatedAt": 1780286400000
+          },
+          {
+            "_id": "j97docmed-ibup",
+            "localId": "med-ibuprofen",
+            "userId": "user_golden",
+            "kind": "medication",
+            "name": "Ibuprofen",
+            "dosage": "1 tablet",
+            "schedule": {
+              "type": "asNeeded",
+              "minGapMinutes": 240,
+              "maxPer24h": 4
+            },
+            "priority": "normal",
+            "tags": [],
+            "caregiverIds": [],
+            "active": true,
+            "createdAt": 1780286400000,
+            "updatedAt": 1780286400000
+          },
+          {
+            "_id": "j97doctask-wat",
+            "localId": "task-water",
+            "userId": "user_golden",
+            "kind": "task",
+            "name": "Water the plants",
+            "schedule": {
+              "type": "daily",
+              "times": [
+                "18:00"
+              ]
+            },
+            "priority": "normal",
+            "tags": [],
+            "caregiverIds": [],
+            "active": true,
+            "createdAt": 1780286400000,
+            "updatedAt": 1780286400000
+          },
+          {
+            "_id": "j97doctask-ren",
+            "localId": "task-rent",
+            "userId": "user_golden",
+            "kind": "task",
+            "name": "Pay rent",
+            "schedule": {
+              "type": "monthly",
+              "daysOfMonth": [
+                1
+              ],
+              "times": [
+                "10:00"
+              ]
+            },
+            "priority": "normal",
+            "tags": [],
+            "caregiverIds": [],
+            "active": true,
+            "createdAt": 1780286400000,
+            "updatedAt": 1780286400000
+          },
+          {
+            "_id": "j97doctask-pha",
+            "localId": "task-pharmacy",
+            "userId": "user_golden",
+            "kind": "task",
+            "name": "Call the pharmacy",
+            "schedule": {
+              "type": "once",
+              "at": 1783364400000
+            },
+            "priority": "normal",
+            "tags": [],
+            "caregiverIds": [],
+            "active": true,
+            "createdAt": 1780286400000,
+            "updatedAt": 1780286400000
+          },
+          {
+            "_id": "j97doctask-str",
+            "localId": "task-stretch",
+            "userId": "user_golden",
+            "kind": "task",
+            "name": "Stretch",
+            "schedule": {
+              "type": "interval",
+              "hours": 8,
+              "startAt": 1783076400000
+            },
+            "priority": "normal",
+            "tags": [],
+            "caregiverIds": [],
+            "active": true,
+            "createdAt": 1780286400000,
+            "updatedAt": 1780286400000
+          },
+          {
+            "_id": "j97doctask-bac",
+            "localId": "task-backlog",
+            "userId": "user_golden",
+            "kind": "task",
+            "name": "Sort the garage",
+            "schedule": {
+              "type": "none"
+            },
+            "priority": "normal",
+            "tags": [],
+            "caregiverIds": [],
+            "active": true,
+            "createdAt": 1780286400000,
+            "updatedAt": 1780286400000
+          },
+          {
+            "_id": "j97doctask-new",
+            "localId": "task-new",
+            "userId": "user_golden",
+            "kind": "task",
+            "name": "Journal",
+            "schedule": {
+              "type": "daily",
+              "times": [
+                "08:00"
+              ]
+            },
+            "priority": "normal",
+            "tags": [],
+            "caregiverIds": [],
+            "active": true,
+            "createdAt": 1783296000000,
+            "updatedAt": 1783296000000
+          },
+          {
+            "_id": "j97doctask-pas",
+            "localId": "task-passport",
+            "userId": "user_golden",
+            "kind": "task",
+            "name": "Renew the passport",
+            "schedule": {
+              "type": "once",
+              "at": 1781532000000
+            },
+            "priority": "normal",
+            "tags": [],
+            "caregiverIds": [],
+            "active": true,
+            "createdAt": 1780286400000,
+            "updatedAt": 1780286400000
+          },
+          {
+            "_id": "j97doctask-tax",
+            "localId": "task-taxes",
+            "userId": "user_golden",
+            "kind": "task",
+            "name": "File the estimate",
+            "schedule": {
+              "type": "once",
+              "at": 1781269200000
+            },
+            "priority": "normal",
+            "tags": [],
+            "caregiverIds": [],
+            "active": true,
+            "createdAt": 1780286400000,
+            "updatedAt": 1780286400000
+          },
+          {
+            "_id": "j97doctask-fen",
+            "localId": "task-fence",
+            "userId": "user_golden",
+            "kind": "task",
+            "name": "Paint the fence",
+            "schedule": {
+              "type": "once",
+              "at": 1781096400000
+            },
+            "priority": "normal",
+            "tags": [],
+            "caregiverIds": [],
+            "active": true,
+            "createdAt": 1780286400000,
+            "updatedAt": 1780286400000
+          },
+          {
+            "_id": "j97doctask-boo",
+            "localId": "task-books",
+            "userId": "user_golden",
+            "kind": "task",
+            "name": "Return the library books",
+            "schedule": {
+              "type": "once",
+              "at": 1781442000000
+            },
+            "priority": "normal",
+            "tags": [],
+            "caregiverIds": [],
+            "active": false,
+            "createdAt": 1780286400000,
+            "updatedAt": 1780286400000
+          },
+          {
+            "_id": "j97doctask-den",
+            "localId": "task-dentist",
+            "userId": "user_golden",
+            "kind": "task",
+            "name": "Book the dentist",
+            "schedule": {
+              "type": "once",
+              "at": 1780405200000
+            },
+            "priority": "normal",
+            "tags": [],
+            "caregiverIds": [],
+            "active": true,
+            "createdAt": 1780459200000,
+            "updatedAt": 1780459200000
+          }
+        ],
+        "instances": [
+          {
+            "_id": "j57inst1783342800000",
+            "localId": "inst-1783342800000-completed",
+            "userId": "user_golden",
+            "reminderId": "med-atorvastatin",
+            "reminderKind": "medication",
+            "scheduledTime": 1783342800000,
+            "status": "completed",
+            "completedAt": 1783343100000,
+            "snoozeCount": 0,
+            "createdAt": 1783342800000,
+            "updatedAt": 1783342800000
+          },
+          {
+            "_id": "j57inst1783342800000",
+            "localId": "inst-1783342800000-skipped",
+            "userId": "user_golden",
+            "reminderId": "med-lisinopril",
+            "reminderKind": "medication",
+            "scheduledTime": 1783342800000,
+            "status": "skipped",
+            "snoozeCount": 0,
+            "createdAt": 1783342800000,
+            "updatedAt": 1783342800000
+          },
+          {
+            "_id": "j57inst1783299600000",
+            "localId": "inst-1783299600000-missed",
+            "userId": "user_golden",
+            "reminderId": "med-atorvastatin",
+            "reminderKind": "medication",
+            "scheduledTime": 1783299600000,
+            "status": "missed",
+            "snoozeCount": 0,
+            "createdAt": 1783299600000,
+            "updatedAt": 1783299600000
+          },
+          {
+            "_id": "j57inst1783339200000",
+            "localId": "inst-1783339200000-snoozed",
+            "userId": "user_golden",
+            "reminderId": "med-vitamin-d",
+            "reminderKind": "medication",
+            "scheduledTime": 1783339200000,
+            "status": "snoozed",
+            "snoozedUntil": 1783341000000,
+            "snoozeCount": 0,
+            "createdAt": 1783339200000,
+            "updatedAt": 1783339200000
+          },
+          {
+            "_id": "j57inst1783335600000",
+            "localId": "inst-1783335600000-completed",
+            "userId": "user_golden",
+            "reminderId": "med-stopped",
+            "reminderKind": "medication",
+            "scheduledTime": 1783335600000,
+            "status": "completed",
+            "completedAt": 1783336200000,
+            "snoozeCount": 0,
+            "createdAt": 1783335600000,
+            "updatedAt": 1783335600000
+          },
+          {
+            "_id": "j57inst1783347300000",
+            "localId": "inst-1783347300000-completed",
+            "userId": "user_golden",
+            "reminderId": "med-ibuprofen",
+            "reminderKind": "medication",
+            "scheduledTime": 1783347300000,
+            "status": "completed",
+            "completedAt": 1783347300000,
+            "snoozeCount": 0,
+            "createdAt": 1783347300000,
+            "updatedAt": 1783347300000
+          },
+          {
+            "_id": "j57inst1783326600000",
+            "localId": "inst-1783326600000-completed",
+            "userId": "user_golden",
+            "reminderId": "med-ibuprofen",
+            "reminderKind": "medication",
+            "scheduledTime": 1783326600000,
+            "status": "completed",
+            "completedAt": 1783326600000,
+            "snoozeCount": 0,
+            "createdAt": 1783326600000,
+            "updatedAt": 1783326600000
+          },
+          {
+            "_id": "j57inst1783288800000",
+            "localId": "inst-1783288800000-pending",
+            "userId": "user_golden",
+            "reminderId": "task-water",
+            "reminderKind": "task",
+            "scheduledTime": 1783288800000,
+            "status": "pending",
+            "snoozeCount": 0,
+            "createdAt": 1783288800000,
+            "updatedAt": 1783288800000
+          },
+          {
+            "_id": "j57inst1783202400000",
+            "localId": "inst-1783202400000-completed",
+            "userId": "user_golden",
+            "reminderId": "task-water",
+            "reminderKind": "task",
+            "scheduledTime": 1783202400000,
+            "status": "completed",
+            "completedAt": 1783206000000,
+            "snoozeCount": 0,
+            "createdAt": 1783202400000,
+            "updatedAt": 1783202400000
+          },
+          {
+            "_id": "j57inst1783306800000",
+            "localId": "inst-1783306800000-snoozed",
+            "userId": "user_golden",
+            "reminderId": "task-stretch",
+            "reminderKind": "task",
+            "scheduledTime": 1783306800000,
+            "status": "snoozed",
+            "snoozedUntil": 1783357200000,
+            "snoozeCount": 0,
+            "createdAt": 1783306800000,
+            "updatedAt": 1783306800000
+          },
+          {
+            "_id": "j57inst1783256400000",
+            "localId": "legacy-a",
+            "userId": "user_golden",
+            "reminderId": "med-lisinopril",
+            "reminderKind": "medication",
+            "scheduledTime": 1783256400000,
+            "status": "missed",
+            "snoozeCount": 0,
+            "createdAt": 1783256400000,
+            "updatedAt": 1783256400000
+          },
+          {
+            "_id": "j57inst1783256400000",
+            "localId": "legacy-b",
+            "userId": "user_golden",
+            "reminderId": "med-lisinopril",
+            "reminderKind": "medication",
+            "scheduledTime": 1783256400000,
+            "status": "completed",
+            "completedAt": 1783258800000,
+            "snoozeCount": 0,
+            "createdAt": 1783256400000,
+            "updatedAt": 1783256400000
+          },
+          {
+            "_id": "j57inst1783461600000",
+            "localId": "water-early",
+            "userId": "user_golden",
+            "reminderId": "task-water",
+            "reminderKind": "task",
+            "scheduledTime": 1783461600000,
+            "status": "completed",
+            "completedAt": 1783350000000,
+            "snoozeCount": 0,
+            "createdAt": 1783461600000,
+            "updatedAt": 1783461600000
+          }
+        ],
+        "olderInstances": [
+          {
+            "_id": "j57inst1781269200000",
+            "localId": "inst-1781269200000-completed",
+            "userId": "user_golden",
+            "reminderId": "task-taxes",
+            "reminderKind": "task",
+            "scheduledTime": 1781269200000,
+            "status": "completed",
+            "completedAt": 1781276400000,
+            "snoozeCount": 0,
+            "createdAt": 1781269200000,
+            "updatedAt": 1781269200000
+          },
+          {
+            "_id": "j57inst1781096400000",
+            "localId": "inst-1781096400000-snoozed",
+            "userId": "user_golden",
+            "reminderId": "task-fence",
+            "reminderKind": "task",
+            "scheduledTime": 1781096400000,
+            "status": "snoozed",
+            "snoozedUntil": 1781100000000,
+            "snoozeCount": 0,
+            "createdAt": 1781096400000,
+            "updatedAt": 1781096400000
+          },
+          {
+            "_id": "j57inst1781992800000",
+            "localId": "inst-1781992800000-pending",
+            "userId": "user_golden",
+            "reminderId": "task-water",
+            "reminderKind": "task",
+            "scheduledTime": 1781992800000,
+            "status": "pending",
+            "snoozeCount": 0,
+            "createdAt": 1781992800000,
+            "updatedAt": 1781992800000
+          }
+        ],
+        "now": 1783353600000,
+        "zone": "America/New_York"
+      },
+      "output": {
+        "overdue": [
+          {
+            "reminderId": "task-fence",
+            "instanceId": "inst-1781096400000-snoozed",
+            "name": "Paint the fence",
+            "dosage": null,
+            "kind": "task",
+            "scheduledTime": 1781096400000,
+            "status": "missed",
+            "snoozedUntil": 1781100000000,
+            "isNext": false,
+            "completedAt": null
+          },
+          {
+            "reminderId": "task-passport",
+            "instanceId": null,
+            "name": "Renew the passport",
+            "dosage": null,
+            "kind": "task",
+            "scheduledTime": 1781532000000,
+            "status": "pending",
+            "snoozedUntil": null,
+            "isNext": false,
+            "completedAt": null
+          },
+          {
+            "reminderId": "task-rent",
+            "instanceId": null,
+            "name": "Pay rent",
+            "dosage": null,
+            "kind": "task",
+            "scheduledTime": 1782914400000,
+            "status": "pending",
+            "snoozedUntil": null,
+            "isNext": false,
+            "completedAt": null
+          },
+          {
+            "reminderId": "task-water",
+            "instanceId": "inst-1783288800000-pending",
+            "name": "Water the plants",
+            "dosage": null,
+            "kind": "task",
+            "scheduledTime": 1783288800000,
+            "status": "pending",
+            "snoozedUntil": null,
+            "isNext": false,
+            "completedAt": null
+          },
+          {
+            "reminderId": "task-stretch",
+            "instanceId": null,
+            "name": "Stretch",
+            "dosage": null,
+            "kind": "task",
+            "scheduledTime": 1783335600000,
+            "status": "pending",
+            "snoozedUntil": null,
+            "isNext": false,
+            "completedAt": null
+          },
+          {
+            "reminderId": "task-new",
+            "instanceId": null,
+            "name": "Journal",
+            "dosage": null,
+            "kind": "task",
+            "scheduledTime": 1783339200000,
+            "status": "pending",
+            "snoozedUntil": null,
+            "isNext": false,
+            "completedAt": null
+          }
+        ],
+        "dueToday": [
+          {
+            "reminderId": "task-pharmacy",
+            "instanceId": null,
+            "name": "Call the pharmacy",
+            "dosage": null,
+            "kind": "task",
+            "scheduledTime": 1783364400000,
+            "status": "pending",
+            "snoozedUntil": null,
+            "isNext": false,
+            "completedAt": null
+          },
+          {
+            "reminderId": "task-stretch",
+            "instanceId": null,
+            "name": "Stretch",
+            "dosage": null,
+            "kind": "task",
+            "scheduledTime": 1783364400000,
+            "status": "pending",
+            "snoozedUntil": null,
+            "isNext": false,
+            "completedAt": null
+          },
+          {
+            "reminderId": "task-water",
+            "instanceId": null,
+            "name": "Water the plants",
+            "dosage": null,
+            "kind": "task",
+            "scheduledTime": 1783375200000,
+            "status": "pending",
+            "snoozedUntil": null,
+            "isNext": false,
+            "completedAt": null
+          },
+          {
+            "reminderId": "task-stretch",
+            "instanceId": null,
+            "name": "Stretch",
+            "dosage": null,
+            "kind": "task",
+            "scheduledTime": 1783393200000,
+            "status": "pending",
+            "snoozedUntil": null,
+            "isNext": false,
+            "completedAt": null
+          }
+        ],
+        "upcoming": [
+          {
+            "dayStart": 1783396800000,
+            "rows": [
+              {
+                "reminderId": "task-stretch",
+                "instanceId": null,
+                "name": "Stretch",
+                "dosage": null,
+                "kind": "task",
+                "scheduledTime": 1783422000000,
+                "status": "pending",
+                "snoozedUntil": null,
+                "isNext": false,
+                "completedAt": null
+              },
+              {
+                "reminderId": "task-new",
+                "instanceId": null,
+                "name": "Journal",
+                "dosage": null,
+                "kind": "task",
+                "scheduledTime": 1783425600000,
+                "status": "pending",
+                "snoozedUntil": null,
+                "isNext": false,
+                "completedAt": null
+              },
+              {
+                "reminderId": "task-stretch",
+                "instanceId": null,
+                "name": "Stretch",
+                "dosage": null,
+                "kind": "task",
+                "scheduledTime": 1783450800000,
+                "status": "pending",
+                "snoozedUntil": null,
+                "isNext": false,
+                "completedAt": null
+              },
+              {
+                "reminderId": "task-water",
+                "instanceId": "water-early",
+                "name": "Water the plants",
+                "dosage": null,
+                "kind": "task",
+                "scheduledTime": 1783461600000,
+                "status": "completed",
+                "snoozedUntil": null,
+                "isNext": false,
+                "completedAt": 1783350000000
+              },
+              {
+                "reminderId": "task-stretch",
+                "instanceId": null,
+                "name": "Stretch",
+                "dosage": null,
+                "kind": "task",
+                "scheduledTime": 1783479600000,
+                "status": "pending",
+                "snoozedUntil": null,
+                "isNext": false,
+                "completedAt": null
+              }
+            ]
+          },
+          {
+            "dayStart": 1783483200000,
+            "rows": [
+              {
+                "reminderId": "task-stretch",
+                "instanceId": null,
+                "name": "Stretch",
+                "dosage": null,
+                "kind": "task",
+                "scheduledTime": 1783508400000,
+                "status": "pending",
+                "snoozedUntil": null,
+                "isNext": false,
+                "completedAt": null
+              },
+              {
+                "reminderId": "task-new",
+                "instanceId": null,
+                "name": "Journal",
+                "dosage": null,
+                "kind": "task",
+                "scheduledTime": 1783512000000,
+                "status": "pending",
+                "snoozedUntil": null,
+                "isNext": false,
+                "completedAt": null
+              },
+              {
+                "reminderId": "task-stretch",
+                "instanceId": null,
+                "name": "Stretch",
+                "dosage": null,
+                "kind": "task",
+                "scheduledTime": 1783537200000,
+                "status": "pending",
+                "snoozedUntil": null,
+                "isNext": false,
+                "completedAt": null
+              },
+              {
+                "reminderId": "task-water",
+                "instanceId": null,
+                "name": "Water the plants",
+                "dosage": null,
+                "kind": "task",
+                "scheduledTime": 1783548000000,
+                "status": "pending",
+                "snoozedUntil": null,
+                "isNext": false,
+                "completedAt": null
+              },
+              {
+                "reminderId": "task-stretch",
+                "instanceId": null,
+                "name": "Stretch",
+                "dosage": null,
+                "kind": "task",
+                "scheduledTime": 1783566000000,
+                "status": "pending",
+                "snoozedUntil": null,
+                "isNext": false,
+                "completedAt": null
+              }
+            ]
+          },
+          {
+            "dayStart": 1783569600000,
+            "rows": [
+              {
+                "reminderId": "task-stretch",
+                "instanceId": null,
+                "name": "Stretch",
+                "dosage": null,
+                "kind": "task",
+                "scheduledTime": 1783594800000,
+                "status": "pending",
+                "snoozedUntil": null,
+                "isNext": false,
+                "completedAt": null
+              },
+              {
+                "reminderId": "task-new",
+                "instanceId": null,
+                "name": "Journal",
+                "dosage": null,
+                "kind": "task",
+                "scheduledTime": 1783598400000,
+                "status": "pending",
+                "snoozedUntil": null,
+                "isNext": false,
+                "completedAt": null
+              },
+              {
+                "reminderId": "task-stretch",
+                "instanceId": null,
+                "name": "Stretch",
+                "dosage": null,
+                "kind": "task",
+                "scheduledTime": 1783623600000,
+                "status": "pending",
+                "snoozedUntil": null,
+                "isNext": false,
+                "completedAt": null
+              },
+              {
+                "reminderId": "task-water",
+                "instanceId": null,
+                "name": "Water the plants",
+                "dosage": null,
+                "kind": "task",
+                "scheduledTime": 1783634400000,
+                "status": "pending",
+                "snoozedUntil": null,
+                "isNext": false,
+                "completedAt": null
+              },
+              {
+                "reminderId": "task-stretch",
+                "instanceId": null,
+                "name": "Stretch",
+                "dosage": null,
+                "kind": "task",
+                "scheduledTime": 1783652400000,
+                "status": "pending",
+                "snoozedUntil": null,
+                "isNext": false,
+                "completedAt": null
+              }
+            ]
+          },
+          {
+            "dayStart": 1783656000000,
+            "rows": [
+              {
+                "reminderId": "task-stretch",
+                "instanceId": null,
+                "name": "Stretch",
+                "dosage": null,
+                "kind": "task",
+                "scheduledTime": 1783681200000,
+                "status": "pending",
+                "snoozedUntil": null,
+                "isNext": false,
+                "completedAt": null
+              },
+              {
+                "reminderId": "task-new",
+                "instanceId": null,
+                "name": "Journal",
+                "dosage": null,
+                "kind": "task",
+                "scheduledTime": 1783684800000,
+                "status": "pending",
+                "snoozedUntil": null,
+                "isNext": false,
+                "completedAt": null
+              },
+              {
+                "reminderId": "task-stretch",
+                "instanceId": null,
+                "name": "Stretch",
+                "dosage": null,
+                "kind": "task",
+                "scheduledTime": 1783710000000,
+                "status": "pending",
+                "snoozedUntil": null,
+                "isNext": false,
+                "completedAt": null
+              },
+              {
+                "reminderId": "task-water",
+                "instanceId": null,
+                "name": "Water the plants",
+                "dosage": null,
+                "kind": "task",
+                "scheduledTime": 1783720800000,
+                "status": "pending",
+                "snoozedUntil": null,
+                "isNext": false,
+                "completedAt": null
+              },
+              {
+                "reminderId": "task-stretch",
+                "instanceId": null,
+                "name": "Stretch",
+                "dosage": null,
+                "kind": "task",
+                "scheduledTime": 1783738800000,
+                "status": "pending",
+                "snoozedUntil": null,
+                "isNext": false,
+                "completedAt": null
+              }
+            ]
+          },
+          {
+            "dayStart": 1783742400000,
+            "rows": [
+              {
+                "reminderId": "task-stretch",
+                "instanceId": null,
+                "name": "Stretch",
+                "dosage": null,
+                "kind": "task",
+                "scheduledTime": 1783767600000,
+                "status": "pending",
+                "snoozedUntil": null,
+                "isNext": false,
+                "completedAt": null
+              },
+              {
+                "reminderId": "task-new",
+                "instanceId": null,
+                "name": "Journal",
+                "dosage": null,
+                "kind": "task",
+                "scheduledTime": 1783771200000,
+                "status": "pending",
+                "snoozedUntil": null,
+                "isNext": false,
+                "completedAt": null
+              },
+              {
+                "reminderId": "task-stretch",
+                "instanceId": null,
+                "name": "Stretch",
+                "dosage": null,
+                "kind": "task",
+                "scheduledTime": 1783796400000,
+                "status": "pending",
+                "snoozedUntil": null,
+                "isNext": false,
+                "completedAt": null
+              },
+              {
+                "reminderId": "task-water",
+                "instanceId": null,
+                "name": "Water the plants",
+                "dosage": null,
+                "kind": "task",
+                "scheduledTime": 1783807200000,
+                "status": "pending",
+                "snoozedUntil": null,
+                "isNext": false,
+                "completedAt": null
+              },
+              {
+                "reminderId": "task-stretch",
+                "instanceId": null,
+                "name": "Stretch",
+                "dosage": null,
+                "kind": "task",
+                "scheduledTime": 1783825200000,
+                "status": "pending",
+                "snoozedUntil": null,
+                "isNext": false,
+                "completedAt": null
+              }
+            ]
+          },
+          {
+            "dayStart": 1783828800000,
+            "rows": [
+              {
+                "reminderId": "task-stretch",
+                "instanceId": null,
+                "name": "Stretch",
+                "dosage": null,
+                "kind": "task",
+                "scheduledTime": 1783854000000,
+                "status": "pending",
+                "snoozedUntil": null,
+                "isNext": false,
+                "completedAt": null
+              },
+              {
+                "reminderId": "task-new",
+                "instanceId": null,
+                "name": "Journal",
+                "dosage": null,
+                "kind": "task",
+                "scheduledTime": 1783857600000,
+                "status": "pending",
+                "snoozedUntil": null,
+                "isNext": false,
+                "completedAt": null
+              },
+              {
+                "reminderId": "task-stretch",
+                "instanceId": null,
+                "name": "Stretch",
+                "dosage": null,
+                "kind": "task",
+                "scheduledTime": 1783882800000,
+                "status": "pending",
+                "snoozedUntil": null,
+                "isNext": false,
+                "completedAt": null
+              },
+              {
+                "reminderId": "task-water",
+                "instanceId": null,
+                "name": "Water the plants",
+                "dosage": null,
+                "kind": "task",
+                "scheduledTime": 1783893600000,
+                "status": "pending",
+                "snoozedUntil": null,
+                "isNext": false,
+                "completedAt": null
+              },
+              {
+                "reminderId": "task-stretch",
+                "instanceId": null,
+                "name": "Stretch",
+                "dosage": null,
+                "kind": "task",
+                "scheduledTime": 1783911600000,
+                "status": "pending",
+                "snoozedUntil": null,
+                "isNext": false,
+                "completedAt": null
+              }
+            ]
+          },
+          {
+            "dayStart": 1783915200000,
+            "rows": [
+              {
+                "reminderId": "task-stretch",
+                "instanceId": null,
+                "name": "Stretch",
+                "dosage": null,
+                "kind": "task",
+                "scheduledTime": 1783940400000,
+                "status": "pending",
+                "snoozedUntil": null,
+                "isNext": false,
+                "completedAt": null
+              },
+              {
+                "reminderId": "task-new",
+                "instanceId": null,
+                "name": "Journal",
+                "dosage": null,
+                "kind": "task",
+                "scheduledTime": 1783944000000,
+                "status": "pending",
+                "snoozedUntil": null,
+                "isNext": false,
+                "completedAt": null
+              },
+              {
+                "reminderId": "task-stretch",
+                "instanceId": null,
+                "name": "Stretch",
+                "dosage": null,
+                "kind": "task",
+                "scheduledTime": 1783969200000,
+                "status": "pending",
+                "snoozedUntil": null,
+                "isNext": false,
+                "completedAt": null
+              },
+              {
+                "reminderId": "task-water",
+                "instanceId": null,
+                "name": "Water the plants",
+                "dosage": null,
+                "kind": "task",
+                "scheduledTime": 1783980000000,
+                "status": "pending",
+                "snoozedUntil": null,
+                "isNext": false,
+                "completedAt": null
+              },
+              {
+                "reminderId": "task-stretch",
+                "instanceId": null,
+                "name": "Stretch",
+                "dosage": null,
+                "kind": "task",
+                "scheduledTime": 1783998000000,
+                "status": "pending",
+                "snoozedUntil": null,
+                "isNext": false,
+                "completedAt": null
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "name": "assembleTasksTab: two weeks on, the week's rows are older than the window",
+      "input": {
+        "call": "assembleTasksTab",
+        "reminders": [
+          {
+            "_id": "j97docmed-ator",
+            "localId": "med-atorvastatin",
+            "userId": "user_golden",
+            "kind": "medication",
+            "name": "Atorvastatin",
+            "dosage": "1 tablet",
+            "schedule": {
+              "type": "daily",
+              "times": [
+                "09:00",
+                "21:00"
+              ]
+            },
+            "priority": "normal",
+            "tags": [],
+            "caregiverIds": [],
+            "active": true,
+            "createdAt": 1780286400000,
+            "updatedAt": 1780286400000
+          },
+          {
+            "_id": "j97docmed-lisi",
+            "localId": "med-lisinopril",
+            "userId": "user_golden",
+            "kind": "medication",
+            "name": "Lisinopril",
+            "dosage": "1 tablet",
+            "schedule": {
+              "type": "daily",
+              "times": [
+                "09:00"
+              ]
+            },
+            "priority": "normal",
+            "tags": [],
+            "caregiverIds": [],
+            "active": true,
+            "createdAt": 1780286400000,
+            "updatedAt": 1780286400000
+          },
+          {
+            "_id": "j97docmed-vita",
+            "localId": "med-vitamin-d",
+            "userId": "user_golden",
+            "kind": "medication",
+            "name": "Vitamin D",
+            "dosage": "1 tablet",
+            "schedule": {
+              "type": "weekly",
+              "daysOfWeek": [
+                1
+              ],
+              "times": [
+                "08:00"
+              ]
+            },
+            "priority": "normal",
+            "tags": [],
+            "caregiverIds": [],
+            "active": true,
+            "createdAt": 1780286400000,
+            "updatedAt": 1780286400000
+          },
+          {
+            "_id": "j97docmed-paus",
+            "localId": "med-paused",
+            "userId": "user_golden",
+            "kind": "medication",
+            "name": "Prednisone",
+            "dosage": "1 tablet",
+            "schedule": {
+              "type": "daily",
+              "times": [
+                "13:00"
+              ]
+            },
+            "priority": "normal",
+            "tags": [],
+            "caregiverIds": [],
+            "active": true,
+            "createdAt": 1780286400000,
+            "updatedAt": 1780286400000,
+            "pauses": [
+              {
+                "from": 1783350000000
+              }
+            ]
+          },
+          {
+            "_id": "j97docmed-stop",
+            "localId": "med-stopped",
+            "userId": "user_golden",
+            "kind": "medication",
+            "name": "Amoxicillin",
+            "dosage": "1 tablet",
+            "schedule": {
+              "type": "daily",
+              "times": [
+                "07:00"
+              ]
+            },
+            "priority": "normal",
+            "tags": [],
+            "caregiverIds": [],
+            "active": false,
+            "createdAt": 1780286400000,
+            "updatedAt": 1780286400000
+          },
+          {
+            "_id": "j97docmed-ibup",
+            "localId": "med-ibuprofen",
+            "userId": "user_golden",
+            "kind": "medication",
+            "name": "Ibuprofen",
+            "dosage": "1 tablet",
+            "schedule": {
+              "type": "asNeeded",
+              "minGapMinutes": 240,
+              "maxPer24h": 4
+            },
+            "priority": "normal",
+            "tags": [],
+            "caregiverIds": [],
+            "active": true,
+            "createdAt": 1780286400000,
+            "updatedAt": 1780286400000
+          },
+          {
+            "_id": "j97doctask-wat",
+            "localId": "task-water",
+            "userId": "user_golden",
+            "kind": "task",
+            "name": "Water the plants",
+            "schedule": {
+              "type": "daily",
+              "times": [
+                "18:00"
+              ]
+            },
+            "priority": "normal",
+            "tags": [],
+            "caregiverIds": [],
+            "active": true,
+            "createdAt": 1780286400000,
+            "updatedAt": 1780286400000
+          },
+          {
+            "_id": "j97doctask-ren",
+            "localId": "task-rent",
+            "userId": "user_golden",
+            "kind": "task",
+            "name": "Pay rent",
+            "schedule": {
+              "type": "monthly",
+              "daysOfMonth": [
+                1
+              ],
+              "times": [
+                "10:00"
+              ]
+            },
+            "priority": "normal",
+            "tags": [],
+            "caregiverIds": [],
+            "active": true,
+            "createdAt": 1780286400000,
+            "updatedAt": 1780286400000
+          },
+          {
+            "_id": "j97doctask-pha",
+            "localId": "task-pharmacy",
+            "userId": "user_golden",
+            "kind": "task",
+            "name": "Call the pharmacy",
+            "schedule": {
+              "type": "once",
+              "at": 1783364400000
+            },
+            "priority": "normal",
+            "tags": [],
+            "caregiverIds": [],
+            "active": true,
+            "createdAt": 1780286400000,
+            "updatedAt": 1780286400000
+          },
+          {
+            "_id": "j97doctask-str",
+            "localId": "task-stretch",
+            "userId": "user_golden",
+            "kind": "task",
+            "name": "Stretch",
+            "schedule": {
+              "type": "interval",
+              "hours": 8,
+              "startAt": 1783076400000
+            },
+            "priority": "normal",
+            "tags": [],
+            "caregiverIds": [],
+            "active": true,
+            "createdAt": 1780286400000,
+            "updatedAt": 1780286400000
+          },
+          {
+            "_id": "j97doctask-bac",
+            "localId": "task-backlog",
+            "userId": "user_golden",
+            "kind": "task",
+            "name": "Sort the garage",
+            "schedule": {
+              "type": "none"
+            },
+            "priority": "normal",
+            "tags": [],
+            "caregiverIds": [],
+            "active": true,
+            "createdAt": 1780286400000,
+            "updatedAt": 1780286400000
+          },
+          {
+            "_id": "j97doctask-new",
+            "localId": "task-new",
+            "userId": "user_golden",
+            "kind": "task",
+            "name": "Journal",
+            "schedule": {
+              "type": "daily",
+              "times": [
+                "08:00"
+              ]
+            },
+            "priority": "normal",
+            "tags": [],
+            "caregiverIds": [],
+            "active": true,
+            "createdAt": 1783296000000,
+            "updatedAt": 1783296000000
+          },
+          {
+            "_id": "j97doctask-pas",
+            "localId": "task-passport",
+            "userId": "user_golden",
+            "kind": "task",
+            "name": "Renew the passport",
+            "schedule": {
+              "type": "once",
+              "at": 1781532000000
+            },
+            "priority": "normal",
+            "tags": [],
+            "caregiverIds": [],
+            "active": true,
+            "createdAt": 1780286400000,
+            "updatedAt": 1780286400000
+          },
+          {
+            "_id": "j97doctask-tax",
+            "localId": "task-taxes",
+            "userId": "user_golden",
+            "kind": "task",
+            "name": "File the estimate",
+            "schedule": {
+              "type": "once",
+              "at": 1781269200000
+            },
+            "priority": "normal",
+            "tags": [],
+            "caregiverIds": [],
+            "active": true,
+            "createdAt": 1780286400000,
+            "updatedAt": 1780286400000
+          },
+          {
+            "_id": "j97doctask-fen",
+            "localId": "task-fence",
+            "userId": "user_golden",
+            "kind": "task",
+            "name": "Paint the fence",
+            "schedule": {
+              "type": "once",
+              "at": 1781096400000
+            },
+            "priority": "normal",
+            "tags": [],
+            "caregiverIds": [],
+            "active": true,
+            "createdAt": 1780286400000,
+            "updatedAt": 1780286400000
+          },
+          {
+            "_id": "j97doctask-boo",
+            "localId": "task-books",
+            "userId": "user_golden",
+            "kind": "task",
+            "name": "Return the library books",
+            "schedule": {
+              "type": "once",
+              "at": 1781442000000
+            },
+            "priority": "normal",
+            "tags": [],
+            "caregiverIds": [],
+            "active": false,
+            "createdAt": 1780286400000,
+            "updatedAt": 1780286400000
+          },
+          {
+            "_id": "j97doctask-den",
+            "localId": "task-dentist",
+            "userId": "user_golden",
+            "kind": "task",
+            "name": "Book the dentist",
+            "schedule": {
+              "type": "once",
+              "at": 1780405200000
+            },
+            "priority": "normal",
+            "tags": [],
+            "caregiverIds": [],
+            "active": true,
+            "createdAt": 1780459200000,
+            "updatedAt": 1780459200000
+          }
+        ],
+        "instances": [],
+        "olderInstances": [
+          {
+            "_id": "j57inst1783288800000",
+            "localId": "inst-1783288800000-pending",
+            "userId": "user_golden",
+            "reminderId": "task-water",
+            "reminderKind": "task",
+            "scheduledTime": 1783288800000,
+            "status": "pending",
+            "snoozeCount": 0,
+            "createdAt": 1783288800000,
+            "updatedAt": 1783288800000
+          },
+          {
+            "_id": "j57inst1783202400000",
+            "localId": "inst-1783202400000-completed",
+            "userId": "user_golden",
+            "reminderId": "task-water",
+            "reminderKind": "task",
+            "scheduledTime": 1783202400000,
+            "status": "completed",
+            "completedAt": 1783206000000,
+            "snoozeCount": 0,
+            "createdAt": 1783202400000,
+            "updatedAt": 1783202400000
+          },
+          {
+            "_id": "j57inst1783306800000",
+            "localId": "inst-1783306800000-snoozed",
+            "userId": "user_golden",
+            "reminderId": "task-stretch",
+            "reminderKind": "task",
+            "scheduledTime": 1783306800000,
+            "status": "snoozed",
+            "snoozedUntil": 1783357200000,
+            "snoozeCount": 0,
+            "createdAt": 1783306800000,
+            "updatedAt": 1783306800000
+          },
+          {
+            "_id": "j57inst1781269200000",
+            "localId": "inst-1781269200000-completed",
+            "userId": "user_golden",
+            "reminderId": "task-taxes",
+            "reminderKind": "task",
+            "scheduledTime": 1781269200000,
+            "status": "completed",
+            "completedAt": 1781276400000,
+            "snoozeCount": 0,
+            "createdAt": 1781269200000,
+            "updatedAt": 1781269200000
+          },
+          {
+            "_id": "j57inst1781096400000",
+            "localId": "inst-1781096400000-snoozed",
+            "userId": "user_golden",
+            "reminderId": "task-fence",
+            "reminderKind": "task",
+            "scheduledTime": 1781096400000,
+            "status": "snoozed",
+            "snoozedUntil": 1781100000000,
+            "snoozeCount": 0,
+            "createdAt": 1781096400000,
+            "updatedAt": 1781096400000
+          },
+          {
+            "_id": "j57inst1781992800000",
+            "localId": "inst-1781992800000-pending",
+            "userId": "user_golden",
+            "reminderId": "task-water",
+            "reminderKind": "task",
+            "scheduledTime": 1781992800000,
+            "status": "pending",
+            "snoozeCount": 0,
+            "createdAt": 1781992800000,
+            "updatedAt": 1781992800000
+          },
+          {
+            "_id": "j57inst1783461600000",
+            "localId": "water-early",
+            "userId": "user_golden",
+            "reminderId": "task-water",
+            "reminderKind": "task",
+            "scheduledTime": 1783461600000,
+            "status": "completed",
+            "completedAt": 1783350000000,
+            "snoozeCount": 0,
+            "createdAt": 1783461600000,
+            "updatedAt": 1783461600000
+          }
+        ],
+        "now": 1784563200000,
+        "zone": "America/New_York"
+      },
+      "output": {
+        "overdue": [
+          {
+            "reminderId": "task-fence",
+            "instanceId": "inst-1781096400000-snoozed",
+            "name": "Paint the fence",
+            "dosage": null,
+            "kind": "task",
+            "scheduledTime": 1781096400000,
+            "status": "missed",
+            "snoozedUntil": 1781100000000,
+            "isNext": false,
+            "completedAt": null
+          },
+          {
+            "reminderId": "task-passport",
+            "instanceId": null,
+            "name": "Renew the passport",
+            "dosage": null,
+            "kind": "task",
+            "scheduledTime": 1781532000000,
+            "status": "pending",
+            "snoozedUntil": null,
+            "isNext": false,
+            "completedAt": null
+          },
+          {
+            "reminderId": "task-rent",
+            "instanceId": null,
+            "name": "Pay rent",
+            "dosage": null,
+            "kind": "task",
+            "scheduledTime": 1782914400000,
+            "status": "pending",
+            "snoozedUntil": null,
+            "isNext": false,
+            "completedAt": null
+          },
+          {
+            "reminderId": "task-pharmacy",
+            "instanceId": null,
+            "name": "Call the pharmacy",
+            "dosage": null,
+            "kind": "task",
+            "scheduledTime": 1783364400000,
+            "status": "pending",
+            "snoozedUntil": null,
+            "isNext": false,
+            "completedAt": null
+          },
+          {
+            "reminderId": "task-water",
+            "instanceId": null,
+            "name": "Water the plants",
+            "dosage": null,
+            "kind": "task",
+            "scheduledTime": 1784498400000,
+            "status": "pending",
+            "snoozedUntil": null,
+            "isNext": false,
+            "completedAt": null
+          },
+          {
+            "reminderId": "task-stretch",
+            "instanceId": null,
+            "name": "Stretch",
+            "dosage": null,
+            "kind": "task",
+            "scheduledTime": 1784545200000,
+            "status": "pending",
+            "snoozedUntil": null,
+            "isNext": false,
+            "completedAt": null
+          },
+          {
+            "reminderId": "task-new",
+            "instanceId": null,
+            "name": "Journal",
+            "dosage": null,
+            "kind": "task",
+            "scheduledTime": 1784548800000,
+            "status": "pending",
+            "snoozedUntil": null,
+            "isNext": false,
+            "completedAt": null
+          }
+        ],
+        "dueToday": [
+          {
+            "reminderId": "task-stretch",
+            "instanceId": null,
+            "name": "Stretch",
+            "dosage": null,
+            "kind": "task",
+            "scheduledTime": 1784574000000,
+            "status": "pending",
+            "snoozedUntil": null,
+            "isNext": false,
+            "completedAt": null
+          },
+          {
+            "reminderId": "task-water",
+            "instanceId": null,
+            "name": "Water the plants",
+            "dosage": null,
+            "kind": "task",
+            "scheduledTime": 1784584800000,
+            "status": "pending",
+            "snoozedUntil": null,
+            "isNext": false,
+            "completedAt": null
+          },
+          {
+            "reminderId": "task-stretch",
+            "instanceId": null,
+            "name": "Stretch",
+            "dosage": null,
+            "kind": "task",
+            "scheduledTime": 1784602800000,
+            "status": "pending",
+            "snoozedUntil": null,
+            "isNext": false,
+            "completedAt": null
+          }
+        ],
+        "upcoming": [
+          {
+            "dayStart": 1784606400000,
+            "rows": [
+              {
+                "reminderId": "task-stretch",
+                "instanceId": null,
+                "name": "Stretch",
+                "dosage": null,
+                "kind": "task",
+                "scheduledTime": 1784631600000,
+                "status": "pending",
+                "snoozedUntil": null,
+                "isNext": false,
+                "completedAt": null
+              },
+              {
+                "reminderId": "task-new",
+                "instanceId": null,
+                "name": "Journal",
+                "dosage": null,
+                "kind": "task",
+                "scheduledTime": 1784635200000,
+                "status": "pending",
+                "snoozedUntil": null,
+                "isNext": false,
+                "completedAt": null
+              },
+              {
+                "reminderId": "task-stretch",
+                "instanceId": null,
+                "name": "Stretch",
+                "dosage": null,
+                "kind": "task",
+                "scheduledTime": 1784660400000,
+                "status": "pending",
+                "snoozedUntil": null,
+                "isNext": false,
+                "completedAt": null
+              },
+              {
+                "reminderId": "task-water",
+                "instanceId": null,
+                "name": "Water the plants",
+                "dosage": null,
+                "kind": "task",
+                "scheduledTime": 1784671200000,
+                "status": "pending",
+                "snoozedUntil": null,
+                "isNext": false,
+                "completedAt": null
+              },
+              {
+                "reminderId": "task-stretch",
+                "instanceId": null,
+                "name": "Stretch",
+                "dosage": null,
+                "kind": "task",
+                "scheduledTime": 1784689200000,
+                "status": "pending",
+                "snoozedUntil": null,
+                "isNext": false,
+                "completedAt": null
+              }
+            ]
+          },
+          {
+            "dayStart": 1784692800000,
+            "rows": [
+              {
+                "reminderId": "task-stretch",
+                "instanceId": null,
+                "name": "Stretch",
+                "dosage": null,
+                "kind": "task",
+                "scheduledTime": 1784718000000,
+                "status": "pending",
+                "snoozedUntil": null,
+                "isNext": false,
+                "completedAt": null
+              },
+              {
+                "reminderId": "task-new",
+                "instanceId": null,
+                "name": "Journal",
+                "dosage": null,
+                "kind": "task",
+                "scheduledTime": 1784721600000,
+                "status": "pending",
+                "snoozedUntil": null,
+                "isNext": false,
+                "completedAt": null
+              },
+              {
+                "reminderId": "task-stretch",
+                "instanceId": null,
+                "name": "Stretch",
+                "dosage": null,
+                "kind": "task",
+                "scheduledTime": 1784746800000,
+                "status": "pending",
+                "snoozedUntil": null,
+                "isNext": false,
+                "completedAt": null
+              },
+              {
+                "reminderId": "task-water",
+                "instanceId": null,
+                "name": "Water the plants",
+                "dosage": null,
+                "kind": "task",
+                "scheduledTime": 1784757600000,
+                "status": "pending",
+                "snoozedUntil": null,
+                "isNext": false,
+                "completedAt": null
+              },
+              {
+                "reminderId": "task-stretch",
+                "instanceId": null,
+                "name": "Stretch",
+                "dosage": null,
+                "kind": "task",
+                "scheduledTime": 1784775600000,
+                "status": "pending",
+                "snoozedUntil": null,
+                "isNext": false,
+                "completedAt": null
+              }
+            ]
+          },
+          {
+            "dayStart": 1784779200000,
+            "rows": [
+              {
+                "reminderId": "task-stretch",
+                "instanceId": null,
+                "name": "Stretch",
+                "dosage": null,
+                "kind": "task",
+                "scheduledTime": 1784804400000,
+                "status": "pending",
+                "snoozedUntil": null,
+                "isNext": false,
+                "completedAt": null
+              },
+              {
+                "reminderId": "task-new",
+                "instanceId": null,
+                "name": "Journal",
+                "dosage": null,
+                "kind": "task",
+                "scheduledTime": 1784808000000,
+                "status": "pending",
+                "snoozedUntil": null,
+                "isNext": false,
+                "completedAt": null
+              },
+              {
+                "reminderId": "task-stretch",
+                "instanceId": null,
+                "name": "Stretch",
+                "dosage": null,
+                "kind": "task",
+                "scheduledTime": 1784833200000,
+                "status": "pending",
+                "snoozedUntil": null,
+                "isNext": false,
+                "completedAt": null
+              },
+              {
+                "reminderId": "task-water",
+                "instanceId": null,
+                "name": "Water the plants",
+                "dosage": null,
+                "kind": "task",
+                "scheduledTime": 1784844000000,
+                "status": "pending",
+                "snoozedUntil": null,
+                "isNext": false,
+                "completedAt": null
+              },
+              {
+                "reminderId": "task-stretch",
+                "instanceId": null,
+                "name": "Stretch",
+                "dosage": null,
+                "kind": "task",
+                "scheduledTime": 1784862000000,
+                "status": "pending",
+                "snoozedUntil": null,
+                "isNext": false,
+                "completedAt": null
+              }
+            ]
+          },
+          {
+            "dayStart": 1784865600000,
+            "rows": [
+              {
+                "reminderId": "task-stretch",
+                "instanceId": null,
+                "name": "Stretch",
+                "dosage": null,
+                "kind": "task",
+                "scheduledTime": 1784890800000,
+                "status": "pending",
+                "snoozedUntil": null,
+                "isNext": false,
+                "completedAt": null
+              },
+              {
+                "reminderId": "task-new",
+                "instanceId": null,
+                "name": "Journal",
+                "dosage": null,
+                "kind": "task",
+                "scheduledTime": 1784894400000,
+                "status": "pending",
+                "snoozedUntil": null,
+                "isNext": false,
+                "completedAt": null
+              },
+              {
+                "reminderId": "task-stretch",
+                "instanceId": null,
+                "name": "Stretch",
+                "dosage": null,
+                "kind": "task",
+                "scheduledTime": 1784919600000,
+                "status": "pending",
+                "snoozedUntil": null,
+                "isNext": false,
+                "completedAt": null
+              },
+              {
+                "reminderId": "task-water",
+                "instanceId": null,
+                "name": "Water the plants",
+                "dosage": null,
+                "kind": "task",
+                "scheduledTime": 1784930400000,
+                "status": "pending",
+                "snoozedUntil": null,
+                "isNext": false,
+                "completedAt": null
+              },
+              {
+                "reminderId": "task-stretch",
+                "instanceId": null,
+                "name": "Stretch",
+                "dosage": null,
+                "kind": "task",
+                "scheduledTime": 1784948400000,
+                "status": "pending",
+                "snoozedUntil": null,
+                "isNext": false,
+                "completedAt": null
+              }
+            ]
+          },
+          {
+            "dayStart": 1784952000000,
+            "rows": [
+              {
+                "reminderId": "task-stretch",
+                "instanceId": null,
+                "name": "Stretch",
+                "dosage": null,
+                "kind": "task",
+                "scheduledTime": 1784977200000,
+                "status": "pending",
+                "snoozedUntil": null,
+                "isNext": false,
+                "completedAt": null
+              },
+              {
+                "reminderId": "task-new",
+                "instanceId": null,
+                "name": "Journal",
+                "dosage": null,
+                "kind": "task",
+                "scheduledTime": 1784980800000,
+                "status": "pending",
+                "snoozedUntil": null,
+                "isNext": false,
+                "completedAt": null
+              },
+              {
+                "reminderId": "task-stretch",
+                "instanceId": null,
+                "name": "Stretch",
+                "dosage": null,
+                "kind": "task",
+                "scheduledTime": 1785006000000,
+                "status": "pending",
+                "snoozedUntil": null,
+                "isNext": false,
+                "completedAt": null
+              },
+              {
+                "reminderId": "task-water",
+                "instanceId": null,
+                "name": "Water the plants",
+                "dosage": null,
+                "kind": "task",
+                "scheduledTime": 1785016800000,
+                "status": "pending",
+                "snoozedUntil": null,
+                "isNext": false,
+                "completedAt": null
+              },
+              {
+                "reminderId": "task-stretch",
+                "instanceId": null,
+                "name": "Stretch",
+                "dosage": null,
+                "kind": "task",
+                "scheduledTime": 1785034800000,
+                "status": "pending",
+                "snoozedUntil": null,
+                "isNext": false,
+                "completedAt": null
+              }
+            ]
+          },
+          {
+            "dayStart": 1785038400000,
+            "rows": [
+              {
+                "reminderId": "task-stretch",
+                "instanceId": null,
+                "name": "Stretch",
+                "dosage": null,
+                "kind": "task",
+                "scheduledTime": 1785063600000,
+                "status": "pending",
+                "snoozedUntil": null,
+                "isNext": false,
+                "completedAt": null
+              },
+              {
+                "reminderId": "task-new",
+                "instanceId": null,
+                "name": "Journal",
+                "dosage": null,
+                "kind": "task",
+                "scheduledTime": 1785067200000,
+                "status": "pending",
+                "snoozedUntil": null,
+                "isNext": false,
+                "completedAt": null
+              },
+              {
+                "reminderId": "task-stretch",
+                "instanceId": null,
+                "name": "Stretch",
+                "dosage": null,
+                "kind": "task",
+                "scheduledTime": 1785092400000,
+                "status": "pending",
+                "snoozedUntil": null,
+                "isNext": false,
+                "completedAt": null
+              },
+              {
+                "reminderId": "task-water",
+                "instanceId": null,
+                "name": "Water the plants",
+                "dosage": null,
+                "kind": "task",
+                "scheduledTime": 1785103200000,
+                "status": "pending",
+                "snoozedUntil": null,
+                "isNext": false,
+                "completedAt": null
+              },
+              {
+                "reminderId": "task-stretch",
+                "instanceId": null,
+                "name": "Stretch",
+                "dosage": null,
+                "kind": "task",
+                "scheduledTime": 1785121200000,
+                "status": "pending",
+                "snoozedUntil": null,
+                "isNext": false,
+                "completedAt": null
+              }
+            ]
+          },
+          {
+            "dayStart": 1785124800000,
+            "rows": [
+              {
+                "reminderId": "task-stretch",
+                "instanceId": null,
+                "name": "Stretch",
+                "dosage": null,
+                "kind": "task",
+                "scheduledTime": 1785150000000,
+                "status": "pending",
+                "snoozedUntil": null,
+                "isNext": false,
+                "completedAt": null
+              },
+              {
+                "reminderId": "task-new",
+                "instanceId": null,
+                "name": "Journal",
+                "dosage": null,
+                "kind": "task",
+                "scheduledTime": 1785153600000,
+                "status": "pending",
+                "snoozedUntil": null,
+                "isNext": false,
+                "completedAt": null
+              },
+              {
+                "reminderId": "task-stretch",
+                "instanceId": null,
+                "name": "Stretch",
+                "dosage": null,
+                "kind": "task",
+                "scheduledTime": 1785178800000,
+                "status": "pending",
+                "snoozedUntil": null,
+                "isNext": false,
+                "completedAt": null
+              },
+              {
+                "reminderId": "task-water",
+                "instanceId": null,
+                "name": "Water the plants",
+                "dosage": null,
+                "kind": "task",
+                "scheduledTime": 1785189600000,
+                "status": "pending",
+                "snoozedUntil": null,
+                "isNext": false,
+                "completedAt": null
+              },
+              {
+                "reminderId": "task-stretch",
+                "instanceId": null,
+                "name": "Stretch",
+                "dosage": null,
+                "kind": "task",
+                "scheduledTime": 1785207600000,
+                "status": "pending",
+                "snoozedUntil": null,
+                "isNext": false,
+                "completedAt": null
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "name": "assembleTasksTab: the first of the month, early",
+      "input": {
+        "call": "assembleTasksTab",
+        "reminders": [
+          {
+            "_id": "j97docmed-ator",
+            "localId": "med-atorvastatin",
+            "userId": "user_golden",
+            "kind": "medication",
+            "name": "Atorvastatin",
+            "dosage": "1 tablet",
+            "schedule": {
+              "type": "daily",
+              "times": [
+                "09:00",
+                "21:00"
+              ]
+            },
+            "priority": "normal",
+            "tags": [],
+            "caregiverIds": [],
+            "active": true,
+            "createdAt": 1780286400000,
+            "updatedAt": 1780286400000
+          },
+          {
+            "_id": "j97docmed-lisi",
+            "localId": "med-lisinopril",
+            "userId": "user_golden",
+            "kind": "medication",
+            "name": "Lisinopril",
+            "dosage": "1 tablet",
+            "schedule": {
+              "type": "daily",
+              "times": [
+                "09:00"
+              ]
+            },
+            "priority": "normal",
+            "tags": [],
+            "caregiverIds": [],
+            "active": true,
+            "createdAt": 1780286400000,
+            "updatedAt": 1780286400000
+          },
+          {
+            "_id": "j97docmed-vita",
+            "localId": "med-vitamin-d",
+            "userId": "user_golden",
+            "kind": "medication",
+            "name": "Vitamin D",
+            "dosage": "1 tablet",
+            "schedule": {
+              "type": "weekly",
+              "daysOfWeek": [
+                1
+              ],
+              "times": [
+                "08:00"
+              ]
+            },
+            "priority": "normal",
+            "tags": [],
+            "caregiverIds": [],
+            "active": true,
+            "createdAt": 1780286400000,
+            "updatedAt": 1780286400000
+          },
+          {
+            "_id": "j97docmed-paus",
+            "localId": "med-paused",
+            "userId": "user_golden",
+            "kind": "medication",
+            "name": "Prednisone",
+            "dosage": "1 tablet",
+            "schedule": {
+              "type": "daily",
+              "times": [
+                "13:00"
+              ]
+            },
+            "priority": "normal",
+            "tags": [],
+            "caregiverIds": [],
+            "active": true,
+            "createdAt": 1780286400000,
+            "updatedAt": 1780286400000,
+            "pauses": [
+              {
+                "from": 1783350000000
+              }
+            ]
+          },
+          {
+            "_id": "j97docmed-stop",
+            "localId": "med-stopped",
+            "userId": "user_golden",
+            "kind": "medication",
+            "name": "Amoxicillin",
+            "dosage": "1 tablet",
+            "schedule": {
+              "type": "daily",
+              "times": [
+                "07:00"
+              ]
+            },
+            "priority": "normal",
+            "tags": [],
+            "caregiverIds": [],
+            "active": false,
+            "createdAt": 1780286400000,
+            "updatedAt": 1780286400000
+          },
+          {
+            "_id": "j97docmed-ibup",
+            "localId": "med-ibuprofen",
+            "userId": "user_golden",
+            "kind": "medication",
+            "name": "Ibuprofen",
+            "dosage": "1 tablet",
+            "schedule": {
+              "type": "asNeeded",
+              "minGapMinutes": 240,
+              "maxPer24h": 4
+            },
+            "priority": "normal",
+            "tags": [],
+            "caregiverIds": [],
+            "active": true,
+            "createdAt": 1780286400000,
+            "updatedAt": 1780286400000
+          },
+          {
+            "_id": "j97doctask-wat",
+            "localId": "task-water",
+            "userId": "user_golden",
+            "kind": "task",
+            "name": "Water the plants",
+            "schedule": {
+              "type": "daily",
+              "times": [
+                "18:00"
+              ]
+            },
+            "priority": "normal",
+            "tags": [],
+            "caregiverIds": [],
+            "active": true,
+            "createdAt": 1780286400000,
+            "updatedAt": 1780286400000
+          },
+          {
+            "_id": "j97doctask-ren",
+            "localId": "task-rent",
+            "userId": "user_golden",
+            "kind": "task",
+            "name": "Pay rent",
+            "schedule": {
+              "type": "monthly",
+              "daysOfMonth": [
+                1
+              ],
+              "times": [
+                "10:00"
+              ]
+            },
+            "priority": "normal",
+            "tags": [],
+            "caregiverIds": [],
+            "active": true,
+            "createdAt": 1780286400000,
+            "updatedAt": 1780286400000
+          },
+          {
+            "_id": "j97doctask-pha",
+            "localId": "task-pharmacy",
+            "userId": "user_golden",
+            "kind": "task",
+            "name": "Call the pharmacy",
+            "schedule": {
+              "type": "once",
+              "at": 1783364400000
+            },
+            "priority": "normal",
+            "tags": [],
+            "caregiverIds": [],
+            "active": true,
+            "createdAt": 1780286400000,
+            "updatedAt": 1780286400000
+          },
+          {
+            "_id": "j97doctask-str",
+            "localId": "task-stretch",
+            "userId": "user_golden",
+            "kind": "task",
+            "name": "Stretch",
+            "schedule": {
+              "type": "interval",
+              "hours": 8,
+              "startAt": 1783076400000
+            },
+            "priority": "normal",
+            "tags": [],
+            "caregiverIds": [],
+            "active": true,
+            "createdAt": 1780286400000,
+            "updatedAt": 1780286400000
+          },
+          {
+            "_id": "j97doctask-bac",
+            "localId": "task-backlog",
+            "userId": "user_golden",
+            "kind": "task",
+            "name": "Sort the garage",
+            "schedule": {
+              "type": "none"
+            },
+            "priority": "normal",
+            "tags": [],
+            "caregiverIds": [],
+            "active": true,
+            "createdAt": 1780286400000,
+            "updatedAt": 1780286400000
+          },
+          {
+            "_id": "j97doctask-new",
+            "localId": "task-new",
+            "userId": "user_golden",
+            "kind": "task",
+            "name": "Journal",
+            "schedule": {
+              "type": "daily",
+              "times": [
+                "08:00"
+              ]
+            },
+            "priority": "normal",
+            "tags": [],
+            "caregiverIds": [],
+            "active": true,
+            "createdAt": 1783296000000,
+            "updatedAt": 1783296000000
+          },
+          {
+            "_id": "j97doctask-pas",
+            "localId": "task-passport",
+            "userId": "user_golden",
+            "kind": "task",
+            "name": "Renew the passport",
+            "schedule": {
+              "type": "once",
+              "at": 1781532000000
+            },
+            "priority": "normal",
+            "tags": [],
+            "caregiverIds": [],
+            "active": true,
+            "createdAt": 1780286400000,
+            "updatedAt": 1780286400000
+          },
+          {
+            "_id": "j97doctask-tax",
+            "localId": "task-taxes",
+            "userId": "user_golden",
+            "kind": "task",
+            "name": "File the estimate",
+            "schedule": {
+              "type": "once",
+              "at": 1781269200000
+            },
+            "priority": "normal",
+            "tags": [],
+            "caregiverIds": [],
+            "active": true,
+            "createdAt": 1780286400000,
+            "updatedAt": 1780286400000
+          },
+          {
+            "_id": "j97doctask-fen",
+            "localId": "task-fence",
+            "userId": "user_golden",
+            "kind": "task",
+            "name": "Paint the fence",
+            "schedule": {
+              "type": "once",
+              "at": 1781096400000
+            },
+            "priority": "normal",
+            "tags": [],
+            "caregiverIds": [],
+            "active": true,
+            "createdAt": 1780286400000,
+            "updatedAt": 1780286400000
+          },
+          {
+            "_id": "j97doctask-boo",
+            "localId": "task-books",
+            "userId": "user_golden",
+            "kind": "task",
+            "name": "Return the library books",
+            "schedule": {
+              "type": "once",
+              "at": 1781442000000
+            },
+            "priority": "normal",
+            "tags": [],
+            "caregiverIds": [],
+            "active": false,
+            "createdAt": 1780286400000,
+            "updatedAt": 1780286400000
+          },
+          {
+            "_id": "j97doctask-den",
+            "localId": "task-dentist",
+            "userId": "user_golden",
+            "kind": "task",
+            "name": "Book the dentist",
+            "schedule": {
+              "type": "once",
+              "at": 1780405200000
+            },
+            "priority": "normal",
+            "tags": [],
+            "caregiverIds": [],
+            "active": true,
+            "createdAt": 1780459200000,
+            "updatedAt": 1780459200000
+          }
+        ],
+        "instances": [
+          {
+            "_id": "j57inst1783342800000",
+            "localId": "inst-1783342800000-completed",
+            "userId": "user_golden",
+            "reminderId": "med-atorvastatin",
+            "reminderKind": "medication",
+            "scheduledTime": 1783342800000,
+            "status": "completed",
+            "completedAt": 1783343100000,
+            "snoozeCount": 0,
+            "createdAt": 1783342800000,
+            "updatedAt": 1783342800000
+          },
+          {
+            "_id": "j57inst1783342800000",
+            "localId": "inst-1783342800000-skipped",
+            "userId": "user_golden",
+            "reminderId": "med-lisinopril",
+            "reminderKind": "medication",
+            "scheduledTime": 1783342800000,
+            "status": "skipped",
+            "snoozeCount": 0,
+            "createdAt": 1783342800000,
+            "updatedAt": 1783342800000
+          },
+          {
+            "_id": "j57inst1783299600000",
+            "localId": "inst-1783299600000-missed",
+            "userId": "user_golden",
+            "reminderId": "med-atorvastatin",
+            "reminderKind": "medication",
+            "scheduledTime": 1783299600000,
+            "status": "missed",
+            "snoozeCount": 0,
+            "createdAt": 1783299600000,
+            "updatedAt": 1783299600000
+          },
+          {
+            "_id": "j57inst1783339200000",
+            "localId": "inst-1783339200000-snoozed",
+            "userId": "user_golden",
+            "reminderId": "med-vitamin-d",
+            "reminderKind": "medication",
+            "scheduledTime": 1783339200000,
+            "status": "snoozed",
+            "snoozedUntil": 1783341000000,
+            "snoozeCount": 0,
+            "createdAt": 1783339200000,
+            "updatedAt": 1783339200000
+          },
+          {
+            "_id": "j57inst1783335600000",
+            "localId": "inst-1783335600000-completed",
+            "userId": "user_golden",
+            "reminderId": "med-stopped",
+            "reminderKind": "medication",
+            "scheduledTime": 1783335600000,
+            "status": "completed",
+            "completedAt": 1783336200000,
+            "snoozeCount": 0,
+            "createdAt": 1783335600000,
+            "updatedAt": 1783335600000
+          },
+          {
+            "_id": "j57inst1783347300000",
+            "localId": "inst-1783347300000-completed",
+            "userId": "user_golden",
+            "reminderId": "med-ibuprofen",
+            "reminderKind": "medication",
+            "scheduledTime": 1783347300000,
+            "status": "completed",
+            "completedAt": 1783347300000,
+            "snoozeCount": 0,
+            "createdAt": 1783347300000,
+            "updatedAt": 1783347300000
+          },
+          {
+            "_id": "j57inst1783326600000",
+            "localId": "inst-1783326600000-completed",
+            "userId": "user_golden",
+            "reminderId": "med-ibuprofen",
+            "reminderKind": "medication",
+            "scheduledTime": 1783326600000,
+            "status": "completed",
+            "completedAt": 1783326600000,
+            "snoozeCount": 0,
+            "createdAt": 1783326600000,
+            "updatedAt": 1783326600000
+          },
+          {
+            "_id": "j57inst1783288800000",
+            "localId": "inst-1783288800000-pending",
+            "userId": "user_golden",
+            "reminderId": "task-water",
+            "reminderKind": "task",
+            "scheduledTime": 1783288800000,
+            "status": "pending",
+            "snoozeCount": 0,
+            "createdAt": 1783288800000,
+            "updatedAt": 1783288800000
+          },
+          {
+            "_id": "j57inst1783202400000",
+            "localId": "inst-1783202400000-completed",
+            "userId": "user_golden",
+            "reminderId": "task-water",
+            "reminderKind": "task",
+            "scheduledTime": 1783202400000,
+            "status": "completed",
+            "completedAt": 1783206000000,
+            "snoozeCount": 0,
+            "createdAt": 1783202400000,
+            "updatedAt": 1783202400000
+          },
+          {
+            "_id": "j57inst1783306800000",
+            "localId": "inst-1783306800000-snoozed",
+            "userId": "user_golden",
+            "reminderId": "task-stretch",
+            "reminderKind": "task",
+            "scheduledTime": 1783306800000,
+            "status": "snoozed",
+            "snoozedUntil": 1783357200000,
+            "snoozeCount": 0,
+            "createdAt": 1783306800000,
+            "updatedAt": 1783306800000
+          },
+          {
+            "_id": "j57inst1783256400000",
+            "localId": "legacy-a",
+            "userId": "user_golden",
+            "reminderId": "med-lisinopril",
+            "reminderKind": "medication",
+            "scheduledTime": 1783256400000,
+            "status": "missed",
+            "snoozeCount": 0,
+            "createdAt": 1783256400000,
+            "updatedAt": 1783256400000
+          },
+          {
+            "_id": "j57inst1783256400000",
+            "localId": "legacy-b",
+            "userId": "user_golden",
+            "reminderId": "med-lisinopril",
+            "reminderKind": "medication",
+            "scheduledTime": 1783256400000,
+            "status": "completed",
+            "completedAt": 1783258800000,
+            "snoozeCount": 0,
+            "createdAt": 1783256400000,
+            "updatedAt": 1783256400000
+          },
+          {
+            "_id": "j57inst1783461600000",
+            "localId": "water-early",
+            "userId": "user_golden",
+            "reminderId": "task-water",
+            "reminderKind": "task",
+            "scheduledTime": 1783461600000,
+            "status": "completed",
+            "completedAt": 1783350000000,
+            "snoozeCount": 0,
+            "createdAt": 1783461600000,
+            "updatedAt": 1783461600000
+          }
+        ],
+        "olderInstances": [
+          {
+            "_id": "j57inst1781269200000",
+            "localId": "inst-1781269200000-completed",
+            "userId": "user_golden",
+            "reminderId": "task-taxes",
+            "reminderKind": "task",
+            "scheduledTime": 1781269200000,
+            "status": "completed",
+            "completedAt": 1781276400000,
+            "snoozeCount": 0,
+            "createdAt": 1781269200000,
+            "updatedAt": 1781269200000
+          },
+          {
+            "_id": "j57inst1781096400000",
+            "localId": "inst-1781096400000-snoozed",
+            "userId": "user_golden",
+            "reminderId": "task-fence",
+            "reminderKind": "task",
+            "scheduledTime": 1781096400000,
+            "status": "snoozed",
+            "snoozedUntil": 1781100000000,
+            "snoozeCount": 0,
+            "createdAt": 1781096400000,
+            "updatedAt": 1781096400000
+          },
+          {
+            "_id": "j57inst1781992800000",
+            "localId": "inst-1781992800000-pending",
+            "userId": "user_golden",
+            "reminderId": "task-water",
+            "reminderKind": "task",
+            "scheduledTime": 1781992800000,
+            "status": "pending",
+            "snoozeCount": 0,
+            "createdAt": 1781992800000,
+            "updatedAt": 1781992800000
+          }
+        ],
+        "now": 1782910800000,
+        "zone": "America/New_York"
+      },
+      "output": {
+        "overdue": [
+          {
+            "reminderId": "task-rent",
+            "instanceId": null,
+            "name": "Pay rent",
+            "dosage": null,
+            "kind": "task",
+            "scheduledTime": 1780322400000,
+            "status": "pending",
+            "snoozedUntil": null,
+            "isNext": false,
+            "completedAt": null
+          },
+          {
+            "reminderId": "task-fence",
+            "instanceId": "inst-1781096400000-snoozed",
+            "name": "Paint the fence",
+            "dosage": null,
+            "kind": "task",
+            "scheduledTime": 1781096400000,
+            "status": "missed",
+            "snoozedUntil": 1781100000000,
+            "isNext": false,
+            "completedAt": null
+          },
+          {
+            "reminderId": "task-passport",
+            "instanceId": null,
+            "name": "Renew the passport",
+            "dosage": null,
+            "kind": "task",
+            "scheduledTime": 1781532000000,
+            "status": "pending",
+            "snoozedUntil": null,
+            "isNext": false,
+            "completedAt": null
+          },
+          {
+            "reminderId": "task-water",
+            "instanceId": null,
+            "name": "Water the plants",
+            "dosage": null,
+            "kind": "task",
+            "scheduledTime": 1782856800000,
+            "status": "pending",
+            "snoozedUntil": null,
+            "isNext": false,
+            "completedAt": null
+          },
+          {
+            "reminderId": "task-new",
+            "instanceId": null,
+            "name": "Journal",
+            "dosage": null,
+            "kind": "task",
+            "scheduledTime": 1782907200000,
+            "status": "pending",
+            "snoozedUntil": null,
+            "isNext": false,
+            "completedAt": null
+          }
+        ],
+        "dueToday": [
+          {
+            "reminderId": "task-rent",
+            "instanceId": null,
+            "name": "Pay rent",
+            "dosage": null,
+            "kind": "task",
+            "scheduledTime": 1782914400000,
+            "status": "pending",
+            "snoozedUntil": null,
+            "isNext": false,
+            "completedAt": null
+          },
+          {
+            "reminderId": "task-water",
+            "instanceId": null,
+            "name": "Water the plants",
+            "dosage": null,
+            "kind": "task",
+            "scheduledTime": 1782943200000,
+            "status": "pending",
+            "snoozedUntil": null,
+            "isNext": false,
+            "completedAt": null
+          }
+        ],
+        "upcoming": [
+          {
+            "dayStart": 1782964800000,
+            "rows": [
+              {
+                "reminderId": "task-new",
+                "instanceId": null,
+                "name": "Journal",
+                "dosage": null,
+                "kind": "task",
+                "scheduledTime": 1782993600000,
+                "status": "pending",
+                "snoozedUntil": null,
+                "isNext": false,
+                "completedAt": null
+              },
+              {
+                "reminderId": "task-water",
+                "instanceId": null,
+                "name": "Water the plants",
+                "dosage": null,
+                "kind": "task",
+                "scheduledTime": 1783029600000,
+                "status": "pending",
+                "snoozedUntil": null,
+                "isNext": false,
+                "completedAt": null
+              }
+            ]
+          },
+          {
+            "dayStart": 1783051200000,
+            "rows": [
+              {
+                "reminderId": "task-stretch",
+                "instanceId": null,
+                "name": "Stretch",
+                "dosage": null,
+                "kind": "task",
+                "scheduledTime": 1783076400000,
+                "status": "pending",
+                "snoozedUntil": null,
+                "isNext": false,
+                "completedAt": null
+              },
+              {
+                "reminderId": "task-new",
+                "instanceId": null,
+                "name": "Journal",
+                "dosage": null,
+                "kind": "task",
+                "scheduledTime": 1783080000000,
+                "status": "pending",
+                "snoozedUntil": null,
+                "isNext": false,
+                "completedAt": null
+              },
+              {
+                "reminderId": "task-stretch",
+                "instanceId": null,
+                "name": "Stretch",
+                "dosage": null,
+                "kind": "task",
+                "scheduledTime": 1783105200000,
+                "status": "pending",
+                "snoozedUntil": null,
+                "isNext": false,
+                "completedAt": null
+              },
+              {
+                "reminderId": "task-water",
+                "instanceId": null,
+                "name": "Water the plants",
+                "dosage": null,
+                "kind": "task",
+                "scheduledTime": 1783116000000,
+                "status": "pending",
+                "snoozedUntil": null,
+                "isNext": false,
+                "completedAt": null
+              },
+              {
+                "reminderId": "task-stretch",
+                "instanceId": null,
+                "name": "Stretch",
+                "dosage": null,
+                "kind": "task",
+                "scheduledTime": 1783134000000,
+                "status": "pending",
+                "snoozedUntil": null,
+                "isNext": false,
+                "completedAt": null
+              }
+            ]
+          },
+          {
+            "dayStart": 1783137600000,
+            "rows": [
+              {
+                "reminderId": "task-stretch",
+                "instanceId": null,
+                "name": "Stretch",
+                "dosage": null,
+                "kind": "task",
+                "scheduledTime": 1783162800000,
+                "status": "pending",
+                "snoozedUntil": null,
+                "isNext": false,
+                "completedAt": null
+              },
+              {
+                "reminderId": "task-new",
+                "instanceId": null,
+                "name": "Journal",
+                "dosage": null,
+                "kind": "task",
+                "scheduledTime": 1783166400000,
+                "status": "pending",
+                "snoozedUntil": null,
+                "isNext": false,
+                "completedAt": null
+              },
+              {
+                "reminderId": "task-stretch",
+                "instanceId": null,
+                "name": "Stretch",
+                "dosage": null,
+                "kind": "task",
+                "scheduledTime": 1783191600000,
+                "status": "pending",
+                "snoozedUntil": null,
+                "isNext": false,
+                "completedAt": null
+              },
+              {
+                "reminderId": "task-water",
+                "instanceId": "inst-1783202400000-completed",
+                "name": "Water the plants",
+                "dosage": null,
+                "kind": "task",
+                "scheduledTime": 1783202400000,
+                "status": "completed",
+                "snoozedUntil": null,
+                "isNext": false,
+                "completedAt": 1783206000000
+              },
+              {
+                "reminderId": "task-stretch",
+                "instanceId": null,
+                "name": "Stretch",
+                "dosage": null,
+                "kind": "task",
+                "scheduledTime": 1783220400000,
+                "status": "pending",
+                "snoozedUntil": null,
+                "isNext": false,
+                "completedAt": null
+              }
+            ]
+          },
+          {
+            "dayStart": 1783224000000,
+            "rows": [
+              {
+                "reminderId": "task-stretch",
+                "instanceId": null,
+                "name": "Stretch",
+                "dosage": null,
+                "kind": "task",
+                "scheduledTime": 1783249200000,
+                "status": "pending",
+                "snoozedUntil": null,
+                "isNext": false,
+                "completedAt": null
+              },
+              {
+                "reminderId": "task-new",
+                "instanceId": null,
+                "name": "Journal",
+                "dosage": null,
+                "kind": "task",
+                "scheduledTime": 1783252800000,
+                "status": "pending",
+                "snoozedUntil": null,
+                "isNext": false,
+                "completedAt": null
+              },
+              {
+                "reminderId": "task-stretch",
+                "instanceId": null,
+                "name": "Stretch",
+                "dosage": null,
+                "kind": "task",
+                "scheduledTime": 1783278000000,
+                "status": "pending",
+                "snoozedUntil": null,
+                "isNext": false,
+                "completedAt": null
+              },
+              {
+                "reminderId": "task-water",
+                "instanceId": "inst-1783288800000-pending",
+                "name": "Water the plants",
+                "dosage": null,
+                "kind": "task",
+                "scheduledTime": 1783288800000,
+                "status": "pending",
+                "snoozedUntil": null,
+                "isNext": false,
+                "completedAt": null
+              },
+              {
+                "reminderId": "task-stretch",
+                "instanceId": "inst-1783306800000-snoozed",
+                "name": "Stretch",
+                "dosage": null,
+                "kind": "task",
+                "scheduledTime": 1783306800000,
+                "status": "snoozed",
+                "snoozedUntil": 1783357200000,
+                "isNext": false,
+                "completedAt": null
+              }
+            ]
+          },
+          {
+            "dayStart": 1783310400000,
+            "rows": [
+              {
+                "reminderId": "task-stretch",
+                "instanceId": null,
+                "name": "Stretch",
+                "dosage": null,
+                "kind": "task",
+                "scheduledTime": 1783335600000,
+                "status": "pending",
+                "snoozedUntil": null,
+                "isNext": false,
+                "completedAt": null
+              },
+              {
+                "reminderId": "task-new",
+                "instanceId": null,
+                "name": "Journal",
+                "dosage": null,
+                "kind": "task",
+                "scheduledTime": 1783339200000,
+                "status": "pending",
+                "snoozedUntil": null,
+                "isNext": false,
+                "completedAt": null
+              },
+              {
+                "reminderId": "task-pharmacy",
+                "instanceId": null,
+                "name": "Call the pharmacy",
+                "dosage": null,
+                "kind": "task",
+                "scheduledTime": 1783364400000,
+                "status": "pending",
+                "snoozedUntil": null,
+                "isNext": false,
+                "completedAt": null
+              },
+              {
+                "reminderId": "task-stretch",
+                "instanceId": null,
+                "name": "Stretch",
+                "dosage": null,
+                "kind": "task",
+                "scheduledTime": 1783364400000,
+                "status": "pending",
+                "snoozedUntil": null,
+                "isNext": false,
+                "completedAt": null
+              },
+              {
+                "reminderId": "task-water",
+                "instanceId": null,
+                "name": "Water the plants",
+                "dosage": null,
+                "kind": "task",
+                "scheduledTime": 1783375200000,
+                "status": "pending",
+                "snoozedUntil": null,
+                "isNext": false,
+                "completedAt": null
+              },
+              {
+                "reminderId": "task-stretch",
+                "instanceId": null,
+                "name": "Stretch",
+                "dosage": null,
+                "kind": "task",
+                "scheduledTime": 1783393200000,
+                "status": "pending",
+                "snoozedUntil": null,
+                "isNext": false,
+                "completedAt": null
+              }
+            ]
+          },
+          {
+            "dayStart": 1783396800000,
+            "rows": [
+              {
+                "reminderId": "task-stretch",
+                "instanceId": null,
+                "name": "Stretch",
+                "dosage": null,
+                "kind": "task",
+                "scheduledTime": 1783422000000,
+                "status": "pending",
+                "snoozedUntil": null,
+                "isNext": false,
+                "completedAt": null
+              },
+              {
+                "reminderId": "task-new",
+                "instanceId": null,
+                "name": "Journal",
+                "dosage": null,
+                "kind": "task",
+                "scheduledTime": 1783425600000,
+                "status": "pending",
+                "snoozedUntil": null,
+                "isNext": false,
+                "completedAt": null
+              },
+              {
+                "reminderId": "task-stretch",
+                "instanceId": null,
+                "name": "Stretch",
+                "dosage": null,
+                "kind": "task",
+                "scheduledTime": 1783450800000,
+                "status": "pending",
+                "snoozedUntil": null,
+                "isNext": false,
+                "completedAt": null
+              },
+              {
+                "reminderId": "task-water",
+                "instanceId": "water-early",
+                "name": "Water the plants",
+                "dosage": null,
+                "kind": "task",
+                "scheduledTime": 1783461600000,
+                "status": "completed",
+                "snoozedUntil": null,
+                "isNext": false,
+                "completedAt": 1783350000000
+              },
+              {
+                "reminderId": "task-stretch",
+                "instanceId": null,
+                "name": "Stretch",
+                "dosage": null,
+                "kind": "task",
+                "scheduledTime": 1783479600000,
+                "status": "pending",
+                "snoozedUntil": null,
+                "isNext": false,
+                "completedAt": null
+              }
+            ]
+          },
+          {
+            "dayStart": 1783483200000,
+            "rows": [
+              {
+                "reminderId": "task-stretch",
+                "instanceId": null,
+                "name": "Stretch",
+                "dosage": null,
+                "kind": "task",
+                "scheduledTime": 1783508400000,
+                "status": "pending",
+                "snoozedUntil": null,
+                "isNext": false,
+                "completedAt": null
+              },
+              {
+                "reminderId": "task-new",
+                "instanceId": null,
+                "name": "Journal",
+                "dosage": null,
+                "kind": "task",
+                "scheduledTime": 1783512000000,
+                "status": "pending",
+                "snoozedUntil": null,
+                "isNext": false,
+                "completedAt": null
+              },
+              {
+                "reminderId": "task-stretch",
+                "instanceId": null,
+                "name": "Stretch",
+                "dosage": null,
+                "kind": "task",
+                "scheduledTime": 1783537200000,
+                "status": "pending",
+                "snoozedUntil": null,
+                "isNext": false,
+                "completedAt": null
+              },
+              {
+                "reminderId": "task-water",
+                "instanceId": null,
+                "name": "Water the plants",
+                "dosage": null,
+                "kind": "task",
+                "scheduledTime": 1783548000000,
+                "status": "pending",
+                "snoozedUntil": null,
+                "isNext": false,
+                "completedAt": null
+              },
+              {
+                "reminderId": "task-stretch",
+                "instanceId": null,
+                "name": "Stretch",
+                "dosage": null,
+                "kind": "task",
+                "scheduledTime": 1783566000000,
+                "status": "pending",
+                "snoozedUntil": null,
+                "isNext": false,
+                "completedAt": null
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "name": "assembleTasksTab: the week alone, nothing older to reach",
+      "input": {
+        "call": "assembleTasksTab",
+        "reminders": [
+          {
+            "_id": "j97docmed-ator",
+            "localId": "med-atorvastatin",
+            "userId": "user_golden",
+            "kind": "medication",
+            "name": "Atorvastatin",
+            "dosage": "1 tablet",
+            "schedule": {
+              "type": "daily",
+              "times": [
+                "09:00",
+                "21:00"
+              ]
+            },
+            "priority": "normal",
+            "tags": [],
+            "caregiverIds": [],
+            "active": true,
+            "createdAt": 1780286400000,
+            "updatedAt": 1780286400000
+          },
+          {
+            "_id": "j97docmed-lisi",
+            "localId": "med-lisinopril",
+            "userId": "user_golden",
+            "kind": "medication",
+            "name": "Lisinopril",
+            "dosage": "1 tablet",
+            "schedule": {
+              "type": "daily",
+              "times": [
+                "09:00"
+              ]
+            },
+            "priority": "normal",
+            "tags": [],
+            "caregiverIds": [],
+            "active": true,
+            "createdAt": 1780286400000,
+            "updatedAt": 1780286400000
+          },
+          {
+            "_id": "j97docmed-vita",
+            "localId": "med-vitamin-d",
+            "userId": "user_golden",
+            "kind": "medication",
+            "name": "Vitamin D",
+            "dosage": "1 tablet",
+            "schedule": {
+              "type": "weekly",
+              "daysOfWeek": [
+                1
+              ],
+              "times": [
+                "08:00"
+              ]
+            },
+            "priority": "normal",
+            "tags": [],
+            "caregiverIds": [],
+            "active": true,
+            "createdAt": 1780286400000,
+            "updatedAt": 1780286400000
+          },
+          {
+            "_id": "j97docmed-paus",
+            "localId": "med-paused",
+            "userId": "user_golden",
+            "kind": "medication",
+            "name": "Prednisone",
+            "dosage": "1 tablet",
+            "schedule": {
+              "type": "daily",
+              "times": [
+                "13:00"
+              ]
+            },
+            "priority": "normal",
+            "tags": [],
+            "caregiverIds": [],
+            "active": true,
+            "createdAt": 1780286400000,
+            "updatedAt": 1780286400000,
+            "pauses": [
+              {
+                "from": 1783350000000
+              }
+            ]
+          },
+          {
+            "_id": "j97docmed-stop",
+            "localId": "med-stopped",
+            "userId": "user_golden",
+            "kind": "medication",
+            "name": "Amoxicillin",
+            "dosage": "1 tablet",
+            "schedule": {
+              "type": "daily",
+              "times": [
+                "07:00"
+              ]
+            },
+            "priority": "normal",
+            "tags": [],
+            "caregiverIds": [],
+            "active": false,
+            "createdAt": 1780286400000,
+            "updatedAt": 1780286400000
+          },
+          {
+            "_id": "j97docmed-ibup",
+            "localId": "med-ibuprofen",
+            "userId": "user_golden",
+            "kind": "medication",
+            "name": "Ibuprofen",
+            "dosage": "1 tablet",
+            "schedule": {
+              "type": "asNeeded",
+              "minGapMinutes": 240,
+              "maxPer24h": 4
+            },
+            "priority": "normal",
+            "tags": [],
+            "caregiverIds": [],
+            "active": true,
+            "createdAt": 1780286400000,
+            "updatedAt": 1780286400000
+          },
+          {
+            "_id": "j97doctask-wat",
+            "localId": "task-water",
+            "userId": "user_golden",
+            "kind": "task",
+            "name": "Water the plants",
+            "schedule": {
+              "type": "daily",
+              "times": [
+                "18:00"
+              ]
+            },
+            "priority": "normal",
+            "tags": [],
+            "caregiverIds": [],
+            "active": true,
+            "createdAt": 1780286400000,
+            "updatedAt": 1780286400000
+          },
+          {
+            "_id": "j97doctask-ren",
+            "localId": "task-rent",
+            "userId": "user_golden",
+            "kind": "task",
+            "name": "Pay rent",
+            "schedule": {
+              "type": "monthly",
+              "daysOfMonth": [
+                1
+              ],
+              "times": [
+                "10:00"
+              ]
+            },
+            "priority": "normal",
+            "tags": [],
+            "caregiverIds": [],
+            "active": true,
+            "createdAt": 1780286400000,
+            "updatedAt": 1780286400000
+          },
+          {
+            "_id": "j97doctask-pha",
+            "localId": "task-pharmacy",
+            "userId": "user_golden",
+            "kind": "task",
+            "name": "Call the pharmacy",
+            "schedule": {
+              "type": "once",
+              "at": 1783364400000
+            },
+            "priority": "normal",
+            "tags": [],
+            "caregiverIds": [],
+            "active": true,
+            "createdAt": 1780286400000,
+            "updatedAt": 1780286400000
+          },
+          {
+            "_id": "j97doctask-str",
+            "localId": "task-stretch",
+            "userId": "user_golden",
+            "kind": "task",
+            "name": "Stretch",
+            "schedule": {
+              "type": "interval",
+              "hours": 8,
+              "startAt": 1783076400000
+            },
+            "priority": "normal",
+            "tags": [],
+            "caregiverIds": [],
+            "active": true,
+            "createdAt": 1780286400000,
+            "updatedAt": 1780286400000
+          },
+          {
+            "_id": "j97doctask-bac",
+            "localId": "task-backlog",
+            "userId": "user_golden",
+            "kind": "task",
+            "name": "Sort the garage",
+            "schedule": {
+              "type": "none"
+            },
+            "priority": "normal",
+            "tags": [],
+            "caregiverIds": [],
+            "active": true,
+            "createdAt": 1780286400000,
+            "updatedAt": 1780286400000
+          },
+          {
+            "_id": "j97doctask-new",
+            "localId": "task-new",
+            "userId": "user_golden",
+            "kind": "task",
+            "name": "Journal",
+            "schedule": {
+              "type": "daily",
+              "times": [
+                "08:00"
+              ]
+            },
+            "priority": "normal",
+            "tags": [],
+            "caregiverIds": [],
+            "active": true,
+            "createdAt": 1783296000000,
+            "updatedAt": 1783296000000
+          }
+        ],
+        "instances": [
+          {
+            "_id": "j57inst1783342800000",
+            "localId": "inst-1783342800000-completed",
+            "userId": "user_golden",
+            "reminderId": "med-atorvastatin",
+            "reminderKind": "medication",
+            "scheduledTime": 1783342800000,
+            "status": "completed",
+            "completedAt": 1783343100000,
+            "snoozeCount": 0,
+            "createdAt": 1783342800000,
+            "updatedAt": 1783342800000
+          },
+          {
+            "_id": "j57inst1783342800000",
+            "localId": "inst-1783342800000-skipped",
+            "userId": "user_golden",
+            "reminderId": "med-lisinopril",
+            "reminderKind": "medication",
+            "scheduledTime": 1783342800000,
+            "status": "skipped",
+            "snoozeCount": 0,
+            "createdAt": 1783342800000,
+            "updatedAt": 1783342800000
+          },
+          {
+            "_id": "j57inst1783299600000",
+            "localId": "inst-1783299600000-missed",
+            "userId": "user_golden",
+            "reminderId": "med-atorvastatin",
+            "reminderKind": "medication",
+            "scheduledTime": 1783299600000,
+            "status": "missed",
+            "snoozeCount": 0,
+            "createdAt": 1783299600000,
+            "updatedAt": 1783299600000
+          },
+          {
+            "_id": "j57inst1783339200000",
+            "localId": "inst-1783339200000-snoozed",
+            "userId": "user_golden",
+            "reminderId": "med-vitamin-d",
+            "reminderKind": "medication",
+            "scheduledTime": 1783339200000,
+            "status": "snoozed",
+            "snoozedUntil": 1783341000000,
+            "snoozeCount": 0,
+            "createdAt": 1783339200000,
+            "updatedAt": 1783339200000
+          },
+          {
+            "_id": "j57inst1783335600000",
+            "localId": "inst-1783335600000-completed",
+            "userId": "user_golden",
+            "reminderId": "med-stopped",
+            "reminderKind": "medication",
+            "scheduledTime": 1783335600000,
+            "status": "completed",
+            "completedAt": 1783336200000,
+            "snoozeCount": 0,
+            "createdAt": 1783335600000,
+            "updatedAt": 1783335600000
+          },
+          {
+            "_id": "j57inst1783347300000",
+            "localId": "inst-1783347300000-completed",
+            "userId": "user_golden",
+            "reminderId": "med-ibuprofen",
+            "reminderKind": "medication",
+            "scheduledTime": 1783347300000,
+            "status": "completed",
+            "completedAt": 1783347300000,
+            "snoozeCount": 0,
+            "createdAt": 1783347300000,
+            "updatedAt": 1783347300000
+          },
+          {
+            "_id": "j57inst1783326600000",
+            "localId": "inst-1783326600000-completed",
+            "userId": "user_golden",
+            "reminderId": "med-ibuprofen",
+            "reminderKind": "medication",
+            "scheduledTime": 1783326600000,
+            "status": "completed",
+            "completedAt": 1783326600000,
+            "snoozeCount": 0,
+            "createdAt": 1783326600000,
+            "updatedAt": 1783326600000
+          },
+          {
+            "_id": "j57inst1783288800000",
+            "localId": "inst-1783288800000-pending",
+            "userId": "user_golden",
+            "reminderId": "task-water",
+            "reminderKind": "task",
+            "scheduledTime": 1783288800000,
+            "status": "pending",
+            "snoozeCount": 0,
+            "createdAt": 1783288800000,
+            "updatedAt": 1783288800000
+          },
+          {
+            "_id": "j57inst1783202400000",
+            "localId": "inst-1783202400000-completed",
+            "userId": "user_golden",
+            "reminderId": "task-water",
+            "reminderKind": "task",
+            "scheduledTime": 1783202400000,
+            "status": "completed",
+            "completedAt": 1783206000000,
+            "snoozeCount": 0,
+            "createdAt": 1783202400000,
+            "updatedAt": 1783202400000
+          },
+          {
+            "_id": "j57inst1783306800000",
+            "localId": "inst-1783306800000-snoozed",
+            "userId": "user_golden",
+            "reminderId": "task-stretch",
+            "reminderKind": "task",
+            "scheduledTime": 1783306800000,
+            "status": "snoozed",
+            "snoozedUntil": 1783357200000,
+            "snoozeCount": 0,
+            "createdAt": 1783306800000,
+            "updatedAt": 1783306800000
+          },
+          {
+            "_id": "j57inst1783256400000",
+            "localId": "legacy-a",
+            "userId": "user_golden",
+            "reminderId": "med-lisinopril",
+            "reminderKind": "medication",
+            "scheduledTime": 1783256400000,
+            "status": "missed",
+            "snoozeCount": 0,
+            "createdAt": 1783256400000,
+            "updatedAt": 1783256400000
+          },
+          {
+            "_id": "j57inst1783256400000",
+            "localId": "legacy-b",
+            "userId": "user_golden",
+            "reminderId": "med-lisinopril",
+            "reminderKind": "medication",
+            "scheduledTime": 1783256400000,
+            "status": "completed",
+            "completedAt": 1783258800000,
+            "snoozeCount": 0,
+            "createdAt": 1783256400000,
+            "updatedAt": 1783256400000
+          }
+        ],
+        "olderInstances": [],
+        "now": 1783353600000,
+        "zone": "America/New_York"
+      },
+      "output": {
+        "overdue": [
+          {
+            "reminderId": "task-rent",
+            "instanceId": null,
+            "name": "Pay rent",
+            "dosage": null,
+            "kind": "task",
+            "scheduledTime": 1782914400000,
+            "status": "pending",
+            "snoozedUntil": null,
+            "isNext": false,
+            "completedAt": null
+          },
+          {
+            "reminderId": "task-water",
+            "instanceId": "inst-1783288800000-pending",
+            "name": "Water the plants",
+            "dosage": null,
+            "kind": "task",
+            "scheduledTime": 1783288800000,
+            "status": "pending",
+            "snoozedUntil": null,
+            "isNext": false,
+            "completedAt": null
+          },
+          {
+            "reminderId": "task-stretch",
+            "instanceId": null,
+            "name": "Stretch",
+            "dosage": null,
+            "kind": "task",
+            "scheduledTime": 1783335600000,
+            "status": "pending",
+            "snoozedUntil": null,
+            "isNext": false,
+            "completedAt": null
+          },
+          {
+            "reminderId": "task-new",
+            "instanceId": null,
+            "name": "Journal",
+            "dosage": null,
+            "kind": "task",
+            "scheduledTime": 1783339200000,
+            "status": "pending",
+            "snoozedUntil": null,
+            "isNext": false,
+            "completedAt": null
+          }
+        ],
+        "dueToday": [
+          {
+            "reminderId": "task-pharmacy",
+            "instanceId": null,
+            "name": "Call the pharmacy",
+            "dosage": null,
+            "kind": "task",
+            "scheduledTime": 1783364400000,
+            "status": "pending",
+            "snoozedUntil": null,
+            "isNext": false,
+            "completedAt": null
+          },
+          {
+            "reminderId": "task-stretch",
+            "instanceId": null,
+            "name": "Stretch",
+            "dosage": null,
+            "kind": "task",
+            "scheduledTime": 1783364400000,
+            "status": "pending",
+            "snoozedUntil": null,
+            "isNext": false,
+            "completedAt": null
+          },
+          {
+            "reminderId": "task-water",
+            "instanceId": null,
+            "name": "Water the plants",
+            "dosage": null,
+            "kind": "task",
+            "scheduledTime": 1783375200000,
+            "status": "pending",
+            "snoozedUntil": null,
+            "isNext": false,
+            "completedAt": null
+          },
+          {
+            "reminderId": "task-stretch",
+            "instanceId": null,
+            "name": "Stretch",
+            "dosage": null,
+            "kind": "task",
+            "scheduledTime": 1783393200000,
+            "status": "pending",
+            "snoozedUntil": null,
+            "isNext": false,
+            "completedAt": null
+          }
+        ],
+        "upcoming": [
+          {
+            "dayStart": 1783396800000,
+            "rows": [
+              {
+                "reminderId": "task-stretch",
+                "instanceId": null,
+                "name": "Stretch",
+                "dosage": null,
+                "kind": "task",
+                "scheduledTime": 1783422000000,
+                "status": "pending",
+                "snoozedUntil": null,
+                "isNext": false,
+                "completedAt": null
+              },
+              {
+                "reminderId": "task-new",
+                "instanceId": null,
+                "name": "Journal",
+                "dosage": null,
+                "kind": "task",
+                "scheduledTime": 1783425600000,
+                "status": "pending",
+                "snoozedUntil": null,
+                "isNext": false,
+                "completedAt": null
+              },
+              {
+                "reminderId": "task-stretch",
+                "instanceId": null,
+                "name": "Stretch",
+                "dosage": null,
+                "kind": "task",
+                "scheduledTime": 1783450800000,
+                "status": "pending",
+                "snoozedUntil": null,
+                "isNext": false,
+                "completedAt": null
+              },
+              {
+                "reminderId": "task-water",
+                "instanceId": null,
+                "name": "Water the plants",
+                "dosage": null,
+                "kind": "task",
+                "scheduledTime": 1783461600000,
+                "status": "pending",
+                "snoozedUntil": null,
+                "isNext": false,
+                "completedAt": null
+              },
+              {
+                "reminderId": "task-stretch",
+                "instanceId": null,
+                "name": "Stretch",
+                "dosage": null,
+                "kind": "task",
+                "scheduledTime": 1783479600000,
+                "status": "pending",
+                "snoozedUntil": null,
+                "isNext": false,
+                "completedAt": null
+              }
+            ]
+          },
+          {
+            "dayStart": 1783483200000,
+            "rows": [
+              {
+                "reminderId": "task-stretch",
+                "instanceId": null,
+                "name": "Stretch",
+                "dosage": null,
+                "kind": "task",
+                "scheduledTime": 1783508400000,
+                "status": "pending",
+                "snoozedUntil": null,
+                "isNext": false,
+                "completedAt": null
+              },
+              {
+                "reminderId": "task-new",
+                "instanceId": null,
+                "name": "Journal",
+                "dosage": null,
+                "kind": "task",
+                "scheduledTime": 1783512000000,
+                "status": "pending",
+                "snoozedUntil": null,
+                "isNext": false,
+                "completedAt": null
+              },
+              {
+                "reminderId": "task-stretch",
+                "instanceId": null,
+                "name": "Stretch",
+                "dosage": null,
+                "kind": "task",
+                "scheduledTime": 1783537200000,
+                "status": "pending",
+                "snoozedUntil": null,
+                "isNext": false,
+                "completedAt": null
+              },
+              {
+                "reminderId": "task-water",
+                "instanceId": null,
+                "name": "Water the plants",
+                "dosage": null,
+                "kind": "task",
+                "scheduledTime": 1783548000000,
+                "status": "pending",
+                "snoozedUntil": null,
+                "isNext": false,
+                "completedAt": null
+              },
+              {
+                "reminderId": "task-stretch",
+                "instanceId": null,
+                "name": "Stretch",
+                "dosage": null,
+                "kind": "task",
+                "scheduledTime": 1783566000000,
+                "status": "pending",
+                "snoozedUntil": null,
+                "isNext": false,
+                "completedAt": null
+              }
+            ]
+          },
+          {
+            "dayStart": 1783569600000,
+            "rows": [
+              {
+                "reminderId": "task-stretch",
+                "instanceId": null,
+                "name": "Stretch",
+                "dosage": null,
+                "kind": "task",
+                "scheduledTime": 1783594800000,
+                "status": "pending",
+                "snoozedUntil": null,
+                "isNext": false,
+                "completedAt": null
+              },
+              {
+                "reminderId": "task-new",
+                "instanceId": null,
+                "name": "Journal",
+                "dosage": null,
+                "kind": "task",
+                "scheduledTime": 1783598400000,
+                "status": "pending",
+                "snoozedUntil": null,
+                "isNext": false,
+                "completedAt": null
+              },
+              {
+                "reminderId": "task-stretch",
+                "instanceId": null,
+                "name": "Stretch",
+                "dosage": null,
+                "kind": "task",
+                "scheduledTime": 1783623600000,
+                "status": "pending",
+                "snoozedUntil": null,
+                "isNext": false,
+                "completedAt": null
+              },
+              {
+                "reminderId": "task-water",
+                "instanceId": null,
+                "name": "Water the plants",
+                "dosage": null,
+                "kind": "task",
+                "scheduledTime": 1783634400000,
+                "status": "pending",
+                "snoozedUntil": null,
+                "isNext": false,
+                "completedAt": null
+              },
+              {
+                "reminderId": "task-stretch",
+                "instanceId": null,
+                "name": "Stretch",
+                "dosage": null,
+                "kind": "task",
+                "scheduledTime": 1783652400000,
+                "status": "pending",
+                "snoozedUntil": null,
+                "isNext": false,
+                "completedAt": null
+              }
+            ]
+          },
+          {
+            "dayStart": 1783656000000,
+            "rows": [
+              {
+                "reminderId": "task-stretch",
+                "instanceId": null,
+                "name": "Stretch",
+                "dosage": null,
+                "kind": "task",
+                "scheduledTime": 1783681200000,
+                "status": "pending",
+                "snoozedUntil": null,
+                "isNext": false,
+                "completedAt": null
+              },
+              {
+                "reminderId": "task-new",
+                "instanceId": null,
+                "name": "Journal",
+                "dosage": null,
+                "kind": "task",
+                "scheduledTime": 1783684800000,
+                "status": "pending",
+                "snoozedUntil": null,
+                "isNext": false,
+                "completedAt": null
+              },
+              {
+                "reminderId": "task-stretch",
+                "instanceId": null,
+                "name": "Stretch",
+                "dosage": null,
+                "kind": "task",
+                "scheduledTime": 1783710000000,
+                "status": "pending",
+                "snoozedUntil": null,
+                "isNext": false,
+                "completedAt": null
+              },
+              {
+                "reminderId": "task-water",
+                "instanceId": null,
+                "name": "Water the plants",
+                "dosage": null,
+                "kind": "task",
+                "scheduledTime": 1783720800000,
+                "status": "pending",
+                "snoozedUntil": null,
+                "isNext": false,
+                "completedAt": null
+              },
+              {
+                "reminderId": "task-stretch",
+                "instanceId": null,
+                "name": "Stretch",
+                "dosage": null,
+                "kind": "task",
+                "scheduledTime": 1783738800000,
+                "status": "pending",
+                "snoozedUntil": null,
+                "isNext": false,
+                "completedAt": null
+              }
+            ]
+          },
+          {
+            "dayStart": 1783742400000,
+            "rows": [
+              {
+                "reminderId": "task-stretch",
+                "instanceId": null,
+                "name": "Stretch",
+                "dosage": null,
+                "kind": "task",
+                "scheduledTime": 1783767600000,
+                "status": "pending",
+                "snoozedUntil": null,
+                "isNext": false,
+                "completedAt": null
+              },
+              {
+                "reminderId": "task-new",
+                "instanceId": null,
+                "name": "Journal",
+                "dosage": null,
+                "kind": "task",
+                "scheduledTime": 1783771200000,
+                "status": "pending",
+                "snoozedUntil": null,
+                "isNext": false,
+                "completedAt": null
+              },
+              {
+                "reminderId": "task-stretch",
+                "instanceId": null,
+                "name": "Stretch",
+                "dosage": null,
+                "kind": "task",
+                "scheduledTime": 1783796400000,
+                "status": "pending",
+                "snoozedUntil": null,
+                "isNext": false,
+                "completedAt": null
+              },
+              {
+                "reminderId": "task-water",
+                "instanceId": null,
+                "name": "Water the plants",
+                "dosage": null,
+                "kind": "task",
+                "scheduledTime": 1783807200000,
+                "status": "pending",
+                "snoozedUntil": null,
+                "isNext": false,
+                "completedAt": null
+              },
+              {
+                "reminderId": "task-stretch",
+                "instanceId": null,
+                "name": "Stretch",
+                "dosage": null,
+                "kind": "task",
+                "scheduledTime": 1783825200000,
+                "status": "pending",
+                "snoozedUntil": null,
+                "isNext": false,
+                "completedAt": null
+              }
+            ]
+          },
+          {
+            "dayStart": 1783828800000,
+            "rows": [
+              {
+                "reminderId": "task-stretch",
+                "instanceId": null,
+                "name": "Stretch",
+                "dosage": null,
+                "kind": "task",
+                "scheduledTime": 1783854000000,
+                "status": "pending",
+                "snoozedUntil": null,
+                "isNext": false,
+                "completedAt": null
+              },
+              {
+                "reminderId": "task-new",
+                "instanceId": null,
+                "name": "Journal",
+                "dosage": null,
+                "kind": "task",
+                "scheduledTime": 1783857600000,
+                "status": "pending",
+                "snoozedUntil": null,
+                "isNext": false,
+                "completedAt": null
+              },
+              {
+                "reminderId": "task-stretch",
+                "instanceId": null,
+                "name": "Stretch",
+                "dosage": null,
+                "kind": "task",
+                "scheduledTime": 1783882800000,
+                "status": "pending",
+                "snoozedUntil": null,
+                "isNext": false,
+                "completedAt": null
+              },
+              {
+                "reminderId": "task-water",
+                "instanceId": null,
+                "name": "Water the plants",
+                "dosage": null,
+                "kind": "task",
+                "scheduledTime": 1783893600000,
+                "status": "pending",
+                "snoozedUntil": null,
+                "isNext": false,
+                "completedAt": null
+              },
+              {
+                "reminderId": "task-stretch",
+                "instanceId": null,
+                "name": "Stretch",
+                "dosage": null,
+                "kind": "task",
+                "scheduledTime": 1783911600000,
+                "status": "pending",
+                "snoozedUntil": null,
+                "isNext": false,
+                "completedAt": null
+              }
+            ]
+          },
+          {
+            "dayStart": 1783915200000,
+            "rows": [
+              {
+                "reminderId": "task-stretch",
+                "instanceId": null,
+                "name": "Stretch",
+                "dosage": null,
+                "kind": "task",
+                "scheduledTime": 1783940400000,
+                "status": "pending",
+                "snoozedUntil": null,
+                "isNext": false,
+                "completedAt": null
+              },
+              {
+                "reminderId": "task-new",
+                "instanceId": null,
+                "name": "Journal",
+                "dosage": null,
+                "kind": "task",
+                "scheduledTime": 1783944000000,
+                "status": "pending",
+                "snoozedUntil": null,
+                "isNext": false,
+                "completedAt": null
+              },
+              {
+                "reminderId": "task-stretch",
+                "instanceId": null,
+                "name": "Stretch",
+                "dosage": null,
+                "kind": "task",
+                "scheduledTime": 1783969200000,
+                "status": "pending",
+                "snoozedUntil": null,
+                "isNext": false,
+                "completedAt": null
+              },
+              {
+                "reminderId": "task-water",
+                "instanceId": null,
+                "name": "Water the plants",
+                "dosage": null,
+                "kind": "task",
+                "scheduledTime": 1783980000000,
+                "status": "pending",
+                "snoozedUntil": null,
+                "isNext": false,
+                "completedAt": null
+              },
+              {
+                "reminderId": "task-stretch",
+                "instanceId": null,
+                "name": "Stretch",
+                "dosage": null,
+                "kind": "task",
+                "scheduledTime": 1783998000000,
+                "status": "pending",
+                "snoozedUntil": null,
+                "isNext": false,
+                "completedAt": null
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "name": "undoableInstanceIds: Monday noon's day and Tasks tab, with rows that offer none",
+      "input": {
+        "call": "undoableInstanceIds",
+        "rows": [
+          {
+            "reminderId": "med-ibuprofen",
+            "instanceId": "inst-1783326600000-completed",
+            "name": "Ibuprofen",
+            "dosage": "1 tablet",
+            "kind": "medication",
+            "scheduledTime": 1783326600000,
+            "status": "completed",
+            "snoozedUntil": null,
+            "isNext": false,
+            "completedAt": 1783326600000
+          },
+          {
+            "reminderId": "med-stopped",
+            "instanceId": "inst-1783335600000-completed",
+            "name": "Amoxicillin",
+            "dosage": "1 tablet",
+            "kind": "medication",
+            "scheduledTime": 1783335600000,
+            "status": "completed",
+            "snoozedUntil": null,
+            "isNext": false,
+            "completedAt": 1783336200000
+          },
+          {
+            "reminderId": "task-stretch",
+            "instanceId": null,
+            "name": "Stretch",
+            "dosage": null,
+            "kind": "task",
+            "scheduledTime": 1783335600000,
+            "status": "pending",
+            "snoozedUntil": null,
+            "isNext": false,
+            "completedAt": null
+          },
+          {
+            "reminderId": "med-vitamin-d",
+            "instanceId": "inst-1783339200000-snoozed",
+            "name": "Vitamin D",
+            "dosage": "1 tablet",
+            "kind": "medication",
+            "scheduledTime": 1783339200000,
+            "status": "snoozed",
+            "snoozedUntil": 1783341000000,
+            "isNext": false,
+            "completedAt": null
+          },
+          {
+            "reminderId": "task-new",
+            "instanceId": null,
+            "name": "Journal",
+            "dosage": null,
+            "kind": "task",
+            "scheduledTime": 1783339200000,
+            "status": "pending",
+            "snoozedUntil": null,
+            "isNext": false,
+            "completedAt": null
+          },
+          {
+            "reminderId": "med-atorvastatin",
+            "instanceId": "inst-1783342800000-completed",
+            "name": "Atorvastatin",
+            "dosage": "1 tablet",
+            "kind": "medication",
+            "scheduledTime": 1783342800000,
+            "status": "completed",
+            "snoozedUntil": null,
+            "isNext": false,
+            "completedAt": 1783343100000
+          },
+          {
+            "reminderId": "med-lisinopril",
+            "instanceId": "inst-1783342800000-skipped",
+            "name": "Lisinopril",
+            "dosage": "1 tablet",
+            "kind": "medication",
+            "scheduledTime": 1783342800000,
+            "status": "skipped",
+            "snoozedUntil": null,
+            "isNext": false,
+            "completedAt": null
+          },
+          {
+            "reminderId": "med-ibuprofen",
+            "instanceId": "inst-1783347300000-completed",
+            "name": "Ibuprofen",
+            "dosage": "1 tablet",
+            "kind": "medication",
+            "scheduledTime": 1783347300000,
+            "status": "completed",
+            "snoozedUntil": null,
+            "isNext": false,
+            "completedAt": 1783347300000
+          },
+          {
+            "reminderId": "task-pharmacy",
+            "instanceId": null,
+            "name": "Call the pharmacy",
+            "dosage": null,
+            "kind": "task",
+            "scheduledTime": 1783364400000,
+            "status": "pending",
+            "snoozedUntil": null,
+            "isNext": true,
+            "completedAt": null
+          },
+          {
+            "reminderId": "task-stretch",
+            "instanceId": null,
+            "name": "Stretch",
+            "dosage": null,
+            "kind": "task",
+            "scheduledTime": 1783364400000,
+            "status": "pending",
+            "snoozedUntil": null,
+            "isNext": false,
+            "completedAt": null
+          },
+          {
+            "reminderId": "task-water",
+            "instanceId": null,
+            "name": "Water the plants",
+            "dosage": null,
+            "kind": "task",
+            "scheduledTime": 1783375200000,
+            "status": "pending",
+            "snoozedUntil": null,
+            "isNext": false,
+            "completedAt": null
+          },
+          {
+            "reminderId": "med-atorvastatin",
+            "instanceId": null,
+            "name": "Atorvastatin",
+            "dosage": "1 tablet",
+            "kind": "medication",
+            "scheduledTime": 1783386000000,
+            "status": "pending",
+            "snoozedUntil": null,
+            "isNext": false,
+            "completedAt": null
+          },
+          {
+            "reminderId": "task-stretch",
+            "instanceId": null,
+            "name": "Stretch",
+            "dosage": null,
+            "kind": "task",
+            "scheduledTime": 1783393200000,
+            "status": "pending",
+            "snoozedUntil": null,
+            "isNext": false,
+            "completedAt": null
+          },
+          {
+            "reminderId": "task-fence",
+            "instanceId": "inst-1781096400000-snoozed",
+            "name": "Paint the fence",
+            "dosage": null,
+            "kind": "task",
+            "scheduledTime": 1781096400000,
+            "status": "missed",
+            "snoozedUntil": 1781100000000,
+            "isNext": false,
+            "completedAt": null
+          },
+          {
+            "reminderId": "task-passport",
+            "instanceId": null,
+            "name": "Renew the passport",
+            "dosage": null,
+            "kind": "task",
+            "scheduledTime": 1781532000000,
+            "status": "pending",
+            "snoozedUntil": null,
+            "isNext": false,
+            "completedAt": null
+          },
+          {
+            "reminderId": "task-rent",
+            "instanceId": null,
+            "name": "Pay rent",
+            "dosage": null,
+            "kind": "task",
+            "scheduledTime": 1782914400000,
+            "status": "pending",
+            "snoozedUntil": null,
+            "isNext": false,
+            "completedAt": null
+          },
+          {
+            "reminderId": "task-water",
+            "instanceId": "inst-1783288800000-pending",
+            "name": "Water the plants",
+            "dosage": null,
+            "kind": "task",
+            "scheduledTime": 1783288800000,
+            "status": "pending",
+            "snoozedUntil": null,
+            "isNext": false,
+            "completedAt": null
+          },
+          {
+            "reminderId": "task-stretch",
+            "instanceId": null,
+            "name": "Stretch",
+            "dosage": null,
+            "kind": "task",
+            "scheduledTime": 1783335600000,
+            "status": "pending",
+            "snoozedUntil": null,
+            "isNext": false,
+            "completedAt": null
+          },
+          {
+            "reminderId": "task-new",
+            "instanceId": null,
+            "name": "Journal",
+            "dosage": null,
+            "kind": "task",
+            "scheduledTime": 1783339200000,
+            "status": "pending",
+            "snoozedUntil": null,
+            "isNext": false,
+            "completedAt": null
+          },
+          {
+            "reminderId": "task-pharmacy",
+            "instanceId": null,
+            "name": "Call the pharmacy",
+            "dosage": null,
+            "kind": "task",
+            "scheduledTime": 1783364400000,
+            "status": "pending",
+            "snoozedUntil": null,
+            "isNext": false,
+            "completedAt": null
+          },
+          {
+            "reminderId": "task-stretch",
+            "instanceId": null,
+            "name": "Stretch",
+            "dosage": null,
+            "kind": "task",
+            "scheduledTime": 1783364400000,
+            "status": "pending",
+            "snoozedUntil": null,
+            "isNext": false,
+            "completedAt": null
+          },
+          {
+            "reminderId": "task-water",
+            "instanceId": null,
+            "name": "Water the plants",
+            "dosage": null,
+            "kind": "task",
+            "scheduledTime": 1783375200000,
+            "status": "pending",
+            "snoozedUntil": null,
+            "isNext": false,
+            "completedAt": null
+          },
+          {
+            "reminderId": "task-stretch",
+            "instanceId": null,
+            "name": "Stretch",
+            "dosage": null,
+            "kind": "task",
+            "scheduledTime": 1783393200000,
+            "status": "pending",
+            "snoozedUntil": null,
+            "isNext": false,
+            "completedAt": null
+          },
+          {
+            "reminderId": "task-stretch",
+            "instanceId": null,
+            "name": "Stretch",
+            "dosage": null,
+            "kind": "task",
+            "scheduledTime": 1783422000000,
+            "status": "pending",
+            "snoozedUntil": null,
+            "isNext": false,
+            "completedAt": null
+          },
+          {
+            "reminderId": "task-new",
+            "instanceId": null,
+            "name": "Journal",
+            "dosage": null,
+            "kind": "task",
+            "scheduledTime": 1783425600000,
+            "status": "pending",
+            "snoozedUntil": null,
+            "isNext": false,
+            "completedAt": null
+          },
+          {
+            "reminderId": "task-stretch",
+            "instanceId": null,
+            "name": "Stretch",
+            "dosage": null,
+            "kind": "task",
+            "scheduledTime": 1783450800000,
+            "status": "pending",
+            "snoozedUntil": null,
+            "isNext": false,
+            "completedAt": null
+          },
+          {
+            "reminderId": "task-water",
+            "instanceId": "water-early",
+            "name": "Water the plants",
+            "dosage": null,
+            "kind": "task",
+            "scheduledTime": 1783461600000,
+            "status": "completed",
+            "snoozedUntil": null,
+            "isNext": false,
+            "completedAt": 1783350000000
+          },
+          {
+            "reminderId": "task-stretch",
+            "instanceId": null,
+            "name": "Stretch",
+            "dosage": null,
+            "kind": "task",
+            "scheduledTime": 1783479600000,
+            "status": "pending",
+            "snoozedUntil": null,
+            "isNext": false,
+            "completedAt": null
+          },
+          {
+            "reminderId": "task-stretch",
+            "instanceId": null,
+            "name": "Stretch",
+            "dosage": null,
+            "kind": "task",
+            "scheduledTime": 1783508400000,
+            "status": "pending",
+            "snoozedUntil": null,
+            "isNext": false,
+            "completedAt": null
+          },
+          {
+            "reminderId": "task-new",
+            "instanceId": null,
+            "name": "Journal",
+            "dosage": null,
+            "kind": "task",
+            "scheduledTime": 1783512000000,
+            "status": "pending",
+            "snoozedUntil": null,
+            "isNext": false,
+            "completedAt": null
+          },
+          {
+            "reminderId": "task-stretch",
+            "instanceId": null,
+            "name": "Stretch",
+            "dosage": null,
+            "kind": "task",
+            "scheduledTime": 1783537200000,
+            "status": "pending",
+            "snoozedUntil": null,
+            "isNext": false,
+            "completedAt": null
+          },
+          {
+            "reminderId": "task-water",
+            "instanceId": null,
+            "name": "Water the plants",
+            "dosage": null,
+            "kind": "task",
+            "scheduledTime": 1783548000000,
+            "status": "pending",
+            "snoozedUntil": null,
+            "isNext": false,
+            "completedAt": null
+          },
+          {
+            "reminderId": "task-stretch",
+            "instanceId": null,
+            "name": "Stretch",
+            "dosage": null,
+            "kind": "task",
+            "scheduledTime": 1783566000000,
+            "status": "pending",
+            "snoozedUntil": null,
+            "isNext": false,
+            "completedAt": null
+          },
+          {
+            "reminderId": "task-stretch",
+            "instanceId": null,
+            "name": "Stretch",
+            "dosage": null,
+            "kind": "task",
+            "scheduledTime": 1783594800000,
+            "status": "pending",
+            "snoozedUntil": null,
+            "isNext": false,
+            "completedAt": null
+          },
+          {
+            "reminderId": "task-new",
+            "instanceId": null,
+            "name": "Journal",
+            "dosage": null,
+            "kind": "task",
+            "scheduledTime": 1783598400000,
+            "status": "pending",
+            "snoozedUntil": null,
+            "isNext": false,
+            "completedAt": null
+          },
+          {
+            "reminderId": "task-stretch",
+            "instanceId": null,
+            "name": "Stretch",
+            "dosage": null,
+            "kind": "task",
+            "scheduledTime": 1783623600000,
+            "status": "pending",
+            "snoozedUntil": null,
+            "isNext": false,
+            "completedAt": null
+          },
+          {
+            "reminderId": "task-water",
+            "instanceId": null,
+            "name": "Water the plants",
+            "dosage": null,
+            "kind": "task",
+            "scheduledTime": 1783634400000,
+            "status": "pending",
+            "snoozedUntil": null,
+            "isNext": false,
+            "completedAt": null
+          },
+          {
+            "reminderId": "task-stretch",
+            "instanceId": null,
+            "name": "Stretch",
+            "dosage": null,
+            "kind": "task",
+            "scheduledTime": 1783652400000,
+            "status": "pending",
+            "snoozedUntil": null,
+            "isNext": false,
+            "completedAt": null
+          },
+          {
+            "reminderId": "task-stretch",
+            "instanceId": null,
+            "name": "Stretch",
+            "dosage": null,
+            "kind": "task",
+            "scheduledTime": 1783681200000,
+            "status": "pending",
+            "snoozedUntil": null,
+            "isNext": false,
+            "completedAt": null
+          },
+          {
+            "reminderId": "task-new",
+            "instanceId": null,
+            "name": "Journal",
+            "dosage": null,
+            "kind": "task",
+            "scheduledTime": 1783684800000,
+            "status": "pending",
+            "snoozedUntil": null,
+            "isNext": false,
+            "completedAt": null
+          },
+          {
+            "reminderId": "task-stretch",
+            "instanceId": null,
+            "name": "Stretch",
+            "dosage": null,
+            "kind": "task",
+            "scheduledTime": 1783710000000,
+            "status": "pending",
+            "snoozedUntil": null,
+            "isNext": false,
+            "completedAt": null
+          },
+          {
+            "reminderId": "task-water",
+            "instanceId": null,
+            "name": "Water the plants",
+            "dosage": null,
+            "kind": "task",
+            "scheduledTime": 1783720800000,
+            "status": "pending",
+            "snoozedUntil": null,
+            "isNext": false,
+            "completedAt": null
+          },
+          {
+            "reminderId": "task-stretch",
+            "instanceId": null,
+            "name": "Stretch",
+            "dosage": null,
+            "kind": "task",
+            "scheduledTime": 1783738800000,
+            "status": "pending",
+            "snoozedUntil": null,
+            "isNext": false,
+            "completedAt": null
+          },
+          {
+            "reminderId": "task-stretch",
+            "instanceId": null,
+            "name": "Stretch",
+            "dosage": null,
+            "kind": "task",
+            "scheduledTime": 1783767600000,
+            "status": "pending",
+            "snoozedUntil": null,
+            "isNext": false,
+            "completedAt": null
+          },
+          {
+            "reminderId": "task-new",
+            "instanceId": null,
+            "name": "Journal",
+            "dosage": null,
+            "kind": "task",
+            "scheduledTime": 1783771200000,
+            "status": "pending",
+            "snoozedUntil": null,
+            "isNext": false,
+            "completedAt": null
+          },
+          {
+            "reminderId": "task-stretch",
+            "instanceId": null,
+            "name": "Stretch",
+            "dosage": null,
+            "kind": "task",
+            "scheduledTime": 1783796400000,
+            "status": "pending",
+            "snoozedUntil": null,
+            "isNext": false,
+            "completedAt": null
+          },
+          {
+            "reminderId": "task-water",
+            "instanceId": null,
+            "name": "Water the plants",
+            "dosage": null,
+            "kind": "task",
+            "scheduledTime": 1783807200000,
+            "status": "pending",
+            "snoozedUntil": null,
+            "isNext": false,
+            "completedAt": null
+          },
+          {
+            "reminderId": "task-stretch",
+            "instanceId": null,
+            "name": "Stretch",
+            "dosage": null,
+            "kind": "task",
+            "scheduledTime": 1783825200000,
+            "status": "pending",
+            "snoozedUntil": null,
+            "isNext": false,
+            "completedAt": null
+          },
+          {
+            "reminderId": "task-stretch",
+            "instanceId": null,
+            "name": "Stretch",
+            "dosage": null,
+            "kind": "task",
+            "scheduledTime": 1783854000000,
+            "status": "pending",
+            "snoozedUntil": null,
+            "isNext": false,
+            "completedAt": null
+          },
+          {
+            "reminderId": "task-new",
+            "instanceId": null,
+            "name": "Journal",
+            "dosage": null,
+            "kind": "task",
+            "scheduledTime": 1783857600000,
+            "status": "pending",
+            "snoozedUntil": null,
+            "isNext": false,
+            "completedAt": null
+          },
+          {
+            "reminderId": "task-stretch",
+            "instanceId": null,
+            "name": "Stretch",
+            "dosage": null,
+            "kind": "task",
+            "scheduledTime": 1783882800000,
+            "status": "pending",
+            "snoozedUntil": null,
+            "isNext": false,
+            "completedAt": null
+          },
+          {
+            "reminderId": "task-water",
+            "instanceId": null,
+            "name": "Water the plants",
+            "dosage": null,
+            "kind": "task",
+            "scheduledTime": 1783893600000,
+            "status": "pending",
+            "snoozedUntil": null,
+            "isNext": false,
+            "completedAt": null
+          },
+          {
+            "reminderId": "task-stretch",
+            "instanceId": null,
+            "name": "Stretch",
+            "dosage": null,
+            "kind": "task",
+            "scheduledTime": 1783911600000,
+            "status": "pending",
+            "snoozedUntil": null,
+            "isNext": false,
+            "completedAt": null
+          },
+          {
+            "reminderId": "task-stretch",
+            "instanceId": null,
+            "name": "Stretch",
+            "dosage": null,
+            "kind": "task",
+            "scheduledTime": 1783940400000,
+            "status": "pending",
+            "snoozedUntil": null,
+            "isNext": false,
+            "completedAt": null
+          },
+          {
+            "reminderId": "task-new",
+            "instanceId": null,
+            "name": "Journal",
+            "dosage": null,
+            "kind": "task",
+            "scheduledTime": 1783944000000,
+            "status": "pending",
+            "snoozedUntil": null,
+            "isNext": false,
+            "completedAt": null
+          },
+          {
+            "reminderId": "task-stretch",
+            "instanceId": null,
+            "name": "Stretch",
+            "dosage": null,
+            "kind": "task",
+            "scheduledTime": 1783969200000,
+            "status": "pending",
+            "snoozedUntil": null,
+            "isNext": false,
+            "completedAt": null
+          },
+          {
+            "reminderId": "task-water",
+            "instanceId": null,
+            "name": "Water the plants",
+            "dosage": null,
+            "kind": "task",
+            "scheduledTime": 1783980000000,
+            "status": "pending",
+            "snoozedUntil": null,
+            "isNext": false,
+            "completedAt": null
+          },
+          {
+            "reminderId": "task-stretch",
+            "instanceId": null,
+            "name": "Stretch",
+            "dosage": null,
+            "kind": "task",
+            "scheduledTime": 1783998000000,
+            "status": "pending",
+            "snoozedUntil": null,
+            "isNext": false,
+            "completedAt": null
+          },
+          {
+            "reminderId": "med-atorvastatin",
+            "instanceId": "extra-dose",
+            "name": "med-atorvastatin",
+            "dosage": null,
+            "kind": "task",
+            "scheduledTime": 1783347300000,
+            "status": "completed",
+            "snoozedUntil": null,
+            "isNext": false,
+            "completedAt": 1783347300000
+          },
+          {
+            "reminderId": "task-backlog",
+            "instanceId": "backlog-done",
+            "name": "task-backlog",
+            "dosage": null,
+            "kind": "task",
+            "scheduledTime": 1783346400000,
+            "status": "completed",
+            "snoozedUntil": null,
+            "isNext": false,
+            "completedAt": 1783346400000
+          },
+          {
+            "reminderId": "task-water",
+            "instanceId": null,
+            "name": "task-water",
+            "dosage": null,
+            "kind": "task",
+            "scheduledTime": 1783375200000,
+            "status": "completed",
+            "snoozedUntil": null,
+            "isNext": false,
+            "completedAt": 1783375200000
+          },
+          {
+            "reminderId": "task-gone",
+            "instanceId": "gone-done",
+            "name": "task-gone",
+            "dosage": null,
+            "kind": "task",
+            "scheduledTime": 1783342800000,
+            "status": "completed",
+            "snoozedUntil": null,
+            "isNext": false,
+            "completedAt": 1783342800000
+          },
+          {
+            "reminderId": "task-water",
+            "instanceId": "water-missed",
+            "name": "task-water",
+            "dosage": null,
+            "kind": "task",
+            "scheduledTime": 1783202400000,
+            "status": "missed",
+            "snoozedUntil": null,
+            "isNext": false,
+            "completedAt": null
+          }
+        ],
+        "reminders": [
+          {
+            "_id": "j97docmed-ator",
+            "localId": "med-atorvastatin",
+            "userId": "user_golden",
+            "kind": "medication",
+            "name": "Atorvastatin",
+            "dosage": "1 tablet",
+            "schedule": {
+              "type": "daily",
+              "times": [
+                "09:00",
+                "21:00"
+              ]
+            },
+            "priority": "normal",
+            "tags": [],
+            "caregiverIds": [],
+            "active": true,
+            "createdAt": 1780286400000,
+            "updatedAt": 1780286400000
+          },
+          {
+            "_id": "j97docmed-lisi",
+            "localId": "med-lisinopril",
+            "userId": "user_golden",
+            "kind": "medication",
+            "name": "Lisinopril",
+            "dosage": "1 tablet",
+            "schedule": {
+              "type": "daily",
+              "times": [
+                "09:00"
+              ]
+            },
+            "priority": "normal",
+            "tags": [],
+            "caregiverIds": [],
+            "active": true,
+            "createdAt": 1780286400000,
+            "updatedAt": 1780286400000
+          },
+          {
+            "_id": "j97docmed-vita",
+            "localId": "med-vitamin-d",
+            "userId": "user_golden",
+            "kind": "medication",
+            "name": "Vitamin D",
+            "dosage": "1 tablet",
+            "schedule": {
+              "type": "weekly",
+              "daysOfWeek": [
+                1
+              ],
+              "times": [
+                "08:00"
+              ]
+            },
+            "priority": "normal",
+            "tags": [],
+            "caregiverIds": [],
+            "active": true,
+            "createdAt": 1780286400000,
+            "updatedAt": 1780286400000
+          },
+          {
+            "_id": "j97docmed-paus",
+            "localId": "med-paused",
+            "userId": "user_golden",
+            "kind": "medication",
+            "name": "Prednisone",
+            "dosage": "1 tablet",
+            "schedule": {
+              "type": "daily",
+              "times": [
+                "13:00"
+              ]
+            },
+            "priority": "normal",
+            "tags": [],
+            "caregiverIds": [],
+            "active": true,
+            "createdAt": 1780286400000,
+            "updatedAt": 1780286400000,
+            "pauses": [
+              {
+                "from": 1783350000000
+              }
+            ]
+          },
+          {
+            "_id": "j97docmed-stop",
+            "localId": "med-stopped",
+            "userId": "user_golden",
+            "kind": "medication",
+            "name": "Amoxicillin",
+            "dosage": "1 tablet",
+            "schedule": {
+              "type": "daily",
+              "times": [
+                "07:00"
+              ]
+            },
+            "priority": "normal",
+            "tags": [],
+            "caregiverIds": [],
+            "active": false,
+            "createdAt": 1780286400000,
+            "updatedAt": 1780286400000
+          },
+          {
+            "_id": "j97docmed-ibup",
+            "localId": "med-ibuprofen",
+            "userId": "user_golden",
+            "kind": "medication",
+            "name": "Ibuprofen",
+            "dosage": "1 tablet",
+            "schedule": {
+              "type": "asNeeded",
+              "minGapMinutes": 240,
+              "maxPer24h": 4
+            },
+            "priority": "normal",
+            "tags": [],
+            "caregiverIds": [],
+            "active": true,
+            "createdAt": 1780286400000,
+            "updatedAt": 1780286400000
+          },
+          {
+            "_id": "j97doctask-wat",
+            "localId": "task-water",
+            "userId": "user_golden",
+            "kind": "task",
+            "name": "Water the plants",
+            "schedule": {
+              "type": "daily",
+              "times": [
+                "18:00"
+              ]
+            },
+            "priority": "normal",
+            "tags": [],
+            "caregiverIds": [],
+            "active": true,
+            "createdAt": 1780286400000,
+            "updatedAt": 1780286400000
+          },
+          {
+            "_id": "j97doctask-ren",
+            "localId": "task-rent",
+            "userId": "user_golden",
+            "kind": "task",
+            "name": "Pay rent",
+            "schedule": {
+              "type": "monthly",
+              "daysOfMonth": [
+                1
+              ],
+              "times": [
+                "10:00"
+              ]
+            },
+            "priority": "normal",
+            "tags": [],
+            "caregiverIds": [],
+            "active": true,
+            "createdAt": 1780286400000,
+            "updatedAt": 1780286400000
+          },
+          {
+            "_id": "j97doctask-pha",
+            "localId": "task-pharmacy",
+            "userId": "user_golden",
+            "kind": "task",
+            "name": "Call the pharmacy",
+            "schedule": {
+              "type": "once",
+              "at": 1783364400000
+            },
+            "priority": "normal",
+            "tags": [],
+            "caregiverIds": [],
+            "active": true,
+            "createdAt": 1780286400000,
+            "updatedAt": 1780286400000
+          },
+          {
+            "_id": "j97doctask-str",
+            "localId": "task-stretch",
+            "userId": "user_golden",
+            "kind": "task",
+            "name": "Stretch",
+            "schedule": {
+              "type": "interval",
+              "hours": 8,
+              "startAt": 1783076400000
+            },
+            "priority": "normal",
+            "tags": [],
+            "caregiverIds": [],
+            "active": true,
+            "createdAt": 1780286400000,
+            "updatedAt": 1780286400000
+          },
+          {
+            "_id": "j97doctask-bac",
+            "localId": "task-backlog",
+            "userId": "user_golden",
+            "kind": "task",
+            "name": "Sort the garage",
+            "schedule": {
+              "type": "none"
+            },
+            "priority": "normal",
+            "tags": [],
+            "caregiverIds": [],
+            "active": true,
+            "createdAt": 1780286400000,
+            "updatedAt": 1780286400000
+          },
+          {
+            "_id": "j97doctask-new",
+            "localId": "task-new",
+            "userId": "user_golden",
+            "kind": "task",
+            "name": "Journal",
+            "schedule": {
+              "type": "daily",
+              "times": [
+                "08:00"
+              ]
+            },
+            "priority": "normal",
+            "tags": [],
+            "caregiverIds": [],
+            "active": true,
+            "createdAt": 1783296000000,
+            "updatedAt": 1783296000000
+          },
+          {
+            "_id": "j97doctask-pas",
+            "localId": "task-passport",
+            "userId": "user_golden",
+            "kind": "task",
+            "name": "Renew the passport",
+            "schedule": {
+              "type": "once",
+              "at": 1781532000000
+            },
+            "priority": "normal",
+            "tags": [],
+            "caregiverIds": [],
+            "active": true,
+            "createdAt": 1780286400000,
+            "updatedAt": 1780286400000
+          },
+          {
+            "_id": "j97doctask-tax",
+            "localId": "task-taxes",
+            "userId": "user_golden",
+            "kind": "task",
+            "name": "File the estimate",
+            "schedule": {
+              "type": "once",
+              "at": 1781269200000
+            },
+            "priority": "normal",
+            "tags": [],
+            "caregiverIds": [],
+            "active": true,
+            "createdAt": 1780286400000,
+            "updatedAt": 1780286400000
+          },
+          {
+            "_id": "j97doctask-fen",
+            "localId": "task-fence",
+            "userId": "user_golden",
+            "kind": "task",
+            "name": "Paint the fence",
+            "schedule": {
+              "type": "once",
+              "at": 1781096400000
+            },
+            "priority": "normal",
+            "tags": [],
+            "caregiverIds": [],
+            "active": true,
+            "createdAt": 1780286400000,
+            "updatedAt": 1780286400000
+          },
+          {
+            "_id": "j97doctask-boo",
+            "localId": "task-books",
+            "userId": "user_golden",
+            "kind": "task",
+            "name": "Return the library books",
+            "schedule": {
+              "type": "once",
+              "at": 1781442000000
+            },
+            "priority": "normal",
+            "tags": [],
+            "caregiverIds": [],
+            "active": false,
+            "createdAt": 1780286400000,
+            "updatedAt": 1780286400000
+          },
+          {
+            "_id": "j97doctask-den",
+            "localId": "task-dentist",
+            "userId": "user_golden",
+            "kind": "task",
+            "name": "Book the dentist",
+            "schedule": {
+              "type": "once",
+              "at": 1780405200000
+            },
+            "priority": "normal",
+            "tags": [],
+            "caregiverIds": [],
+            "active": true,
+            "createdAt": 1780459200000,
+            "updatedAt": 1780459200000
+          }
+        ],
+        "zone": "America/New_York"
+      },
+      "output": [
+        "inst-1783335600000-completed",
+        "inst-1783339200000-snoozed",
+        "inst-1783342800000-completed",
+        "inst-1783342800000-skipped",
+        "water-early"
+      ]
     }
   ]
 }

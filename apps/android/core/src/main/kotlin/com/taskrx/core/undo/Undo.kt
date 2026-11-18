@@ -5,6 +5,7 @@ import com.taskrx.core.domain.Reminder
 import com.taskrx.core.domain.instanceUndoableStatuses
 import com.taskrx.core.schedule.nextOccurrences
 import com.taskrx.core.sweep.GRACE_PERIOD_MS
+import com.taskrx.core.timeline.TimelineRow
 import java.time.ZoneId
 
 /*
@@ -74,3 +75,21 @@ fun isScheduledOccurrence(reminder: Reminder, scheduledTime: Long, zone: ZoneId 
  */
 fun undoWillBeMissed(scheduledTime: Long, now: Long, gracePeriodMs: Long = GRACE_PERIOD_MS): Boolean =
     scheduledTime < now - gracePeriodMs
+
+/**
+ * The Instances whose answer a screen offers to take back from the row itself: an answer
+ * ([UNDOABLE_STATUSES]) on a moment its Reminder's Schedule predicts. An extra dose or a Backlog
+ * completion would reopen into a miss that never was ([UndoVerdict.NotScheduled]). A row with no
+ * Instance, or whose Reminder is not in [reminders], offers none.
+ *
+ * Read over every row on screen at once: the day and the Tasks tab's sections together, so a
+ * task completed early, ahead of the day shown, can still be undone.
+ */
+fun undoableInstanceIds(rows: Iterable<TimelineRow>, reminders: List<Reminder>, zone: ZoneId): Set<String> {
+    val byId = reminders.associateBy { it.id }
+    return rows.mapNotNullTo(HashSet()) { row ->
+        val id = row.instanceId ?: return@mapNotNullTo null
+        val reminder = byId[row.reminderId] ?: return@mapNotNullTo null
+        id.takeIf { row.status in UNDOABLE_STATUSES && isScheduledOccurrence(reminder, row.scheduledTime, zone) }
+    }
+}

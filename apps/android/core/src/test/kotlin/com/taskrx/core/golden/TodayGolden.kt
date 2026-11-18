@@ -13,7 +13,10 @@ import com.taskrx.core.sweep.SWEEP_LOOKBACK_MS
 import com.taskrx.core.sweep.planMissedSweep
 import com.taskrx.core.sweep.snoozeRanOut
 import com.taskrx.core.tasks.TaskSections
+import com.taskrx.core.tasks.TasksTabInput
+import com.taskrx.core.tasks.assembleTasksTab
 import com.taskrx.core.tasks.sectionTasks
+import com.taskrx.core.tasks.taskWindow
 import com.taskrx.core.time.localDayBounds
 import com.taskrx.core.timeline.ProjectTimelineInput
 import com.taskrx.core.timeline.TimelineRow
@@ -23,6 +26,7 @@ import com.taskrx.core.undo.UndoVerdict
 import com.taskrx.core.undo.isScheduledOccurrence
 import com.taskrx.core.undo.undoVerdict
 import com.taskrx.core.undo.undoWillBeMissed
+import com.taskrx.core.undo.undoableInstanceIds
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonNull
 import kotlinx.serialization.json.JsonObject
@@ -181,7 +185,9 @@ object TodayGolden : GoldenSet {
     override val name = "today"
     override val about =
         "projectTimeline, sectionTasks, batchSlots/batchText/batchNotificationId, planMissedSweep, snoozeRanOut, " +
-            "undoVerdict/isScheduledOccurrence/undoWillBeMissed. Reminders and instances are Convex documents " +
+            "undoVerdict/isScheduledOccurrence/undoWillBeMissed, assembleTasksTab (the Tasks tab's rows: a fortnight's " +
+            "projection, the stored task rows before it, one row at the latest moment of a task with none), " +
+            "undoableInstanceIds. Reminders and instances are Convex documents " +
             "(an instance's reminderId already resolved to the parent's localId)."
 
     private val reminders = World.reminders.map(::reminderFromDoc)
@@ -520,6 +526,99 @@ object TodayGolden : GoldenSet {
         return verdicts + scheduled + missed
     }
 
+    /**
+     * Tasks the week above does not have, for what the Tasks tab reaches past its fortnight:
+     * a once task with no row at its moment (one row is invented), one already answered (none
+     * is), a snooze nobody came back to (read as missed), a stopped task and a task created
+     * after its own moment (neither gets a row), an older pending row of a daily task, and a
+     * task completed a day early (in Upcoming, and undoable).
+     */
+    private object Older {
+        private fun once(id: String, name: String, at: Long, createdAt: Long = ny(1, month = 6), active: Boolean = true) =
+            reminderDoc(localId = id, kind = "task", name = name, dosage = null, schedule = schedule("once") { put("at", at) }, active = active, createdAt = createdAt)
+
+        val reminders: List<JsonObject> =
+            listOf(
+                once("task-passport", "Renew the passport", ny(15, 10, month = 6)),
+                once("task-taxes", "File the estimate", ny(12, 9, month = 6)),
+                once("task-fence", "Paint the fence", ny(10, 9, month = 6)),
+                once("task-books", "Return the library books", ny(14, 9, month = 6), active = false),
+                once("task-dentist", "Book the dentist", ny(2, 9, month = 6), createdAt = ny(3, month = 6)),
+            )
+
+        val instances: List<JsonObject> =
+            listOf(
+                instanceDoc("task-taxes", ny(12, 9, month = 6), "completed", completedAt = ny(12, 11, month = 6)),
+                instanceDoc("task-fence", ny(10, 9, month = 6), "snoozed", snoozedUntil = ny(10, 10, month = 6)),
+                instanceDoc("task-water", ny(20, 18, month = 6), "pending"),
+                instanceDoc("task-water", ny(7, 18), "completed", completedAt = ny(6, 11), localId = "water-early"),
+            )
+    }
+
+    private val allReminders = World.reminders + Older.reminders
+    private val allInstances = World.instances + Older.instances
+
+    /** What the phone reads for the tab: every row inside the window, and the task rows before it. */
+    private fun tasksTabInput(now: Long, reminders: List<JsonObject>, instances: List<JsonObject>): Pair<JsonObject, TasksTabInput> {
+        val window = taskWindow(now, ZONE)
+        val inside = instances.filter { (it["scheduledTime"] as JsonPrimitive).content.toLong() in window.start..window.end }
+        val older = instances.filter { (it["reminderKind"] as JsonPrimitive).content == "task" && (it["scheduledTime"] as JsonPrimitive).content.toLong() < window.start }
+        val json =
+            buildJsonObject {
+                put("call", "assembleTasksTab")
+                put("reminders", JsonArray(reminders))
+                put("instances", JsonArray(inside))
+                put("olderInstances", JsonArray(older))
+                put("now", now)
+                put("zone", NY)
+            }
+        return json to TasksTabInput(reminders.map(::reminderFromDoc), inside.map(::instanceFromDoc), older.map(::instanceFromDoc), now, ZONE)
+    }
+
+    private fun tasksTabCases(): List<GoldenCase> =
+        listOf(
+            Triple("assembleTasksTab: Monday noon", ny(6, 12), true),
+            Triple("assembleTasksTab: two weeks on, the week's rows are older than the window", ny(20, 12), true),
+            Triple("assembleTasksTab: the first of the month, early", ny(1, 9), true),
+            Triple("assembleTasksTab: the week alone, nothing older to reach", ny(6, 12), false),
+        ).map { (name, now, withOlder) ->
+            val (json, input) = tasksTabInput(now, if (withOlder) allReminders else World.reminders, if (withOlder) allInstances else World.instances)
+            GoldenCase(name, json, sectionsJson(assembleTasksTab(input)))
+        }
+
+    private fun undoableCases(): List<GoldenCase> {
+        val now = ny(6, 12)
+        val day = localDayBounds(now, 0, ZONE)
+        val reminders = allReminders.map(::reminderFromDoc)
+        val sections = assembleTasksTab(tasksTabInput(now, allReminders, allInstances).second)
+        fun hand(reminderId: String, instanceId: String?, time: Long, status: InstanceStatus) =
+            TimelineRow(reminderId, instanceId, reminderId, null, ReminderKind.Task, time, status, null, false, time.takeIf { status == InstanceStatus.Completed })
+        val rows =
+            projectTimeline(
+                ProjectTimelineInput(reminders, allInstances.map(::instanceFromDoc), TimelineWindow(day.start, day.end), now, ZONE, 64),
+            ) + sections.overdue + sections.dueToday + sections.upcoming.flatMap { it.rows } +
+                listOf(
+                    hand("med-atorvastatin", "extra-dose", ny(6, 10, 15), InstanceStatus.Completed),
+                    hand("task-backlog", "backlog-done", ny(6, 10), InstanceStatus.Completed),
+                    hand("task-water", null, ny(6, 18), InstanceStatus.Completed),
+                    hand("task-gone", "gone-done", ny(6, 9), InstanceStatus.Completed),
+                    hand("task-water", "water-missed", ny(4, 18), InstanceStatus.Missed),
+                )
+        return listOf(
+            GoldenCase(
+                "undoableInstanceIds: Monday noon's day and Tasks tab, with rows that offer none",
+                buildJsonObject {
+                    put("call", "undoableInstanceIds")
+                    put("rows", JsonArray(rows.map(::rowJson)))
+                    put("reminders", JsonArray(allReminders))
+                    put("zone", NY)
+                },
+                JsonArray(undoableInstanceIds(rows, reminders, ZONE).sorted().map(::JsonPrimitive)),
+            ),
+        )
+    }
+
     override fun cases(): List<GoldenCase> =
-        timelineCases() + duplicateCases() + taskCases() + handRowCases() + batchCases() + sweepCases() + snoozeRanOutCases() + undoCases()
+        timelineCases() + duplicateCases() + taskCases() + handRowCases() + batchCases() + sweepCases() + snoozeRanOutCases() + undoCases() +
+            tasksTabCases() + undoableCases()
 }

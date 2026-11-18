@@ -47,10 +47,10 @@ because two writers are unsafe until one Occurrence can only ever be one Instanc
         the contract)
   - [x] `tasks`, `timeline`, `batch`, `asneeded`, `snooze`, `undo`, `sweep` (`today`, 58
         cases over one week of data; `answer`, 46), and `time` (`local-day`, 47)
-  - [ ] Move the Tasks tab's assembly out of `:app`'s `TodayViewModel` into `:core`, with
+  - [x] Move the Tasks tab's assembly out of `:app`'s `TodayViewModel` into `:core`, with
         fixtures: the stored task rows older than the fortnight (a run-out snooze read as
-        missed), the one invented row at a task's latest moment, and which rows offer Undo.
-        Until then the desktop would port them from a view model with no reference
+        missed), the one invented row at a task's latest moment, and which rows offer Undo
+        (`assembleTasksTab`, `taskWindow`, `undoableInstanceIds`; in `today`, 5 cases)
   - [ ] Move the Convex document decoders (`ServerDocs.toPulled`) and the write call shapes
         (`Push.kt`'s callers in `SyncPayloads`) into `:core` with fixtures, including
         resolving an instance's Convex `reminderId` to the parent's `localId`
