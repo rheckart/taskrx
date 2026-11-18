@@ -14,6 +14,8 @@ mod domain;
 mod later;
 #[path = "golden/local_day.rs"]
 mod local_day;
+#[path = "golden/notices.rs"]
+mod notices;
 #[path = "golden/parser.rs"]
 mod parser;
 #[path = "golden/push.rs"]
@@ -30,7 +32,7 @@ use serde::Deserialize;
 use serde_json::Value;
 
 /// The fixture files whose rules are not ported yet.
-const PENDING: &[&str] = &["notices"];
+const PENDING: &[&str] = &[];
 
 /// One rule set's file. The envelope is strict; the documents inside are not.
 #[derive(Deserialize)]
@@ -71,6 +73,7 @@ fn handlers() -> BTreeMap<&'static str, Handler> {
         ("refill", later::refill as Handler),
         ("push", push::case as Handler),
         ("parser", parser::case as Handler),
+        ("notices", notices::case as Handler),
     ])
 }
 

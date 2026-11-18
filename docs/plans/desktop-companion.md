@@ -79,8 +79,9 @@ because two writers are unsafe until one Occurrence can only ever be one Instanc
 - [ ] Desktop, `apps/desktop`:
   - [ ] Cargo workspace: `taskrx-desktop-core` (rules, Convex, screen state) and the Rune crate
         (`taskrx-desktop-core` exists; `cargo test` is the third gate in `CLAUDE.md`)
-  - [ ] Rules ported to Rust against the fixtures. `tests/golden.rs` reads them in place and
-        fails on any file not handled or listed as pending:
+  - [x] Rules ported to Rust against the fixtures: all fourteen files, 779 cases, none
+        pending (2026-11-18). `tests/golden.rs` reads them in place and fails on any file or
+        call it does not handle:
     - [x] `instance-id`, `local-day` (jiff, zones bundled), `server-schedule`, `server-docs`
           (119 cases)
     - [x] `schedule` (the Occurrence engine, pauses, overrides; 92 cases)
@@ -89,7 +90,8 @@ because two writers are unsafe until one Occurrence can only ever be one Instanc
           snooze; 109 cases)
     - [x] `backlog`, `catch-up`, `refill` (32 cases; each catch-up case now names its call)
     - [x] `parser` (157 cases)
-    - [ ] `notices`
+    - [x] `notices` (112 cases; the date reader's digit-boundary lookaround through
+          `fancy-regex`, Java's ASCII classes spelled out)
     - [x] `push` (21 cases; call arguments are a wire type whose only number is a float64,
           so an Int64 cannot reach a `v.number()` validator)
   - [ ] Sign-in through the browser, session token in the keyring

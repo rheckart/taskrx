@@ -49,7 +49,7 @@ reproduce it.
     developer-facing messages (`instanceTransitionProblem`, the Backlog refusal's text) and
     `parseScheduleGrammar`, which nothing outside its own tests calls. The parser's
     `reasons` are shown to the person, so they are in.
-  - Fourteen files, 779 cases (2026-11-18). Rust loads every one under a strict schema; every
+  - Fourteen files, 779 cases (2026-11-18), every one reproduced by `taskrx-desktop-core`. Rust loads every one under a strict schema; every
     whole number fits an `i64`. The date reader's remaining unreached branches are guards its
     own patterns make unreachable (a month name the pattern matched but the map lacks).
   - Rule fixtures hold whole numbers as JSON integers, but Convex delivers float64. The Rust

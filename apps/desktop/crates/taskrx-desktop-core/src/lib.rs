@@ -9,6 +9,7 @@ pub mod backlog;
 pub mod batch;
 pub mod catchup;
 pub mod domain;
+pub mod notices;
 pub mod parser;
 pub mod refill;
 pub mod schedule;
