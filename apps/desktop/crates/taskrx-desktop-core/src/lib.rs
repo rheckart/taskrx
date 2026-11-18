@@ -4,8 +4,14 @@
 //! here is held to the golden fixtures `:core` writes (`apps/android/core/golden`), and
 //! `cargo test` must reproduce each case exactly. Pure: no clock, no I/O.
 
+pub mod asneeded;
+pub mod batch;
 pub mod domain;
 pub mod schedule;
+pub mod snooze;
 pub mod sweep;
 pub mod sync;
+pub mod tasks;
 pub mod time;
+pub mod timeline;
+pub mod undo;

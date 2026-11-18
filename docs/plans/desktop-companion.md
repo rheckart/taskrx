@@ -85,7 +85,8 @@ because two writers are unsafe until one Occurrence can only ever be one Instanc
           (119 cases)
     - [x] `schedule` (the Occurrence engine, pauses, overrides; 92 cases)
     - [x] `domain` (the lifecycles, pauses, moves; 137 cases)
-    - [ ] `today`, `answer`
+    - [x] `today`, `answer` (the timeline, the Tasks tab, batches, the sweep, undo, as-needed,
+          snooze; 109 cases)
     - [ ] `backlog`, `catch-up`, `refill`
     - [ ] `parser`, `notices`
     - [ ] `push`

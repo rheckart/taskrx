@@ -4,6 +4,8 @@
 //! `call` a handler does not know, unless the file is on [`PENDING`]: the rules not ported
 //! yet. The list only shrinks; a file that is handled must leave it.
 
+#[path = "golden/answer.rs"]
+mod answer;
 #[path = "golden/docs.rs"]
 mod docs;
 #[path = "golden/domain.rs"]
@@ -12,6 +14,8 @@ mod domain;
 mod local_day;
 #[path = "golden/schedule.rs"]
 mod schedule;
+#[path = "golden/today.rs"]
+mod today;
 
 use std::collections::BTreeMap;
 use std::path::PathBuf;
@@ -20,9 +24,7 @@ use serde::Deserialize;
 use serde_json::Value;
 
 /// The fixture files whose rules are not ported yet.
-const PENDING: &[&str] = &[
-    "answer", "backlog", "catch-up", "notices", "parser", "push", "refill", "today",
-];
+const PENDING: &[&str] = &["backlog", "catch-up", "notices", "parser", "push", "refill"];
 
 /// One rule set's file. The envelope is strict; the documents inside are not.
 #[derive(Deserialize)]
@@ -56,6 +58,8 @@ fn handlers() -> BTreeMap<&'static str, Handler> {
         ("server-docs", docs::case as Handler),
         ("schedule", schedule::occurrences as Handler),
         ("domain", domain::case as Handler),
+        ("today", today::case as Handler),
+        ("answer", answer::case as Handler),
     ])
 }
 
