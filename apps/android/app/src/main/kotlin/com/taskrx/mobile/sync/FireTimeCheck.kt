@@ -4,7 +4,6 @@ import android.os.SystemClock
 import android.util.Log
 import com.taskrx.core.domain.InstanceStatus
 import com.taskrx.core.domain.isMomentAnswered
-import com.taskrx.core.sync.ConvexFunctions
 import com.taskrx.mobile.auth.AuthGateway
 import com.taskrx.mobile.auth.AuthStatus
 import com.taskrx.mobile.data.RemindersRepository
@@ -16,7 +15,6 @@ import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.async
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.ensureActive
-import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.withTimeoutOrNull
 
@@ -58,17 +56,14 @@ internal val readAlone: MomentRead = { read -> read() }
  * device (ADR 0016). Unbounded by itself: [FireGate] bounds it and posts the dose when it is slow.
  *
  * It reads the one instant through `reminderInstances:list` (`since` = `until`, on the
- * `by_user_time` index) and keeps the rows of this reminder, found by its server id. The read
- * covers every reminder at that instant, so the doses due together can share it ([MomentRead]).
- * The times go as doubles: the client sends a Kotlin Long as an Int64, which a `v.number()`
- * argument refuses, and a refusal here would look exactly like "not answered".
+ * `by_user_time` index; [MomentReader], over HTTP rather than the app's Convex connection) and
+ * keeps the rows of this reminder, found by its server id. The read covers every reminder at that
+ * instant, so the doses due together can share it ([MomentRead]).
  */
-class FireTimeCheck(
+internal class FireTimeCheck(
     private val auth: AuthGateway,
-    private val ready: StateFlow<Boolean>,
-    private val gateway: ConvexGateway,
     private val reminders: RemindersRepository,
-    private val clock: () -> Long = SystemClock::elapsedRealtime,
+    private val read: suspend (scheduledTime: Long) -> List<ServerInstance>,
 ) {
     suspend fun check(reminderId: String, scheduledTime: Long): FireCheck = check(reminderId, scheduledTime, readAlone)
 
@@ -81,17 +76,6 @@ class FireTimeCheck(
         // A row this build cannot read is not an answer it can trust.
         if (statuses.size != rows.size) return FireCheck.Open
         return if (isMomentAnswered(statuses)) FireCheck.Answered else FireCheck.Open
-    }
-
-    /** Every row at the instant. Timed by stage, so a slow wake shows whether the login or the query took it. */
-    private suspend fun read(scheduledTime: Long): List<ServerInstance> {
-        val started = clock()
-        ready.first { it }
-        val loggedIn = clock()
-        val at = scheduledTime.toDouble()
-        val rows = ServerDocs.instances(gateway.query(ConvexFunctions.INSTANCES_LIST, mapOf("since" to at, "until" to at)))
-        Log.i(TAG, "read of $scheduledTime: logged in after ${loggedIn - started} ms, ${rows.size} rows after ${clock() - loggedIn} ms more")
-        return rows
     }
 }
 

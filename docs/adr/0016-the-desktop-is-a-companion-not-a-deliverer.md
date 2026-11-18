@@ -69,9 +69,14 @@ and no network, a timeout per dose would post the fifth twenty seconds late, whe
 before the check posted all five at once. The doses of one instant share one read of that
 instant and one timeout, counted from the first alarm; a dose that arrives after it still gets a
 quarter second to match its rows, so a read that lands after the first dose gave up answers a
-later dose only if it lands within that quarter second. This removes the stacking, not the
-timeout: on the phone a process woken from a long freeze took about 6 s to reach the server, so
-a dose answered elsewhere can still ring after an idle wake until that reconnect is shortened.
+later dose only if it lands within that quarter second. 
+
+The check does not use the app's Convex connection. Android cuts a background app's network five
+seconds after it leaves the foreground, so after an idle hour the connection is down and its
+token stale. When an alarm wakes the app, the connection's first reconnect can land before the
+firewall lifts, and it then waits out its retry backoff: about six seconds on the phone, past
+the bound. Instead the check takes Clerk's `convex` token (cached for the hour it lasts) and posts
+one query to the deployment's HTTP API, retrying every quarter second inside the bound.
 
 The check runs on the Medication Tier's path, which ADR 0003's device evidence covers. It
 needs its own harness cases: offline posts, answered elsewhere stays silent, and a slow

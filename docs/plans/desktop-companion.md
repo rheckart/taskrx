@@ -68,9 +68,13 @@ because two writers are unsafe until one Occurrence can only ever be one Instanc
         against the VPS (0.13.0, 2026-11-18 08:30): one dose `Open in 2587 ms`, but the one before
         it `TimedOut` on a wake from a frozen process (the connection took about 6 s back), and
         the second waited for the first: the bound was per dose. Now per moment, one shared read
-        (case 19). That removes the stacking, not the timeout: an idle wake still takes about 6 s
-        to reach the server, so expect `TimedOut` there until the `read of` and Clerk failure
-        lines show where the time goes. Still to see: those lines from a phone dose
+        (case 19). The 6 s was the Convex connection: Android 17 cuts a background app's network
+        5 s after it leaves the foreground (`dumpsys netpolicy`: `blocked=APP_BACKGROUND`), the
+        Clerk "local-error" bursts land within 100 ms of each cut, and on a wake the connection's
+        reconnect races the firewall and then backs off. The check now reads over HTTP with
+        retries (`MomentReader`). The API 34 emulator has no such firewall, so the harness cannot
+        reproduce the idle wake. Still to see: an idle-wake dose on the phone answered inside the
+        bound (`read of … attempt N`)
 - [ ] Desktop, `apps/desktop`:
   - [ ] Cargo workspace: `taskrx-desktop-core` (rules, Convex, screen state) and the Rune crate
   - [ ] Rules ported to Rust against the fixtures

@@ -45,17 +45,25 @@ class ClerkConvexAuthProvider : AuthProvider<String> {
 
     override fun extractIdToken(authResult: String): String = authResult
 
-    private suspend fun token(): Result<String> {
-        if (Clerk.session == null) return Result.failure(IllegalStateException("No active Clerk session"))
-        return when (val result = Clerk.auth.getToken(GetTokenOptions(template = CONVEX_JWT_TEMPLATE, skipCache = true))) {
-            is ClerkResult.Success -> Result.success(result.value)
-            is ClerkResult.Failure -> {
-                val error = result.throwable ?: IllegalStateException("Clerk token request failed")
-                // Otherwise silent: the library swallows it and the server just says "Not authenticated".
-                // All of it: a failure with no throwable says only what kind it was and what came back.
-                Log.w(TAG, "Clerk token request failed: ${result.errorType} ${result.code ?: "-"} ${result.error ?: "-"} ${result.throwable ?: ""}")
-                Result.failure(error)
-            }
+    private suspend fun token(): Result<String> = convexToken(skipCache = true)
+}
+
+/**
+ * The signed-in session's `convex` template token. [skipCache] false takes Clerk's cached one while
+ * it is valid (the template lives an hour); true always asks Clerk for a new one.
+ */
+internal suspend fun convexToken(skipCache: Boolean): Result<String> {
+    if (Clerk.session == null) return Result.failure(IllegalStateException("No active Clerk session"))
+    return when (val result = Clerk.auth.getToken(GetTokenOptions(template = CONVEX_JWT_TEMPLATE, skipCache = skipCache))) {
+        is ClerkResult.Success -> Result.success(result.value)
+        is ClerkResult.Failure -> {
+            val error = result.throwable ?: IllegalStateException("Clerk token request failed")
+            // Otherwise silent: the library swallows it and the server just says "Not authenticated".
+            // All of it: a failure with no throwable says only what kind it was and what came back.
+            // "local-error" with nothing else is Clerk's own stand-in for a request that failed on
+            // the device, usually a background app's network cut by Android.
+            Log.w(TAG, "Clerk token request failed: ${result.errorType} ${result.code ?: "-"} ${result.error ?: "-"} ${result.throwable ?: ""}")
+            Result.failure(error)
         }
     }
 }

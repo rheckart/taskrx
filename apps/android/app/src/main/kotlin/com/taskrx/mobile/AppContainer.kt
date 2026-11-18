@@ -9,6 +9,7 @@ import com.taskrx.mobile.batch.BatchAnswers
 import com.taskrx.mobile.catchup.CatchUpReader
 import com.taskrx.mobile.auth.ClerkAuthGateway
 import com.taskrx.mobile.auth.ConvexSession
+import com.taskrx.mobile.auth.convexToken
 import com.taskrx.mobile.auth.LocalOnlyAuth
 import com.taskrx.mobile.data.Clock
 import com.taskrx.mobile.data.IdGenerator
@@ -38,7 +39,9 @@ import com.taskrx.mobile.sync.PushWorker
 import com.taskrx.mobile.sync.RealConvexGateway
 import com.taskrx.mobile.sync.ReauthenticatingGateway
 import com.taskrx.mobile.sync.StuckChanges
+import com.taskrx.mobile.sync.ConvexHttp
 import com.taskrx.mobile.sync.FireTimeCheck
+import com.taskrx.mobile.sync.MomentReader
 import com.taskrx.mobile.sync.SyncCoordinator
 import com.taskrx.mobile.sweep.MissedSweepRunner
 import com.taskrx.mobile.sweep.RoomSweepStore
@@ -75,7 +78,13 @@ class AppContainer(
     scope: CoroutineScope = CoroutineScope(SupervisorJob() + Dispatchers.Default),
 ) {
     /** What talks to the server: the gateway, whether Convex holds a valid token, and the network. */
-    class Remote(val gateway: ConvexGateway, val ready: StateFlow<Boolean>, val connectivity: Connectivity)
+    class Remote(
+        val gateway: ConvexGateway,
+        val ready: StateFlow<Boolean>,
+        val connectivity: Connectivity,
+        /** The fire-time check's own read of an instant; none, no check (a test's remote). */
+        internal val moments: MomentReader? = null,
+    )
 
     val syncQueue = SyncQueueRepository(database.syncQueueDao(), clock)
     val reminders = RemindersRepository(database, syncQueue, clock, newId)
@@ -182,7 +191,7 @@ class AppContainer(
         }
 
     /** Asks the server, as a dose's alarm fires, whether it was answered elsewhere (ADR 0016). Null in a local-only build. */
-    val fireTimeCheck: FireTimeCheck? = remote?.let { FireTimeCheck(auth, it.ready, it.gateway, reminders) }
+    internal val fireTimeCheck: FireTimeCheck? = remote?.moments?.let { FireTimeCheck(auth, reminders, it::read) }
 
     init {
         session.follow(scope) { notifications.onForeground() }
@@ -203,7 +212,9 @@ class AppContainer(
 
             val auth = ClerkAuthGateway(context, clerkKey, scope)
             val convex = ConvexSession(convexUrl, auth, context.applicationContext, scope)
-            val remote = Remote(ReauthenticatingGateway(RealConvexGateway(convex.client), convex::reauthenticate), convex.ready, AndroidConnectivity(context))
+            val moments = MomentReader(query = ConvexHttp(convexUrl)::query, token = { fresh -> convexToken(skipCache = fresh).getOrThrow() })
+            val remote =
+                Remote(ReauthenticatingGateway(RealConvexGateway(convex.client), convex::reauthenticate), convex.ready, AndroidConnectivity(context), moments)
             // Desktop edits reach this phone's alarms with the app closed (ADR 0016). Only a
             // build with a server has anything to pull; the job does nothing while signed out.
             BackgroundPullWorker.schedule(WorkManager.getInstance(context))
