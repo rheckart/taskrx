@@ -5,7 +5,11 @@ use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
 
 use jiff::tz::TimeZone;
+use rune::TextEdit;
 use taskrx_desktop_core::domain::{InstanceStatus, ReminderKind};
+use taskrx_desktop_core::parser::{
+    PhraseReading, is_savable_draft, read_phrase, with_kind, with_name,
+};
 use taskrx_desktop_core::snooze::{snooze_minutes_or_default, snooze_until};
 use taskrx_desktop_core::sync::push::PushCall;
 use taskrx_desktop_core::timeline::TimelineRow;
@@ -13,6 +17,7 @@ use taskrx_desktop_service::connection::{Event, Table};
 use taskrx_desktop_service::data::{Data, Lists};
 use taskrx_desktop_service::screens::today::{Row, Today, TodayInput, today};
 use taskrx_desktop_service::writes::{Answer, Moment, Refusal, answer_call};
+use taskrx_desktop_service::writes::{NewReminder, reminder_create};
 
 use crate::host::Host;
 use crate::theme::Followed;
@@ -36,6 +41,32 @@ pub enum Screen {
     CatchUp,
     Backlog,
     Proposals,
+    Add,
+    Reminders,
+}
+
+/// The Add screen: the phrase typed, and once read, the draft with its editable fields.
+pub struct Adding {
+    pub phrase: TextEdit,
+    pub reading: Option<PhraseReading>,
+    pub name: TextEdit,
+    pub dosage: TextEdit,
+    pub instructions: TextEdit,
+    /// The ticket of the save in flight, so a second press cannot write a second Reminder.
+    pub saving: Option<u64>,
+}
+
+impl Default for Adding {
+    fn default() -> Self {
+        Adding {
+            phrase: TextEdit::new(""),
+            reading: None,
+            name: TextEdit::new(""),
+            dosage: TextEdit::new(""),
+            instructions: TextEdit::new(""),
+            saving: None,
+        }
+    }
 }
 
 /// Several writes sent as one answer: said once, when the last is back.
@@ -73,6 +104,9 @@ pub struct Ui {
     /// Clerk could not renew the sign-in for now.
     pub auth_problem: Option<String>,
     pub screen: Screen,
+    pub adding: Adding,
+    /// The Reminder whose Stop was pressed once: a second press stops it for good.
+    pub confirm_stop: Option<String>,
     pub kind: Option<ReminderKind>,
     pub batch: Option<Batch>,
     /// A write to send once the ticket's write has landed, under the same key.
@@ -112,6 +146,8 @@ impl Ui {
             problem: None,
             auth_problem: None,
             screen: Screen::Today,
+            adding: Adding::default(),
+            confirm_stop: None,
             kind: None,
             batch: None,
             follow_ups: HashMap::new(),
@@ -188,6 +224,14 @@ impl Ui {
             Event::AuthUnreachable(why) => self.auth_problem = Some(why),
             Event::Wrote { ticket, result } => {
                 let (_, what) = self.sending.remove(&ticket).unwrap_or_default();
+                if self.adding.saving == Some(ticket) {
+                    self.adding.saving = None;
+                    if result.is_ok() {
+                        // Saved: the form starts over, and the day shows the new Reminder.
+                        self.adding = Adding::default();
+                        self.screen = Screen::Today;
+                    }
+                }
                 if let Some((then, key, done)) = self.follow_ups.remove(&ticket) {
                     match result {
                         Ok(()) => {
@@ -441,6 +485,70 @@ impl Ui {
         }
         if let Some(ticket) = self.send_call(first, key.clone(), String::new()) {
             self.follow_ups.insert(ticket, (then, key, done));
+        }
+    }
+
+    /// Reads the typed phrase into a draft. The clock is read now: it anchors "every N hours".
+    pub fn read_phrase(&mut self) {
+        let phrase = self.adding.phrase.text.clone();
+        if phrase.trim().is_empty() {
+            return;
+        }
+        let reading = read_phrase(&phrase, self.now());
+        self.adding.name.replace_text(reading.draft.name.clone());
+        self.adding
+            .dosage
+            .replace_text(reading.draft.dosage.clone().unwrap_or_default());
+        self.adding
+            .instructions
+            .replace_text(reading.draft.instructions.clone().unwrap_or_default());
+        self.adding.reading = Some(reading);
+    }
+
+    /// The draft with the fields as typed: a changed name drops an RxNorm id with it.
+    pub fn draft(&self) -> Option<taskrx_desktop_core::parser::ReminderDraft> {
+        let reading = self.adding.reading.as_ref()?;
+        let mut draft = reading.draft.clone();
+        if self.adding.name.text != draft.name {
+            draft = with_name(&draft, &self.adding.name.text);
+        }
+        let text = |e: &TextEdit| Some(e.text.clone()).filter(|t| !t.trim().is_empty());
+        draft.dosage = text(&self.adding.dosage);
+        draft.instructions = text(&self.adding.instructions);
+        Some(draft)
+    }
+
+    pub fn set_kind(&mut self, kind: ReminderKind) {
+        if let Some(reading) = self.adding.reading.as_mut() {
+            reading.draft = with_kind(&reading.draft, kind);
+            self.adding
+                .dosage
+                .replace_text(reading.draft.dosage.clone().unwrap_or_default());
+        }
+    }
+
+    pub fn can_save(&self) -> bool {
+        self.adding.saving.is_none() && self.draft().is_some_and(|d| is_savable_draft(&d))
+    }
+
+    pub fn save_new(&mut self) {
+        if !self.can_save() {
+            return;
+        }
+        let (Some(draft), Some(user)) = (self.draft(), self.user_id()) else {
+            self.say("Not signed in", true);
+            return;
+        };
+        let new = NewReminder::from_draft(&draft);
+        let done = match new.kind {
+            ReminderKind::Medication => format!("{} added", new.name),
+            ReminderKind::Task => "Task added".to_string(),
+        };
+        match reminder_create(&user, &new, self.now()) {
+            Ok((_, call)) => {
+                self.adding.saving = self.send_call(call, "adding".into(), done);
+            }
+            Err(refusal) => self.refuse(&refusal),
         }
     }
 

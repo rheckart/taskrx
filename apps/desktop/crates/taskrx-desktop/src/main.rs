@@ -64,6 +64,18 @@ fn scene_notices(s: &mut Ui) {
     s.screen = crate::ui::Screen::Proposals;
 }
 
+fn scene_add(s: &mut Ui) {
+    scene_day(s);
+    s.screen = crate::ui::Screen::Add;
+    s.adding.phrase = rune::TextEdit::new("Amoxicillin 500mg three times a day for 10 days");
+    s.read_phrase();
+}
+
+fn scene_reminders(s: &mut Ui) {
+    scene_day(s);
+    s.screen = crate::ui::Screen::Reminders;
+}
+
 fn scene_signed_out(s: &mut Ui) {
     s.phase = Phase::SignedOut { problem: None };
 }
@@ -131,6 +143,8 @@ fn main() {
             ("catch-up", scene_catch_up),
             ("backlog", scene_backlog),
             ("notices", scene_notices),
+            ("add", scene_add),
+            ("reminders", scene_reminders),
             ("signed-out", scene_signed_out),
             ("offline", scene_offline),
         ],

@@ -27,7 +27,7 @@ cargo run -p taskrx-desktop -- --snap day.png --scene day    # headless, made-up
 cargo run -p taskrx-desktop -- --list-scenes
 ```
 
-The scenes (`day`, `all`, `tasks`, `catch-up`, `backlog`, `notices`, `signed-out`, `offline`) draw `crates/taskrx-desktop/scenes/day.json`,
+The scenes (`day`, `all`, `tasks`, `catch-up`, `backlog`, `notices`, `add`, `reminders`, `signed-out`, `offline`) draw `crates/taskrx-desktop/scenes/day.json`,
 which is made up, with no network, keyring or sign-in. `--tree` and `--script` drive them as
 Rune's README describes. `TASKRX_DEPLOYMENT_URL` points the window at another deployment.
 

@@ -109,7 +109,11 @@ because two writers are unsafe until one Occurrence can only ever be one Instanc
         Notices (Proposals) too: each open notice with the date it names and the move its rules
         propose, applied as an override then the notice settled, the second write only once the
         first lands; New task and Dismiss as on the phone. Applying by hand to a task with no
-        rule, and choosing another moment, wait. Add and edit is to come)
+        rule, and choosing another moment, wait. Add: a phrase read by the ported parser into a
+        draft whose kind, name, dose and instructions can be changed before saving; when it
+        happens is changed by rephrasing. Reminders: each active one with its schedule, paused
+        or resumed, or stopped after a second press. Editing a schedule field by field, and a
+        pause with an end date, wait)
   - [x] Omarchy theme (the palette from `colors.toml`, re-read when it changes; `hyprctl`
         rounding)
   - [ ] PKGBUILD and `.desktop` entry. `cargo test` becomes a gate in `CLAUDE.md`

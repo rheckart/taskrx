@@ -10,10 +10,12 @@
 
 use serde_json::{Map, Value, json};
 use taskrx_desktop_core::domain::{
-    InstanceStatus, NoticeResolution, NoticeRule, OccurrenceOverride, PauseWindow, Reminder,
-    ReminderKind, ScheduleTimes, allows_instance_transition, instance_id_for, notice_rules_to_json,
-    overrides_to_json, pauses_to_json,
+    InstanceStatus, NoticeResolution, NoticeRule, OccurrenceOverride, PauseWindow, Priority,
+    Reminder, ReminderAction, ReminderKind, ScheduleTimes, add_pause, allows_instance_transition,
+    instance_id_for, notice_rules_to_json, overrides_to_json, pauses_to_json, reminder_actions,
+    reminder_phase, resume_pause,
 };
+use taskrx_desktop_core::parser::ReminderDraft;
 use taskrx_desktop_core::sync::push::{
     PushCall, PushRejected, instance_create_call, instance_update_call, notice_update_call,
     reminder_create_call, reminder_update_call,
@@ -241,6 +243,51 @@ pub struct NewReminder {
     pub dosage: Option<String>,
     pub instructions: Option<String>,
     pub schedule: ScheduleTimes,
+    pub priority: Option<Priority>,
+    pub rxcui: Option<String>,
+    pub pills_remaining: Option<f64>,
+    pub pills_per_dose: Option<f64>,
+    pub refill_reminder_days: Option<i32>,
+}
+
+impl NewReminder {
+    /// What the phrase parser read, trimmed at the boundary as the phone's Add screen does.
+    pub fn from_draft(draft: &ReminderDraft) -> NewReminder {
+        let trimmed = |s: &Option<String>| {
+            s.as_deref()
+                .map(str::trim)
+                .filter(|t| !t.is_empty())
+                .map(str::to_string)
+        };
+        NewReminder {
+            kind: draft.kind,
+            name: draft.name.trim().to_string(),
+            dosage: trimmed(&draft.dosage),
+            instructions: trimmed(&draft.instructions),
+            schedule: draft.schedule.clone(),
+            priority: Some(draft.priority),
+            rxcui: draft.rxcui.clone(),
+            pills_remaining: draft.pills_remaining,
+            pills_per_dose: draft.pills_per_dose,
+            refill_reminder_days: draft.refill_reminder_days,
+        }
+    }
+
+    /// A one-off task, as a notice makes one.
+    pub fn task(name: String, instructions: Option<String>, at: i64) -> NewReminder {
+        NewReminder {
+            kind: ReminderKind::Task,
+            name,
+            dosage: None,
+            instructions,
+            schedule: ScheduleTimes::Once { at },
+            priority: None,
+            rxcui: None,
+            pills_remaining: None,
+            pills_per_dose: None,
+            refill_reminder_days: None,
+        }
+    }
 }
 
 /// `reminders.create` under a new random local id, which is returned with the call.
@@ -255,7 +302,7 @@ pub fn reminder_create(
     p.insert("userId".into(), json!(user_id));
     p.insert("kind".into(), json!(new.kind.wire()));
     p.insert("name".into(), json!(new.name));
-    p.insert("rxcui".into(), Value::Null);
+    put_opt(&mut p, "rxcui", new.rxcui.clone().map(Value::from));
     put_opt(&mut p, "dosage", new.dosage.clone().map(Value::from));
     put_opt(
         &mut p,
@@ -263,23 +310,52 @@ pub fn reminder_create(
         new.instructions.clone().map(Value::from),
     );
     p.insert("schedule".into(), schedule_to_server(&new.schedule));
-    for key in [
-        "priority",
-        "tags",
+    put_opt(&mut p, "priority", new.priority.map(|x| json!(x.wire())));
+    put_opt(
+        &mut p,
         "pillsRemaining",
-        "pillsPerDose",
+        new.pills_remaining.map(Value::from),
+    );
+    put_opt(&mut p, "pillsPerDose", new.pills_per_dose.map(Value::from));
+    put_opt(
+        &mut p,
         "refillReminderDays",
-        "caregiverIds",
-        "pauses",
-        "overrides",
-        "noticeRules",
-    ] {
+        new.refill_reminder_days.map(Value::from),
+    );
+    for key in ["tags", "caregiverIds", "pauses", "overrides", "noticeRules"] {
         p.insert(key.into(), Value::Null);
     }
     p.insert("active".into(), json!(true));
     p.insert("createdAt".into(), json!(now));
     p.insert("updatedAt".into(), json!(now));
     Ok((id, reminder_create_call(&Value::Object(p))?))
+}
+
+/// The edit Pause, Resume or Stop makes. A pause from the desktop runs until resumed.
+pub fn reminder_action_patch(
+    reminder: &Reminder,
+    action: ReminderAction,
+    now: i64,
+) -> Result<ReminderPatch, Refusal> {
+    if !reminder_actions(reminder, reminder_phase(reminder, now)).contains(&action) {
+        return Err(Refusal::NotAllowed);
+    }
+    Ok(match action {
+        ReminderAction::Pause => ReminderPatch {
+            pauses: Some(
+                add_pause(&reminder.pauses, now, None, now).map_err(|_| Refusal::NotAllowed)?,
+            ),
+            ..ReminderPatch::default()
+        },
+        ReminderAction::Resume => ReminderPatch {
+            pauses: Some(resume_pause(&reminder.pauses, now)),
+            ..ReminderPatch::default()
+        },
+        ReminderAction::Stop => ReminderPatch {
+            active: Some(false),
+            ..ReminderPatch::default()
+        },
+    })
 }
 
 /// `notices.update`: the decision the person made about a notice.
@@ -460,13 +536,11 @@ mod tests {
 
     #[test]
     fn a_new_reminder_gets_a_fresh_id_each_time() {
-        let new = NewReminder {
-            kind: ReminderKind::Task,
-            name: "Pick up the prescription".into(),
-            dosage: None,
-            instructions: Some("Ready Thursday".into()),
-            schedule: ScheduleTimes::Once { at: AT },
-        };
+        let new = NewReminder::task(
+            "Pick up the prescription".into(),
+            Some("Ready Thursday".into()),
+            AT,
+        );
         let (a, call) = reminder_create("user_1", &new, AT).unwrap();
         let (b, _) = reminder_create("user_1", &new, AT).unwrap();
         assert_ne!(a, b);
@@ -474,6 +548,39 @@ mod tests {
         assert_eq!(arg(&call, "localId"), Some(&Wire::Text(a)));
         assert_eq!(arg(&call, "kind"), Some(&Wire::Text("task".into())));
         assert_eq!(arg(&call, "active"), Some(&Wire::Bool(true)));
+    }
+
+    #[test]
+    fn pause_resume_and_stop_are_offered_by_the_phase() {
+        let d = data();
+        let r = d.reminder("r1").unwrap();
+        let paused = reminder_action_patch(r, ReminderAction::Pause, AT).unwrap();
+        assert_eq!(
+            paused.pauses,
+            Some(vec![PauseWindow {
+                from: AT,
+                until: None
+            }])
+        );
+        // Not paused, so nothing to resume.
+        assert_eq!(
+            reminder_action_patch(r, ReminderAction::Resume, AT),
+            Err(Refusal::NotAllowed)
+        );
+        let stop = reminder_action_patch(r, ReminderAction::Stop, AT).unwrap();
+        assert_eq!(stop.active, Some(false));
+        let call = reminder_patch_call(&d, "r1", &stop, AT).unwrap();
+        assert_eq!(arg(&call, "active"), Some(&Wire::Bool(false)));
+    }
+
+    #[test]
+    fn a_read_phrase_becomes_a_new_reminder() {
+        let reading = taskrx_desktop_core::parser::read_phrase("Lisinopril 10mg daily at 8am", AT);
+        let new = NewReminder::from_draft(&reading.draft);
+        assert_eq!(new.kind, ReminderKind::Medication);
+        let (_, call) = reminder_create("user_1", &new, AT).unwrap();
+        assert_eq!(arg(&call, "name"), Some(&Wire::Text(new.name.clone())));
+        assert!(arg(&call, "schedule").is_some());
     }
 
     #[test]

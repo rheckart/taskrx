@@ -1,19 +1,23 @@
 //! What the window draws. It reads [`Ui`] and the service's screen state and forwards presses;
 //! it decides nothing about the data.
 
+use rune::text_input;
 use rune::tok::{space, type_};
 use rune::{Cx, El, ScrollSpec, Tx, col, el, row, text};
 use taskrx_desktop_core::domain::{InstanceStatus, ReminderKind};
-use taskrx_desktop_core::domain::{MoveRefusal, NoticeResolution, ScheduleTimes};
+use taskrx_desktop_core::domain::{
+    MoveRefusal, NoticeResolution, ReminderAction, ReminderPhase, reminder_actions, reminder_phase,
+};
 use taskrx_desktop_core::notices::{ProposalRefusal, ReadDate, UnreadReason};
 use taskrx_desktop_core::timeline::TimelineRow;
+use taskrx_desktop_service::data::Data;
 use taskrx_desktop_service::screens::backlog::{BacklogEntry, backlog};
 use taskrx_desktop_service::screens::catch_up::{CatchUpDay, catch_up, total};
 use taskrx_desktop_service::screens::proposals::{NoticeView, apply_patch, proposals};
 use taskrx_desktop_service::screens::today::{AsNeeded, Row, Today};
 use taskrx_desktop_service::writes::Answer;
 use taskrx_desktop_service::writes::{
-    NewReminder, notice_resolve_call, reminder_create, reminder_patch_call,
+    NewReminder, notice_resolve_call, reminder_action_patch, reminder_create, reminder_patch_call,
 };
 
 use crate::theme::Palette;
@@ -155,6 +159,8 @@ fn signed_in(s: &Ui, p: Palette) -> El {
         Screen::CatchUp => (None, catch_up_view(s, p, &late)),
         Screen::Backlog => (None, backlog_view(s, p, &loose)),
         Screen::Proposals => (None, proposals_view(s, p, &notices)),
+        Screen::Add => (None, add_view(s, p)),
+        Screen::Reminders => (None, reminders_view(s, p, data)),
     };
     // A list that failed after the day was drawn: what is shown may be out of date.
     if let Some(problem) = &s.problem {
@@ -241,6 +247,12 @@ fn nav(s: &Ui, p: Palette, late: usize, loose: usize, open: usize) -> El {
             counted("Notices", open),
             Screen::Proposals,
         ))
+        .child(screen(
+            "screen-reminders",
+            "Reminders".to_string(),
+            Screen::Reminders,
+        ))
+        .child(screen("screen-add", "Add".to_string(), Screen::Add))
         .child(el().grow(1.0));
     if let Some(line) = status {
         top = top.child(
@@ -663,13 +675,7 @@ fn notice_card(s: &Ui, p: Palette, v: &NoticeView) -> El {
             } else {
                 title.trim().to_string()
             };
-            let new = NewReminder {
-                kind: ReminderKind::Task,
-                name: name.clone(),
-                dosage: None,
-                instructions: sentence.clone(),
-                schedule: ScheduleTimes::Once { at: new_at },
-            };
+            let new = NewReminder::task(name.clone(), sentence.clone(), new_at);
             let calls = reminder_create(&user, &new, now).and_then(|(_, create)| {
                 Ok((
                     create,
@@ -698,6 +704,261 @@ fn notice_card(s: &Ui, p: Palette, v: &NoticeView) -> El {
         }),
     );
     card.child(actions)
+}
+
+/// A labelled one-line text field bound to `field`.
+fn field(
+    p: Palette,
+    key: &str,
+    label: &str,
+    edit: &rune::TextEdit,
+    bind: fn(&mut Ui) -> &mut rune::TextEdit,
+) -> El {
+    col()
+        .key(key.to_string())
+        .w_full()
+        .gap(4.0)
+        .child(
+            text(label.to_string())
+                .font(type_::SECTION)
+                .color(p.text_secondary),
+        )
+        .child(
+            el().key("box")
+                .w_full()
+                .h(32.0)
+                .px(space::S2)
+                .radius(p.radius.min(8.0))
+                .fill(p.bg)
+                .border(1.0, p.card_border)
+                .center_y()
+                .child(
+                    text_input(edit, type_::BODY)
+                        .key("input")
+                        .single_line()
+                        .color(p.text)
+                        .on_edit(bind),
+                ),
+        )
+}
+
+fn add_view(s: &Ui, p: Palette) -> El {
+    let a = &s.adding;
+    let mut c = col()
+        .key("add")
+        .w_full()
+        .gap(space::S3)
+        .child(
+            text("Type it the way you'd say it: \u{201c}Lisinopril 10mg every morning at 8\u{201d}, \u{201c}water the plants every Tuesday\u{201d}.")
+                .font(type_::LABEL)
+                .color(p.text_secondary)
+                .wrap(),
+        )
+        .child(
+            row()
+                .key("phrase-row")
+                .w_full()
+                .gap(space::S2)
+                .center_y()
+                .child(
+                    el().key("phrase-box")
+                        .grow(1.0)
+                        .h(36.0)
+                        .px(space::S2)
+                        .radius(p.radius.min(8.0))
+                        .fill(p.card)
+                        .border(1.0, p.accent)
+                        .center_y()
+                        .child(
+                            text_input(&a.phrase, type_::BODY)
+                                .key("phrase")
+                                .single_line()
+                                .color(p.text)
+                                .placeholder("What to remember, and when", p.text_secondary)
+                                .on_edit(|s: &mut Ui| &mut s.adding.phrase)
+                                .on_submit(|s: &mut Ui, _| s.read_phrase()),
+                        ),
+                )
+                .child(button(p, "read", "Read it", true).on_press(|s: &mut Ui| s.read_phrase())),
+        );
+    let Some(reading) = &a.reading else {
+        return c;
+    };
+    let Some(draft) = s.draft() else { return c };
+    if !reading.understood || !reading.reasons.is_empty() {
+        let line = if reading.understood {
+            reading.reasons.join(" ")
+        } else {
+            format!("I couldn't read all of that. {}", reading.reasons.join(" "))
+        };
+        c = c.child(
+            text(line)
+                .key("reasons")
+                .font(type_::LABEL)
+                .color(p.warning)
+                .wrap(),
+        );
+    }
+    let kind = |key: &str, label: &str, k: ReminderKind| {
+        button(p, key, label, draft.kind == k)
+            .role("tab")
+            .on_press(move |s: &mut Ui| s.set_kind(k))
+    };
+    c = c
+        .child(
+            row()
+                .key("kind")
+                .gap(space::S2)
+                .child(kind(
+                    "kind-medication",
+                    "Medication",
+                    ReminderKind::Medication,
+                ))
+                .child(kind("kind-task", "Task", ReminderKind::Task)),
+        )
+        .child(field(p, "name-field", "Name", &a.name, |s| {
+            &mut s.adding.name
+        }));
+    if draft.kind == ReminderKind::Medication {
+        c = c.child(field(p, "dosage-field", "Dose", &a.dosage, |s| {
+            &mut s.adding.dosage
+        }));
+    }
+    c = c
+        .child(field(
+            p,
+            "instructions-field",
+            "Instructions",
+            &a.instructions,
+            |s| &mut s.adding.instructions,
+        ))
+        .child(
+            col()
+                .key("when")
+                .gap(4.0)
+                .child(text("When").font(type_::SECTION).color(p.text_secondary))
+                .child(
+                    text(words::schedule(&draft.schedule, &s.zone))
+                        .font(type_::BODY)
+                        .color(p.text),
+                )
+                .child(
+                    text("To change when, change the phrase and read it again.")
+                        .font(type_::LABEL)
+                        .color(p.text_secondary),
+                ),
+        );
+    let mut actions = row()
+        .key("save-row")
+        .w_full()
+        .gap(space::S2)
+        .child(el().grow(1.0));
+    if !s.connected {
+        actions = actions.child(text("Not connected").font(type_::LABEL).color(p.warning));
+    } else if a.saving.is_some() {
+        actions = actions.child(saving(p));
+    } else if s.can_save() {
+        actions =
+            actions.child(button(p, "save", "Save", true).on_press(|s: &mut Ui| s.save_new()));
+    } else {
+        actions = actions.child(
+            text("It needs a name and a time it can keep")
+                .font(type_::LABEL)
+                .color(p.text_secondary),
+        );
+    }
+    c.child(actions)
+}
+
+fn reminders_view(s: &Ui, p: Palette, data: &Data) -> El {
+    let now = s.now();
+    let mut list: Vec<_> = data.reminders.iter().filter(|r| r.active).collect();
+    list.sort_by_cached_key(|r| (r.kind == ReminderKind::Task, r.name.to_lowercase()));
+    let mut c = col().key("reminders").w_full().gap(space::S2);
+    if list.is_empty() {
+        return c.child(
+            text("No reminders yet. Add one.")
+                .key("empty")
+                .font(type_::BODY)
+                .color(p.text_secondary),
+        );
+    }
+    for r in list {
+        let key = format!("reminder-{}", r.id);
+        let phase = reminder_phase(r, now);
+        let (phase_word, phase_color) = match phase {
+            ReminderPhase::Paused(_) => ("Paused", p.warning),
+            _ => ("", p.text_secondary),
+        };
+        let mut info = col().key("info").grow(1.0).min_w(0.0).gap(2.0).child(
+            text(match &r.dosage {
+                Some(d) => format!("{} · {d}", r.name),
+                None => r.name.clone(),
+            })
+            .font(type_::TITLE)
+            .color(p.text)
+            .truncate(),
+        );
+        info = info.child(
+            text(words::schedule(&r.schedule, &s.zone))
+                .font(type_::LABEL)
+                .color(p.text_secondary)
+                .truncate(),
+        );
+        let mut line = card_row(p, &key, false).child(info).child(
+            text(phase_word)
+                .key("phase")
+                .font(type_::LABEL)
+                .color(phase_color),
+        );
+        if s.connected {
+            if s.in_flight(&key) {
+                line = line.child(saving(p));
+            } else {
+                for action in reminder_actions(r, phase) {
+                    let confirming = s.confirm_stop.as_deref() == Some(r.id.as_str());
+                    let label = match action {
+                        ReminderAction::Pause => "Pause",
+                        ReminderAction::Resume => "Resume",
+                        ReminderAction::Stop if confirming => "Stop for good?",
+                        ReminderAction::Stop => "Stop",
+                    };
+                    let (id, name, key) = (r.id.clone(), r.name.clone(), key.clone());
+                    line = line.child(button(p, action.wire(), label, confirming).on_press(
+                        move |s: &mut Ui| {
+                            if action == ReminderAction::Stop
+                                && s.confirm_stop.as_deref() != Some(id.as_str())
+                            {
+                                s.confirm_stop = Some(id.clone());
+                                return;
+                            }
+                            s.confirm_stop = None;
+                            let now = s.now();
+                            let Some(data) = s.data.as_ref() else { return };
+                            let Some(reminder) = data.reminder(&id) else {
+                                return;
+                            };
+                            let call = reminder_action_patch(reminder, action, now)
+                                .and_then(|patch| reminder_patch_call(data, &id, &patch, now));
+                            let done = match action {
+                                ReminderAction::Pause => format!("{name} paused"),
+                                ReminderAction::Resume => format!("{name} resumed"),
+                                ReminderAction::Stop => format!("{name} stopped"),
+                            };
+                            match call {
+                                Ok(call) => {
+                                    let _ = s.send_call(call, key.clone(), done);
+                                }
+                                Err(refusal) => s.refuse(&refusal),
+                            }
+                        },
+                    ));
+                }
+            }
+        }
+        c = c.child(line);
+    }
+    c
 }
 
 fn card_row(p: Palette, key: &str, highlighted: bool) -> El {
