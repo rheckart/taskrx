@@ -74,8 +74,13 @@ because two writers are unsafe until one Occurrence can only ever be one Instanc
         Clerk "local-error" bursts land within 100 ms of each cut, and on a wake the connection's
         reconnect races the firewall and then backs off. The check now reads over HTTP with
         retries (`MomentReader`). The API 34 emulator has no such firewall, so the harness cannot
-        reproduce the idle wake. Still to see: an idle-wake dose on the phone answered inside the
-        bound (`read of … attempt N`)
+        reproduce the idle wake. On 2026-11-18 at 21:00, after the app had sat frozen for over an
+        hour, Android unfroze it at 21:00:00.064 and the two doses posted at .497 and .538
+        (`dumpsys notification`), 0.43 s after the wake and 41 ms apart: one shared read, well
+        inside the bound. The app's own lines were lost (adb over Wi-Fi had dropped, and the
+        256 KiB buffer rotated), so whether the read answered or failed fast is not recorded;
+        a failure retries until the bound, so a post at 0.43 s points to a read that answered.
+        Still to see with its own lines: `read of … attempt N`
 - [ ] Desktop, `apps/desktop`:
   - [x] Cargo workspace: `taskrx-desktop-core` (the rules, pure), `taskrx-desktop-service`
         (sign-in, keyring, Convex, screen state) and `taskrx-desktop` (the Rune window, pinned
