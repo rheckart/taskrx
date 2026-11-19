@@ -109,8 +109,11 @@ because two writers are unsafe until one Occurrence can only ever be one Instanc
   - [ ] Today, Tasks, add and edit, Backlog, Catch up, Proposals (Today and Tasks drawn and
         answering, checked headless on made-up data: an answer is the status call, or one create
         under the moment's id; past-grace rows read Missed and are never recorded; offline rows
-        only show. Against the server on 2026-11-18 the day matched the phone's. An answer from
-        the desktop is still to be watched reaching the phone. Catch up and Backlog are drawn too,
+        only show. Against the server on 2026-11-18 the day matched the phone's. On 2026-11-19,
+        from the installed package, a Skip on an 8:30 dose with no row (one create under the
+        moment's id) reached the phone, which showed it Skipped; a Take on the phone reached the
+        desktop as soon as the phone sent it (the phone's first send after a wake fails "Not
+        authenticated" and goes 5 s later). The other answers and screens are still headless only. Catch up and Backlog are drawn too,
         headless: Catch up lists what the sweep would mark, answered a row, a day or all at once
         and stamped at the moment due, with one Undo for the last answer; Backlog's Done records
         an Instance at the act. Moving a Backlog item to the timeline waits for the edit screen.
