@@ -420,7 +420,7 @@ fn late_row(s: &Ui, p: Palette, r: &TimelineRow) -> El {
         return line;
     }
     if s.in_flight(&key) {
-        return line.child(saving(p));
+        return line.child(saving(p, s.waiting_word(&key)));
     }
     if s.batch.is_none() {
         let (take, skip) = (vec![r.clone()], vec![r.clone()]);
@@ -471,7 +471,7 @@ fn backlog_view(s: &Ui, p: Palette, entries: &[BacklogEntry]) -> El {
             );
         if s.connected {
             if s.in_flight(&key) {
-                line = line.child(saving(p));
+                line = line.child(saving(p, s.waiting_word(&key)));
             } else {
                 let (id, name) = (r.id.clone(), r.name.clone());
                 line = line.child(
@@ -649,7 +649,7 @@ fn notice_card(s: &Ui, p: Palette, v: &NoticeView) -> El {
         return card;
     }
     if s.in_flight(&key) {
-        return card.child(actions.child(saving(p)));
+        return card.child(actions.child(saving(p, s.waiting_word(&key))));
     }
     let new_at = v.new_task_at;
     let (notice_id, title, sentence) = (n.id.clone(), n.title.clone(), n.sentence.clone());
@@ -856,7 +856,7 @@ fn add_view(s: &Ui, p: Palette) -> El {
     if !s.connected {
         actions = actions.child(text("Not connected").font(type_::LABEL).color(p.warning));
     } else if a.saving.is_some() {
-        actions = actions.child(saving(p));
+        actions = actions.child(saving(p, s.waiting_word("adding")));
     } else if s.can_save() {
         actions =
             actions.child(button(p, "save", "Save", true).on_press(|s: &mut Ui| s.save_new()));
@@ -913,7 +913,7 @@ fn reminders_view(s: &Ui, p: Palette, data: &Data) -> El {
         );
         if s.connected {
             if s.in_flight(&key) {
-                line = line.child(saving(p));
+                line = line.child(saving(p, s.waiting_word(&key)));
             } else {
                 for action in reminder_actions(r, phase) {
                     let confirming = s.confirm_stop.as_deref() == Some(r.id.as_str());
@@ -993,8 +993,8 @@ fn name_column(p: Palette, name: &str, dosage: Option<&str>) -> El {
     c
 }
 
-fn saving(p: Palette) -> El {
-    text("Saving…")
+fn saving(p: Palette, word: &'static str) -> El {
+    text(word)
         .key("saving")
         .font(type_::LABEL)
         .color(p.text_secondary)
@@ -1183,12 +1183,7 @@ fn row_view(s: &Ui, p: Palette, r: &Row, task: bool) -> El {
     }
     // A row whose answer is on its way offers nothing until the server has it.
     if s.in_flight(&key) {
-        return line.child(
-            text("Saving…")
-                .key("saving")
-                .font(type_::LABEL)
-                .color(p.text_secondary),
-        );
+        return line.child(saving(p, s.waiting_word(&key)));
     }
     if r.is_answerable() {
         let now_row = r.clone();
@@ -1288,13 +1283,9 @@ fn as_needed_row(s: &Ui, p: Palette, a: &AsNeeded) -> El {
     if !s.connected {
         return r;
     }
-    if s.in_flight(&format!("as-needed-{}", a.reminder_id)) {
-        return r.child(
-            text("Saving…")
-                .key("saving")
-                .font(type_::LABEL)
-                .color(p.text_secondary),
-        );
+    let as_needed_key = format!("as-needed-{}", a.reminder_id);
+    if s.in_flight(&as_needed_key) {
+        return r.child(saving(p, s.waiting_word(&as_needed_key)));
     }
     // Offered while waiting too: the wait is advice, and a dose already taken is recorded.
     r.child(

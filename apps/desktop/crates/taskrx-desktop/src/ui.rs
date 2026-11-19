@@ -109,6 +109,8 @@ pub struct Ui {
     pub confirm_stop: Option<String>,
     pub kind: Option<ReminderKind>,
     pub batch: Option<Batch>,
+    /// Writes that have waited long enough to say so.
+    pub slow: HashSet<u64>,
     /// A write to send once the ticket's write has landed, under the same key.
     pub follow_ups: HashMap<u64, (PushCall, String, String)>,
     pub bulk_undo: Option<BulkUndo>,
@@ -150,6 +152,7 @@ impl Ui {
             confirm_stop: None,
             kind: None,
             batch: None,
+            slow: HashSet::new(),
             follow_ups: HashMap::new(),
             bulk_undo: None,
             day_offset: 0,
@@ -166,6 +169,19 @@ impl Ui {
 
     pub fn in_flight(&self, key: &str) -> bool {
         self.sending.values().any(|(k, _)| k == key)
+    }
+
+    /// What a row waiting on a write says: "Saving…", or "Still sending…" once it is slow.
+    pub fn waiting_word(&self, key: &str) -> &'static str {
+        let slow = self
+            .sending
+            .iter()
+            .any(|(t, (k, _))| k == key && self.slow.contains(t));
+        if slow {
+            "Still sending…"
+        } else {
+            "Saving…"
+        }
     }
 
     pub fn now(&self) -> i64 {
@@ -222,8 +238,12 @@ impl Ui {
             }
             Event::SignedOut => self.signed_out(None),
             Event::AuthUnreachable(why) => self.auth_problem = Some(why),
+            Event::Slow { ticket } => {
+                self.slow.insert(ticket);
+            }
             Event::Wrote { ticket, result } => {
                 let (_, what) = self.sending.remove(&ticket).unwrap_or_default();
+                self.slow.remove(&ticket);
                 if self.adding.saving == Some(ticket) {
                     self.adding.saving = None;
                     if result.is_ok() {
@@ -289,6 +309,7 @@ impl Ui {
         self.connected = false;
         self.sending.clear();
         self.batch = None;
+        self.slow.clear();
         self.follow_ups.clear();
         self.bulk_undo = None;
         self.screen = Screen::Today;
@@ -678,6 +699,21 @@ mod tests {
         assert!(ui.follow_ups.is_empty());
         assert!(!ui.in_flight("notice-n1"));
         assert!(ui.toast.as_ref().unwrap().failed);
+    }
+
+    #[test]
+    fn a_slow_write_keeps_its_row_waiting() {
+        let mut ui = ui();
+        ui.sending.insert(9, ("row-r1-1".into(), "Taken".into()));
+        ui.on_event(Event::Slow { ticket: 9 });
+        assert!(ui.in_flight("row-r1-1"));
+        assert_eq!(ui.waiting_word("row-r1-1"), "Still sending…");
+        ui.on_event(Event::Wrote {
+            ticket: 9,
+            result: Ok(()),
+        });
+        assert!(!ui.in_flight("row-r1-1"));
+        assert!(ui.slow.is_empty());
     }
 
     #[test]

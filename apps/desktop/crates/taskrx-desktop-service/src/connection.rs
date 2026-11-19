@@ -26,8 +26,9 @@ use crate::auth::session::REFRESH_MARGIN_MS;
 use crate::auth::{Session, SessionError};
 use crate::config::Config;
 
-/// How long a write waits for the server before it is reported as not sent. The client keeps
-/// it queued, so it may still land after this; the subscription then shows it.
+/// How long a write waits before it is reported as slow. It is never given up on: the client
+/// keeps it queued and it may still land, so the row stays waiting for it rather than offering
+/// a second press that could record a second dose or a second Reminder.
 pub const WRITE_WAIT: Duration = Duration::from_secs(15);
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -68,6 +69,8 @@ pub enum Event {
     SignedOut,
     /// Sign-in could not be renewed for now.
     AuthUnreachable(String),
+    /// A write has waited [`WRITE_WAIT`] and is still waiting.
+    Slow { ticket: u64 },
     /// A write finished. `ticket` is the one [`Link::write`] returned.
     Wrote {
         ticket: u64,
@@ -240,15 +243,18 @@ async fn run(
                 Some(Command::Write { ticket, call }) => {
                     let (mut client, emit) = (client.clone(), Arc::clone(&emit));
                     tokio::spawn(async move {
-                        let sent = tokio::time::timeout(
-                            WRITE_WAIT,
-                            client.mutation(call.function, args(&call)),
-                        )
-                        .await;
+                        let sending = client.mutation(call.function, args(&call));
+                        tokio::pin!(sending);
+                        let sent = tokio::select! {
+                            sent = &mut sending => sent,
+                            () = tokio::time::sleep(WRITE_WAIT) => {
+                                emit(Event::Slow { ticket });
+                                sending.await
+                            }
+                        };
                         let result = match sent {
-                            Err(_) => Err("Timed out waiting for the server".to_string()),
-                            Ok(Err(e)) => Err(e.to_string()),
-                            Ok(Ok(r)) => outcome(r).map(|_| ()),
+                            Err(e) => Err(e.to_string()),
+                            Ok(r) => outcome(r).map(|_| ()),
                         };
                         emit(Event::Wrote { ticket, result });
                     });

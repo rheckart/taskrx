@@ -7,7 +7,7 @@
 
 use jiff::tz::TimeZone;
 use taskrx_desktop_core::catchup::{CATCH_UP_WINDOW_MS, catch_up_days, needs_catch_up};
-use taskrx_desktop_core::domain::InstanceStatus;
+use taskrx_desktop_core::domain::{InstanceStatus, is_answerable};
 use taskrx_desktop_core::timeline::{
     DEFAULT_MAX_OCCURRENCES_PER_REMINDER, ProjectTimelineInput, TimelineRow, TimelineWindow,
     project_timeline, timeline_row_key,
@@ -46,7 +46,11 @@ pub fn catch_up(data: &Data, now: i64, zone: &TimeZone) -> Vec<CatchUpDay> {
     })
     .into_iter()
     .map(|mut r| {
-        if missed.contains(&timeline_row_key(&r.reminder_id, r.scheduled_time)) {
+        // Only an unanswered row reads as Missed: a moment can hold an answered row beside a
+        // stale pending one, and the sweep's verdict on the stale one is not this row's.
+        if is_answerable(r.status)
+            && missed.contains(&timeline_row_key(&r.reminder_id, r.scheduled_time))
+        {
             r.status = InstanceStatus::Missed;
         }
         r
@@ -110,5 +114,36 @@ mod tests {
         let later = catch_up(&data, at("2026-11-18T11:30"), &zone);
         assert_eq!(later[0].day_start, at("2026-11-18T00:00"));
         assert_eq!(total(&later), 2);
+    }
+
+    #[test]
+    fn an_answered_moment_is_not_listed_beside_a_stale_pending_row() {
+        let moment = at("2026-11-16T09:00");
+        let instance = |id: &str, status: &str, updated: f64| {
+            json!({
+                "_id": format!("srv_{id}"), "localId": id, "userId": "u", "reminderId": "srv_r1",
+                "reminderKind": "medication", "scheduledTime": moment as f64, "status": status,
+                "completedAt": if status == "completed" { Some(moment as f64) } else { None },
+                "snoozeCount": 0.0, "createdAt": 1.0, "updatedAt": updated
+            })
+        };
+        let data = Data::decode(&Lists {
+            reminders: Some(json!([{
+                "_id": "srv_r1", "localId": "r1", "userId": "u", "kind": "medication",
+                "name": "Zinc", "schedule": { "type": "daily", "times": ["09:00"] },
+                "priority": "normal", "active": true,
+                "createdAt": at("2026-11-16T00:00") as f64, "updatedAt": 1.0
+            }])),
+            // Two rows at one moment, as issue #21's duplicates left: the answer and a pending one.
+            instances: Some(json!([
+                instance("old", "pending", 1.0),
+                instance("taken", "completed", 2.0),
+            ])),
+            ..Lists::default()
+        })
+        .unwrap();
+        let zone = TimeZone::get("America/New_York").unwrap();
+        let days = catch_up(&data, at("2026-11-16T12:00"), &zone);
+        assert_eq!(total(&days), 0, "{days:?}");
     }
 }
