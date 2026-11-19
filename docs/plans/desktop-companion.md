@@ -119,9 +119,12 @@ because two writers are unsafe until one Occurrence can only ever be one Instanc
         medication) or Done records an Instance at the act. Three presses seconds apart on
         2026-11-19 made three Tramadol doses (taken back by hand as skipped), so for five minutes
         after a record its row says "Recorded" where the button was, offers Undo (reopen, then
-        skip: the server keeps every Instance) and asks before recording again. Moving a Backlog
-        item to the timeline waits for a schedule picker: the phrase reader is no help there, as
-        it reads "tomorrow at 3pm" as daily and an unread time as daily at 9:00.
+        skip: the server keeps every Instance) and asks before recording again. "Give it a time" moves a Backlog item to the timeline as on
+        the phone: Daily, Weekly, Monthly, Interval or Once, typed into fields ("9 am, 9 pm",
+        "tomorrow", "Nov 20") and read back as the schedule before Move is offered; a moment
+        already past is warned of, as the phone does. As needed is left to the edit screen, as on
+        the phone. The phrase reader is not used there: it reads "tomorrow at 3pm" as daily and an
+        unread time as daily at 9:00.
         Notices (Proposals) too: each open notice with the date it names and the move its rules
         propose, applied as an override then the notice settled, the second write only once the
         first lands; New task and Dismiss as on the phone. Applying by hand to a task with no

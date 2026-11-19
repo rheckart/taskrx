@@ -65,6 +65,13 @@ fn scene_backlog_again(s: &mut Ui) {
     s.confirm_again = Some("r8".to_string());
 }
 
+/// Backlog with "Give it a time" open on the task, set to weekly.
+fn scene_backlog_time(s: &mut Ui) {
+    scene_backlog(s);
+    s.toggle_timing("r7");
+    s.set_timing_kind(taskrx_desktop_service::screens::timing::TimingKind::Weekly);
+}
+
 fn scene_notices(s: &mut Ui) {
     scene_day(s);
     s.screen = crate::ui::Screen::Proposals;
@@ -149,6 +156,7 @@ fn main() {
             ("catch-up", scene_catch_up),
             ("backlog", scene_backlog),
             ("backlog-again", scene_backlog_again),
+            ("backlog-time", scene_backlog_time),
             ("notices", scene_notices),
             ("add", scene_add),
             ("reminders", scene_reminders),

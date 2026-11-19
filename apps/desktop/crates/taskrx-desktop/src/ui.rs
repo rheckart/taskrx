@@ -16,9 +16,14 @@ use taskrx_desktop_core::timeline::TimelineRow;
 use taskrx_desktop_service::connection::{Event, Table};
 use taskrx_desktop_service::data::{Data, Lists};
 use taskrx_desktop_service::screens::backlog::{RECORD_AGAIN_MS, backlog};
+use taskrx_desktop_service::screens::timing::{
+    IntervalUnit, TimingForm, TimingKind, form_for, read_form,
+};
 use taskrx_desktop_service::screens::today::{Row, Today, TodayInput, today};
 use taskrx_desktop_service::writes::{Answer, Moment, Refusal, answer_call, take_back_record};
-use taskrx_desktop_service::writes::{NewReminder, reminder_create};
+use taskrx_desktop_service::writes::{
+    NewReminder, ReminderPatch, reminder_create, reminder_patch_call,
+};
 
 use crate::host::Host;
 use crate::theme::Followed;
@@ -66,6 +71,54 @@ impl Default for Adding {
             dosage: TextEdit::new(""),
             instructions: TextEdit::new(""),
             saving: None,
+        }
+    }
+}
+
+/// "Give it a time" on a Backlog item: which item, and the picker's fields as typed.
+pub struct Timing {
+    /// The item whose picker is open; one at a time.
+    pub reminder: Option<String>,
+    pub kind: TimingKind,
+    pub times: TextEdit,
+    pub days_of_week: Vec<i32>,
+    pub days_of_month: TextEdit,
+    pub every: TextEdit,
+    pub unit: IntervalUnit,
+    pub date: TextEdit,
+    pub at: TextEdit,
+}
+
+impl Timing {
+    fn closed() -> Timing {
+        Timing::starting(None, form_for(TimingKind::Daily, 0, &TimeZone::UTC))
+    }
+
+    fn starting(reminder: Option<String>, f: TimingForm) -> Timing {
+        Timing {
+            reminder,
+            kind: f.kind,
+            times: TextEdit::new(f.times),
+            days_of_week: f.days_of_week,
+            days_of_month: TextEdit::new(f.days_of_month),
+            every: TextEdit::new(f.every),
+            unit: f.unit,
+            date: TextEdit::new(f.date),
+            at: TextEdit::new(f.at),
+        }
+    }
+
+    /// The fields as the service reads them.
+    pub fn form(&self) -> TimingForm {
+        TimingForm {
+            kind: self.kind,
+            times: self.times.text.clone(),
+            days_of_week: self.days_of_week.clone(),
+            days_of_month: self.days_of_month.text.clone(),
+            every: self.every.text.clone(),
+            unit: self.unit,
+            date: self.date.text.clone(),
+            at: self.at.text.clone(),
         }
     }
 }
@@ -133,6 +186,7 @@ pub struct Ui {
     pub recorded: HashMap<String, i64>,
     /// The Backlog item whose Record again was pressed once: a second press records it.
     pub confirm_again: Option<String>,
+    pub timing: Timing,
     pub bulk_undo: Option<BulkUndo>,
     pub day_offset: i32,
     pub hide_done: bool,
@@ -177,6 +231,7 @@ impl Ui {
             failure_words: HashMap::new(),
             recorded: HashMap::new(),
             confirm_again: None,
+            timing: Timing::closed(),
             bulk_undo: None,
             day_offset: 0,
             hide_done: true,
@@ -351,6 +406,7 @@ impl Ui {
         self.failure_words.clear();
         self.recorded.clear();
         self.confirm_again = None;
+        self.timing = Timing::closed();
         self.bulk_undo = None;
         self.screen = Screen::Today;
     }
@@ -436,6 +492,64 @@ impl Ui {
             .is_some()
         {
             self.recorded.insert(reminder_id.to_string(), now);
+        }
+    }
+
+    /// Opens "Give it a time" on a Backlog item, daily at 9 to start; pressed again, closes it.
+    pub fn toggle_timing(&mut self, reminder_id: &str) {
+        if self.timing.reminder.as_deref() == Some(reminder_id) {
+            self.timing = Timing::closed();
+        } else {
+            let f = form_for(TimingKind::Daily, self.now(), &self.zone);
+            self.timing = Timing::starting(Some(reminder_id.to_string()), f);
+        }
+    }
+
+    /// Another variant: a fresh start for it, as on the phone, since the variants share no field.
+    pub fn set_timing_kind(&mut self, kind: TimingKind) {
+        let f = form_for(kind, self.now(), &self.zone);
+        self.timing = Timing::starting(self.timing.reminder.take(), f);
+    }
+
+    /// Gives the open Backlog item the schedule the picker reads, which moves it to the timeline.
+    pub fn move_to_timeline(&mut self) {
+        let Some(id) = self.timing.reminder.clone() else {
+            return;
+        };
+        let key = format!("backlog-{id}");
+        if self.in_flight(&key) {
+            return;
+        }
+        let now = self.now();
+        let schedule = match read_form(&self.timing.form(), now, &self.zone) {
+            Ok(schedule) => schedule,
+            Err(problem) => {
+                self.say(problem.words(), true);
+                return;
+            }
+        };
+        let Some(data) = self.data.as_ref() else {
+            self.say("Not connected", true);
+            return;
+        };
+        let name = data
+            .reminder(&id)
+            .map(|r| r.name.clone())
+            .unwrap_or_default();
+        let patch = ReminderPatch {
+            schedule: Some(schedule),
+            ..ReminderPatch::default()
+        };
+        match reminder_patch_call(data, &id, &patch, now) {
+            Ok(call) => {
+                if self
+                    .send_call(call, key, format!("{name} moved to your timeline"))
+                    .is_some()
+                {
+                    self.timing = Timing::closed();
+                }
+            }
+            Err(refusal) => self.refuse(&refusal),
         }
     }
 
@@ -946,6 +1060,42 @@ mod tests {
             "reopened but not marked skipped"
         );
         assert!(ui.failure_words.is_empty());
+    }
+
+    #[test]
+    fn give_it_a_time_opens_on_one_item_and_starts_daily_at_nine() {
+        let mut ui = backlog_ui(None);
+        ui.toggle_timing("r1");
+        assert_eq!(ui.timing.reminder.as_deref(), Some("r1"));
+        assert_eq!(ui.timing.kind, TimingKind::Daily);
+        assert_eq!(ui.timing.times.text, "9:00 AM");
+        ui.set_timing_kind(TimingKind::Once);
+        assert_eq!(ui.timing.reminder.as_deref(), Some("r1"));
+        assert_eq!(ui.timing.date.text, "today");
+        assert_eq!(ui.timing.at.text, "3:30 PM", "an hour on from 2:30");
+        ui.toggle_timing("r1");
+        assert!(ui.timing.reminder.is_none());
+    }
+
+    #[test]
+    fn an_unreadable_time_is_said_and_nothing_is_sent() {
+        let mut ui = backlog_ui(None);
+        ui.toggle_timing("r1");
+        ui.timing.times.replace_text("nine-ish".to_string());
+        ui.move_to_timeline();
+        assert!(
+            ui.toast
+                .as_ref()
+                .unwrap()
+                .text
+                .starts_with("Type one or more times")
+        );
+        assert!(ui.sending.is_empty());
+        assert_eq!(
+            ui.timing.reminder.as_deref(),
+            Some("r1"),
+            "the picker stays open"
+        );
     }
 
     #[test]

@@ -14,6 +14,9 @@ use taskrx_desktop_service::data::Data;
 use taskrx_desktop_service::screens::backlog::{BacklogEntry, backlog};
 use taskrx_desktop_service::screens::catch_up::{CatchUpDay, catch_up, total};
 use taskrx_desktop_service::screens::proposals::{NoticeView, apply_patch, proposals};
+use taskrx_desktop_service::screens::timing::{
+    IntervalUnit, TimingKind, in_the_past, read_form, toggle_day,
+};
 use taskrx_desktop_service::screens::today::{AsNeeded, Row, Today};
 use taskrx_desktop_service::writes::Answer;
 use taskrx_desktop_service::writes::{
@@ -475,8 +478,21 @@ fn backlog_view(s: &Ui, p: Palette, entries: &[BacklogEntry]) -> El {
                     .color(p.text_secondary),
             );
         }
+        let timing = s.timing.reminder.as_deref() == Some(r.id.as_str());
         if s.connected {
             let (id, name) = (r.id.clone(), r.name.clone());
+            if !s.in_flight(&key) {
+                let time_id = id.clone();
+                line = line.child(
+                    button(
+                        p,
+                        "time",
+                        if timing { "Cancel" } else { "Give it a time" },
+                        false,
+                    )
+                    .on_press(move |s: &mut Ui| s.toggle_timing(&time_id)),
+                );
+            }
             if s.in_flight(&key) {
                 line = line.child(saving(p, s.waiting_word(&key)));
             } else if let Some(at) = recent {
@@ -514,6 +530,115 @@ fn backlog_view(s: &Ui, p: Palette, entries: &[BacklogEntry]) -> El {
             }
         }
         c = c.child(line);
+        if timing && s.connected {
+            c = c.child(timing_view(s, p, &r.id));
+        }
+    }
+    c
+}
+
+/// "Give it a time": the variant, its fields, and what they read as before anything is sent.
+fn timing_view(s: &Ui, p: Palette, reminder_id: &str) -> El {
+    let t = &s.timing;
+    let now = s.now();
+    let mut c = col()
+        .key(format!("timing-{reminder_id}"))
+        .w_full()
+        .gap(space::S3)
+        .px(space::S3)
+        .py(space::S3)
+        .radius(p.radius)
+        .fill(p.card)
+        .border(1.0, p.accent);
+    let mut kinds = row().key("kinds").gap(space::S2);
+    for kind in TimingKind::ALL {
+        kinds = kinds.child(
+            button(p, kind.label(), kind.label(), t.kind == kind)
+                .role("radio")
+                .on_press(move |s: &mut Ui| s.set_timing_kind(kind)),
+        );
+    }
+    c = c.child(kinds);
+    let times = || field(p, "times", "Times", &t.times, |s| &mut s.timing.times);
+    match t.kind {
+        TimingKind::Daily => c = c.child(times()),
+        TimingKind::Weekly => {
+            const DAYS: [&str; 7] = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+            let mut days = row().key("days").gap(space::S2);
+            for (d, label) in (0..).zip(DAYS) {
+                days = days.child(
+                    button(p, label, label, t.days_of_week.contains(&d))
+                        .role("checkbox")
+                        .on_press(move |s: &mut Ui| {
+                            s.timing.days_of_week = toggle_day(&s.timing.days_of_week, d);
+                        }),
+                );
+            }
+            c = c.child(days).child(times());
+        }
+        TimingKind::Monthly => {
+            c = c
+                .child(field(
+                    p,
+                    "days-of-month",
+                    "Days of the month",
+                    &t.days_of_month,
+                    |s| &mut s.timing.days_of_month,
+                ))
+                .child(times());
+        }
+        TimingKind::Interval => {
+            let mut units = row().key("units").gap(space::S2);
+            for unit in IntervalUnit::ALL {
+                units = units.child(
+                    button(p, unit.label(), unit.label(), t.unit == unit)
+                        .role("radio")
+                        .on_press(move |s: &mut Ui| s.timing.unit = unit),
+                );
+            }
+            c = c
+                .child(field(p, "every", "Repeat every", &t.every, |s| {
+                    &mut s.timing.every
+                }))
+                .child(units)
+                .child(field(p, "date", "First on", &t.date, |s| {
+                    &mut s.timing.date
+                }))
+                .child(field(p, "at", "At", &t.at, |s| &mut s.timing.at));
+        }
+        TimingKind::Once => {
+            c = c
+                .child(field(p, "date", "Day", &t.date, |s| &mut s.timing.date))
+                .child(field(p, "at", "Time", &t.at, |s| &mut s.timing.at));
+        }
+    }
+    let reading = read_form(&t.form(), now, &s.zone);
+    let (line, color) = match &reading {
+        Ok(schedule) => (words::schedule(schedule, &s.zone), p.text),
+        Err(problem) => (problem.words().to_string(), p.warning),
+    };
+    c = c.child(
+        text(line)
+            .key("reading")
+            .font(type_::BODY)
+            .color(color)
+            .wrap(),
+    );
+    if reading
+        .as_ref()
+        .is_ok_and(|schedule| in_the_past(schedule, now))
+    {
+        c = c.child(
+            text("That is in the past: nothing will fire for it.")
+                .key("past")
+                .font(type_::LABEL)
+                .color(p.warning),
+        );
+    }
+    if reading.is_ok() {
+        c = c.child(row().key("timing-actions").child(
+            button(p, "move", "Move to timeline", true).on_press(|s: &mut Ui| s.move_to_timeline()),
+        ));
     }
     c
 }
