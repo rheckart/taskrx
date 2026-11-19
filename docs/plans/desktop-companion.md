@@ -102,7 +102,11 @@ because two writers are unsafe until one Occurrence can only ever be one Instanc
         answering, checked headless on made-up data: an answer is the status call, or one create
         under the moment's id; past-grace rows read Missed and are never recorded; offline rows
         only show. Against the server on 2026-11-18 the day matched the phone's. An answer from
-        the desktop is still to be watched reaching the phone. The other four screens are to come)
+        the desktop is still to be watched reaching the phone. Catch up and Backlog are drawn too,
+        headless: Catch up lists what the sweep would mark, answered a row, a day or all at once
+        and stamped at the moment due, with one Undo for the last answer; Backlog's Done records
+        an Instance at the act. Moving a Backlog item to the timeline waits for the edit screen.
+        Add and edit, and Proposals, are to come)
   - [x] Omarchy theme (the palette from `colors.toml`, re-read when it changes; `hyprctl`
         rounding)
   - [ ] PKGBUILD and `.desktop` entry. `cargo test` becomes a gate in `CLAUDE.md`

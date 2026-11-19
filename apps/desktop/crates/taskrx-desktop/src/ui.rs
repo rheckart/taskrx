@@ -1,12 +1,13 @@
 //! The window's state: what the service last said, and what the person has chosen to look at.
 //! Every rule is the service crate's; this keeps its answers and the person's choices.
 
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
 
 use jiff::tz::TimeZone;
-use taskrx_desktop_core::domain::ReminderKind;
+use taskrx_desktop_core::domain::{InstanceStatus, ReminderKind};
 use taskrx_desktop_core::snooze::{snooze_minutes_or_default, snooze_until};
+use taskrx_desktop_core::timeline::TimelineRow;
 use taskrx_desktop_service::connection::{Event, Table};
 use taskrx_desktop_service::data::{Data, Lists};
 use taskrx_desktop_service::screens::today::{Row, Today, TodayInput, today};
@@ -27,6 +28,30 @@ pub enum Phase {
     SignedIn,
 }
 
+/// The screen shown once signed in.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Screen {
+    Today,
+    CatchUp,
+    Backlog,
+}
+
+/// Several writes sent as one answer: said once, when the last is back.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Batch {
+    pub tickets: HashSet<u64>,
+    pub failed: usize,
+    pub total: usize,
+    pub done: String,
+}
+
+/// The last bulk answer of Catch up, so one press takes it all back.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct BulkUndo {
+    pub message: String,
+    pub moments: Vec<(String, i64)>,
+}
+
 #[derive(Debug, Clone, PartialEq)]
 pub struct Toast {
     pub text: String,
@@ -45,7 +70,10 @@ pub struct Ui {
     pub problem: Option<String>,
     /// Clerk could not renew the sign-in for now.
     pub auth_problem: Option<String>,
+    pub screen: Screen,
     pub kind: Option<ReminderKind>,
+    pub batch: Option<Batch>,
+    pub bulk_undo: Option<BulkUndo>,
     pub day_offset: i32,
     pub hide_done: bool,
     pub toast: Option<Toast>,
@@ -79,7 +107,10 @@ impl Ui {
             data: None,
             problem: None,
             auth_problem: None,
+            screen: Screen::Today,
             kind: None,
+            batch: None,
+            bulk_undo: None,
             day_offset: 0,
             hide_done: true,
             toast: None,
@@ -152,6 +183,25 @@ impl Ui {
             Event::AuthUnreachable(why) => self.auth_problem = Some(why),
             Event::Wrote { ticket, result } => {
                 let (_, what) = self.sending.remove(&ticket).unwrap_or_default();
+                if let Some(batch) = self.batch.as_mut()
+                    && batch.tickets.remove(&ticket)
+                {
+                    if result.is_err() {
+                        batch.failed += 1;
+                    }
+                    if batch.tickets.is_empty() {
+                        let batch = self.batch.take().expect("the batch");
+                        if batch.failed == 0 {
+                            self.say(batch.done, false);
+                        } else {
+                            self.say(
+                                format!("Couldn't answer {} of {}", batch.failed, batch.total),
+                                true,
+                            );
+                        }
+                    }
+                    return;
+                }
                 match result {
                     Ok(()) => self.say(what, false),
                     Err(e) => self.say(format!("Couldn't save that: {e}"), true),
@@ -180,6 +230,9 @@ impl Ui {
         self.data = None;
         self.connected = false;
         self.sending.clear();
+        self.batch = None;
+        self.bulk_undo = None;
+        self.screen = Screen::Today;
     }
 
     /// Answers one row. `done` is what to say once the server has it.
@@ -190,7 +243,7 @@ impl Ui {
             instance_id: row.row.instance_id.as_deref(),
         };
         let key = row_key(moment.reminder_id, moment.scheduled_time);
-        self.send(&moment, answer, key, done);
+        let _ = self.send(&moment, answer, key, done);
     }
 
     /// Records an as-needed dose as taken now.
@@ -202,7 +255,7 @@ impl Ui {
             instance_id: None,
         };
         let key = format!("as-needed-{reminder_id}");
-        self.send(
+        let _ = self.send(
             &moment,
             Answer::Take { at: now },
             key,
@@ -210,26 +263,149 @@ impl Ui {
         );
     }
 
-    fn send(&mut self, moment: &Moment, answer: Answer, key: String, done: String) {
-        if self.in_flight(&key) {
+    /// Completes a Backlog item: one Instance at the moment of the act (ADR 0002).
+    pub fn complete_backlog(&mut self, reminder_id: &str, name: &str) {
+        let now = self.now();
+        let moment = Moment {
+            reminder_id,
+            scheduled_time: now,
+            instance_id: None,
+        };
+        let key = format!("backlog-{reminder_id}");
+        let _ = self.send(
+            &moment,
+            Answer::Take { at: now },
+            key,
+            format!("{name} recorded"),
+        );
+    }
+
+    /// Answers Catch up rows, Take or Skip. A Take is stamped with the moment it was due: days
+    /// later that is the best guess there is, as on the phone.
+    pub fn answer_late(&mut self, rows: &[TimelineRow], take: bool) {
+        let mut tickets = HashSet::new();
+        let mut moments = Vec::new();
+        for r in rows {
+            let moment = Moment {
+                reminder_id: &r.reminder_id,
+                scheduled_time: r.scheduled_time,
+                instance_id: r.instance_id.as_deref(),
+            };
+            let answer = if take {
+                Answer::Take {
+                    at: r.scheduled_time,
+                }
+            } else {
+                Answer::Skip
+            };
+            let key = row_key(&r.reminder_id, r.scheduled_time);
+            if let Some(ticket) = self.send(&moment, answer, key, String::new()) {
+                tickets.insert(ticket);
+                moments.push((r.reminder_id.clone(), r.scheduled_time));
+            }
+        }
+        if tickets.is_empty() {
             return;
+        }
+        let word = match (
+            take,
+            rows.iter().all(|r| r.kind == ReminderKind::Medication),
+        ) {
+            (false, _) => "skipped",
+            (true, true) => "taken",
+            (true, false) => "done",
+        };
+        let message = match rows {
+            [one] => format!("{} {word}", one.name),
+            _ => format!("{} {word}", tickets.len()),
+        };
+        self.batch = Some(Batch {
+            total: tickets.len(),
+            tickets,
+            failed: 0,
+            done: message.clone(),
+        });
+        self.bulk_undo = Some(BulkUndo { message, moments });
+    }
+
+    /// Takes the last Catch up answer back, every row of it that the server now shows answered.
+    pub fn undo_late(&mut self) {
+        let Some(last) = self.bulk_undo.take() else {
+            return;
+        };
+        let Some(data) = self.data.as_ref() else {
+            return;
+        };
+        let found: Vec<(String, i64, String)> = last
+            .moments
+            .iter()
+            .filter_map(|(reminder, time)| {
+                data.instances
+                    .iter()
+                    .find(|i| {
+                        &i.reminder_id == reminder
+                            && i.scheduled_time == *time
+                            && i.status != InstanceStatus::Pending
+                    })
+                    .map(|i| (reminder.clone(), *time, i.id.clone()))
+            })
+            .collect();
+        let mut tickets = HashSet::new();
+        for (reminder_id, time, instance_id) in &found {
+            let moment = Moment {
+                reminder_id,
+                scheduled_time: *time,
+                instance_id: Some(instance_id),
+            };
+            if let Some(t) = self.send(
+                &moment,
+                Answer::Reopen,
+                row_key(reminder_id, *time),
+                String::new(),
+            ) {
+                tickets.insert(t);
+            }
+        }
+        if tickets.is_empty() {
+            self.say("Nothing to take back yet", true);
+            return;
+        }
+        self.batch = Some(Batch {
+            total: tickets.len(),
+            tickets,
+            failed: 0,
+            done: "Taken back".to_string(),
+        });
+    }
+
+    /// Sends one answer; the ticket, or `None` when it was refused or there is no connection.
+    fn send(&mut self, moment: &Moment, answer: Answer, key: String, done: String) -> Option<u64> {
+        if self.in_flight(&key) {
+            return None;
         }
         let (Some(host), Some(data)) = (self.host.clone(), self.data.as_ref()) else {
             self.say("Not connected", true);
-            return;
+            return None;
         };
         let Some(user) = host.user_id() else {
             self.say("Not signed in", true);
-            return;
+            return None;
         };
         match answer_call(data, &user, moment, answer, self.now()) {
             Ok(call) => match host.write(call) {
                 Some(ticket) => {
                     self.sending.insert(ticket, (key, done));
+                    Some(ticket)
                 }
-                None => self.say("Not connected", true),
+                None => {
+                    self.say("Not connected", true);
+                    None
+                }
             },
-            Err(refusal) => self.say(refused(&refusal), true),
+            Err(refusal) => {
+                self.say(refused(&refusal), true);
+                None
+            }
         }
     }
 
@@ -308,6 +484,30 @@ mod tests {
         assert!(ui.toast.as_ref().unwrap().failed);
         assert!(ui.sending.is_empty());
         assert!(!ui.in_flight("row-r1-1"));
+    }
+
+    #[test]
+    fn a_batch_is_said_once_when_its_last_write_is_back() {
+        let mut ui = ui();
+        ui.batch = Some(Batch {
+            tickets: [1, 2].into_iter().collect(),
+            failed: 0,
+            total: 2,
+            done: "2 taken".into(),
+        });
+        ui.on_event(Event::Wrote {
+            ticket: 1,
+            result: Ok(()),
+        });
+        assert!(ui.toast.is_none());
+        ui.on_event(Event::Wrote {
+            ticket: 2,
+            result: Err("x".into()),
+        });
+        let toast = ui.toast.as_ref().unwrap();
+        assert_eq!(toast.text, "Couldn't answer 1 of 2");
+        assert!(toast.failed);
+        assert!(ui.batch.is_none());
     }
 
     #[test]

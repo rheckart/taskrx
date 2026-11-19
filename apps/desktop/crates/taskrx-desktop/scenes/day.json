@@ -10,7 +10,10 @@
       "kind": "medication",
       "name": "Lisinopril",
       "dosage": "10 mg",
-      "schedule": { "type": "daily", "times": ["08:00", "20:00"] },
+      "schedule": {
+        "type": "daily",
+        "times": ["08:00", "20:00"]
+      },
       "priority": "normal",
       "active": true,
       "createdAt": 1793000000000,
@@ -23,7 +26,10 @@
       "kind": "medication",
       "name": "Vitamin D",
       "dosage": "1000 IU",
-      "schedule": { "type": "daily", "times": ["09:00"] },
+      "schedule": {
+        "type": "daily",
+        "times": ["09:00"]
+      },
       "priority": "normal",
       "active": true,
       "createdAt": 1793000000000,
@@ -36,7 +42,11 @@
       "kind": "medication",
       "name": "Ibuprofen",
       "dosage": "200 mg",
-      "schedule": { "type": "asNeeded", "minGapMinutes": 360, "maxPer24h": 4 },
+      "schedule": {
+        "type": "asNeeded",
+        "minGapMinutes": 360,
+        "maxPer24h": 4
+      },
       "priority": "normal",
       "active": true,
       "createdAt": 1793000000000,
@@ -49,7 +59,10 @@
       "kind": "medication",
       "name": "Metformin",
       "dosage": "500 mg",
-      "schedule": { "type": "daily", "times": ["12:00", "18:00"] },
+      "schedule": {
+        "type": "daily",
+        "times": ["12:00", "18:00"]
+      },
       "priority": "normal",
       "active": true,
       "createdAt": 1793000000000,
@@ -61,7 +74,10 @@
       "userId": "user_scene",
       "kind": "task",
       "name": "Water the plants",
-      "schedule": { "type": "daily", "times": ["10:00"] },
+      "schedule": {
+        "type": "daily",
+        "times": ["10:00"]
+      },
       "priority": "normal",
       "active": true,
       "createdAt": 1793000000000,
@@ -73,7 +89,25 @@
       "userId": "user_scene",
       "kind": "task",
       "name": "Take out recycling",
-      "schedule": { "type": "weekly", "daysOfWeek": [4], "times": ["19:00"] },
+      "schedule": {
+        "type": "weekly",
+        "daysOfWeek": [4],
+        "times": ["19:00"]
+      },
+      "priority": "normal",
+      "active": true,
+      "createdAt": 1793000000000,
+      "updatedAt": 1793000000000
+    },
+    {
+      "_id": "srv_r7",
+      "localId": "r7",
+      "userId": "user_scene",
+      "kind": "task",
+      "name": "Call the pharmacy about refills",
+      "schedule": {
+        "type": "none"
+      },
       "priority": "normal",
       "active": true,
       "createdAt": 1793000000000,

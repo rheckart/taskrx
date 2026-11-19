@@ -2,4 +2,6 @@
 //! apply is a ported one from `taskrx-desktop-core`; these only choose the inputs, as the phone's
 //! view models do.
 
+pub mod backlog;
+pub mod catch_up;
 pub mod today;

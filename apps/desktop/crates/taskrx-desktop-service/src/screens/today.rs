@@ -204,7 +204,7 @@ fn draw(r: &TimelineRow, missed: &HashSet<String>, undoable: &BTreeSet<String>) 
 }
 
 /// The moments the phone's sweep would record as Missed, read and never written.
-fn shown_missed(data: &Data, now: i64, zone: &TimeZone) -> HashSet<String> {
+pub(crate) fn shown_missed(data: &Data, now: i64, zone: &TimeZone) -> HashSet<String> {
     let recent: Vec<_> = data
         .instances
         .iter()

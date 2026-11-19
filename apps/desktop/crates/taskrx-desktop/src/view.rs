@@ -4,11 +4,14 @@
 use rune::tok::{space, type_};
 use rune::{Cx, El, ScrollSpec, Tx, col, el, row, text};
 use taskrx_desktop_core::domain::{InstanceStatus, ReminderKind};
+use taskrx_desktop_core::timeline::TimelineRow;
+use taskrx_desktop_service::screens::backlog::{BacklogEntry, backlog};
+use taskrx_desktop_service::screens::catch_up::{CatchUpDay, catch_up, total};
 use taskrx_desktop_service::screens::today::{AsNeeded, Row, Today};
 use taskrx_desktop_service::writes::Answer;
 
 use crate::theme::Palette;
-use crate::ui::{Phase, Ui, row_key};
+use crate::ui::{Phase, Screen, Ui, row_key};
 use crate::words;
 
 pub fn view(s: &Ui, _cx: &mut Cx<Ui>) -> El {
@@ -118,7 +121,7 @@ fn sign_in(p: Palette, problem: Option<&str>) -> El {
 }
 
 fn signed_in(s: &Ui, p: Palette) -> El {
-    let Some(today) = s.today() else {
+    let Some(data) = s.data.as_ref() else {
         let line = s
             .problem
             .clone()
@@ -127,15 +130,25 @@ fn signed_in(s: &Ui, p: Palette) -> El {
             .key("loading")
             .w_full()
             .grow(1.0)
-            .child(header(s, p, None))
+            .child(nav(s, p, 0, 0))
             .child(centered(p, "Loading your day", &line));
     };
-    let tab = s.tab(&today);
-    let mut list = match tab {
-        ReminderKind::Medication => medications(s, p, &today),
-        ReminderKind::Task => tasks(s, p, &today),
+    let now = s.now();
+    let late = catch_up(data, now, &s.zone);
+    let loose = backlog(data);
+    let (sub, mut list) = match s.screen {
+        Screen::Today => {
+            let today = s.today().expect("data is decoded");
+            let list = match s.tab(&today) {
+                ReminderKind::Medication => medications(s, p, &today),
+                ReminderKind::Task => tasks(s, p, &today),
+            };
+            (Some(today_header(s, p, &today)), list)
+        }
+        Screen::CatchUp => (None, catch_up_view(s, p, &late)),
+        Screen::Backlog => (None, backlog_view(s, p, &loose)),
     };
-    // A list that failed after the day was drawn: the day shown may be out of date.
+    // A list that failed after the day was drawn: what is shown may be out of date.
     if let Some(problem) = &s.problem {
         list = col()
             .key("with-problem")
@@ -149,89 +162,135 @@ fn signed_in(s: &Ui, p: Palette) -> El {
             )
             .child(list);
     }
-    col()
-        .key("today")
+    let mut c = col()
+        .key("signed-in")
         .w_full()
         .grow(1.0)
         .min_h(0.0)
-        .child(header(s, p, Some(&today)))
-        .child(
-            col()
-                .key("list")
-                .w_full()
-                .px(space::S6)
-                .pb(space::S6)
-                .gap(space::S2)
-                .child(list)
-                .scroll(ScrollSpec {
-                    stick_bottom: false,
-                })
-                .grow(1.0)
-                .min_h(0.0),
-        )
+        .child(nav(s, p, total(&late), loose.len()));
+    if let Some(sub) = sub {
+        c = c.child(sub);
+    }
+    c.child(
+        col()
+            .key("list")
+            .w_full()
+            .px(space::S6)
+            .pb(space::S6)
+            .gap(space::S2)
+            .child(list)
+            .scroll(ScrollSpec {
+                stick_bottom: false,
+            })
+            .grow(1.0)
+            .min_h(0.0),
+    )
 }
 
-fn header(s: &Ui, p: Palette, today: Option<&Today>) -> El {
-    let mut status = if !s.connected {
-        Some(("Reconnecting to the server…", p.warning))
+fn counted(label: &str, count: usize) -> String {
+    if count > 0 {
+        format!("{label} {count}")
+    } else {
+        label.to_string()
+    }
+}
+
+/// The screens, the connection's state and sign-out.
+fn nav(s: &Ui, p: Palette, late: usize, loose: usize) -> El {
+    let status = if s.auth_problem.is_some() {
+        Some("Couldn't renew the sign-in; retrying")
+    } else if !s.connected {
+        Some("Reconnecting to the server…")
     } else {
         None
     };
-    if let Some(why) = &s.auth_problem {
-        let _ = why;
-        status = Some(("Couldn't renew the sign-in; retrying", p.warning));
+    let screen = |key: &str, label: String, which: Screen| {
+        button(p, key, &label, s.screen == which)
+            .role("tab")
+            .on_press(move |s: &mut Ui| s.screen = which)
+    };
+    let mut top = row()
+        .key("nav")
+        .w_full()
+        .px(space::S6)
+        .pt(space::S6)
+        .pb(space::S2)
+        .gap(space::S2)
+        .center_y()
+        .child(screen("screen-today", "Today".to_string(), Screen::Today))
+        .child(screen(
+            "screen-catch-up",
+            counted("Catch up", late),
+            Screen::CatchUp,
+        ))
+        .child(screen(
+            "screen-backlog",
+            counted("Backlog", loose),
+            Screen::Backlog,
+        ))
+        .child(el().grow(1.0));
+    if let Some(line) = status {
+        top = top.child(
+            text(line)
+                .key("connection")
+                .font(type_::LABEL)
+                .color(p.warning),
+        );
     }
+    top.child(
+        button(p, "sign-out", "Sign out", false).on_press(|s: &mut Ui| {
+            if let Some(host) = s.host.clone() {
+                host.sign_out();
+            }
+        }),
+    )
+}
+
+/// Today's tabs, the day shown and Show done.
+fn today_header(s: &Ui, p: Palette, today: &Today) -> El {
+    let tab = s.tab(today);
     let mut top = row()
         .key("header")
         .w_full()
         .px(space::S6)
-        .pt(space::S6)
         .pb(space::S3)
         .gap(space::S2)
-        .center_y();
-    if let Some(today) = today {
-        let tab = s.tab(today);
+        .center_y()
+        .child(tab_button(
+            s,
+            p,
+            ReminderKind::Medication,
+            "Medications",
+            today,
+        ))
+        .child(tab_button(s, p, ReminderKind::Task, "Tasks", today));
+    if tab == ReminderKind::Medication {
         top = top
-            .child(tab_button(
-                s,
-                p,
-                ReminderKind::Medication,
-                "Medications",
-                today,
-            ))
-            .child(tab_button(s, p, ReminderKind::Task, "Tasks", today));
-        if tab == ReminderKind::Medication {
-            top = top
-                .child(el().w(space::S3))
-                .child(
-                    button(p, "previous-day", "‹", false)
-                        .label("Previous day")
-                        .on_press(|s: &mut Ui| s.day_offset -= 1),
-                )
-                .child(
-                    text(words::day_heading(
-                        today.day_offset,
-                        today.day_start,
-                        &s.zone,
-                    ))
-                    .key("day")
-                    .font(type_::TITLE)
-                    .color(p.text),
-                );
-            if today.day_offset < 0 {
-                top = top.child(
-                    button(p, "next-day", "›", false)
-                        .label("Next day")
-                        .on_press(|s: &mut Ui| s.day_offset = (s.day_offset + 1).min(0)),
-                );
-            }
+            .child(el().w(space::S3))
+            .child(
+                button(p, "previous-day", "‹", false)
+                    .label("Previous day")
+                    .on_press(|s: &mut Ui| s.day_offset -= 1),
+            )
+            .child(
+                text(words::day_heading(
+                    today.day_offset,
+                    today.day_start,
+                    &s.zone,
+                ))
+                .key("day")
+                .font(type_::TITLE)
+                .color(p.text),
+            );
+        if today.day_offset < 0 {
+            top = top.child(
+                button(p, "next-day", "›", false)
+                    .label("Next day")
+                    .on_press(|s: &mut Ui| s.day_offset = (s.day_offset + 1).min(0)),
+            );
         }
     }
-    top = top.child(el().grow(1.0));
-    if let Some((line, color)) = status {
-        top = top.child(text(line).key("connection").font(type_::LABEL).color(color));
-    }
-    top.child(
+    top.child(el().grow(1.0)).child(
         button(
             p,
             "hide-done",
@@ -244,13 +303,200 @@ fn header(s: &Ui, p: Palette, today: Option<&Today>) -> El {
         )
         .on_press(|s: &mut Ui| s.hide_done = !s.hide_done),
     )
-    .child(
-        button(p, "sign-out", "Sign out", false).on_press(|s: &mut Ui| {
-            if let Some(host) = s.host.clone() {
-                host.sign_out();
+}
+
+fn catch_up_view(s: &Ui, p: Palette, days: &[CatchUpDay]) -> El {
+    let mut c = col().key("catch-up").w_full().gap(space::S2);
+    if days.is_empty() {
+        return c.child(
+            text("Nothing missed in the last week.")
+                .key("empty")
+                .font(type_::BODY)
+                .color(p.text_secondary),
+        );
+    }
+    let all: Vec<TimelineRow> = days.iter().flat_map(|d| d.rows.clone()).collect();
+    let mut top = row()
+        .key("catch-up-actions")
+        .w_full()
+        .gap(space::S2)
+        .center_y()
+        .child(
+            text("Answered late, a dose or task is recorded at the time it was due.")
+                .font(type_::LABEL)
+                .color(p.text_secondary)
+                .grow(1.0),
+        );
+    if let Some(undo) = &s.bulk_undo {
+        top = top.child(
+            button(p, "undo-late", &format!("Undo: {}", undo.message), false)
+                .on_press(|s: &mut Ui| s.undo_late()),
+        );
+    }
+    if s.connected && s.batch.is_none() {
+        let (take, skip) = (all.clone(), all);
+        top = top
+            .child(
+                button(p, "take-all", "All taken", true)
+                    .on_press(move |s: &mut Ui| s.answer_late(&take, true)),
+            )
+            .child(
+                button(p, "skip-all", "All skipped", false)
+                    .on_press(move |s: &mut Ui| s.answer_late(&skip, false)),
+            );
+    }
+    c = c.child(top);
+    for day in days {
+        let mut heading = row()
+            .key(format!("late-day-{}", day.day_start))
+            .w_full()
+            .gap(space::S2)
+            .center_y()
+            .child(section(p, "title", &words::day(day.day_start, &s.zone)).grow(1.0));
+        if s.connected && s.batch.is_none() && day.rows.len() > 1 {
+            let (take, skip) = (day.rows.clone(), day.rows.clone());
+            heading = heading
+                .child(
+                    button(p, "take-day", "Day taken", false)
+                        .on_press(move |s: &mut Ui| s.answer_late(&take, true)),
+                )
+                .child(
+                    button(p, "skip-day", "Day skipped", false)
+                        .on_press(move |s: &mut Ui| s.answer_late(&skip, false)),
+                );
+        }
+        c = c.child(heading);
+        for r in &day.rows {
+            c = c.child(late_row(s, p, r));
+        }
+    }
+    c
+}
+
+fn late_row(s: &Ui, p: Palette, r: &TimelineRow) -> El {
+    let key = row_key(&r.reminder_id, r.scheduled_time);
+    let task = r.kind == ReminderKind::Task;
+    let mut line = card_row(p, &key, false)
+        .child(
+            text(words::clock(r.scheduled_time, &s.zone))
+                .key("time")
+                .font(type_::LABEL)
+                .color(p.text_secondary)
+                .w(64.0),
+        )
+        .child(name_column(p, &r.name, r.dosage.as_deref()))
+        .child(
+            text(if task { "Overdue" } else { "Missed" })
+                .key("status")
+                .font(type_::LABEL)
+                .color(p.danger),
+        );
+    if !s.connected {
+        return line;
+    }
+    if s.in_flight(&key) {
+        return line.child(saving(p));
+    }
+    if s.batch.is_none() {
+        let (take, skip) = (vec![r.clone()], vec![r.clone()]);
+        line = line
+            .child(
+                button(p, "take", if task { "Done" } else { "Taken" }, true)
+                    .on_press(move |s: &mut Ui| s.answer_late(&take, true)),
+            )
+            .child(
+                button(p, "skip", "Skipped", false)
+                    .on_press(move |s: &mut Ui| s.answer_late(&skip, false)),
+            );
+    }
+    line
+}
+
+fn backlog_view(s: &Ui, p: Palette, entries: &[BacklogEntry]) -> El {
+    let mut c = col().key("backlog").w_full().gap(space::S2).child(
+        text("Things to do with no set time. Done records it; the item stays here.")
+            .font(type_::LABEL)
+            .color(p.text_secondary),
+    );
+    if entries.is_empty() {
+        return c.child(
+            text("Nothing in the Backlog.")
+                .key("empty")
+                .font(type_::BODY)
+                .color(p.text_secondary),
+        );
+    }
+    for e in entries {
+        let r = &e.reminder;
+        let key = format!("backlog-{}", r.id);
+        let last = e.last_done.map_or("Never done".to_string(), |t| {
+            format!(
+                "Last done {}, {}",
+                words::day(t, &s.zone),
+                words::clock(t, &s.zone)
+            )
+        });
+        let mut line = card_row(p, &key, false)
+            .child(name_column(p, &r.name, r.dosage.as_deref()))
+            .child(
+                text(last)
+                    .key("last")
+                    .font(type_::LABEL)
+                    .color(p.text_secondary),
+            );
+        if s.connected {
+            if s.in_flight(&key) {
+                line = line.child(saving(p));
+            } else {
+                let (id, name) = (r.id.clone(), r.name.clone());
+                line = line.child(
+                    button(p, "done", "Done", true)
+                        .on_press(move |s: &mut Ui| s.complete_backlog(&id, &name)),
+                );
             }
-        }),
-    )
+        }
+        c = c.child(line);
+    }
+    c
+}
+
+fn card_row(p: Palette, key: &str, highlighted: bool) -> El {
+    row()
+        .key(key.to_string())
+        .w_full()
+        .min_h(48.0)
+        .px(space::S3)
+        .py(space::S2)
+        .gap(space::S3)
+        .center_y()
+        .radius(p.radius)
+        .fill(p.card)
+        .border(1.0, if highlighted { p.accent } else { p.card_border })
+}
+
+fn name_column(p: Palette, name: &str, dosage: Option<&str>) -> El {
+    let mut c = col().key("name").grow(1.0).min_w(0.0).gap(2.0).child(
+        text(name.to_string())
+            .font(type_::TITLE)
+            .color(p.text)
+            .truncate(),
+    );
+    if let Some(dosage) = dosage {
+        c = c.child(
+            text(dosage.to_string())
+                .font(type_::LABEL)
+                .color(p.text_secondary)
+                .truncate(),
+        );
+    }
+    c
+}
+
+fn saving(p: Palette) -> El {
+    text("Saving…")
+        .key("saving")
+        .font(type_::LABEL)
+        .color(p.text_secondary)
 }
 
 fn tab_button(s: &Ui, p: Palette, kind: ReminderKind, label: &str, today: &Today) -> El {

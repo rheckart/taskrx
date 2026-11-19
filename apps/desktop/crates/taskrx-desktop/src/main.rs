@@ -49,6 +49,16 @@ fn scene_all(s: &mut Ui) {
     s.hide_done = false;
 }
 
+fn scene_catch_up(s: &mut Ui) {
+    scene_day(s);
+    s.screen = crate::ui::Screen::CatchUp;
+}
+
+fn scene_backlog(s: &mut Ui) {
+    scene_day(s);
+    s.screen = crate::ui::Screen::Backlog;
+}
+
 fn scene_signed_out(s: &mut Ui) {
     s.phase = Phase::SignedOut { problem: None };
 }
@@ -113,6 +123,8 @@ fn main() {
             ("day", scene_day),
             ("all", scene_all),
             ("tasks", scene_tasks),
+            ("catch-up", scene_catch_up),
+            ("backlog", scene_backlog),
             ("signed-out", scene_signed_out),
             ("offline", scene_offline),
         ],
