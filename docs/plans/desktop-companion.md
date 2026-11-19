@@ -115,8 +115,13 @@ because two writers are unsafe until one Occurrence can only ever be one Instanc
         desktop as soon as the phone sent it (the phone's first send after a wake fails "Not
         authenticated" and goes 5 s later). The other answers and screens are still headless only. Catch up and Backlog are drawn too,
         headless: Catch up lists what the sweep would mark, answered a row, a day or all at once
-        and stamped at the moment due, with one Undo for the last answer; Backlog's Done records
-        an Instance at the act. Moving a Backlog item to the timeline waits for the edit screen.
+        and stamped at the moment due, with one Undo for the last answer; Backlog's Taken (a
+        medication) or Done records an Instance at the act. Three presses seconds apart on
+        2026-11-19 made three Tramadol doses (taken back by hand as skipped), so for five minutes
+        after a record its row says "Recorded" where the button was, offers Undo (reopen, then
+        skip: the server keeps every Instance) and asks before recording again. Moving a Backlog
+        item to the timeline waits for a schedule picker: the phrase reader is no help there, as
+        it reads "tomorrow at 3pm" as daily and an unread time as daily at 9:00.
         Notices (Proposals) too: each open notice with the date it names and the move its rules
         propose, applied as an override then the notice settled, the second write only once the
         first lands; New task and Dismiss as on the phone. Applying by hand to a task with no

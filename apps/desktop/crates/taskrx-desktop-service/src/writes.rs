@@ -132,6 +132,24 @@ pub fn answer_call(
     Ok(instance_create_call(&Value::Object(payload), parent)?)
 }
 
+/// Takes back a record whose moment is the act itself (a Backlog item's): reopened, then
+/// skipped, the second once the first has landed. Reopened alone it would be a pending dose at a
+/// past moment, which the screens read as overdue; skipped, it reads as not done. The server
+/// keeps every Instance, so this is how a record made by mistake is undone.
+pub fn take_back_record(data: &Data, instance_id: &str) -> Result<(PushCall, PushCall), Refusal> {
+    let instance = data.instance(instance_id).ok_or(Refusal::NotOnServer)?;
+    if instance.status != InstanceStatus::Completed {
+        return Err(Refusal::NothingToReopen);
+    }
+    let server_id = data
+        .instance_server_id(instance_id)
+        .ok_or(Refusal::NotOnServer)?;
+    let to = |status: InstanceStatus| {
+        instance_update_call(&json!({ "status": status.wire() }), server_id)
+    };
+    Ok((to(InstanceStatus::Pending)?, to(InstanceStatus::Skipped)?))
+}
+
 /// What an edit of a Reminder means to change. A field left `None` is not sent, so the server's
 /// copy stays: an unrelated edit must not overwrite a pause, a moved moment or a pill count
 /// another device set (the phone's `RemindersRepository.update`).
@@ -414,6 +432,22 @@ mod tests {
             instance_id: None,
         };
         answer_call(&data(), "user_1", &moment, answer, AT + 90_000_000)
+    }
+
+    #[test]
+    fn a_record_is_taken_back_as_reopened_then_skipped() {
+        let (first, then) = take_back_record(&data(), "i1").unwrap();
+        assert_eq!(first.function, functions::INSTANCES_REOPEN);
+        assert_eq!(then.function, functions::INSTANCES_MARK_SKIPPED);
+        assert_eq!(arg(&then, "id"), Some(&Wire::Text("srv_i1".into())));
+        assert_eq!(take_back_record(&data(), "i9"), Err(Refusal::NotOnServer));
+    }
+
+    #[test]
+    fn only_a_completed_record_is_taken_back() {
+        let mut d = data();
+        d.instances[0].status = InstanceStatus::Skipped;
+        assert_eq!(take_back_record(&d, "i1"), Err(Refusal::NothingToReopen));
     }
 
     #[test]

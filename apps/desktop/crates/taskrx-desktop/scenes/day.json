@@ -119,6 +119,21 @@
       "active": true,
       "createdAt": 1793000000000,
       "updatedAt": 1793000000000
+    },
+    {
+      "_id": "srv_r8",
+      "localId": "r8",
+      "userId": "user_scene",
+      "kind": "medication",
+      "name": "Meclizine",
+      "dosage": "25mg",
+      "schedule": {
+        "type": "none"
+      },
+      "priority": "normal",
+      "active": true,
+      "createdAt": 1793000000000,
+      "updatedAt": 1793000000000
     }
   ],
   "instances": [
@@ -160,6 +175,19 @@
       "snoozeCount": 1,
       "createdAt": 1795539600000,
       "updatedAt": 1795540000000
+    },
+    {
+      "_id": "srv_i_r8",
+      "localId": "i_r8",
+      "userId": "user_scene",
+      "reminderId": "srv_r8",
+      "reminderKind": "medication",
+      "scheduledTime": 1795548480000,
+      "status": "completed",
+      "completedAt": 1795548480000,
+      "snoozeCount": 0,
+      "createdAt": 1795548480000,
+      "updatedAt": 1795548480000
     }
   ],
   "notices": [

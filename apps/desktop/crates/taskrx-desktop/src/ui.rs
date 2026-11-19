@@ -15,8 +15,9 @@ use taskrx_desktop_core::sync::push::PushCall;
 use taskrx_desktop_core::timeline::TimelineRow;
 use taskrx_desktop_service::connection::{Event, Table};
 use taskrx_desktop_service::data::{Data, Lists};
+use taskrx_desktop_service::screens::backlog::{RECORD_AGAIN_MS, backlog};
 use taskrx_desktop_service::screens::today::{Row, Today, TodayInput, today};
-use taskrx_desktop_service::writes::{Answer, Moment, Refusal, answer_call};
+use taskrx_desktop_service::writes::{Answer, Moment, Refusal, answer_call, take_back_record};
 use taskrx_desktop_service::writes::{NewReminder, reminder_create};
 
 use crate::host::Host;
@@ -85,6 +86,16 @@ pub struct BulkUndo {
     pub moments: Vec<(String, i64)>,
 }
 
+/// The second of two writes: sent once the first has landed.
+#[derive(Debug, Clone, PartialEq)]
+pub struct FollowUp {
+    pub call: PushCall,
+    pub key: String,
+    pub done: String,
+    /// Said instead of the plain failure if this write fails.
+    pub if_failed: Option<String>,
+}
+
 #[derive(Debug, Clone, PartialEq)]
 pub struct Toast {
     pub text: String,
@@ -111,8 +122,17 @@ pub struct Ui {
     pub batch: Option<Batch>,
     /// Writes that have waited long enough to say so.
     pub slow: HashSet<u64>,
-    /// A write to send once the ticket's write has landed, under the same key.
-    pub follow_ups: HashMap<u64, (PushCall, String, String)>,
+    /// A write to send once the ticket's write has landed, under the same key, and what to say
+    /// if that second write fails.
+    pub follow_ups: HashMap<u64, FollowUp>,
+    /// What to say when a write fails, where the plain words would hide what it left behind.
+    pub failure_words: HashMap<u64, String>,
+    /// Backlog items recorded from this window: the Reminder and the instant of the press. The
+    /// list carrying the record can land after the write's answer, so this keeps the row
+    /// "just recorded" in between.
+    pub recorded: HashMap<String, i64>,
+    /// The Backlog item whose Record again was pressed once: a second press records it.
+    pub confirm_again: Option<String>,
     pub bulk_undo: Option<BulkUndo>,
     pub day_offset: i32,
     pub hide_done: bool,
@@ -154,6 +174,9 @@ impl Ui {
             batch: None,
             slow: HashSet::new(),
             follow_ups: HashMap::new(),
+            failure_words: HashMap::new(),
+            recorded: HashMap::new(),
+            confirm_again: None,
             bulk_undo: None,
             day_offset: 0,
             hide_done: true,
@@ -242,8 +265,15 @@ impl Ui {
                 self.slow.insert(ticket);
             }
             Event::Wrote { ticket, result } => {
-                let (_, what) = self.sending.remove(&ticket).unwrap_or_default();
+                let (key, what) = self.sending.remove(&ticket).unwrap_or_default();
                 self.slow.remove(&ticket);
+                let failure = self.failure_words.remove(&ticket);
+                if result.is_err()
+                    && let Some(reminder) = key.strip_prefix("backlog-")
+                {
+                    // Not recorded after all: the row offers a plain record again.
+                    self.recorded.remove(reminder);
+                }
                 if self.adding.saving == Some(ticket) {
                     self.adding.saving = None;
                     if result.is_ok() {
@@ -252,10 +282,14 @@ impl Ui {
                         self.screen = Screen::Today;
                     }
                 }
-                if let Some((then, key, done)) = self.follow_ups.remove(&ticket) {
+                if let Some(next) = self.follow_ups.remove(&ticket) {
                     match result {
                         Ok(()) => {
-                            let _ = self.send_call(then, key, done);
+                            if let Some(t) = self.send_call(next.call, next.key, next.done)
+                                && let Some(words) = next.if_failed
+                            {
+                                self.failure_words.insert(t, words);
+                            }
                         }
                         Err(e) => self.say(format!("Couldn't save that: {e}"), true),
                     }
@@ -282,7 +316,10 @@ impl Ui {
                 }
                 match result {
                     Ok(()) => self.say(what, false),
-                    Err(e) => self.say(format!("Couldn't save that: {e}"), true),
+                    Err(e) => {
+                        let words = failure.unwrap_or_else(|| format!("Couldn't save that: {e}"));
+                        self.say(words, true)
+                    }
                 }
             }
         }
@@ -311,6 +348,9 @@ impl Ui {
         self.batch = None;
         self.slow.clear();
         self.follow_ups.clear();
+        self.failure_words.clear();
+        self.recorded.clear();
+        self.confirm_again = None;
         self.bulk_undo = None;
         self.screen = Screen::Today;
     }
@@ -343,8 +383,42 @@ impl Ui {
         );
     }
 
-    /// Completes a Backlog item: one Instance at the moment of the act (ADR 0002).
-    pub fn complete_backlog(&mut self, reminder_id: &str, name: &str) {
+    /// Shows another screen. A half-made second press does not follow the person there.
+    pub fn go(&mut self, screen: Screen) {
+        self.screen = screen;
+        self.confirm_again = None;
+        self.confirm_stop = None;
+    }
+
+    /// When a Backlog item was last recorded, if that was in the last few minutes: by this
+    /// window, or by anything the server has.
+    pub fn recently_recorded(&self, reminder_id: &str) -> Option<i64> {
+        let now = self.now();
+        let here = self
+            .recorded
+            .get(reminder_id)
+            .copied()
+            .filter(|at| now - at < RECORD_AGAIN_MS);
+        let server = self.data.as_ref().and_then(|data| {
+            backlog(data)
+                .into_iter()
+                .find(|e| e.reminder.id == reminder_id)
+                .and_then(|e| e.just_recorded(now).map(|(_, at)| at))
+        });
+        here.max(server)
+    }
+
+    /// Records a Backlog item: one Instance at the moment of the act (ADR 0002). The item stays
+    /// in the Backlog, so a press a few minutes after the last record only asks; the next press
+    /// records it again.
+    pub fn complete_backlog(&mut self, reminder_id: &str, name: &str, medication: bool) {
+        if self.recently_recorded(reminder_id).is_some()
+            && self.confirm_again.as_deref() != Some(reminder_id)
+        {
+            self.confirm_again = Some(reminder_id.to_string());
+            return;
+        }
+        self.confirm_again = None;
         let now = self.now();
         let moment = Moment {
             reminder_id,
@@ -352,12 +426,49 @@ impl Ui {
             instance_id: None,
         };
         let key = format!("backlog-{reminder_id}");
-        let _ = self.send(
-            &moment,
-            Answer::Take { at: now },
-            key,
-            format!("{name} recorded"),
-        );
+        let done = if medication {
+            format!("{name} recorded as taken")
+        } else {
+            format!("{name} recorded as done")
+        };
+        if self
+            .send(&moment, Answer::Take { at: now }, key, done)
+            .is_some()
+        {
+            self.recorded.insert(reminder_id.to_string(), now);
+        }
+    }
+
+    /// Takes back a Backlog record made by mistake: reopened, then skipped.
+    pub fn undo_backlog(&mut self, reminder_id: &str, instance_id: &str, name: &str) {
+        let key = format!("backlog-{reminder_id}");
+        if self.in_flight(&key) {
+            return;
+        }
+        let Some(data) = self.data.as_ref() else {
+            self.say("Not connected", true);
+            return;
+        };
+        match take_back_record(data, instance_id) {
+            Ok((reopen, skip)) => {
+                self.confirm_again = None;
+                self.recorded.remove(reminder_id);
+                if let Some(ticket) = self.send_call(reopen, key.clone(), String::new()) {
+                    self.follow_ups.insert(
+                        ticket,
+                        FollowUp {
+                            call: skip,
+                            key,
+                            done: format!("{name} taken back"),
+                            if_failed: Some(format!(
+                                "{name} was reopened but not marked skipped: it may show as due"
+                            )),
+                        },
+                    );
+                }
+            }
+            Err(refusal) => self.refuse(&refusal),
+        }
     }
 
     /// Answers Catch up rows, Take or Skip. A Take is stamped with the moment it was due: days
@@ -505,7 +616,15 @@ impl Ui {
             return;
         }
         if let Some(ticket) = self.send_call(first, key.clone(), String::new()) {
-            self.follow_ups.insert(ticket, (then, key, done));
+            self.follow_ups.insert(
+                ticket,
+                FollowUp {
+                    call: then,
+                    key,
+                    done,
+                    if_failed: None,
+                },
+            );
         }
     }
 
@@ -690,8 +809,15 @@ mod tests {
             args: Vec::new(),
         };
         ui.sending.insert(7, ("notice-n1".into(), String::new()));
-        ui.follow_ups
-            .insert(7, (then, "notice-n1".into(), "Moved".into()));
+        ui.follow_ups.insert(
+            7,
+            FollowUp {
+                call: then,
+                key: "notice-n1".into(),
+                done: "Moved".into(),
+                if_failed: None,
+            },
+        );
         ui.on_event(Event::Wrote {
             ticket: 7,
             result: Err("Reminder not found".into()),
@@ -721,6 +847,105 @@ mod tests {
         let mut ui = ui();
         ui.on_event(Event::List(Table::Notices, json!([])));
         assert!(ui.connected);
+    }
+
+    const NOW: i64 = 1_795_548_600_000;
+
+    /// A Backlog medication recorded `ago` ms before NOW, or never.
+    fn backlog_ui(ago: Option<i64>) -> Ui {
+        let mut ui = ui();
+        ui.fixed_now = Some(NOW);
+        let instances: Vec<serde_json::Value> = ago
+            .map(|ago| {
+                let at = (NOW - ago) as f64;
+                json!({ "_id": "srv_i1", "localId": "i1", "userId": "u", "reminderId": "srv_r1",
+                        "reminderKind": "medication", "scheduledTime": at, "status": "completed",
+                        "completedAt": at, "snoozeCount": 0.0, "createdAt": at, "updatedAt": at })
+            })
+            .into_iter()
+            .collect();
+        ui.on_event(Event::List(
+            Table::Reminders,
+            json!([{ "_id": "srv_r1", "localId": "r1", "userId": "u", "kind": "medication",
+                     "name": "Meclizine", "schedule": { "type": "none" }, "priority": "normal",
+                     "active": true, "createdAt": 1.0, "updatedAt": 1.0 }]),
+        ));
+        ui.on_event(Event::List(Table::Instances, json!(instances)));
+        ui
+    }
+
+    #[test]
+    fn a_backlog_item_recorded_minutes_ago_asks_before_recording_again() {
+        let mut ui = backlog_ui(Some(60_000));
+        assert_eq!(ui.recently_recorded("r1"), Some(NOW - 60_000));
+        ui.complete_backlog("r1", "Meclizine", true);
+        assert_eq!(ui.confirm_again.as_deref(), Some("r1"));
+        assert!(ui.toast.is_none(), "the first press only asks");
+        // The second press goes on to send; with no connection here that is said.
+        ui.complete_backlog("r1", "Meclizine", true);
+        assert!(ui.confirm_again.is_none());
+        assert_eq!(ui.toast.as_ref().unwrap().text, "Not connected");
+    }
+
+    #[test]
+    fn a_backlog_item_recorded_long_ago_records_on_the_first_press() {
+        let mut ui = backlog_ui(Some(RECORD_AGAIN_MS));
+        assert_eq!(ui.recently_recorded("r1"), None);
+        ui.complete_backlog("r1", "Meclizine", true);
+        assert!(ui.confirm_again.is_none());
+        assert_eq!(ui.toast.as_ref().unwrap().text, "Not connected");
+    }
+
+    #[test]
+    fn a_record_from_this_window_counts_before_the_server_shows_it() {
+        let mut ui = backlog_ui(None);
+        assert_eq!(ui.recently_recorded("r1"), None);
+        ui.recorded.insert("r1".into(), NOW - 2_000);
+        assert_eq!(ui.recently_recorded("r1"), Some(NOW - 2_000));
+        ui.complete_backlog("r1", "Meclizine", true);
+        assert_eq!(ui.confirm_again.as_deref(), Some("r1"));
+    }
+
+    #[test]
+    fn a_failed_backlog_record_is_forgotten() {
+        let mut ui = backlog_ui(None);
+        ui.recorded.insert("r1".into(), NOW);
+        ui.sending.insert(
+            5,
+            ("backlog-r1".into(), "Meclizine recorded as taken".into()),
+        );
+        ui.on_event(Event::Wrote {
+            ticket: 5,
+            result: Err("x".into()),
+        });
+        assert!(ui.recorded.is_empty());
+    }
+
+    #[test]
+    fn another_screen_drops_a_half_made_second_press() {
+        let mut ui = backlog_ui(Some(1_000));
+        ui.complete_backlog("r1", "Meclizine", true);
+        assert!(ui.confirm_again.is_some());
+        ui.go(Screen::Today);
+        assert!(ui.confirm_again.is_none());
+    }
+
+    #[test]
+    fn a_write_that_leaves_something_behind_says_so_when_it_fails() {
+        let mut ui = ui();
+        ui.sending
+            .insert(8, ("backlog-r1".into(), "taken back".into()));
+        ui.failure_words
+            .insert(8, "reopened but not marked skipped".into());
+        ui.on_event(Event::Wrote {
+            ticket: 8,
+            result: Err("x".into()),
+        });
+        assert_eq!(
+            ui.toast.as_ref().unwrap().text,
+            "reopened but not marked skipped"
+        );
+        assert!(ui.failure_words.is_empty());
     }
 
     #[test]

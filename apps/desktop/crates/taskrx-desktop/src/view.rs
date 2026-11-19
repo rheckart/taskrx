@@ -221,7 +221,7 @@ fn nav(s: &Ui, p: Palette, late: usize, loose: usize, open: usize) -> El {
     let screen = |key: &str, label: String, which: Screen| {
         button(p, key, &label, s.screen == which)
             .role("tab")
-            .on_press(move |s: &mut Ui| s.screen = which)
+            .on_press(move |s: &mut Ui| s.go(which))
     };
     let mut top = row()
         .key("nav")
@@ -439,7 +439,7 @@ fn late_row(s: &Ui, p: Palette, r: &TimelineRow) -> El {
 
 fn backlog_view(s: &Ui, p: Palette, entries: &[BacklogEntry]) -> El {
     let mut c = col().key("backlog").w_full().gap(space::S2).child(
-        text("Things to do with no set time. Done records it; the item stays here.")
+        text("Things with no set time. Taken or Done records it now, and the item stays here.")
             .font(type_::LABEL)
             .color(p.text_secondary),
     );
@@ -451,32 +451,65 @@ fn backlog_view(s: &Ui, p: Palette, entries: &[BacklogEntry]) -> El {
                 .color(p.text_secondary),
         );
     }
+    let now = s.now();
     for e in entries {
         let r = &e.reminder;
         let key = format!("backlog-{}", r.id);
-        let last = e.last_done.map_or("Never done".to_string(), |t| {
+        let medication = r.kind == ReminderKind::Medication;
+        let recent = s.recently_recorded(&r.id);
+        let kind = if medication { "Medication" } else { "Task" };
+        let last = e.last_done.map_or("never done".to_string(), |t| {
             format!(
-                "Last done {}, {}",
+                "last done {}, {}",
                 words::day(t, &s.zone),
                 words::clock(t, &s.zone)
             )
         });
-        let mut line = card_row(p, &key, false)
-            .child(name_column(p, &r.name, r.dosage.as_deref()))
-            .child(
-                text(last)
+        let mut line =
+            card_row(p, &key, recent.is_some()).child(name_column(p, &r.name, r.dosage.as_deref()));
+        if recent.is_none() {
+            line = line.child(
+                text(format!("{kind} · {last}"))
                     .key("last")
                     .font(type_::LABEL)
                     .color(p.text_secondary),
             );
+        }
         if s.connected {
+            let (id, name) = (r.id.clone(), r.name.clone());
             if s.in_flight(&key) {
                 line = line.child(saving(p, s.waiting_word(&key)));
-            } else {
-                let (id, name) = (r.id.clone(), r.name.clone());
+            } else if let Some(at) = recent {
+                // The record button's place now holds words, not a button: a press repeated
+                // because nothing seemed to happen lands on nothing.
+                let confirming = s.confirm_again.as_deref() == Some(r.id.as_str());
+                let again = if confirming {
+                    "Record again?"
+                } else {
+                    "Record again"
+                };
+                let (again_id, again_name) = (id.clone(), name.clone());
+                line = line.child(button(p, "again", again, confirming).on_press(
+                    move |s: &mut Ui| s.complete_backlog(&again_id, &again_name, medication),
+                ));
+                if let Some((instance, _)) = e.just_recorded(now) {
+                    let instance = instance.to_string();
+                    line = line.child(
+                        button(p, "undo", "Undo", false)
+                            .on_press(move |s: &mut Ui| s.undo_backlog(&id, &instance, &name)),
+                    );
+                }
                 line = line.child(
-                    button(p, "done", "Done", true)
-                        .on_press(move |s: &mut Ui| s.complete_backlog(&id, &name)),
+                    text(format!("Recorded {}", words::clock(at, &s.zone)))
+                        .key("recorded")
+                        .font(type_::LABEL)
+                        .color(p.success),
+                );
+            } else {
+                let label = if medication { "Taken" } else { "Done" };
+                line = line.child(
+                    button(p, "record", label, true)
+                        .on_press(move |s: &mut Ui| s.complete_backlog(&id, &name, medication)),
                 );
             }
         }

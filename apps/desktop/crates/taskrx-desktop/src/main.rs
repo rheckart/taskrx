@@ -59,6 +59,12 @@ fn scene_backlog(s: &mut Ui) {
     s.screen = crate::ui::Screen::Backlog;
 }
 
+/// Backlog with Record again pressed once on the item recorded two minutes ago.
+fn scene_backlog_again(s: &mut Ui) {
+    scene_backlog(s);
+    s.confirm_again = Some("r8".to_string());
+}
+
 fn scene_notices(s: &mut Ui) {
     scene_day(s);
     s.screen = crate::ui::Screen::Proposals;
@@ -142,6 +148,7 @@ fn main() {
             ("tasks", scene_tasks),
             ("catch-up", scene_catch_up),
             ("backlog", scene_backlog),
+            ("backlog-again", scene_backlog_again),
             ("notices", scene_notices),
             ("add", scene_add),
             ("reminders", scene_reminders),
