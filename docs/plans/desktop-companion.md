@@ -80,7 +80,10 @@ because two writers are unsafe until one Occurrence can only ever be one Instanc
         inside the bound. The app's own lines were lost (adb over Wi-Fi had dropped, and the
         256 KiB buffer rotated), so whether the read answered or failed fast is not recorded;
         a failure retries until the bound, so a post at 0.43 s points to a read that answered.
-        Still to see with its own lines: `read of … attempt N`
+        Seen with its own lines on 2026-11-19 at 09:00 (logcat over USB, `dumpsys battery
+        unplug` so the phone idles, light idle reached): unfrozen at 09:00:00.123, `read of
+        1795096800000: 0 rows on attempt 1 after 208 ms`, `Open in 210 ms; posting`, posted
+        0.28 s after the wake. Deep idle was not reached, so a deep-idle wake is not recorded
 - [ ] Desktop, `apps/desktop`:
   - [x] Cargo workspace: `taskrx-desktop-core` (the rules, pure), `taskrx-desktop-service`
         (sign-in, keyring, Convex, screen state) and `taskrx-desktop` (the Rune window, pinned
