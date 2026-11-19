@@ -153,6 +153,8 @@ fn main() {
         min_size: Some((560.0, 420.0)),
         ..AppSpec::new("TaskRx", (760.0, 640.0), || Ui::new(true), view::view)
     };
+    // The Wayland app id: it matches the window to taskrx-desktop.desktop and its icon.
+    rune::set_app_id("taskrx-desktop");
     let app = App::new(spec);
     if !headless() {
         let Some(_claim) = claim_single_instance() else {

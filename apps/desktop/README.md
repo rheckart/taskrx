@@ -19,6 +19,12 @@ the reference (ADR 0017). The plan is `docs/plans/desktop-companion.md`.
   rounding). It holds no rule. One copy runs at a time: two would each refresh the sign-in and
   spend the other's refresh token.
 
+## Installing it
+
+```bash
+bin/install    # makepkg -fsi in pkgbuild/: the binary, the launcher entry and the icon
+```
+
 ## Running it
 
 ```bash

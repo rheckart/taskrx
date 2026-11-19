@@ -1,0 +1,9 @@
+[Desktop Entry]
+Type=Application
+Name=TaskRx
+Comment=See your day and answer your medications and tasks; your phone does the reminding
+Exec=taskrx-desktop
+Icon=taskrx-desktop
+Terminal=false
+Categories=Utility;
+StartupWMClass=taskrx-desktop

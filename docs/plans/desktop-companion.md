@@ -116,7 +116,9 @@ because two writers are unsafe until one Occurrence can only ever be one Instanc
         pause with an end date, wait)
   - [x] Omarchy theme (the palette from `colors.toml`, re-read when it changes; `hyprctl`
         rounding)
-  - [ ] PKGBUILD and `.desktop` entry. `cargo test` becomes a gate in `CLAUDE.md`
+  - [x] PKGBUILD and `.desktop` entry (`apps/desktop/pkgbuild`, `bin/install` runs `makepkg -fsi`;
+        the window's Wayland app id is `taskrx-desktop`, and the icon is the phone's). `cargo
+        test` is a gate in `CLAUDE.md`
 - [ ] Docs: `architecture.md` moves the desktop out of Deferred, and the ADRs' open
       questions are closed
 

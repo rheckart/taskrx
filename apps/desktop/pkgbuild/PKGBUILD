@@ -1,0 +1,27 @@
+# Built from this checkout: `bin/install` runs makepkg here.
+pkgname=taskrx-desktop
+pkgver=0.1.0
+pkgrel=1
+pkgdesc='TaskRx on the desktop: see the day and answer it; the phone does the reminding'
+arch=('x86_64' 'aarch64')
+license=('MIT')
+# Rune draws with Vulkan on Wayland. The sign-in is kept by a Secret Service provider
+# (gnome-keyring on Omarchy), and xdg-open hands sign-in to the browser.
+depends=('libxkbcommon' 'wayland' 'vulkan-icd-loader' 'xdg-utils' 'org.freedesktop.secrets')
+makedepends=('cargo')
+options=('!lto' '!debug')
+source=()
+sha256sums=()
+
+build() {
+  cd "$startdir/.."
+  cargo build --release --locked -p taskrx-desktop
+}
+
+package() {
+  cd "$startdir/.."
+  install -Dm755 target/release/taskrx-desktop "$pkgdir/usr/bin/taskrx-desktop"
+  install -Dm644 ../../LICENSE "$pkgdir/usr/share/licenses/$pkgname/LICENSE"
+  install -Dm644 "$startdir/taskrx-desktop.svg" "$pkgdir/usr/share/icons/hicolor/scalable/apps/taskrx-desktop.svg"
+  install -Dm644 "$startdir/taskrx-desktop.desktop" "$pkgdir/usr/share/applications/taskrx-desktop.desktop"
+}
