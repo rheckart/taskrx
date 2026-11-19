@@ -95,13 +95,14 @@ because two writers are unsafe until one Occurrence can only ever be one Instanc
           `fancy-regex`, Java's ASCII classes spelled out)
     - [x] `push` (21 cases; call arguments are a wire type whose only number is a float64,
           so an Int64 cannot reach a `v.number()` validator)
-  - [ ] Sign-in through the browser, session token in the keyring (built 2026-11-18: PKCE to a
-        loopback port, the rotated refresh token saved before use, refreshes serialized, the
-        keyring round trip checked against gnome-keyring. Not yet run against Clerk from the app)
+  - [x] Sign-in through the browser, session token in the keyring (2026-11-18: PKCE to a
+        loopback port, the rotated refresh token saved before use, refreshes serialized. Signed in
+        from the app against Clerk; the refresh token is in gnome-keyring)
   - [ ] Today, Tasks, add and edit, Backlog, Catch up, Proposals (Today and Tasks drawn and
         answering, checked headless on made-up data: an answer is the status call, or one create
         under the moment's id; past-grace rows read Missed and are never recorded; offline rows
-        only show. Not yet run against the server. The other four screens are to come)
+        only show. Against the server on 2026-11-18 the day matched the phone's. An answer from
+        the desktop is still to be watched reaching the phone. The other four screens are to come)
   - [x] Omarchy theme (the palette from `colors.toml`, re-read when it changes; `hyprctl`
         rounding)
   - [ ] PKGBUILD and `.desktop` entry. `cargo test` becomes a gate in `CLAUDE.md`
