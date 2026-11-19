@@ -9,10 +9,16 @@
 //! - The desktop never records Missed (ADR 0005, 0016): [`Answer`] has no such case.
 
 use serde_json::{Map, Value, json};
-use taskrx_desktop_core::domain::{InstanceStatus, allows_instance_transition, instance_id_for};
-use taskrx_desktop_core::sync::push::{
-    PushCall, PushRejected, instance_create_call, instance_update_call,
+use taskrx_desktop_core::domain::{
+    InstanceStatus, NoticeResolution, NoticeRule, OccurrenceOverride, PauseWindow, Reminder,
+    ReminderKind, ScheduleTimes, allows_instance_transition, instance_id_for, notice_rules_to_json,
+    overrides_to_json, pauses_to_json,
 };
+use taskrx_desktop_core::sync::push::{
+    PushCall, PushRejected, instance_create_call, instance_update_call, notice_update_call,
+    reminder_create_call, reminder_update_call,
+};
+use taskrx_desktop_core::sync::server_schedule::schedule_to_server;
 
 use crate::data::Data;
 
@@ -122,6 +128,176 @@ pub fn answer_call(
     payload.insert("updatedAt".into(), json!(now));
     put(&mut payload, answer);
     Ok(instance_create_call(&Value::Object(payload), parent)?)
+}
+
+/// What an edit of a Reminder means to change. A field left `None` is not sent, so the server's
+/// copy stays: an unrelated edit must not overwrite a pause, a moved moment or a pill count
+/// another device set (the phone's `RemindersRepository.update`).
+#[derive(Debug, Clone, Default, PartialEq)]
+pub struct ReminderPatch {
+    pub name: Option<String>,
+    pub dosage: Option<String>,
+    pub instructions: Option<String>,
+    pub schedule: Option<ScheduleTimes>,
+    pub active: Option<bool>,
+    /// Only a count the person typed: a dose's spend is the server's (ADR 0018).
+    pub pills_remaining: Option<f64>,
+    pub pauses: Option<Vec<PauseWindow>>,
+    pub overrides: Option<Vec<OccurrenceOverride>>,
+    pub notice_rules: Option<Vec<NoticeRule>>,
+}
+
+fn put_opt(payload: &mut Map<String, Value>, key: &str, value: Option<Value>) {
+    payload.insert(key.into(), value.unwrap_or(Value::Null));
+}
+
+/// `reminders.update` for one Reminder: the fields it keeps, with the patch over them.
+pub fn reminder_patch_call(
+    data: &Data,
+    reminder_id: &str,
+    patch: &ReminderPatch,
+    now: i64,
+) -> Result<PushCall, Refusal> {
+    let r: &Reminder = data.reminder(reminder_id).ok_or(Refusal::NotOnServer)?;
+    let server_id = data
+        .reminder_server_id(reminder_id)
+        .ok_or(Refusal::NotOnServer)?;
+    let mut p = Map::new();
+    p.insert("localId".into(), json!(r.id));
+    p.insert("userId".into(), json!(r.user_id));
+    p.insert("kind".into(), json!(r.kind.wire()));
+    p.insert(
+        "name".into(),
+        json!(patch.name.clone().unwrap_or_else(|| r.name.clone())),
+    );
+    put_opt(
+        &mut p,
+        "rxcui",
+        data.reminder_rxcui(reminder_id).map(|x| json!(x)),
+    );
+    put_opt(
+        &mut p,
+        "dosage",
+        patch
+            .dosage
+            .clone()
+            .or_else(|| r.dosage.clone())
+            .map(Value::from),
+    );
+    put_opt(
+        &mut p,
+        "instructions",
+        patch
+            .instructions
+            .clone()
+            .or_else(|| r.instructions.clone())
+            .map(Value::from),
+    );
+    p.insert(
+        "schedule".into(),
+        schedule_to_server(patch.schedule.as_ref().unwrap_or(&r.schedule)),
+    );
+    // Priority, tags and caregivers are the server's unless the person chose them here.
+    p.insert("priority".into(), Value::Null);
+    p.insert("tags".into(), Value::Null);
+    p.insert("caregiverIds".into(), Value::Null);
+    put_opt(
+        &mut p,
+        "pillsRemaining",
+        patch.pills_remaining.map(Value::from),
+    );
+    put_opt(&mut p, "pillsPerDose", r.pills_per_dose.map(Value::from));
+    put_opt(
+        &mut p,
+        "refillReminderDays",
+        r.refill_reminder_days.map(Value::from),
+    );
+    p.insert("active".into(), json!(patch.active.unwrap_or(r.active)));
+    p.insert("createdAt".into(), json!(r.created_at));
+    p.insert("updatedAt".into(), json!(now));
+    put_opt(
+        &mut p,
+        "pauses",
+        patch.pauses.as_deref().map(pauses_to_json),
+    );
+    put_opt(
+        &mut p,
+        "overrides",
+        patch.overrides.as_deref().map(overrides_to_json),
+    );
+    put_opt(
+        &mut p,
+        "noticeRules",
+        patch.notice_rules.as_deref().map(notice_rules_to_json),
+    );
+    Ok(reminder_update_call(&Value::Object(p), server_id)?)
+}
+
+/// A new Reminder, as the phone's `RemindersRepository.create` sends one.
+#[derive(Debug, Clone, PartialEq)]
+pub struct NewReminder {
+    pub kind: ReminderKind,
+    pub name: String,
+    pub dosage: Option<String>,
+    pub instructions: Option<String>,
+    pub schedule: ScheduleTimes,
+}
+
+/// `reminders.create` under a new random local id, which is returned with the call.
+pub fn reminder_create(
+    user_id: &str,
+    new: &NewReminder,
+    now: i64,
+) -> Result<(String, PushCall), Refusal> {
+    let id = uuid::Uuid::new_v4().to_string();
+    let mut p = Map::new();
+    p.insert("localId".into(), json!(id));
+    p.insert("userId".into(), json!(user_id));
+    p.insert("kind".into(), json!(new.kind.wire()));
+    p.insert("name".into(), json!(new.name));
+    p.insert("rxcui".into(), Value::Null);
+    put_opt(&mut p, "dosage", new.dosage.clone().map(Value::from));
+    put_opt(
+        &mut p,
+        "instructions",
+        new.instructions.clone().map(Value::from),
+    );
+    p.insert("schedule".into(), schedule_to_server(&new.schedule));
+    for key in [
+        "priority",
+        "tags",
+        "pillsRemaining",
+        "pillsPerDose",
+        "refillReminderDays",
+        "caregiverIds",
+        "pauses",
+        "overrides",
+        "noticeRules",
+    ] {
+        p.insert(key.into(), Value::Null);
+    }
+    p.insert("active".into(), json!(true));
+    p.insert("createdAt".into(), json!(now));
+    p.insert("updatedAt".into(), json!(now));
+    Ok((id, reminder_create_call(&Value::Object(p))?))
+}
+
+/// `notices.update`: the decision the person made about a notice.
+pub fn notice_resolve_call(
+    data: &Data,
+    notice_id: &str,
+    resolution: NoticeResolution,
+    now: i64,
+) -> Result<PushCall, Refusal> {
+    let server_id = data
+        .notice_server_id(notice_id)
+        .ok_or(Refusal::NotOnServer)?;
+    let payload = json!({
+        "resolution": resolution.wire(),
+        "resolvedAt": now,
+        "updatedAt": now,
+    });
+    Ok(notice_update_call(&payload, server_id)?)
 }
 
 #[cfg(test)]
@@ -242,6 +418,68 @@ mod tests {
         };
         assert_eq!(
             answer_call(&data(), "user_1", &moment, Answer::Skip, AT),
+            Err(Refusal::NotOnServer)
+        );
+    }
+
+    #[test]
+    fn a_patch_sends_only_what_it_changes() {
+        let moved = OccurrenceOverride {
+            from: AT,
+            to: AT + 3_600_000,
+            notice_id: Some("n1".into()),
+        };
+        let call = reminder_patch_call(
+            &data(),
+            "r1",
+            &ReminderPatch {
+                overrides: Some(vec![moved]),
+                ..ReminderPatch::default()
+            },
+            AT + 10,
+        )
+        .unwrap();
+        assert_eq!(call.function, functions::REMINDERS_UPDATE);
+        assert_eq!(arg(&call, "id"), Some(&Wire::Text("srv_r1".into())));
+        assert_eq!(arg(&call, "name"), Some(&Wire::Text("Flonase".into())));
+        assert_eq!(
+            arg(&call, "updatedAt"),
+            Some(&Wire::Number((AT + 10) as f64))
+        );
+        assert!(arg(&call, "overrides").is_some());
+        for untouched in [
+            "pauses",
+            "noticeRules",
+            "pillsRemaining",
+            "priority",
+            "tags",
+        ] {
+            assert_eq!(arg(&call, untouched), None, "{untouched} was sent");
+        }
+    }
+
+    #[test]
+    fn a_new_reminder_gets_a_fresh_id_each_time() {
+        let new = NewReminder {
+            kind: ReminderKind::Task,
+            name: "Pick up the prescription".into(),
+            dosage: None,
+            instructions: Some("Ready Thursday".into()),
+            schedule: ScheduleTimes::Once { at: AT },
+        };
+        let (a, call) = reminder_create("user_1", &new, AT).unwrap();
+        let (b, _) = reminder_create("user_1", &new, AT).unwrap();
+        assert_ne!(a, b);
+        assert_eq!(call.function, functions::REMINDERS_CREATE);
+        assert_eq!(arg(&call, "localId"), Some(&Wire::Text(a)));
+        assert_eq!(arg(&call, "kind"), Some(&Wire::Text("task".into())));
+        assert_eq!(arg(&call, "active"), Some(&Wire::Bool(true)));
+    }
+
+    #[test]
+    fn an_unknown_notice_is_not_resolved() {
+        assert_eq!(
+            notice_resolve_call(&data(), "n9", NoticeResolution::Dismissed, AT),
             Err(Refusal::NotOnServer)
         );
     }

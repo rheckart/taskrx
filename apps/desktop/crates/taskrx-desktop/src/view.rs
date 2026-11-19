@@ -4,11 +4,17 @@
 use rune::tok::{space, type_};
 use rune::{Cx, El, ScrollSpec, Tx, col, el, row, text};
 use taskrx_desktop_core::domain::{InstanceStatus, ReminderKind};
+use taskrx_desktop_core::domain::{MoveRefusal, NoticeResolution, ScheduleTimes};
+use taskrx_desktop_core::notices::{ProposalRefusal, ReadDate, UnreadReason};
 use taskrx_desktop_core::timeline::TimelineRow;
 use taskrx_desktop_service::screens::backlog::{BacklogEntry, backlog};
 use taskrx_desktop_service::screens::catch_up::{CatchUpDay, catch_up, total};
+use taskrx_desktop_service::screens::proposals::{NoticeView, apply_patch, proposals};
 use taskrx_desktop_service::screens::today::{AsNeeded, Row, Today};
 use taskrx_desktop_service::writes::Answer;
+use taskrx_desktop_service::writes::{
+    NewReminder, notice_resolve_call, reminder_create, reminder_patch_call,
+};
 
 use crate::theme::Palette;
 use crate::ui::{Phase, Screen, Ui, row_key};
@@ -130,12 +136,13 @@ fn signed_in(s: &Ui, p: Palette) -> El {
             .key("loading")
             .w_full()
             .grow(1.0)
-            .child(nav(s, p, 0, 0))
+            .child(nav(s, p, 0, 0, 0))
             .child(centered(p, "Loading your day", &line));
     };
     let now = s.now();
     let late = catch_up(data, now, &s.zone);
     let loose = backlog(data);
+    let notices = proposals(data, now, &s.zone);
     let (sub, mut list) = match s.screen {
         Screen::Today => {
             let today = s.today().expect("data is decoded");
@@ -147,6 +154,7 @@ fn signed_in(s: &Ui, p: Palette) -> El {
         }
         Screen::CatchUp => (None, catch_up_view(s, p, &late)),
         Screen::Backlog => (None, backlog_view(s, p, &loose)),
+        Screen::Proposals => (None, proposals_view(s, p, &notices)),
     };
     // A list that failed after the day was drawn: what is shown may be out of date.
     if let Some(problem) = &s.problem {
@@ -167,7 +175,7 @@ fn signed_in(s: &Ui, p: Palette) -> El {
         .w_full()
         .grow(1.0)
         .min_h(0.0)
-        .child(nav(s, p, total(&late), loose.len()));
+        .child(nav(s, p, total(&late), loose.len(), notices.len()));
     if let Some(sub) = sub {
         c = c.child(sub);
     }
@@ -196,7 +204,7 @@ fn counted(label: &str, count: usize) -> String {
 }
 
 /// The screens, the connection's state and sign-out.
-fn nav(s: &Ui, p: Palette, late: usize, loose: usize) -> El {
+fn nav(s: &Ui, p: Palette, late: usize, loose: usize, open: usize) -> El {
     let status = if s.auth_problem.is_some() {
         Some("Couldn't renew the sign-in; retrying")
     } else if !s.connected {
@@ -227,6 +235,11 @@ fn nav(s: &Ui, p: Palette, late: usize, loose: usize) -> El {
             "screen-backlog",
             counted("Backlog", loose),
             Screen::Backlog,
+        ))
+        .child(screen(
+            "screen-proposals",
+            counted("Notices", open),
+            Screen::Proposals,
         ))
         .child(el().grow(1.0));
     if let Some(line) = status {
@@ -458,6 +471,233 @@ fn backlog_view(s: &Ui, p: Palette, entries: &[BacklogEntry]) -> El {
         c = c.child(line);
     }
     c
+}
+
+fn proposals_view(s: &Ui, p: Palette, notices: &[NoticeView]) -> El {
+    let mut c = col().key("proposals").w_full().gap(space::S2).child(
+        text("Messages your watched senders sent. Nothing changes until you choose.")
+            .font(type_::LABEL)
+            .color(p.text_secondary),
+    );
+    if notices.is_empty() {
+        return c.child(
+            text("No notices waiting.")
+                .key("empty")
+                .font(type_::BODY)
+                .color(p.text_secondary),
+        );
+    }
+    for v in notices {
+        c = c.child(notice_card(s, p, v));
+    }
+    c
+}
+
+/// What the reader made of the notice: the date it names, or why it found none.
+fn reading_line(v: &NoticeView) -> String {
+    match &v.reading {
+        ReadDate::Found {
+            date,
+            time,
+            matched_text,
+        } => {
+            let when = date.strftime("%A, %B %-d").to_string();
+            match time {
+                Some(t) => format!(
+                    "Names {when} at {} (\u{201c}{matched_text}\u{201d})",
+                    t.strftime("%-I:%M %p")
+                ),
+                None => format!("Names {when} (\u{201c}{matched_text}\u{201d})"),
+            }
+        }
+        ReadDate::Unread(UnreadReason::NoDate) => "No date found".to_string(),
+        ReadDate::Unread(UnreadReason::Ambiguous) => {
+            "The date could be read more than one way".to_string()
+        }
+        ReadDate::Unread(UnreadReason::Competing) => "It names more than one date".to_string(),
+        ReadDate::Unread(UnreadReason::Impossible) => {
+            "It names a date that doesn't exist".to_string()
+        }
+    }
+}
+
+fn refusal_words(r: ProposalRefusal) -> &'static str {
+    match r {
+        ProposalRefusal::NoOccurrence => "the task has no moment near that date",
+        ProposalRefusal::Move(MoveRefusal::InThePast) => "that time has passed",
+        ProposalRefusal::Move(MoveRefusal::AlreadyAnswered) => "that moment is already answered",
+        ProposalRefusal::Move(MoveRefusal::InProgress) => "that moment is under way",
+        ProposalRefusal::Move(MoveRefusal::InAPause) => "the task is paused then",
+        ProposalRefusal::Move(MoveRefusal::TooLate) => "it is too late to move it",
+        ProposalRefusal::Move(MoveRefusal::NotATask | MoveRefusal::NotAfter) => {
+            "it can't be moved there"
+        }
+    }
+}
+
+fn notice_card(s: &Ui, p: Palette, v: &NoticeView) -> El {
+    let n = &v.notice;
+    let key = format!("notice-{}", n.id);
+    let mut card = col()
+        .key(key.clone())
+        .w_full()
+        .px(space::S3)
+        .py(space::S3)
+        .gap(space::S2)
+        .radius(p.radius)
+        .fill(p.card)
+        .border(1.0, p.card_border)
+        .child(
+            row()
+                .key("head")
+                .w_full()
+                .gap(space::S2)
+                .child(
+                    text(n.title.clone())
+                        .font(type_::TITLE)
+                        .color(p.text)
+                        .grow(1.0)
+                        .truncate(),
+                )
+                .child(
+                    text(format!(
+                        "{} · {}",
+                        n.source_value,
+                        words::day(n.received_at, &s.zone)
+                    ))
+                    .font(type_::LABEL)
+                    .color(p.text_secondary),
+                ),
+        );
+    if let Some(sentence) = &n.sentence {
+        card = card.child(
+            text(sentence.clone())
+                .key("sentence")
+                .font(type_::BODY)
+                .color(p.text)
+                .wrap(),
+        );
+    }
+    card = card.child(
+        text(reading_line(v))
+            .key("reading")
+            .font(type_::LABEL)
+            .color(p.text_secondary),
+    );
+    for offer in &v.offers {
+        let pr = &offer.proposal;
+        let line = match (pr.from, pr.refusal) {
+            (Some(from), None) => format!(
+                "Move {} from {}, {} to {}, {}",
+                offer.task_name,
+                words::day(from, &s.zone),
+                words::clock(from, &s.zone),
+                words::day(pr.to, &s.zone),
+                words::clock(pr.to, &s.zone)
+            ),
+            (_, Some(r)) => format!("{}: can't move, {}", offer.task_name, refusal_words(r)),
+            (None, None) => format!("{}: nothing to move", offer.task_name),
+        };
+        let mut r = row()
+            .key(format!("offer-{}", pr.reminder_id))
+            .w_full()
+            .gap(space::S2)
+            .center_y()
+            .child(text(line).font(type_::BODY).color(p.text).grow(1.0));
+        if s.connected && !s.in_flight(&key) && pr.applies() {
+            let (notice_id, proposal, name) = (n.id.clone(), pr.clone(), offer.task_name.clone());
+            let key = key.clone();
+            r = r.child(
+                button(p, "apply", "Move it", true).on_press(move |s: &mut Ui| {
+                    let now = s.now();
+                    let Some(data) = s.data.as_ref() else { return };
+                    let calls = apply_patch(data, &notice_id, &proposal, now).and_then(|patch| {
+                        Ok((
+                            reminder_patch_call(data, &proposal.reminder_id, &patch, now)?,
+                            notice_resolve_call(data, &notice_id, NoticeResolution::Applied, now)?,
+                        ))
+                    });
+                    match calls {
+                        Ok((first, then)) => {
+                            s.send_then(first, then, key.clone(), format!("{name} moved"))
+                        }
+                        Err(refusal) => s.refuse(&refusal),
+                    }
+                }),
+            );
+        }
+        card = card.child(r);
+    }
+    let mut actions = row()
+        .key("actions")
+        .w_full()
+        .gap(space::S2)
+        .child(el().grow(1.0));
+    if !s.connected {
+        return card;
+    }
+    if s.in_flight(&key) {
+        return card.child(actions.child(saving(p)));
+    }
+    let new_at = v.new_task_at;
+    let (notice_id, title, sentence) = (n.id.clone(), n.title.clone(), n.sentence.clone());
+    let task_key = key.clone();
+    actions = actions.child(
+        button(
+            p,
+            "new-task",
+            &format!(
+                "New task {}, {}",
+                words::day(new_at, &s.zone),
+                words::clock(new_at, &s.zone)
+            ),
+            false,
+        )
+        .on_press(move |s: &mut Ui| {
+            let now = s.now();
+            let (Some(user), Some(data)) = (s.user_id(), s.data.as_ref()) else {
+                return;
+            };
+            let name = if title.trim().is_empty() {
+                "From a notice".to_string()
+            } else {
+                title.trim().to_string()
+            };
+            let new = NewReminder {
+                kind: ReminderKind::Task,
+                name: name.clone(),
+                dosage: None,
+                instructions: sentence.clone(),
+                schedule: ScheduleTimes::Once { at: new_at },
+            };
+            let calls = reminder_create(&user, &new, now).and_then(|(_, create)| {
+                Ok((
+                    create,
+                    notice_resolve_call(data, &notice_id, NoticeResolution::NewTask, now)?,
+                ))
+            });
+            match calls {
+                Ok((first, then)) => {
+                    s.send_then(first, then, task_key.clone(), "Task added".into())
+                }
+                Err(refusal) => s.refuse(&refusal),
+            }
+        }),
+    );
+    let (notice_id, dismiss_key) = (n.id.clone(), key.clone());
+    actions = actions.child(
+        button(p, "dismiss", "Dismiss", false).on_press(move |s: &mut Ui| {
+            let now = s.now();
+            let Some(data) = s.data.as_ref() else { return };
+            match notice_resolve_call(data, &notice_id, NoticeResolution::Dismissed, now) {
+                Ok(call) => {
+                    let _ = s.send_call(call, dismiss_key.clone(), "Notice dismissed".into());
+                }
+                Err(refusal) => s.refuse(&refusal),
+            }
+        }),
+    );
+    card.child(actions)
 }
 
 fn card_row(p: Palette, key: &str, highlighted: bool) -> El {

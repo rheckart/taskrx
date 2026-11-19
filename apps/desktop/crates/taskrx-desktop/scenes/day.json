@@ -97,7 +97,14 @@
       "priority": "normal",
       "active": true,
       "createdAt": 1793000000000,
-      "updatedAt": 1793000000000
+      "updatedAt": 1793000000000,
+      "noticeRules": [
+        {
+          "sourceKind": "email",
+          "sourceValue": "city@example.org",
+          "terms": ["recycling"]
+        }
+      ]
     },
     {
       "_id": "srv_r7",
@@ -155,5 +162,32 @@
       "updatedAt": 1795540000000
     }
   ],
-  "notices": []
+  "notices": [
+    {
+      "_id": "srv_n1",
+      "localId": "n1",
+      "userId": "user_scene",
+      "sourceKind": "email",
+      "sourceValue": "city@example.org",
+      "title": "Holiday collection schedule",
+      "sentence": "Recycling pickup moves to Friday, November 27 because of the holiday.",
+      "receivedAt": 1795540000000,
+      "resolution": "none",
+      "createdAt": 1795540000000,
+      "updatedAt": 1795540000000
+    },
+    {
+      "_id": "srv_n2",
+      "localId": "n2",
+      "userId": "user_scene",
+      "sourceKind": "email",
+      "sourceValue": "pharmacy@example.com",
+      "title": "Your prescription is ready",
+      "sentence": "Your order can be picked up after 3pm on December 1.",
+      "receivedAt": 1795545000000,
+      "resolution": "none",
+      "createdAt": 1795545000000,
+      "updatedAt": 1795545000000
+    }
+  ]
 }

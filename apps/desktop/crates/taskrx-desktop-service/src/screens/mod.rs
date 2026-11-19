@@ -4,4 +4,5 @@
 
 pub mod backlog;
 pub mod catch_up;
+pub mod proposals;
 pub mod today;

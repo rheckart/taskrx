@@ -33,7 +33,9 @@ pub struct Data {
     pub instances: Vec<ReminderInstance>,
     pub notices: Vec<Notice>,
     reminder_server_ids: HashMap<String, String>,
+    reminder_rxcuis: HashMap<String, String>,
     instance_server_ids: HashMap<String, String>,
+    notice_server_ids: HashMap<String, String>,
     /// Documents left out: an unknown kind or status, or an Instance whose parent is not listed.
     pub left_out: usize,
 }
@@ -53,6 +55,10 @@ impl Data {
         for doc in &reminder_docs {
             match reminder_to_pulled(doc) {
                 Some(pulled) => {
+                    if let Some(rxcui) = pulled.rxcui {
+                        data.reminder_rxcuis
+                            .insert(pulled.reminder.id.clone(), rxcui);
+                    }
                     data.reminder_server_ids
                         .insert(pulled.reminder.id.clone(), pulled.convex_id);
                     data.reminders.push(pulled.reminder);
@@ -73,7 +79,11 @@ impl Data {
         }
         for doc in &notice_docs {
             match notice_to_pulled(doc) {
-                Some(pulled) => data.notices.push(pulled.notice),
+                Some(pulled) => {
+                    data.notice_server_ids
+                        .insert(pulled.notice.id.clone(), pulled.convex_id);
+                    data.notices.push(pulled.notice);
+                }
                 None => data.left_out += 1,
             }
         }
@@ -90,6 +100,18 @@ impl Data {
 
     pub fn reminder_server_id(&self, local_id: &str) -> Option<&str> {
         self.reminder_server_ids.get(local_id).map(String::as_str)
+    }
+
+    pub fn reminder_rxcui(&self, local_id: &str) -> Option<&str> {
+        self.reminder_rxcuis.get(local_id).map(String::as_str)
+    }
+
+    pub fn notice(&self, local_id: &str) -> Option<&Notice> {
+        self.notices.iter().find(|n| n.id == local_id)
+    }
+
+    pub fn notice_server_id(&self, local_id: &str) -> Option<&str> {
+        self.notice_server_ids.get(local_id).map(String::as_str)
     }
 
     pub fn instance_server_id(&self, local_id: &str) -> Option<&str> {

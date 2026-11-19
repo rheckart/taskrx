@@ -7,6 +7,7 @@ use std::sync::Arc;
 use jiff::tz::TimeZone;
 use taskrx_desktop_core::domain::{InstanceStatus, ReminderKind};
 use taskrx_desktop_core::snooze::{snooze_minutes_or_default, snooze_until};
+use taskrx_desktop_core::sync::push::PushCall;
 use taskrx_desktop_core::timeline::TimelineRow;
 use taskrx_desktop_service::connection::{Event, Table};
 use taskrx_desktop_service::data::{Data, Lists};
@@ -34,6 +35,7 @@ pub enum Screen {
     Today,
     CatchUp,
     Backlog,
+    Proposals,
 }
 
 /// Several writes sent as one answer: said once, when the last is back.
@@ -73,6 +75,8 @@ pub struct Ui {
     pub screen: Screen,
     pub kind: Option<ReminderKind>,
     pub batch: Option<Batch>,
+    /// A write to send once the ticket's write has landed, under the same key.
+    pub follow_ups: HashMap<u64, (PushCall, String, String)>,
     pub bulk_undo: Option<BulkUndo>,
     pub day_offset: i32,
     pub hide_done: bool,
@@ -110,6 +114,7 @@ impl Ui {
             screen: Screen::Today,
             kind: None,
             batch: None,
+            follow_ups: HashMap::new(),
             bulk_undo: None,
             day_offset: 0,
             hide_done: true,
@@ -183,6 +188,15 @@ impl Ui {
             Event::AuthUnreachable(why) => self.auth_problem = Some(why),
             Event::Wrote { ticket, result } => {
                 let (_, what) = self.sending.remove(&ticket).unwrap_or_default();
+                if let Some((then, key, done)) = self.follow_ups.remove(&ticket) {
+                    match result {
+                        Ok(()) => {
+                            let _ = self.send_call(then, key, done);
+                        }
+                        Err(e) => self.say(format!("Couldn't save that: {e}"), true),
+                    }
+                    return;
+                }
                 if let Some(batch) = self.batch.as_mut()
                     && batch.tickets.remove(&ticket)
                 {
@@ -231,6 +245,7 @@ impl Ui {
         self.connected = false;
         self.sending.clear();
         self.batch = None;
+        self.follow_ups.clear();
         self.bulk_undo = None;
         self.screen = Screen::Today;
     }
@@ -392,21 +407,49 @@ impl Ui {
             return None;
         };
         match answer_call(data, &user, moment, answer, self.now()) {
-            Ok(call) => match host.write(call) {
-                Some(ticket) => {
-                    self.sending.insert(ticket, (key, done));
-                    Some(ticket)
-                }
-                None => {
-                    self.say("Not connected", true);
-                    None
-                }
-            },
+            Ok(call) => self.send_call(call, key, done),
             Err(refusal) => {
                 self.say(refused(&refusal), true);
                 None
             }
         }
+    }
+
+    /// Sends a built call under `key`; `done` is said when the server has it.
+    pub fn send_call(&mut self, call: PushCall, key: String, done: String) -> Option<u64> {
+        let Some(host) = self.host.clone() else {
+            self.say("Not connected", true);
+            return None;
+        };
+        match host.write(call) {
+            Some(ticket) => {
+                self.sending.insert(ticket, (key, done));
+                Some(ticket)
+            }
+            None => {
+                self.say("Not connected", true);
+                None
+            }
+        }
+    }
+
+    /// Two writes where the second only makes sense once the first has landed: a notice is
+    /// settled after its move or its task is saved, never before.
+    pub fn send_then(&mut self, first: PushCall, then: PushCall, key: String, done: String) {
+        if self.in_flight(&key) {
+            return;
+        }
+        if let Some(ticket) = self.send_call(first, key.clone(), String::new()) {
+            self.follow_ups.insert(ticket, (then, key, done));
+        }
+    }
+
+    pub fn refuse(&mut self, refusal: &Refusal) {
+        self.say(refused(refusal), true);
+    }
+
+    pub fn user_id(&self) -> Option<String> {
+        self.host.as_ref().and_then(|h| h.user_id())
     }
 
     pub fn snooze_until(&self) -> i64 {
@@ -508,6 +551,25 @@ mod tests {
         assert_eq!(toast.text, "Couldn't answer 1 of 2");
         assert!(toast.failed);
         assert!(ui.batch.is_none());
+    }
+
+    #[test]
+    fn a_second_write_is_not_sent_when_the_first_fails() {
+        let mut ui = ui();
+        let then = PushCall {
+            function: "notices:update",
+            args: Vec::new(),
+        };
+        ui.sending.insert(7, ("notice-n1".into(), String::new()));
+        ui.follow_ups
+            .insert(7, (then, "notice-n1".into(), "Moved".into()));
+        ui.on_event(Event::Wrote {
+            ticket: 7,
+            result: Err("Reminder not found".into()),
+        });
+        assert!(ui.follow_ups.is_empty());
+        assert!(!ui.in_flight("notice-n1"));
+        assert!(ui.toast.as_ref().unwrap().failed);
     }
 
     #[test]

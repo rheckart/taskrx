@@ -106,7 +106,10 @@ because two writers are unsafe until one Occurrence can only ever be one Instanc
         headless: Catch up lists what the sweep would mark, answered a row, a day or all at once
         and stamped at the moment due, with one Undo for the last answer; Backlog's Done records
         an Instance at the act. Moving a Backlog item to the timeline waits for the edit screen.
-        Add and edit, and Proposals, are to come)
+        Notices (Proposals) too: each open notice with the date it names and the move its rules
+        propose, applied as an override then the notice settled, the second write only once the
+        first lands; New task and Dismiss as on the phone. Applying by hand to a task with no
+        rule, and choosing another moment, wait. Add and edit is to come)
   - [x] Omarchy theme (the palette from `colors.toml`, re-read when it changes; `hyprctl`
         rounding)
   - [ ] PKGBUILD and `.desktop` entry. `cargo test` becomes a gate in `CLAUDE.md`

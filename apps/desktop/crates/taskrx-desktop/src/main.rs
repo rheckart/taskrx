@@ -59,6 +59,11 @@ fn scene_backlog(s: &mut Ui) {
     s.screen = crate::ui::Screen::Backlog;
 }
 
+fn scene_notices(s: &mut Ui) {
+    scene_day(s);
+    s.screen = crate::ui::Screen::Proposals;
+}
+
 fn scene_signed_out(s: &mut Ui) {
     s.phase = Phase::SignedOut { problem: None };
 }
@@ -125,6 +130,7 @@ fn main() {
             ("tasks", scene_tasks),
             ("catch-up", scene_catch_up),
             ("backlog", scene_backlog),
+            ("notices", scene_notices),
             ("signed-out", scene_signed_out),
             ("offline", scene_offline),
         ],
