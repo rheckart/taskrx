@@ -122,9 +122,12 @@ because two writers are unsafe until one Occurrence can only ever be one Instanc
         skip: the server keeps every Instance) and asks before recording again. "Give it a time" moves a Backlog item to the timeline as on
         the phone: Daily, Weekly, Monthly, Interval or Once, typed into fields ("9 am, 9 pm",
         "tomorrow", "Nov 20") and read back as the schedule before Move is offered; a moment
-        already past is warned of, as the phone does. As needed is left to the edit screen, as on
-        the phone. The phrase reader is not used there: it reads "tomorrow at 3pm" as daily and an
-        unread time as daily at 9:00.
+        already past is warned of, as the phone does. A medication can also be made As needed there
+        (least time between doses, optional most in 24 hours), which the phone's Backlog leaves to
+        its edit screen: the desktop has no schedule editor yet. The phrase reader is not used
+        there: it reads "tomorrow at 3pm" as daily and an unread time as daily at 9:00. Today's
+        as-needed Take now works as the Backlog's record does: for five minutes after a dose taken
+        on either device it says "Taken", offers Undo, and asks before taking another.
         Notices (Proposals) too: each open notice with the date it names and the move its rules
         propose, applied as an override then the notice settled, the second write only once the
         first lands; New task and Dismiss as on the phone. Applying by hand to a task with no

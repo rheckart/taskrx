@@ -3,7 +3,8 @@
 //!
 //! Two things the phone does not have yet, because a press here records at once and the item
 //! stays put: a record made in the last few minutes is said on the row with a way to take it
-//! back, and recording it again asks first (see [`RECORD_AGAIN_MS`]).
+//! back, and recording it again asks first (see [`RECORD_AGAIN_MS`]). Today's as-needed Take
+//! now works the same way, from the same [`last_record`].
 
 use taskrx_desktop_core::backlog::is_backlog;
 use taskrx_desktop_core::domain::{InstanceStatus, Reminder};
@@ -11,7 +12,8 @@ use taskrx_desktop_core::domain::{InstanceStatus, Reminder};
 use crate::data::Data;
 
 /// How long a record stays "just recorded" on its row: Undo is offered, and recording the same
-/// item again takes a second press. Three presses seconds apart once made three doses.
+/// item again takes a second press. Three presses seconds apart once made three doses. The
+/// Backlog's Taken or Done and Today's as-needed Take now both use it.
 pub const RECORD_AGAIN_MS: i64 = 5 * 60_000;
 
 #[derive(Debug, Clone, PartialEq)]
@@ -32,17 +34,28 @@ impl BacklogEntry {
     }
 }
 
+/// A reminder's latest completed Instance, from any device: when, and which. Ties go to the
+/// larger id, so the time shown and the record Undo takes back are always the same one.
+pub fn last_record(data: &Data, reminder_id: &str) -> Option<(i64, String)> {
+    data.instances
+        .iter()
+        .filter(|i| i.reminder_id == reminder_id && i.status == InstanceStatus::Completed)
+        .filter_map(|i| i.completed_at.map(|at| (at, i.id.clone())))
+        .max()
+}
+
+/// [`last_record`] while it is recent enough to take back: its Instance and when.
+pub fn just_recorded(data: &Data, reminder_id: &str, now: i64) -> Option<(String, i64)> {
+    let (at, id) = last_record(data, reminder_id)?;
+    (now - at < RECORD_AGAIN_MS).then_some((id, at))
+}
+
 pub fn backlog(data: &Data) -> Vec<BacklogEntry> {
     data.reminders
         .iter()
         .filter(|r| r.active && is_backlog(r))
         .map(|r| {
-            let last = data
-                .instances
-                .iter()
-                .filter(|i| i.reminder_id == r.id && i.status == InstanceStatus::Completed)
-                .filter_map(|i| i.completed_at.map(|at| (at, i.id.clone())))
-                .max();
+            let last = last_record(data, &r.id);
             BacklogEntry {
                 reminder: r.clone(),
                 last_done: last.as_ref().map(|(at, _)| *at),

@@ -11,11 +11,11 @@ use taskrx_desktop_core::domain::{
 use taskrx_desktop_core::notices::{ProposalRefusal, ReadDate, UnreadReason};
 use taskrx_desktop_core::timeline::TimelineRow;
 use taskrx_desktop_service::data::Data;
-use taskrx_desktop_service::screens::backlog::{BacklogEntry, backlog};
+use taskrx_desktop_service::screens::backlog::{BacklogEntry, backlog, just_recorded};
 use taskrx_desktop_service::screens::catch_up::{CatchUpDay, catch_up, total};
 use taskrx_desktop_service::screens::proposals::{NoticeView, apply_patch, proposals};
 use taskrx_desktop_service::screens::timing::{
-    IntervalUnit, TimingKind, in_the_past, read_form, toggle_day,
+    GapUnit, IntervalUnit, TimingKind, in_the_past, read_form, toggle_day,
 };
 use taskrx_desktop_service::screens::today::{AsNeeded, Row, Today};
 use taskrx_desktop_service::writes::Answer;
@@ -509,11 +509,10 @@ fn backlog_view(s: &Ui, p: Palette, entries: &[BacklogEntry]) -> El {
                     move |s: &mut Ui| s.complete_backlog(&again_id, &again_name, medication),
                 ));
                 if let Some((instance, _)) = e.just_recorded(now) {
-                    let instance = instance.to_string();
-                    line = line.child(
-                        button(p, "undo", "Undo", false)
-                            .on_press(move |s: &mut Ui| s.undo_backlog(&id, &instance, &name)),
-                    );
+                    let (instance, undo_key) = (instance.to_string(), key.clone());
+                    line = line.child(button(p, "undo", "Undo", false).on_press(
+                        move |s: &mut Ui| s.undo_record(undo_key.clone(), &id, &instance, &name),
+                    ));
                 }
                 line = line.child(
                     text(format!("Recorded {}", words::clock(at, &s.zone)))
@@ -531,14 +530,14 @@ fn backlog_view(s: &Ui, p: Palette, entries: &[BacklogEntry]) -> El {
         }
         c = c.child(line);
         if timing && s.connected {
-            c = c.child(timing_view(s, p, &r.id));
+            c = c.child(timing_view(s, p, &r.id, medication));
         }
     }
     c
 }
 
 /// "Give it a time": the variant, its fields, and what they read as before anything is sent.
-fn timing_view(s: &Ui, p: Palette, reminder_id: &str) -> El {
+fn timing_view(s: &Ui, p: Palette, reminder_id: &str, medication: bool) -> El {
     let t = &s.timing;
     let now = s.now();
     let mut c = col()
@@ -551,7 +550,7 @@ fn timing_view(s: &Ui, p: Palette, reminder_id: &str) -> El {
         .fill(p.card)
         .border(1.0, p.accent);
     let mut kinds = row().key("kinds").gap(space::S2);
-    for kind in TimingKind::ALL {
+    for kind in TimingKind::offered(medication) {
         kinds = kinds.child(
             button(p, kind.label(), kind.label(), t.kind == kind)
                 .role("radio")
@@ -611,6 +610,39 @@ fn timing_view(s: &Ui, p: Palette, reminder_id: &str) -> El {
                 .child(field(p, "date", "Day", &t.date, |s| &mut s.timing.date))
                 .child(field(p, "at", "Time", &t.at, |s| &mut s.timing.at));
         }
+        TimingKind::AsNeeded => {
+            let mut units = row().key("gap-units").gap(space::S2);
+            for unit in GapUnit::ALL {
+                units = units.child(
+                    button(p, unit.label(), unit.label(), t.gap_unit == unit)
+                        .role("radio")
+                        .on_press(move |s: &mut Ui| s.timing.gap_unit = unit),
+                );
+            }
+            c = c
+                .child(field(
+                    p,
+                    "gap",
+                    "At least this long between doses",
+                    &t.gap,
+                    |s| &mut s.timing.gap,
+                ))
+                .child(units)
+                .child(field(
+                    p,
+                    "limit",
+                    "No more than this many doses in 24 hours (optional)",
+                    &t.limit,
+                    |s| &mut s.timing.limit,
+                ))
+                .child(
+                    text("No times. Take it from Today when you need it; Today says when the next dose is allowed.")
+                        .key("as-needed-hint")
+                        .font(type_::LABEL)
+                        .color(p.text_secondary)
+                        .wrap(),
+                );
+        }
     }
     let reading = read_form(&t.form(), now, &s.zone);
     let (line, color) = match &reading {
@@ -636,9 +668,21 @@ fn timing_view(s: &Ui, p: Palette, reminder_id: &str) -> El {
         );
     }
     if reading.is_ok() {
-        c = c.child(row().key("timing-actions").child(
-            button(p, "move", "Move to timeline", true).on_press(|s: &mut Ui| s.move_to_timeline()),
-        ));
+        c = c.child(
+            row().key("timing-actions").child(
+                button(
+                    p,
+                    "move",
+                    if t.kind == TimingKind::AsNeeded {
+                        "Make it as needed"
+                    } else {
+                        "Move to timeline"
+                    },
+                    true,
+                )
+                .on_press(|s: &mut Ui| s.move_to_timeline()),
+            ),
+        );
     }
     c
 }
@@ -1445,11 +1489,45 @@ fn as_needed_row(s: &Ui, p: Palette, a: &AsNeeded) -> El {
     if s.in_flight(&as_needed_key) {
         return r.child(saving(p, s.waiting_word(&as_needed_key)));
     }
-    // Offered while waiting too: the wait is advice, and a dose already taken is recorded.
-    r.child(
-        button(p, "take", "Take now", ready).on_press_tx(move |s: &mut Ui, tx: &mut Tx| {
+    let Some(at) = s.recently_recorded(&a.reminder_id) else {
+        // Offered while waiting too: the wait is advice, and a dose already taken is recorded.
+        return r.child(button(p, "take", "Take now", ready).on_press_tx(
+            move |s: &mut Ui, tx: &mut Tx| {
+                s.clock = tx.clock();
+                s.take_as_needed(&id, &name);
+            },
+        ));
+    };
+    // Just taken, here or on the phone: Take now's place holds words, another dose takes a
+    // second press, and the dose can be taken back, as on the Backlog.
+    let confirming = s.confirm_again.as_deref() == Some(a.reminder_id.as_str());
+    let again = if confirming {
+        "Take again?"
+    } else {
+        "Take again"
+    };
+    let (again_id, again_name) = (id.clone(), name.clone());
+    let mut r = r.child(button(p, "again", again, confirming).on_press_tx(
+        move |s: &mut Ui, tx: &mut Tx| {
             s.clock = tx.clock();
-            s.take_as_needed(&id, &name);
-        }),
+            s.take_as_needed(&again_id, &again_name);
+        },
+    ));
+    if let Some((instance, _)) = s
+        .data
+        .as_ref()
+        .and_then(|data| just_recorded(data, &a.reminder_id, now))
+    {
+        r = r.child(
+            button(p, "undo", "Undo", false).on_press(move |s: &mut Ui| {
+                s.undo_record(as_needed_key.clone(), &id, &instance, &name)
+            }),
+        );
+    }
+    r.child(
+        text(format!("Taken {}", words::clock(at, &s.zone)))
+            .key("recorded")
+            .font(type_::LABEL)
+            .color(p.success),
     )
 }

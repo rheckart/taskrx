@@ -3,8 +3,11 @@
 //! `canMoveToTimeline`: what is savable is core's `is_well_formed_schedule`, and the Backlog's
 //! own "no time" is not a time to move to.
 //!
-//! As needed is not offered, as on the phone's Backlog: it is a way to take a medication, set
-//! from the Reminder's edit screen.
+//! As needed is offered for a medication, which the phone's Backlog does not do (its
+//! `SchedulePicker` leaves it out there and offers it on the edit screen): the desktop has no
+//! edit screen for a schedule yet, and a medication kept in the Backlog is often one taken when
+//! needed. Its fields are the phone's `AsNeededPicker`: the least time between doses, and an
+//! optional most in 24 hours.
 
 use jiff::civil::{Date, Time};
 use jiff::tz::TimeZone;
@@ -20,16 +23,26 @@ pub enum TimingKind {
     Monthly,
     Interval,
     Once,
+    AsNeeded,
 }
 
 impl TimingKind {
-    pub const ALL: [TimingKind; 5] = [
+    pub const ALL: [TimingKind; 6] = [
         TimingKind::Daily,
         TimingKind::Weekly,
         TimingKind::Monthly,
         TimingKind::Interval,
         TimingKind::Once,
+        TimingKind::AsNeeded,
     ];
+
+    /// The variants offered for an item: As needed is a way to take a medication, and a task
+    /// has no doses to space out.
+    pub fn offered(medication: bool) -> impl Iterator<Item = TimingKind> {
+        Self::ALL
+            .into_iter()
+            .filter(move |k| medication || *k != TimingKind::AsNeeded)
+    }
 
     pub fn label(self) -> &'static str {
         match self {
@@ -38,6 +51,32 @@ impl TimingKind {
             TimingKind::Monthly => "Monthly",
             TimingKind::Interval => "Interval",
             TimingKind::Once => "Once",
+            TimingKind::AsNeeded => "As needed",
+        }
+    }
+}
+
+/// What the least time between as-needed doses is counted in. The schedule keeps minutes.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum GapUnit {
+    Minutes,
+    Hours,
+}
+
+impl GapUnit {
+    pub const ALL: [GapUnit; 2] = [GapUnit::Minutes, GapUnit::Hours];
+
+    pub fn label(self) -> &'static str {
+        match self {
+            GapUnit::Minutes => "Minutes",
+            GapUnit::Hours => "Hours",
+        }
+    }
+
+    fn minutes(self) -> i32 {
+        match self {
+            GapUnit::Minutes => 1,
+            GapUnit::Hours => 60,
         }
     }
 }
@@ -87,10 +126,16 @@ pub struct TimingForm {
     pub date: String,
     /// Once, and an Interval's first: "3 pm".
     pub at: String,
+    /// As needed: at least this many units between doses.
+    pub gap: String,
+    pub gap_unit: GapUnit,
+    /// As needed: no more than this many doses in 24 hours; blank is no limit.
+    pub limit: String,
 }
 
 /// Where a variant starts the person off, as the phone's `defaultSchedule`: daily at 9, weekdays
-/// at 9, the first of the month at 9, every 8 hours from now, once an hour from now. Moments are
+/// at 9, the first of the month at 9, every 8 hours from now, once an hour from now, as needed
+/// four hours apart with no daily limit. Moments are
 /// rounded up to the quarter hour, so they read as a person would type them.
 pub fn form_for(kind: TimingKind, now: i64, zone: &TimeZone) -> TimingForm {
     let quarter = 15 * 60_000;
@@ -124,6 +169,9 @@ pub fn form_for(kind: TimingKind, now: i64, zone: &TimeZone) -> TimingForm {
         unit: IntervalUnit::Hours,
         date,
         at,
+        gap: "4".to_string(),
+        gap_unit: GapUnit::Hours,
+        limit: String::new(),
     }
 }
 
@@ -146,6 +194,8 @@ pub enum TimingProblem {
     Every,
     Date,
     At,
+    Gap,
+    Limit,
 }
 
 impl TimingProblem {
@@ -157,6 +207,10 @@ impl TimingProblem {
             TimingProblem::Every => "Type how many, a whole number from 1",
             TimingProblem::Date => "Type a day: today, tomorrow, Friday, Nov 20 or 2026-11-20",
             TimingProblem::At => "Type a time, like 3 pm or 15:00",
+            TimingProblem::Gap => "Type how long between doses, a whole number from 1",
+            TimingProblem::Limit => {
+                "Type the most doses in 24 hours, a whole number from 1, or leave it blank"
+            }
         }
     }
 }
@@ -207,6 +261,19 @@ pub fn read_form(
         TimingKind::Once => ScheduleTimes::Once {
             at: read_moment(&form.date, &form.at, now, zone)?,
         },
+        TimingKind::AsNeeded => {
+            let gap = read_count(&form.gap)
+                .and_then(|n| n.checked_mul(form.gap_unit.minutes()))
+                .ok_or(TimingProblem::Gap)?;
+            let limit = match form.limit.trim() {
+                "" => None,
+                text => Some(read_count(text).ok_or(TimingProblem::Limit)?),
+            };
+            ScheduleTimes::AsNeeded {
+                min_gap_minutes: gap,
+                max_per_24h: limit,
+            }
+        }
     };
     if is_well_formed_schedule(&schedule) {
         Ok(schedule)
@@ -214,6 +281,7 @@ pub fn read_form(
         Err(match form.kind {
             TimingKind::Interval => TimingProblem::Every,
             TimingKind::Once => TimingProblem::Date,
+            TimingKind::AsNeeded => TimingProblem::Gap,
             _ => TimingProblem::Times,
         })
     }
@@ -227,6 +295,11 @@ pub fn in_the_past(schedule: &ScheduleTimes, now: i64) -> bool {
         ScheduleTimes::Interval { start_at, .. } => *start_at <= now,
         _ => false,
     }
+}
+
+/// A whole number from 1.
+fn read_count(text: &str) -> Option<i32> {
+    text.trim().parse().ok().filter(|n| *n > 0)
 }
 
 fn today(now: i64, zone: &TimeZone) -> Date {
@@ -574,5 +647,45 @@ mod tests {
     fn days_toggle_in_order() {
         assert_eq!(toggle_day(&[1, 5], 3), vec![1, 3, 5]);
         assert_eq!(toggle_day(&[1, 3, 5], 3), vec![1, 5]);
+    }
+
+    #[test]
+    fn as_needed_is_read_as_a_gap_and_an_optional_limit() {
+        let (n, z) = (now(), zone());
+        let mut f = form_for(TimingKind::AsNeeded, n, &z);
+        assert_eq!(
+            read_form(&f, n, &z),
+            Ok(ScheduleTimes::AsNeeded {
+                min_gap_minutes: 240,
+                max_per_24h: None
+            })
+        );
+        f.gap = "90".into();
+        f.gap_unit = GapUnit::Minutes;
+        f.limit = " 3 ".into();
+        assert_eq!(
+            read_form(&f, n, &z),
+            Ok(ScheduleTimes::AsNeeded {
+                min_gap_minutes: 90,
+                max_per_24h: Some(3)
+            })
+        );
+        f.limit = "0".into();
+        assert_eq!(read_form(&f, n, &z), Err(TimingProblem::Limit));
+        f.limit = String::new();
+        for gap in ["0", "", "four", "-2"] {
+            f.gap = gap.into();
+            assert_eq!(read_form(&f, n, &z), Err(TimingProblem::Gap), "{gap}");
+        }
+        f.gap = i32::MAX.to_string();
+        f.gap_unit = GapUnit::Hours;
+        assert_eq!(read_form(&f, n, &z), Err(TimingProblem::Gap));
+    }
+
+    #[test]
+    fn as_needed_is_offered_for_a_medication_only() {
+        assert!(TimingKind::offered(true).any(|k| k == TimingKind::AsNeeded));
+        assert!(!TimingKind::offered(false).any(|k| k == TimingKind::AsNeeded));
+        assert_eq!(TimingKind::offered(false).count(), 5);
     }
 }

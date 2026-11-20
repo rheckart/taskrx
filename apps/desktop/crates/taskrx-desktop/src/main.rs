@@ -72,6 +72,28 @@ fn scene_backlog_time(s: &mut Ui) {
     s.set_timing_kind(taskrx_desktop_service::screens::timing::TimingKind::Weekly);
 }
 
+/// Backlog with "Give it a time" open on the medication, set to As needed.
+fn scene_backlog_as_needed(s: &mut Ui) {
+    scene_backlog(s);
+    s.toggle_timing("r8");
+    s.set_timing_kind(taskrx_desktop_service::screens::timing::TimingKind::AsNeeded);
+}
+
+/// Today with an Ibuprofen dose taken a minute ago, on any device: Take now's place says so.
+fn scene_today_taken(s: &mut Ui) {
+    scene_day(s);
+    let day: Value = serde_json::from_str(SCENE_DAY).expect("the scene's JSON");
+    let at = day["now"].as_i64().unwrap_or_default() - 60_000;
+    let mut instances = day["instances"].as_array().cloned().unwrap_or_default();
+    instances.push(serde_json::json!({
+        "_id": "srv_i_r3_taken", "localId": "i_r3_taken", "userId": "user_scene",
+        "reminderId": "srv_r3", "reminderKind": "medication", "scheduledTime": at,
+        "status": "completed", "completedAt": at, "snoozeCount": 0, "createdAt": at,
+        "updatedAt": at
+    }));
+    s.on_event(Event::List(Table::Instances, Value::Array(instances)));
+}
+
 fn scene_notices(s: &mut Ui) {
     scene_day(s);
     s.screen = crate::ui::Screen::Proposals;
@@ -157,6 +179,8 @@ fn main() {
             ("backlog", scene_backlog),
             ("backlog-again", scene_backlog_again),
             ("backlog-time", scene_backlog_time),
+            ("backlog-as-needed", scene_backlog_as_needed),
+            ("today-taken", scene_today_taken),
             ("notices", scene_notices),
             ("add", scene_add),
             ("reminders", scene_reminders),

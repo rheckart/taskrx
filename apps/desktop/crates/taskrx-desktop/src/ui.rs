@@ -15,9 +15,9 @@ use taskrx_desktop_core::sync::push::PushCall;
 use taskrx_desktop_core::timeline::TimelineRow;
 use taskrx_desktop_service::connection::{Event, Table};
 use taskrx_desktop_service::data::{Data, Lists};
-use taskrx_desktop_service::screens::backlog::{RECORD_AGAIN_MS, backlog};
+use taskrx_desktop_service::screens::backlog::{RECORD_AGAIN_MS, last_record};
 use taskrx_desktop_service::screens::timing::{
-    IntervalUnit, TimingForm, TimingKind, form_for, read_form,
+    GapUnit, IntervalUnit, TimingForm, TimingKind, form_for, read_form,
 };
 use taskrx_desktop_service::screens::today::{Row, Today, TodayInput, today};
 use taskrx_desktop_service::writes::{Answer, Moment, Refusal, answer_call, take_back_record};
@@ -87,6 +87,9 @@ pub struct Timing {
     pub unit: IntervalUnit,
     pub date: TextEdit,
     pub at: TextEdit,
+    pub gap: TextEdit,
+    pub gap_unit: GapUnit,
+    pub limit: TextEdit,
 }
 
 impl Timing {
@@ -105,6 +108,9 @@ impl Timing {
             unit: f.unit,
             date: TextEdit::new(f.date),
             at: TextEdit::new(f.at),
+            gap: TextEdit::new(f.gap),
+            gap_unit: f.gap_unit,
+            limit: TextEdit::new(f.limit),
         }
     }
 
@@ -119,6 +125,9 @@ impl Timing {
             unit: self.unit,
             date: self.date.text.clone(),
             at: self.at.text.clone(),
+            gap: self.gap.text.clone(),
+            gap_unit: self.gap_unit,
+            limit: self.limit.text.clone(),
         }
     }
 }
@@ -324,7 +333,9 @@ impl Ui {
                 self.slow.remove(&ticket);
                 let failure = self.failure_words.remove(&ticket);
                 if result.is_err()
-                    && let Some(reminder) = key.strip_prefix("backlog-")
+                    && let Some(reminder) = key
+                        .strip_prefix("backlog-")
+                        .or_else(|| key.strip_prefix("as-needed-"))
                 {
                     // Not recorded after all: the row offers a plain record again.
                     self.recorded.remove(reminder);
@@ -422,8 +433,12 @@ impl Ui {
         let _ = self.send(&moment, answer, key, done);
     }
 
-    /// Records an as-needed dose as taken now.
+    /// Records an as-needed dose as taken now. A dose taken in the last few minutes, here or on
+    /// the phone, makes the first press only ask; the next press records another.
     pub fn take_as_needed(&mut self, reminder_id: &str, name: &str) {
+        if !self.armed_to_record(reminder_id) {
+            return;
+        }
         let now = self.now();
         let moment = Moment {
             reminder_id,
@@ -431,12 +446,30 @@ impl Ui {
             instance_id: None,
         };
         let key = format!("as-needed-{reminder_id}");
-        let _ = self.send(
-            &moment,
-            Answer::Take { at: now },
-            key,
-            format!("{name} recorded as taken"),
-        );
+        if self
+            .send(
+                &moment,
+                Answer::Take { at: now },
+                key,
+                format!("{name} recorded as taken"),
+            )
+            .is_some()
+        {
+            self.recorded.insert(reminder_id.to_string(), now);
+        }
+    }
+
+    /// Whether a press may record: yes unless something was recorded for this reminder a few
+    /// minutes ago and this is not the second press that answers "again?". A first press arms.
+    fn armed_to_record(&mut self, reminder_id: &str) -> bool {
+        if self.recently_recorded(reminder_id).is_some()
+            && self.confirm_again.as_deref() != Some(reminder_id)
+        {
+            self.confirm_again = Some(reminder_id.to_string());
+            return false;
+        }
+        self.confirm_again = None;
+        true
     }
 
     /// Shows another screen. A half-made second press does not follow the person there.
@@ -446,8 +479,8 @@ impl Ui {
         self.confirm_stop = None;
     }
 
-    /// When a Backlog item was last recorded, if that was in the last few minutes: by this
-    /// window, or by anything the server has.
+    /// When a Backlog item or an as-needed dose was last recorded, if that was in the last few
+    /// minutes: by this window, or by anything the server has, from any device.
     pub fn recently_recorded(&self, reminder_id: &str) -> Option<i64> {
         let now = self.now();
         let here = self
@@ -455,12 +488,12 @@ impl Ui {
             .get(reminder_id)
             .copied()
             .filter(|at| now - at < RECORD_AGAIN_MS);
-        let server = self.data.as_ref().and_then(|data| {
-            backlog(data)
-                .into_iter()
-                .find(|e| e.reminder.id == reminder_id)
-                .and_then(|e| e.just_recorded(now).map(|(_, at)| at))
-        });
+        let server = self
+            .data
+            .as_ref()
+            .and_then(|data| last_record(data, reminder_id))
+            .map(|(at, _)| at)
+            .filter(|at| now - at < RECORD_AGAIN_MS);
         here.max(server)
     }
 
@@ -468,13 +501,9 @@ impl Ui {
     /// in the Backlog, so a press a few minutes after the last record only asks; the next press
     /// records it again.
     pub fn complete_backlog(&mut self, reminder_id: &str, name: &str, medication: bool) {
-        if self.recently_recorded(reminder_id).is_some()
-            && self.confirm_again.as_deref() != Some(reminder_id)
-        {
-            self.confirm_again = Some(reminder_id.to_string());
+        if !self.armed_to_record(reminder_id) {
             return;
         }
-        self.confirm_again = None;
         let now = self.now();
         let moment = Moment {
             reminder_id,
@@ -506,18 +535,37 @@ impl Ui {
     }
 
     /// Another variant: a fresh start for it, as on the phone, since the variants share no field.
+    /// As needed only for a medication.
     pub fn set_timing_kind(&mut self, kind: TimingKind) {
+        if kind == TimingKind::AsNeeded && !self.timing_is_medication() {
+            return;
+        }
         let f = form_for(kind, self.now(), &self.zone);
         self.timing = Timing::starting(self.timing.reminder.take(), f);
     }
 
-    /// Gives the open Backlog item the schedule the picker reads, which moves it to the timeline.
+    /// Whether the item the picker is open on is a medication.
+    fn timing_is_medication(&self) -> bool {
+        let id = self.timing.reminder.as_deref();
+        self.data
+            .as_ref()
+            .zip(id)
+            .and_then(|(data, id)| data.reminder(id))
+            .is_some_and(|r| r.kind == ReminderKind::Medication)
+    }
+
+    /// Gives the open Backlog item the schedule the picker reads, which moves it to the timeline,
+    /// or for As needed, to Today's As needed list.
     pub fn move_to_timeline(&mut self) {
         let Some(id) = self.timing.reminder.clone() else {
             return;
         };
         let key = format!("backlog-{id}");
         if self.in_flight(&key) {
+            return;
+        }
+        if self.timing.kind == TimingKind::AsNeeded && !self.timing_is_medication() {
+            self.say("Only a medication can be taken as needed", true);
             return;
         }
         let now = self.now();
@@ -542,10 +590,12 @@ impl Ui {
         };
         match reminder_patch_call(data, &id, &patch, now) {
             Ok(call) => {
-                if self
-                    .send_call(call, key, format!("{name} moved to your timeline"))
-                    .is_some()
-                {
+                let done = if self.timing.kind == TimingKind::AsNeeded {
+                    format!("{name} is now taken as needed: Take now is on Today")
+                } else {
+                    format!("{name} moved to your timeline")
+                };
+                if self.send_call(call, key, done).is_some() {
                     self.timing = Timing::closed();
                 }
             }
@@ -553,9 +603,9 @@ impl Ui {
         }
     }
 
-    /// Takes back a Backlog record made by mistake: reopened, then skipped.
-    pub fn undo_backlog(&mut self, reminder_id: &str, instance_id: &str, name: &str) {
-        let key = format!("backlog-{reminder_id}");
+    /// Takes back a record made by mistake, a Backlog item's or an as-needed dose: reopened,
+    /// then skipped. `key` is the row's, so the row shows the write in flight.
+    pub fn undo_record(&mut self, key: String, reminder_id: &str, instance_id: &str, name: &str) {
         if self.in_flight(&key) {
             return;
         }
@@ -967,6 +1017,11 @@ mod tests {
 
     /// A Backlog medication recorded `ago` ms before NOW, or never.
     fn backlog_ui(ago: Option<i64>) -> Ui {
+        ui_with("medication", json!({ "type": "none" }), ago)
+    }
+
+    /// One reminder, r1 "Meclizine", completed `ago` before now if given.
+    fn ui_with(kind: &str, schedule: serde_json::Value, ago: Option<i64>) -> Ui {
         let mut ui = ui();
         ui.fixed_now = Some(NOW);
         let instances: Vec<serde_json::Value> = ago
@@ -980,8 +1035,8 @@ mod tests {
             .collect();
         ui.on_event(Event::List(
             Table::Reminders,
-            json!([{ "_id": "srv_r1", "localId": "r1", "userId": "u", "kind": "medication",
-                     "name": "Meclizine", "schedule": { "type": "none" }, "priority": "normal",
+            json!([{ "_id": "srv_r1", "localId": "r1", "userId": "u", "kind": kind,
+                     "name": "Meclizine", "schedule": schedule, "priority": "normal",
                      "active": true, "createdAt": 1.0, "updatedAt": 1.0 }]),
         ));
         ui.on_event(Event::List(Table::Instances, json!(instances)));
@@ -1103,5 +1158,71 @@ mod tests {
         let mut ui = ui();
         ui.take_as_needed("r1", "Advil");
         assert_eq!(ui.toast.as_ref().unwrap().text, "Not connected");
+    }
+
+    fn as_needed() -> serde_json::Value {
+        json!({ "type": "asNeeded", "minGapMinutes": 240.0 })
+    }
+
+    #[test]
+    fn a_dose_taken_minutes_ago_on_any_device_asks_before_take_now_records_another() {
+        // Taken two minutes ago, by the server's record alone: nothing stamped in this window.
+        let mut ui = ui_with("medication", as_needed(), Some(2 * 60_000));
+        assert!(ui.recorded.is_empty());
+        ui.take_as_needed("r1", "Meclizine");
+        assert_eq!(ui.confirm_again.as_deref(), Some("r1"));
+        assert!(ui.toast.is_none(), "the first press only asks");
+        assert!(ui.sending.is_empty());
+        ui.take_as_needed("r1", "Meclizine");
+        assert!(ui.confirm_again.is_none());
+        assert_eq!(ui.toast.as_ref().unwrap().text, "Not connected");
+    }
+
+    #[test]
+    fn a_dose_taken_long_ago_is_taken_on_the_first_press() {
+        let mut ui = ui_with("medication", as_needed(), Some(RECORD_AGAIN_MS));
+        ui.take_as_needed("r1", "Meclizine");
+        assert!(ui.confirm_again.is_none());
+        assert_eq!(ui.toast.as_ref().unwrap().text, "Not connected");
+    }
+
+    #[test]
+    fn a_failed_take_now_is_forgotten() {
+        let mut ui = ui_with("medication", as_needed(), None);
+        ui.recorded.insert("r1".into(), NOW);
+        ui.sending
+            .insert(6, ("as-needed-r1".into(), "recorded as taken".into()));
+        ui.on_event(Event::Wrote {
+            ticket: 6,
+            result: Err("x".into()),
+        });
+        assert!(ui.recorded.is_empty());
+    }
+
+    #[test]
+    fn as_needed_is_offered_for_a_medication() {
+        let mut ui = backlog_ui(None);
+        ui.toggle_timing("r1");
+        ui.set_timing_kind(TimingKind::AsNeeded);
+        assert_eq!(ui.timing.kind, TimingKind::AsNeeded);
+        assert_eq!(ui.timing.gap.text, "4");
+        assert_eq!(ui.timing.gap_unit, GapUnit::Hours);
+        assert_eq!(ui.timing.limit.text, "");
+    }
+
+    #[test]
+    fn a_task_is_never_made_as_needed() {
+        let mut ui = ui_with("task", json!({ "type": "none" }), None);
+        ui.toggle_timing("r1");
+        ui.set_timing_kind(TimingKind::AsNeeded);
+        assert_eq!(ui.timing.kind, TimingKind::Daily, "the press is ignored");
+        // Even if the kind were set some other way, nothing is sent.
+        ui.timing.kind = TimingKind::AsNeeded;
+        ui.move_to_timeline();
+        assert_eq!(
+            ui.toast.as_ref().unwrap().text,
+            "Only a medication can be taken as needed"
+        );
+        assert!(ui.sending.is_empty());
     }
 }
