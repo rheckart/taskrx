@@ -127,7 +127,9 @@ because two writers are unsafe until one Occurrence can only ever be one Instanc
         its edit screen: the desktop has no schedule editor yet. The phrase reader is not used
         there: it reads "tomorrow at 3pm" as daily and an unread time as daily at 9:00. Today's
         as-needed Take now works as the Backlog's record does: for five minutes after a dose taken
-        on either device it says "Taken", offers Undo, and asks before taking another.
+        on either device it says "Taken", offers Undo, and asks before taking another. A press-twice
+        button (Record again, Take again, Stop) ignores a second press within a second of the
+        first, so a double-click only asks.
         Notices (Proposals) too: each open notice with the date it names and the move its rules
         propose, applied as an override then the notice settled, the second write only once the
         first lands; New task and Dismiss as on the phone. Applying by hand to a task with no

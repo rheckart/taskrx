@@ -132,6 +132,26 @@ impl Timing {
     }
 }
 
+/// How long after a press-twice button asks that a press counts as the answer. A double-click
+/// lands both presses well inside it; a person who reads the question takes longer.
+pub const SETTLE_MS: i64 = 1_000;
+
+/// A press on a button that asks first. The first press arms it (`slot` names the item) and
+/// does nothing else; a press within [`SETTLE_MS`] of that is the same double-click and is
+/// ignored; a later press is the answer.
+fn confirmed(slot: &mut Option<String>, armed_at: &mut i64, id: &str, now: i64) -> bool {
+    if slot.as_deref() != Some(id) {
+        *slot = Some(id.to_string());
+        *armed_at = now;
+        return false;
+    }
+    if now - *armed_at < SETTLE_MS {
+        return false;
+    }
+    *slot = None;
+    true
+}
+
 /// Several writes sent as one answer: said once, when the last is back.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Batch {
@@ -180,6 +200,9 @@ pub struct Ui {
     pub adding: Adding,
     /// The Reminder whose Stop was pressed once: a second press stops it for good.
     pub confirm_stop: Option<String>,
+    /// When the last press-twice button was armed: a second press sooner than [`SETTLE_MS`]
+    /// after is the same double-click, not an answer to the question.
+    pub armed_at: i64,
     pub kind: Option<ReminderKind>,
     pub batch: Option<Batch>,
     /// Writes that have waited long enough to say so.
@@ -233,6 +256,7 @@ impl Ui {
             screen: Screen::Today,
             adding: Adding::default(),
             confirm_stop: None,
+            armed_at: 0,
             kind: None,
             batch: None,
             slow: HashSet::new(),
@@ -462,14 +486,23 @@ impl Ui {
     /// Whether a press may record: yes unless something was recorded for this reminder a few
     /// minutes ago and this is not the second press that answers "again?". A first press arms.
     fn armed_to_record(&mut self, reminder_id: &str) -> bool {
-        if self.recently_recorded(reminder_id).is_some()
-            && self.confirm_again.as_deref() != Some(reminder_id)
-        {
-            self.confirm_again = Some(reminder_id.to_string());
-            return false;
+        if self.recently_recorded(reminder_id).is_none() {
+            self.confirm_again = None;
+            return true;
         }
-        self.confirm_again = None;
-        true
+        let now = self.now();
+        confirmed(
+            &mut self.confirm_again,
+            &mut self.armed_at,
+            reminder_id,
+            now,
+        )
+    }
+
+    /// Whether a press on Stop stops: the first press only asks "Stop for good?".
+    pub fn stop_confirmed(&mut self, reminder_id: &str) -> bool {
+        let now = self.now();
+        confirmed(&mut self.confirm_stop, &mut self.armed_at, reminder_id, now)
     }
 
     /// Shows another screen. A half-made second press does not follow the person there.
@@ -1050,7 +1083,9 @@ mod tests {
         ui.complete_backlog("r1", "Meclizine", true);
         assert_eq!(ui.confirm_again.as_deref(), Some("r1"));
         assert!(ui.toast.is_none(), "the first press only asks");
-        // The second press goes on to send; with no connection here that is said.
+        // The second press, once the question has been read, goes on to send; with no
+        // connection here that is said.
+        ui.fixed_now = Some(NOW + SETTLE_MS);
         ui.complete_backlog("r1", "Meclizine", true);
         assert!(ui.confirm_again.is_none());
         assert_eq!(ui.toast.as_ref().unwrap().text, "Not connected");
@@ -1173,6 +1208,7 @@ mod tests {
         assert_eq!(ui.confirm_again.as_deref(), Some("r1"));
         assert!(ui.toast.is_none(), "the first press only asks");
         assert!(ui.sending.is_empty());
+        ui.fixed_now = Some(NOW + SETTLE_MS);
         ui.take_as_needed("r1", "Meclizine");
         assert!(ui.confirm_again.is_none());
         assert_eq!(ui.toast.as_ref().unwrap().text, "Not connected");
@@ -1224,5 +1260,31 @@ mod tests {
             "Only a medication can be taken as needed"
         );
         assert!(ui.sending.is_empty());
+    }
+
+    #[test]
+    fn a_double_click_on_a_press_twice_button_only_asks() {
+        let mut ui = ui_with("medication", as_needed(), Some(60_000));
+        ui.take_as_needed("r1", "Meclizine");
+        ui.fixed_now = Some(NOW + 150);
+        ui.take_as_needed("r1", "Meclizine");
+        assert_eq!(ui.confirm_again.as_deref(), Some("r1"), "still asking");
+        assert!(ui.toast.is_none(), "nothing sent");
+        ui.fixed_now = Some(NOW + SETTLE_MS);
+        ui.take_as_needed("r1", "Meclizine");
+        assert!(ui.confirm_again.is_none());
+        assert_eq!(ui.toast.as_ref().unwrap().text, "Not connected");
+    }
+
+    #[test]
+    fn a_double_click_on_stop_only_asks() {
+        let mut ui = backlog_ui(None);
+        assert!(!ui.stop_confirmed("r1"));
+        assert_eq!(ui.confirm_stop.as_deref(), Some("r1"));
+        ui.fixed_now = Some(NOW + 150);
+        assert!(!ui.stop_confirmed("r1"), "the same double-click");
+        ui.fixed_now = Some(NOW + SETTLE_MS);
+        assert!(ui.stop_confirmed("r1"));
+        assert!(ui.confirm_stop.is_none());
     }
 }

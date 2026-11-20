@@ -1128,10 +1128,7 @@ fn reminders_view(s: &Ui, p: Palette, data: &Data) -> El {
                     let (id, name, key) = (r.id.clone(), r.name.clone(), key.clone());
                     line = line.child(button(p, action.wire(), label, confirming).on_press(
                         move |s: &mut Ui| {
-                            if action == ReminderAction::Stop
-                                && s.confirm_stop.as_deref() != Some(id.as_str())
-                            {
-                                s.confirm_stop = Some(id.clone());
+                            if action == ReminderAction::Stop && !s.stop_confirmed(&id) {
                                 return;
                             }
                             s.confirm_stop = None;
