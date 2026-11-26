@@ -164,4 +164,17 @@ class NewReminderViewModelTest {
             assertEquals("Couldn't save — will retry on next sync", container.toaster.current.value?.message)
             assertEquals(ToastKind.Error, container.toaster.current.value?.kind)
         }
+
+    @Test
+    fun `initial name and notes seed a task form, while medications ignore initial notes`() =
+        withUi(NOW) {
+            val task = NewReminderViewModel(container, ReminderKind.Task, initialName = "Call mom", initialNotes = "Ask about Sunday")
+            assertEquals("Call mom", task.state.value.name)
+            assertEquals("Ask about Sunday", task.state.value.notes)
+            assertTrue(task.state.value.canSave)
+
+            val med = NewReminderViewModel(container, ReminderKind.Medication, initialName = "Metformin", initialNotes = "ignored")
+            assertEquals("Metformin", med.state.value.name)
+            assertEquals("", med.state.value.notes)
+        }
 }

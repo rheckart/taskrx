@@ -48,7 +48,8 @@ fun ReminderFields(
             value = detail,
             onValueChange = onDetail,
             modifier = Modifier.fillMaxWidth().padding(top = 4.dp),
-            singleLine = true,
+            singleLine = !isTask,
+            maxLines = if (isTask) 6 else 1,
             placeholder = { Text(if (isTask) "e.g. ask about the repeat prescription" else "e.g. 500mg") },
         )
 

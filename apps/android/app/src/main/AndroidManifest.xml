@@ -40,6 +40,12 @@
                 <category android:name="android.intent.category.DEFAULT" />
                 <data android:mimeType="text/plain" />
             </intent-filter>
+            <!-- The highlight-text road: selecting text in another app offers to turn it straight into a task. -->
+            <intent-filter android:label="@string/process_text_label">
+                <action android:name="android.intent.action.PROCESS_TEXT" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <data android:mimeType="text/plain" />
+            </intent-filter>
         </activity>
 
         <!-- A medication alarm firing (AlarmManager.setAlarmClock). Private to the app. -->

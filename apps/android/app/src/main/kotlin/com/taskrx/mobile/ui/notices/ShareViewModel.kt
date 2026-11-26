@@ -41,8 +41,7 @@ class ShareViewModel(
     /** Seeds the form from the shared text, once. */
     fun load(text: String?) {
         if (text.isNullOrBlank() || mutable.value.text.isNotEmpty()) return
-        val firstLine = text.lineSequence().map { it.trim() }.firstOrNull { it.isNotEmpty() }.orEmpty()
-        mutable.value = ShareState(text = text, title = firstLine.take(120))
+        mutable.value = ShareState(text = text, title = shareTitle(text))
     }
 
     fun setTitle(title: String) = mutable.update { it.copy(title = title) }

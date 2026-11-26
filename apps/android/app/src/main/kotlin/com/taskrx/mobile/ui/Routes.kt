@@ -29,8 +29,12 @@ object Routes {
     const val SHARE = "share"
 
     const val ARG_NAME = "name"
+    const val ARG_NOTES = "notes"
     const val ARG_RXCUI = "rxcui"
     const val ARG_EDIT_ID = "id"
+
+    /** The task form, optionally pre-filled from shared or highlighted text. */
+    const val NEW_TASK_PATTERN = "$NEW_TASK?$ARG_NAME={$ARG_NAME}&$ARG_NOTES={$ARG_NOTES}"
 
     /** The medication form, optionally started from a drug-search pick. */
     const val NEW_MEDICATION_PATTERN = "$NEW_MEDICATION?$ARG_NAME={$ARG_NAME}&$ARG_RXCUI={$ARG_RXCUI}"
@@ -38,6 +42,16 @@ object Routes {
     const val EDIT_PATTERN = "reminders/{$ARG_EDIT_ID}/edit"
 
     fun edit(reminderId: String): String = "reminders/${Uri.encode(reminderId)}/edit"
+
+    /** The task form pre-filled with a name and optional notes. */
+    fun newTask(name: String = "", notes: String = ""): String {
+        val params =
+            buildList {
+                if (name.isNotEmpty()) add("$ARG_NAME=${Uri.encode(name)}")
+                if (notes.isNotEmpty()) add("$ARG_NOTES=${Uri.encode(notes)}")
+            }
+        return if (params.isEmpty()) NEW_TASK else "$NEW_TASK?${params.joinToString("&")}"
+    }
 
     /** The medication form with a picked drug filled in. */
     fun newMedication(name: String, rxcui: String): String =
@@ -60,7 +74,7 @@ object Routes {
     fun titleOf(route: String?): String =
         when (route) {
             ADD -> "Add a reminder"
-            NEW_TASK -> "New Task"
+            NEW_TASK, NEW_TASK_PATTERN -> "New Task"
             NEW_MEDICATION, NEW_MEDICATION_PATTERN -> "New Medication"
             ADD_DOSE -> "Add a dose"
             BACKLOG -> "Backlog"
@@ -73,7 +87,7 @@ object Routes {
             SYNC_PROBLEMS -> "Sync problems"
             SETTINGS -> "Settings"
             NOTICES -> "Notices"
-            SHARE -> "New notice"
+            SHARE -> "Shared text"
             EDIT_PATTERN -> "Edit reminder"
             ANSWER_PATTERN -> "Answer a reminder"
             else -> "TaskRx"

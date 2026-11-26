@@ -31,6 +31,7 @@ import com.taskrx.mobile.USER
 import com.taskrx.mobile.data.CreateReminderInstanceInput
 import com.taskrx.mobile.data.InstanceFilter
 import com.taskrx.mobile.notifications.TapHandler
+import com.taskrx.mobile.ui.notices.ShareIntake
 import com.taskrx.mobile.ui.search.DrugMatch
 import com.taskrx.mobile.ui.search.DrugSearchService
 import com.taskrx.mobile.ui.search.OfflineDrugSearch
@@ -74,7 +75,10 @@ class AppShellTest {
     }
 
     @AfterTest
-    fun tearDown() = fx.close()
+    fun tearDown() {
+        ShareIntake.consume()
+        fx.close()
+    }
 
     private fun seed() = runBlocking {
         fx.reminder("med", ReminderKind.Medication, dailyTimes(listOf("09:00")), createdAt = NOW - 10 * DAY, name = "Metformin")
@@ -486,6 +490,79 @@ class AppShellTest {
             val saved = fx.container.reminders.list(USER).single()
             assertEquals("metformin hydrochloride 500 MG", saved.name)
             assertEquals("6809", fx.container.reminders.getRxcui(saved.id))
+        }
+    }
+
+    @Test
+    fun `sharing text can jump straight into a pre-filled New Task and save it`() {
+        show()
+        awaitText("Nothing due today")
+
+        val shared = "Pick up milk & eggs (100%?)\nFrom Trader Joe's on 5th"
+        ShareIntake.offer(
+            Intent(Intent.ACTION_SEND).apply {
+                type = "text/plain"
+                putExtra(Intent.EXTRA_TEXT, shared)
+            },
+        )
+        awaitText("Create new task")
+        compose.onNodeWithText("Create new task").performClick()
+
+        awaitText("Save task")
+        compose.onNodeWithText("New Task").assertExists()
+        compose.onNodeWithText("Save task").performScrollTo().performClick()
+
+        awaitGone("Save task")
+        runBlocking {
+            val saved = fx.container.reminders.list(USER).single()
+            assertEquals(ReminderKind.Task, saved.kind)
+            assertEquals("Pick up milk & eggs (100%?)", saved.name)
+            assertEquals(shared, saved.instructions)
+        }
+    }
+
+    @Test
+    fun `sharing text can still be saved to Notices`() {
+        show()
+        awaitText("Nothing due today")
+
+        ShareIntake.offer(
+            Intent(Intent.ACTION_SEND).apply {
+                type = "text/plain"
+                putExtra(Intent.EXTRA_TEXT, "Bins move to Thursday")
+            },
+        )
+        awaitText("Save to Notices")
+        compose.onNodeWithText("Save to Notices").performClick()
+
+        awaitText("1 waiting for you")
+        runBlocking {
+            assertEquals(listOf("Bins move to Thursday"), fx.container.notices.list(USER).map { it.title })
+        }
+    }
+
+    @Test
+    fun `highlighting text via ACTION_PROCESS_TEXT opens a pre-filled New Task directly`() {
+        show()
+        awaitText("Nothing due today")
+
+        ShareIntake.offer(
+            Intent(Intent.ACTION_PROCESS_TEXT).apply {
+                type = "text/plain"
+                putExtra(Intent.EXTRA_PROCESS_TEXT, "Call the pharmacy before 5pm")
+            },
+        )
+        awaitText("Save task")
+        compose.onNodeWithText("New Task").assertExists()
+        compose.onNodeWithText("Call the pharmacy before 5pm").assertExists()
+        compose.onNodeWithText("Save task").performScrollTo().performClick()
+
+        awaitGone("Save task")
+        runBlocking {
+            val saved = fx.container.reminders.list(USER).single()
+            assertEquals(ReminderKind.Task, saved.kind)
+            assertEquals("Call the pharmacy before 5pm", saved.name)
+            assertEquals(null, saved.instructions)
         }
     }
 }

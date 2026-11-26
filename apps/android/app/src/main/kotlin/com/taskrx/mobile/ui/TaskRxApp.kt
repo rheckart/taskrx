@@ -53,8 +53,11 @@ import com.taskrx.mobile.ui.history.HistoryViewModel
 import com.taskrx.mobile.ui.notices.NoticesContent
 import com.taskrx.mobile.ui.notices.NoticesViewModel
 import com.taskrx.mobile.ui.notices.ShareContent
+import com.taskrx.mobile.ui.notices.ShareDestination
 import com.taskrx.mobile.ui.notices.ShareIntake
 import com.taskrx.mobile.ui.notices.ShareViewModel
+import com.taskrx.mobile.ui.notices.taskDraftFromShare
+import com.taskrx.mobile.ui.notices.taskDraftFromText
 import com.taskrx.mobile.ui.reminders.EditReminderContent
 import com.taskrx.mobile.ui.reminders.EditReminderViewModel
 import com.taskrx.mobile.ui.reminders.EditState
@@ -133,7 +136,7 @@ private fun AppShell(container: AppContainer, signedIn: Boolean, modifier: Modif
     val navController = rememberNavController()
     val backStack by navController.currentBackStackEntryAsState()
     val tapRoute by container.notifications.taps.route.collectAsState()
-    val shareText by ShareIntake.text.collectAsState()
+    val pendingShare by ShareIntake.pending.collectAsState()
 
     LaunchedEffect(tapRoute) {
         val route = tapRoute ?: return@LaunchedEffect
@@ -142,9 +145,16 @@ private fun AppShell(container: AppContainer, signedIn: Boolean, modifier: Modif
         container.notifications.taps.consume()
     }
 
-    LaunchedEffect(shareText) {
-        if (shareText == null) return@LaunchedEffect
-        navController.navigate(Routes.SHARE) { launchSingleTop = true }
+    LaunchedEffect(pendingShare) {
+        val incoming = pendingShare ?: return@LaunchedEffect
+        when (incoming.destination) {
+            ShareDestination.Share -> navController.navigate(Routes.SHARE) { launchSingleTop = true }
+            ShareDestination.NewTask -> {
+                val draft = taskDraftFromText(incoming.text)
+                ShareIntake.consume()
+                navController.navigate(Routes.newTask(draft.name, draft.notes))
+            }
+        }
     }
 
     // Read here, where `backStack` is observed, and not inside the top bar's slot: the
@@ -333,17 +343,26 @@ private fun AppNavHost(container: AppContainer, navController: NavController) {
         composable(Routes.SHARE) {
             val vm = screenViewModel { ShareViewModel(container) }
             val state by vm.state.collectAsState()
-            val shared by ShareIntake.text.collectAsState()
-            LaunchedEffect(shared) {
-                vm.load(shared)
-                if (shared != null) ShareIntake.consume()
+            val pending by ShareIntake.pending.collectAsState()
+            LaunchedEffect(pending) {
+                val incoming = pending?.takeIf { it.destination == ShareDestination.Share } ?: return@LaunchedEffect
+                vm.load(incoming.text)
+                ShareIntake.consume()
             }
             LaunchedEffect(state.saved) {
                 if (state.saved) {
                     host.navigate(Routes.NOTICES) { popUpTo(Routes.SHARE) { inclusive = true } }
                 }
             }
-            ShareContent(state, vm::setTitle, vm::save)
+            ShareContent(
+                state = state,
+                onTitle = vm::setTitle,
+                onSave = vm::save,
+                onCreateTask = {
+                    val draft = taskDraftFromShare(state.title, state.text)
+                    host.navigate(Routes.newTask(draft.name, draft.notes))
+                },
+            )
         }
 
         composable(Routes.ADD) {
@@ -354,7 +373,22 @@ private fun AppNavHost(container: AppContainer, navController: NavController) {
             AddContent(state, vm, now = container.clock::invoke)
         }
 
-        composable(Routes.NEW_TASK) { NewReminder(container, ReminderKind.Task, ::backToToday) }
+        composable(
+            Routes.NEW_TASK_PATTERN,
+            arguments =
+                listOf(
+                    navArgument(Routes.ARG_NAME) { type = NavType.StringType; nullable = true; defaultValue = null },
+                    navArgument(Routes.ARG_NOTES) { type = NavType.StringType; nullable = true; defaultValue = null },
+                ),
+        ) { entry ->
+            NewReminder(
+                container,
+                ReminderKind.Task,
+                ::backToToday,
+                initialName = entry.arguments?.getString(Routes.ARG_NAME).orEmpty(),
+                initialNotes = entry.arguments?.getString(Routes.ARG_NOTES).orEmpty(),
+            )
+        }
         composable(
             Routes.NEW_MEDICATION_PATTERN,
             arguments =
@@ -504,8 +538,9 @@ private fun NewReminder(
     onSaved: () -> Unit,
     initialName: String = "",
     rxcui: String? = null,
+    initialNotes: String = "",
 ) {
-    val vm = screenViewModel { NewReminderViewModel(container, kind, initialName, rxcui) }
+    val vm = screenViewModel { NewReminderViewModel(container, kind, initialName, rxcui, initialNotes) }
     val state by vm.state.collectAsState()
     LaunchedEffect(state.saved) { if (state.saved) onSaved() }
     NewReminderContent(state, vm, now = container.clock::invoke)

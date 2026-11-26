@@ -265,21 +265,25 @@ class NoticesScreenTest {
     }
 
     @Test
-    fun `the share form shows the text and saves`() {
+    fun `the share form shows the text and offers creating a task or saving to notices`() {
         var saved = 0
+        var createdTask = 0
         compose.setContent {
             TaskRxTheme {
                 ShareContent(
                     state = ShareState(text = "Bins move to Thursday", title = "Bins"),
                     onTitle = {},
                     onSave = { saved++ },
+                    onCreateTask = { createdTask++ },
                 )
             }
         }
 
         compose.onNodeWithText("Bins move to Thursday").assertIsDisplayed()
+        compose.onNodeWithText("Create new task").performClick()
         compose.onNodeWithText("Save to Notices").performClick()
 
+        assertEquals(1, createdTask)
         assertEquals(1, saved)
     }
 }

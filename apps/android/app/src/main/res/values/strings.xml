@@ -6,4 +6,6 @@
         the person approves that app.
     -->
     <string name="notification_listener_label">TaskRx notices</string>
+    <!-- Shown in Android's floating text-selection toolbar when text is highlighted in another app. -->
+    <string name="process_text_label">New TaskRx task</string>
 </resources>
