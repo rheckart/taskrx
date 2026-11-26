@@ -25,10 +25,11 @@ import com.taskrx.mobile.ui.components.ErrorText
 import com.taskrx.mobile.ui.components.FieldLabel
 import com.taskrx.mobile.ui.components.HintText
 import com.taskrx.mobile.ui.components.PrimaryButton
+import com.taskrx.mobile.ui.forms.InstantField
 
 /**
- * What the share sheet opens: the shared text, a subject the person can correct, and the
- * choice to turn it straight into a new task or keep it in Notices for later.
+ * What the share sheet opens: the shared text, a subject the person can correct, any date/time
+ * read from the text, and the choice to turn it straight into a new task or keep it in Notices.
  */
 @Composable
 fun ShareContent(
@@ -36,6 +37,8 @@ fun ShareContent(
     onTitle: (String) -> Unit,
     onSave: () -> Unit,
     onCreateTask: () -> Unit = {},
+    onDetectedAt: (Long) -> Unit = {},
+    now: () -> Long = System::currentTimeMillis,
     modifier: Modifier = Modifier,
 ) {
     Column(modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp)) {
@@ -48,6 +51,17 @@ fun ShareContent(
         )
         FieldLabel("Shared text")
         Text(state.text, Modifier.padding(top = 4.dp), style = MaterialTheme.typography.bodyMedium)
+        state.detectedAt?.let { at ->
+            InstantField(
+                label = "When",
+                hint =
+                    state.matchedText?.let { "Read from “$it” — tap to change, or keep for Create new task." }
+                        ?: "Tap to change when this task is due.",
+                value = at,
+                onChange = onDetectedAt,
+                now = now,
+            )
+        }
         HintText("Create a task straight from this text, or keep it in Notices to act on later. Nothing changes until you save.")
         state.error?.let { ErrorText("Save failed: $it", Modifier.padding(top = 16.dp)) }
         PrimaryButton("Create new task", onCreateTask, Modifier.padding(top = 24.dp), enabled = state.canSave)

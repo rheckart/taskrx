@@ -9,6 +9,7 @@ import com.taskrx.core.domain.NoticeResolution
 import com.taskrx.core.domain.OccurrenceOverride
 import com.taskrx.core.domain.Reminder
 import com.taskrx.core.domain.ReminderKind
+import com.taskrx.core.domain.SourceKind
 import com.taskrx.core.domain.moveRefusal
 import com.taskrx.core.domain.onceTimes
 import com.taskrx.core.domain.withOverride
@@ -20,6 +21,7 @@ import com.taskrx.core.notices.occurrenceOptionsAround
 import com.taskrx.core.notices.proposalFor
 import com.taskrx.core.notices.proposalsFor
 import com.taskrx.core.notices.readNoticeDate
+import com.taskrx.core.notices.readSharedMoment
 import com.taskrx.mobile.AppContainer
 import com.taskrx.mobile.data.CreateReminderInput
 import com.taskrx.mobile.data.InstanceFilter
@@ -109,7 +111,7 @@ class NoticesViewModel(
      * than creating a task that is born missed.
      */
     fun beginTask(notice: Notice) {
-        mutable.update { it.copy(draft = NoticeTaskDraft(notice, defaultTaskMoment(mutable.value.readings[notice.id]))) }
+        mutable.update { it.copy(draft = NoticeTaskDraft(notice, defaultTaskMoment(notice, mutable.value.readings[notice.id]))) }
     }
 
     fun setDraftAt(at: Long) = mutable.update { it.copy(draft = it.draft?.copy(at = at)) }
@@ -274,14 +276,21 @@ class NoticesViewModel(
             loads.withLock { load() }
         }
 
-    private fun defaultTaskMoment(reading: ReadDate?): Long {
+    private fun defaultTaskMoment(notice: Notice, reading: ReadDate?): Long {
         val now = app.clock()
         val zone = zone()
         val found = reading as? ReadDate.Found
-        val time = found?.time ?: DEFAULT_NOTICE_TIME
-        val date = found?.date ?: Instant.ofEpochMilli(now).atZone(zone).toLocalDate().plusDays(1)
-        val at = ZonedDateTime.of(date, time, zone).toInstant().toEpochMilli()
-        return if (at > now) at else ZonedDateTime.of(date.plusDays(1), time, zone).toInstant().toEpochMilli()
+        if (found != null) {
+            val time = found.time ?: DEFAULT_NOTICE_TIME
+            val at = ZonedDateTime.of(found.date, time, zone).toInstant().toEpochMilli()
+            return if (at > now) at else ZonedDateTime.of(found.date.plusDays(1), time, zone).toInstant().toEpochMilli()
+        }
+        if (notice.sourceKind == SourceKind.Share) {
+            val shared = readSharedMoment(noticeText(notice), notice.receivedAt, zone)
+            if (shared != null && shared.at > now) return shared.at
+        }
+        val tomorrow = Instant.ofEpochMilli(now).atZone(zone).toLocalDate().plusDays(1)
+        return ZonedDateTime.of(tomorrow, DEFAULT_NOTICE_TIME, zone).toInstant().toEpochMilli()
     }
 
     private suspend fun load() {

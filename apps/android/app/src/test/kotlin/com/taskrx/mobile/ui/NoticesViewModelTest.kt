@@ -103,6 +103,36 @@ class NoticesViewModelTest {
         }
 
     @Test
+    fun `beginning a task from a share notice uses a relative date and time when present`() =
+        withUi(NOW) {
+            val created =
+                container.notices.create(
+                    com.taskrx.mobile.data.CreateNoticeInput(
+                        userId = USER,
+                        sourceKind = SourceKind.Share,
+                        sourceValue = "share",
+                        title = "Call dentist",
+                        sentence = "Call dentist tomorrow at 2:30pm",
+                        receivedAt = NOW,
+                    ),
+                )
+            val vm = NoticesViewModel(container, zone = { ZONE })
+            vm.refresh().join()
+
+            vm.beginTask(created)
+
+            val expected =
+                ZonedDateTime.ofInstant(Instant.ofEpochMilli(NOW), ZONE)
+                    .toLocalDate()
+                    .plusDays(1)
+                    .atTime(14, 30)
+                    .atZone(ZONE)
+                    .toInstant()
+                    .toEpochMilli()
+            assertEquals(expected, vm.state.value.draft!!.at)
+        }
+
+    @Test
     fun `saving a draft makes a one-off task and settles the notice`() =
         withUi(NOW) {
             val created = notice()

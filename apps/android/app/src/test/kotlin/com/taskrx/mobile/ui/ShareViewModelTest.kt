@@ -1,5 +1,6 @@
 package com.taskrx.mobile.ui
 
+import android.content.ClipData
 import android.content.Intent
 import android.text.SpannableString
 import com.taskrx.core.domain.NoticeResolution
@@ -13,7 +14,8 @@ import com.taskrx.mobile.ui.notices.SharedTaskDraft
 import com.taskrx.mobile.ui.notices.taskDraftFromShare
 import com.taskrx.mobile.ui.notices.taskDraftFromText
 import java.time.Instant
-import kotlin.test.AfterTest
+import java.time.ZoneOffset
+import java.time.ZonedDateTime
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
@@ -26,11 +28,6 @@ private val NOW = Instant.parse("2026-08-06T12:00:00Z").toEpochMilli()
 
 @RunWith(RobolectricTestRunner::class)
 class ShareViewModelTest {
-    @AfterTest
-    fun tearDown() {
-        ShareIntake.consume()
-    }
-
     @Test
     fun `the first non-blank line becomes the subject`() =
         withUi(NOW) {
@@ -98,34 +95,57 @@ class ShareViewModelTest {
 
     @Test
     fun `ShareIntake routes ACTION_SEND to Share and ACTION_PROCESS_TEXT to NewTask`() {
+        val intake = ShareIntake()
         val send =
             Intent(Intent.ACTION_SEND).apply {
                 type = "text/plain"
                 putExtra(Intent.EXTRA_TEXT, "  Pick up prescription  ")
             }
-        ShareIntake.offer(send)
-        assertEquals(PendingShare("Pick up prescription", ShareDestination.Share), ShareIntake.pending.value)
-        ShareIntake.consume()
+        intake.offer(send)
+        assertEquals(PendingShare("Pick up prescription", ShareDestination.Share), intake.pending.value)
+        intake.consume()
 
         val processText =
             Intent(Intent.ACTION_PROCESS_TEXT).apply {
                 type = "text/plain"
                 putExtra(Intent.EXTRA_PROCESS_TEXT, SpannableString("  Call pharmacy tomorrow  "))
             }
-        ShareIntake.offer(processText)
-        assertEquals(PendingShare("Call pharmacy tomorrow", ShareDestination.NewTask), ShareIntake.pending.value)
+        intake.offer(processText)
+        assertEquals(PendingShare("Call pharmacy tomorrow", ShareDestination.NewTask), intake.pending.value)
+    }
+
+    @Test
+    fun `ShareIntake falls back to ClipData or EXTRA_SUBJECT when EXTRA_TEXT is absent`() {
+        val intake = ShareIntake()
+        val fromClip =
+            Intent(Intent.ACTION_SEND).apply {
+                type = "text/plain"
+                clipData = ClipData.newPlainText("msg", "  From clip data  ")
+            }
+        intake.offer(fromClip)
+        assertEquals(PendingShare("From clip data", ShareDestination.Share), intake.pending.value)
+        intake.consume()
+
+        val fromSubject =
+            Intent(Intent.ACTION_SEND).apply {
+                type = "text/plain"
+                putExtra(Intent.EXTRA_SUBJECT, "  Subject only  ")
+            }
+        intake.offer(fromSubject)
+        assertEquals(PendingShare("Subject only", ShareDestination.Share), intake.pending.value)
     }
 
     @Test
     fun `ShareIntake ignores blank text, non-text shares, and unrelated actions`() {
-        ShareIntake.offer(Intent(Intent.ACTION_SEND).apply { type = "image/png"; putExtra(Intent.EXTRA_TEXT, "caption") })
-        assertNull(ShareIntake.pending.value)
+        val intake = ShareIntake()
+        intake.offer(Intent(Intent.ACTION_SEND).apply { type = "image/png"; putExtra(Intent.EXTRA_TEXT, "caption") })
+        assertNull(intake.pending.value)
 
-        ShareIntake.offer(Intent(Intent.ACTION_PROCESS_TEXT).apply { type = "text/plain"; putExtra(Intent.EXTRA_PROCESS_TEXT, "   ") })
-        assertNull(ShareIntake.pending.value)
+        intake.offer(Intent(Intent.ACTION_PROCESS_TEXT).apply { type = "text/plain"; putExtra(Intent.EXTRA_PROCESS_TEXT, "   ") })
+        assertNull(intake.pending.value)
 
-        ShareIntake.offer(Intent(Intent.ACTION_VIEW).apply { type = "text/plain"; putExtra(Intent.EXTRA_TEXT, "ignored") })
-        assertNull(ShareIntake.pending.value)
+        intake.offer(Intent(Intent.ACTION_VIEW).apply { type = "text/plain"; putExtra(Intent.EXTRA_TEXT, "ignored") })
+        assertNull(intake.pending.value)
     }
 
     @Test
@@ -148,4 +168,18 @@ class ShareViewModelTest {
             taskDraftFromText(longLine),
         )
     }
+
+    @Test
+    fun `a clear date and time in shared text is detected and editable`() =
+        withUi(NOW) {
+            val vm = ShareViewModel(container, initialText = "Dentist Dec 4 at 2:30pm", zone = { ZoneOffset.UTC })
+            val expected = ZonedDateTime.of(2026, 12, 4, 14, 30, 0, 0, ZoneOffset.UTC).toInstant().toEpochMilli()
+
+            assertEquals(expected, vm.state.value.detectedAt)
+            assertEquals("Dec 4 at 2:30pm", vm.state.value.matchedText)
+
+            val edited = expected + 3_600_000L
+            vm.setDetectedAt(edited)
+            assertEquals(edited, vm.state.value.detectedAt)
+        }
 }

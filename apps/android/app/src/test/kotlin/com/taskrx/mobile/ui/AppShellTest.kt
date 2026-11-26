@@ -61,11 +61,14 @@ class AppShellTest {
 
     private lateinit var fx: Fixture
 
+    private lateinit var shareIntake: ShareIntake
+
     private var drugSearch: DrugSearchService = OfflineDrugSearch
 
     @BeforeTest
     fun setUp() {
         fx = Fixture(NOW, drugSearch)
+        shareIntake = ShareIntake()
         WorkManagerTestInitHelper.initializeTestWorkManager(
             ApplicationProvider.getApplicationContext<Application>(),
             Configuration.Builder().setExecutor(SynchronousExecutor()).setTaskExecutor(SynchronousExecutor()).build(),
@@ -75,17 +78,14 @@ class AppShellTest {
     }
 
     @AfterTest
-    fun tearDown() {
-        ShareIntake.consume()
-        fx.close()
-    }
+    fun tearDown() = fx.close()
 
     private fun seed() = runBlocking {
         fx.reminder("med", ReminderKind.Medication, dailyTimes(listOf("09:00")), createdAt = NOW - 10 * DAY, name = "Metformin")
         fx.reminder("chore", ReminderKind.Task, onceTimes(NOW + 2 * HOUR), createdAt = NOW - DAY, name = "Call pharmacy")
     }
 
-    private fun show() = compose.setContent { TaskRxApp(fx.container) }
+    private fun show() = compose.setContent { TaskRxApp(fx.container, shareIntake = shareIntake) }
 
     private fun awaitText(text: String, substring: Boolean = false) =
         compose.waitUntil(10_000) { compose.onAllNodesWithText(text, substring = substring).fetchSemanticsNodes().isNotEmpty() }
@@ -498,8 +498,8 @@ class AppShellTest {
         show()
         awaitText("Nothing due today")
 
-        val shared = "Pick up milk & eggs (100%?)\nFrom Trader Joe's on 5th"
-        ShareIntake.offer(
+        val shared = "Pick up milk + eggs & 100%? https://example.com/a?x=1&y=2%20z#top\nFrom Trader Joe's on 5th"
+        shareIntake.offer(
             Intent(Intent.ACTION_SEND).apply {
                 type = "text/plain"
                 putExtra(Intent.EXTRA_TEXT, shared)
@@ -516,8 +516,66 @@ class AppShellTest {
         runBlocking {
             val saved = fx.container.reminders.list(USER).single()
             assertEquals(ReminderKind.Task, saved.kind)
-            assertEquals("Pick up milk & eggs (100%?)", saved.name)
+            assertEquals("Pick up milk + eggs & 100%? https://example.com/a?x=1&y=2%20z#top", saved.name)
             assertEquals(shared, saved.instructions)
+        }
+    }
+
+    @Test
+    fun `sharing text on cold start opens ShareScreen populated even with a second shell mounted`() {
+        val backgroundIntake = ShareIntake()
+        val foregroundIntake = ShareIntake()
+        foregroundIntake.offer(
+            Intent(Intent.ACTION_SEND).apply {
+                type = "text/plain"
+                putExtra(Intent.EXTRA_TEXT, "Buy coffee beans")
+            },
+        )
+        compose.setContent {
+            // Two separate Activity instances in the same process: background stays on Today,
+            // foreground receives the share with its text intact.
+            TaskRxApp(fx.container, shareIntake = backgroundIntake)
+            TaskRxApp(fx.container, shareIntake = foregroundIntake)
+        }
+
+        awaitText("Create new task")
+        // Both the Subject input and the Shared text body show the shared message.
+        compose.onAllNodesWithText("Buy coffee beans").assertCountEquals(2)
+        compose.onNodeWithText("Create new task").performClick()
+        awaitText("Save task")
+        compose.onNodeWithText("Save task").performScrollTo().performClick()
+
+        awaitGone("Save task")
+        runBlocking {
+            assertEquals(listOf("Buy coffee beans"), fx.container.reminders.list(USER).map { it.name })
+        }
+    }
+
+    @Test
+    fun `a second share while on ShareScreen replaces it with the new text`() {
+        show()
+        awaitText("Nothing due today")
+
+        shareIntake.offer(
+            Intent(Intent.ACTION_SEND).apply {
+                type = "text/plain"
+                putExtra(Intent.EXTRA_TEXT, "First message")
+            },
+        )
+        awaitText("First message")
+
+        shareIntake.offer(
+            Intent(Intent.ACTION_SEND).apply {
+                type = "text/plain"
+                putExtra(Intent.EXTRA_TEXT, "Second message")
+            },
+        )
+        awaitText("Second message")
+        compose.onNodeWithText("Save to Notices").performClick()
+
+        awaitText("1 waiting for you")
+        runBlocking {
+            assertEquals(listOf("Second message"), fx.container.notices.list(USER).map { it.title })
         }
     }
 
@@ -526,14 +584,14 @@ class AppShellTest {
         show()
         awaitText("Nothing due today")
 
-        ShareIntake.offer(
+        shareIntake.offer(
             Intent(Intent.ACTION_SEND).apply {
                 type = "text/plain"
                 putExtra(Intent.EXTRA_TEXT, "Bins move to Thursday")
             },
         )
         awaitText("Save to Notices")
-        compose.onNodeWithText("Save to Notices").performClick()
+        compose.onNodeWithText("Save to Notices").performScrollTo().performClick()
 
         awaitText("1 waiting for you")
         runBlocking {
@@ -546,7 +604,7 @@ class AppShellTest {
         show()
         awaitText("Nothing due today")
 
-        ShareIntake.offer(
+        shareIntake.offer(
             Intent(Intent.ACTION_PROCESS_TEXT).apply {
                 type = "text/plain"
                 putExtra(Intent.EXTRA_PROCESS_TEXT, "Call the pharmacy before 5pm")
@@ -563,6 +621,40 @@ class AppShellTest {
             assertEquals(ReminderKind.Task, saved.kind)
             assertEquals("Call the pharmacy before 5pm", saved.name)
             assertEquals(null, saved.instructions)
+            val expectedAt =
+                java.time.ZonedDateTime.of(2026, 8, 6, 17, 0, 0, 0, java.time.ZoneId.systemDefault())
+                    .toInstant()
+                    .toEpochMilli()
+            assertEquals(onceTimes(expectedAt), saved.schedule)
+        }
+    }
+
+    @Test
+    fun `sharing text with a date and time shows When on ShareScreen and pre-fills New Task`() {
+        show()
+        awaitText("Nothing due today")
+
+        shareIntake.offer(
+            Intent(Intent.ACTION_SEND).apply {
+                type = "text/plain"
+                putExtra(Intent.EXTRA_TEXT, "Dentist appointment Dec 4 at 2:30pm")
+            },
+        )
+        awaitText("Read from “Dec 4 at 2:30pm”", substring = true)
+        compose.onNodeWithText("Create new task").performScrollTo().performClick()
+
+        awaitText("Save task")
+        compose.onNodeWithText("Save task").performScrollTo().performClick()
+
+        awaitGone("Save task")
+        runBlocking {
+            val saved = fx.container.reminders.list(USER).single()
+            assertEquals("Dentist appointment Dec 4 at 2:30pm", saved.name)
+            val expectedAt =
+                java.time.ZonedDateTime.of(2026, 12, 4, 14, 30, 0, 0, java.time.ZoneId.systemDefault())
+                    .toInstant()
+                    .toEpochMilli()
+            assertEquals(onceTimes(expectedAt), saved.schedule)
         }
     }
 }

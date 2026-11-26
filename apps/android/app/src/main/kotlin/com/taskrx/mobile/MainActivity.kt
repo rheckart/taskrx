@@ -7,17 +7,26 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.lifecycleScope
+import androidx.lifecycle.viewmodel.initializer
+import androidx.lifecycle.viewmodel.viewModelFactory
 import com.taskrx.mobile.harness.DeviceHarness
 import com.taskrx.mobile.notifications.PromptHost
 import com.taskrx.mobile.ui.TaskRxApp
 import com.taskrx.mobile.ui.notices.ShareIntake
+import com.taskrx.mobile.ui.notices.ShareIntakeHolder
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.launch
 import android.util.Log
 
 class MainActivity : ComponentActivity() {
     private val container get() = (application as TaskRxApplication).container
+
+    private val shareIntake: ShareIntake
+        get() =
+            ViewModelProvider(this, viewModelFactory { initializer { ShareIntakeHolder() } })[ShareIntakeHolder::class.java]
+                .intake
 
     private val notificationPrompt =
         registerForActivityResult(ActivityResultContracts.RequestPermission()) {
@@ -36,15 +45,15 @@ class MainActivity : ComponentActivity() {
         if (savedInstanceState != null || !DeviceHarness.handle(this, container, intent)) container.notifications.taps.handle(intent)
         // A share is only read on a fresh start: a recreated activity is handed the original
         // intent again, and offering it twice would open the intake screen a second time.
-        if (savedInstanceState == null) ShareIntake.offer(intent)
-        setContent { TaskRxApp(container) }
+        if (savedInstanceState == null) shareIntake.offer(intent)
+        setContent { TaskRxApp(container, shareIntake = shareIntake) }
     }
 
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
         setIntent(intent)
         if (!DeviceHarness.handle(this, container, intent)) container.notifications.taps.handle(intent)
-        ShareIntake.offer(intent)
+        shareIntake.offer(intent)
     }
 
     override fun onStart() {

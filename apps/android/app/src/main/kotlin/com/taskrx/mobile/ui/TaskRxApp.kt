@@ -13,6 +13,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.Alignment
@@ -34,6 +35,7 @@ import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
 import com.taskrx.core.domain.ReminderKind
+import com.taskrx.core.notices.readSharedMoment
 import com.taskrx.mobile.AppContainer
 import com.taskrx.mobile.auth.AuthGateway
 import com.taskrx.mobile.auth.AuthStatus
@@ -102,11 +104,15 @@ import com.taskrx.mobile.ui.today.TodayViewModel
  * the app is held until there is somewhere to navigate it.
  */
 @Composable
-fun TaskRxApp(container: AppContainer, modifier: Modifier = Modifier) {
+fun TaskRxApp(
+    container: AppContainer,
+    modifier: Modifier = Modifier,
+    shareIntake: ShareIntake = remember { ShareIntake() },
+) {
     val status by container.auth.status.collectAsState()
     // A build with no Clerk key has no sign-in and runs local-only, as the Expo app did.
     when {
-        !container.auth.configured || status is AuthStatus.SignedIn -> AppShell(container, status is AuthStatus.SignedIn, modifier)
+        !container.auth.configured || status is AuthStatus.SignedIn -> AppShell(container, status is AuthStatus.SignedIn, shareIntake, modifier)
         status == AuthStatus.Loading -> TaskRxTheme { Centered { CircularProgressIndicator() } }
         else -> TaskRxTheme { AuthScreen(container.auth, modifier) }
     }
@@ -132,27 +138,48 @@ private fun AuthScreen(auth: AuthGateway, modifier: Modifier) {
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-private fun AppShell(container: AppContainer, signedIn: Boolean, modifier: Modifier = Modifier) {
+private fun AppShell(
+    container: AppContainer,
+    signedIn: Boolean,
+    shareIntake: ShareIntake,
+    modifier: Modifier = Modifier,
+) {
     val navController = rememberNavController()
     val backStack by navController.currentBackStackEntryAsState()
+    val navReady = backStack != null
     val tapRoute by container.notifications.taps.route.collectAsState()
-    val pendingShare by ShareIntake.pending.collectAsState()
+    val pendingShare by shareIntake.pending.collectAsState()
 
-    LaunchedEffect(tapRoute) {
+    // Scaffold subcomposes its body (NavHost) during layout, after the outer composition's
+    // first effects run. Wait until the graph is attached (navReady) before navigating so a
+    // cold-start tap or share neither crashes nor consumes its payload too early.
+    LaunchedEffect(tapRoute, navReady) {
+        if (!navReady) return@LaunchedEffect
         val route = tapRoute ?: return@LaunchedEffect
         // On top of the day, so Back from the answer returns to it.
         navController.navigate(route) { launchSingleTop = true }
         container.notifications.taps.consume()
     }
 
-    LaunchedEffect(pendingShare) {
+    LaunchedEffect(pendingShare, navReady) {
+        if (!navReady) return@LaunchedEffect
         val incoming = pendingShare ?: return@LaunchedEffect
+        shareIntake.consume()
         when (incoming.destination) {
-            ShareDestination.Share -> navController.navigate(Routes.SHARE) { launchSingleTop = true }
+            ShareDestination.Share ->
+                navController.navigate(Routes.share(incoming.text)) {
+                    if (navController.currentDestination?.route == Routes.SHARE_PATTERN) {
+                        popUpTo(Routes.SHARE_PATTERN) { inclusive = true }
+                    }
+                }
             ShareDestination.NewTask -> {
                 val draft = taskDraftFromText(incoming.text)
-                ShareIntake.consume()
-                navController.navigate(Routes.newTask(draft.name, draft.notes))
+                val detectedAt = readSharedMoment(incoming.text, container.clock())?.at
+                navController.navigate(Routes.newTask(draft.name, draft.notes, detectedAt)) {
+                    if (navController.currentDestination?.route == Routes.NEW_TASK_PATTERN) {
+                        popUpTo(Routes.NEW_TASK_PATTERN) { inclusive = true }
+                    }
+                }
             }
         }
     }
@@ -340,18 +367,16 @@ private fun AppNavHost(container: AppContainer, navController: NavController) {
             )
         }
 
-        composable(Routes.SHARE) {
-            val vm = screenViewModel { ShareViewModel(container) }
+        composable(
+            Routes.SHARE_PATTERN,
+            arguments = listOf(navArgument(Routes.ARG_TEXT) { type = NavType.StringType; nullable = true; defaultValue = null }),
+        ) { entry ->
+            val initialText = entry.arguments?.getString(Routes.ARG_TEXT).orEmpty()
+            val vm = screenViewModel { ShareViewModel(container, initialText = initialText) }
             val state by vm.state.collectAsState()
-            val pending by ShareIntake.pending.collectAsState()
-            LaunchedEffect(pending) {
-                val incoming = pending?.takeIf { it.destination == ShareDestination.Share } ?: return@LaunchedEffect
-                vm.load(incoming.text)
-                ShareIntake.consume()
-            }
             LaunchedEffect(state.saved) {
                 if (state.saved) {
-                    host.navigate(Routes.NOTICES) { popUpTo(Routes.SHARE) { inclusive = true } }
+                    host.navigate(Routes.NOTICES) { popUpTo(Routes.SHARE_PATTERN) { inclusive = true } }
                 }
             }
             ShareContent(
@@ -360,8 +385,10 @@ private fun AppNavHost(container: AppContainer, navController: NavController) {
                 onSave = vm::save,
                 onCreateTask = {
                     val draft = taskDraftFromShare(state.title, state.text)
-                    host.navigate(Routes.newTask(draft.name, draft.notes))
+                    host.navigate(Routes.newTask(draft.name, draft.notes, state.detectedAt))
                 },
+                onDetectedAt = vm::setDetectedAt,
+                now = container.clock::invoke,
             )
         }
 
@@ -379,6 +406,7 @@ private fun AppNavHost(container: AppContainer, navController: NavController) {
                 listOf(
                     navArgument(Routes.ARG_NAME) { type = NavType.StringType; nullable = true; defaultValue = null },
                     navArgument(Routes.ARG_NOTES) { type = NavType.StringType; nullable = true; defaultValue = null },
+                    navArgument(Routes.ARG_AT) { type = NavType.StringType; nullable = true; defaultValue = null },
                 ),
         ) { entry ->
             NewReminder(
@@ -387,6 +415,7 @@ private fun AppNavHost(container: AppContainer, navController: NavController) {
                 ::backToToday,
                 initialName = entry.arguments?.getString(Routes.ARG_NAME).orEmpty(),
                 initialNotes = entry.arguments?.getString(Routes.ARG_NOTES).orEmpty(),
+                initialAt = entry.arguments?.getString(Routes.ARG_AT)?.toLongOrNull(),
             )
         }
         composable(
@@ -539,8 +568,9 @@ private fun NewReminder(
     initialName: String = "",
     rxcui: String? = null,
     initialNotes: String = "",
+    initialAt: Long? = null,
 ) {
-    val vm = screenViewModel { NewReminderViewModel(container, kind, initialName, rxcui, initialNotes) }
+    val vm = screenViewModel { NewReminderViewModel(container, kind, initialName, rxcui, initialNotes, initialAt) }
     val state by vm.state.collectAsState()
     LaunchedEffect(state.saved) { if (state.saved) onSaved() }
     NewReminderContent(state, vm, now = container.clock::invoke)

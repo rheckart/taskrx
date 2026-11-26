@@ -5,6 +5,7 @@ import androidx.lifecycle.viewModelScope
 import com.taskrx.core.domain.ReminderKind
 import com.taskrx.core.domain.ScheduleTimes
 import com.taskrx.core.domain.isWellFormedSchedule
+import com.taskrx.core.domain.onceTimes
 import com.taskrx.mobile.AppContainer
 import com.taskrx.mobile.data.CreateReminderInput
 import com.taskrx.mobile.ui.add.copyFor
@@ -54,6 +55,8 @@ class NewReminderViewModel(
     private val rxcui: String? = null,
     /** Optional task notes pre-filled from shared or highlighted text. Tasks only. */
     initialNotes: String = "",
+    /** Optional suggested moment read from shared or highlighted text. Tasks only. */
+    initialAt: Long? = null,
 ) : ViewModel() {
     private val mutable =
         MutableStateFlow(
@@ -61,7 +64,12 @@ class NewReminderViewModel(
                 kind = kind,
                 name = initialName,
                 notes = if (kind == ReminderKind.Task) initialNotes else "",
-                schedule = defaultSchedule(if (kind == ReminderKind.Task) ScheduleType.Once else ScheduleType.Daily, app.clock()),
+                schedule =
+                    if (kind == ReminderKind.Task && initialAt != null) {
+                        onceTimes(initialAt)
+                    } else {
+                        defaultSchedule(if (kind == ReminderKind.Task) ScheduleType.Once else ScheduleType.Daily, app.clock())
+                    },
             ),
         )
     val state: StateFlow<NewReminderState> = mutable

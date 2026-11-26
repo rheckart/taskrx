@@ -166,15 +166,32 @@ class NewReminderViewModelTest {
         }
 
     @Test
-    fun `initial name and notes seed a task form, while medications ignore initial notes`() =
+    fun `initial name, notes, and moment seed a task form, while medications ignore task-only seeds`() =
         withUi(NOW) {
-            val task = NewReminderViewModel(container, ReminderKind.Task, initialName = "Call mom", initialNotes = "Ask about Sunday")
+            val targetAt = NOW + 86_400_000L
+            val task =
+                NewReminderViewModel(
+                    container,
+                    ReminderKind.Task,
+                    initialName = "Call mom",
+                    initialNotes = "Ask about Sunday",
+                    initialAt = targetAt,
+                )
             assertEquals("Call mom", task.state.value.name)
             assertEquals("Ask about Sunday", task.state.value.notes)
+            assertEquals(OnceTimes(targetAt), task.state.value.schedule)
             assertTrue(task.state.value.canSave)
 
-            val med = NewReminderViewModel(container, ReminderKind.Medication, initialName = "Metformin", initialNotes = "ignored")
+            val med =
+                NewReminderViewModel(
+                    container,
+                    ReminderKind.Medication,
+                    initialName = "Metformin",
+                    initialNotes = "ignored",
+                    initialAt = targetAt,
+                )
             assertEquals("Metformin", med.state.value.name)
             assertEquals("", med.state.value.notes)
+            assertIs<DailyTimes>(med.state.value.schedule)
         }
 }

@@ -1,6 +1,7 @@
 package com.taskrx.mobile.ui.notices
 
 import android.content.Intent
+import androidx.lifecycle.ViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -44,14 +45,16 @@ fun taskDraftFromShare(title: String, text: String): SharedTaskDraft {
 fun taskDraftFromText(text: String): SharedTaskDraft = taskDraftFromShare(title = "", text = text)
 
 /**
- * The text handed to TaskRx by the share sheet or text-selection toolbar, held until the
- * app shell can navigate to it.
+ * Per-Activity holder for text handed to TaskRx by the share sheet or text-selection toolbar,
+ * held until that Activity's app shell can navigate to it.
  *
- * An incoming share arrives as an Intent, which is not Compose state; this is the one place
- * the two meet. [offer] is called from the activity, the shell collects [pending] and opens
- * the right screen, and [consume] clears it so a recreated activity does not replay it.
+ * Scoped to one Activity instance (via [ShareIntakeHolder]) rather than a process-global
+ * singleton: when another app starts `MainActivity` (`launchMode="singleTop"`) in its own
+ * task for `ACTION_SEND` or `ACTION_PROCESS_TEXT`, a background `MainActivity` in TaskRx's
+ * own task is still alive in the same process and must never steal or consume the new
+ * Activity's incoming share.
  */
-object ShareIntake {
+class ShareIntake {
     private val mutable = MutableStateFlow<PendingShare?>(null)
     val pending: StateFlow<PendingShare?> = mutable.asStateFlow()
 
@@ -60,8 +63,8 @@ object ShareIntake {
         if (intent == null) return
         when (intent.action) {
             Intent.ACTION_SEND -> {
-                if (intent.type?.startsWith("text/") != true) return
-                val shared = intent.getCharSequenceExtra(Intent.EXTRA_TEXT)?.toString()?.trim().orEmpty()
+                if (intent.type != null && intent.type?.startsWith("text/") != true) return
+                val shared = extractSendText(intent)
                 if (shared.isNotEmpty()) mutable.value = PendingShare(shared, ShareDestination.Share)
             }
             Intent.ACTION_PROCESS_TEXT -> {
@@ -75,4 +78,17 @@ object ShareIntake {
     fun consume() {
         mutable.value = null
     }
+
+    private fun extractSendText(intent: Intent): String {
+        val extra = intent.getCharSequenceExtra(Intent.EXTRA_TEXT)?.toString()?.trim().orEmpty()
+        if (extra.isNotEmpty()) return extra
+        val clip = intent.clipData?.takeIf { it.itemCount > 0 }?.getItemAt(0)?.text?.toString()?.trim().orEmpty()
+        if (clip.isNotEmpty()) return clip
+        return intent.getCharSequenceExtra(Intent.EXTRA_SUBJECT)?.toString()?.trim().orEmpty()
+    }
+}
+
+/** Keeps one [ShareIntake] per Activity instance across configuration changes. */
+class ShareIntakeHolder : ViewModel() {
+    val intake = ShareIntake()
 }

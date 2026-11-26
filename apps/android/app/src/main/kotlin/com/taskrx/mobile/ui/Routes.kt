@@ -30,11 +30,16 @@ object Routes {
 
     const val ARG_NAME = "name"
     const val ARG_NOTES = "notes"
+    const val ARG_AT = "at"
+    const val ARG_TEXT = "text"
     const val ARG_RXCUI = "rxcui"
     const val ARG_EDIT_ID = "id"
 
+    /** The share intake screen, seeded directly from the shared text argument. */
+    const val SHARE_PATTERN = "$SHARE?$ARG_TEXT={$ARG_TEXT}"
+
     /** The task form, optionally pre-filled from shared or highlighted text. */
-    const val NEW_TASK_PATTERN = "$NEW_TASK?$ARG_NAME={$ARG_NAME}&$ARG_NOTES={$ARG_NOTES}"
+    const val NEW_TASK_PATTERN = "$NEW_TASK?$ARG_NAME={$ARG_NAME}&$ARG_NOTES={$ARG_NOTES}&$ARG_AT={$ARG_AT}"
 
     /** The medication form, optionally started from a drug-search pick. */
     const val NEW_MEDICATION_PATTERN = "$NEW_MEDICATION?$ARG_NAME={$ARG_NAME}&$ARG_RXCUI={$ARG_RXCUI}"
@@ -43,12 +48,16 @@ object Routes {
 
     fun edit(reminderId: String): String = "reminders/${Uri.encode(reminderId)}/edit"
 
-    /** The task form pre-filled with a name and optional notes. */
-    fun newTask(name: String = "", notes: String = ""): String {
+    /** The share screen pre-filled with incoming shared text. */
+    fun share(text: String): String = "$SHARE?$ARG_TEXT=${Uri.encode(text)}"
+
+    /** The task form pre-filled with a name, optional notes, and optional suggested moment. */
+    fun newTask(name: String = "", notes: String = "", at: Long? = null): String {
         val params =
             buildList {
                 if (name.isNotEmpty()) add("$ARG_NAME=${Uri.encode(name)}")
                 if (notes.isNotEmpty()) add("$ARG_NOTES=${Uri.encode(notes)}")
+                if (at != null) add("$ARG_AT=$at")
             }
         return if (params.isEmpty()) NEW_TASK else "$NEW_TASK?${params.joinToString("&")}"
     }
@@ -87,7 +96,7 @@ object Routes {
             SYNC_PROBLEMS -> "Sync problems"
             SETTINGS -> "Settings"
             NOTICES -> "Notices"
-            SHARE -> "Shared text"
+            SHARE, SHARE_PATTERN -> "Shared text"
             EDIT_PATTERN -> "Edit reminder"
             ANSWER_PATTERN -> "Answer a reminder"
             else -> "TaskRx"

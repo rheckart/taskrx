@@ -261,7 +261,9 @@ private fun numericWithYearCandidate(match: MatchResult): Candidate {
  * Times
  * --------------------------------------------------------------------------------------- */
 
-private data class TimeCandidate(val start: Int, val end: Int, val time: LocalTime)
+internal data class TimeMatch(val time: LocalTime, val text: String)
+
+private data class TimeCandidate(val start: Int, val end: Int, val time: LocalTime, val text: String)
 
 private val CLOCK_TIME = Regex("""(?<!\d)(\d{1,2})(?::(\d{2}))?\s*(am|pm)\b""", RegexOption.IGNORE_CASE)
 
@@ -272,7 +274,10 @@ private val NOON = Regex("""\bnoon\b""", RegexOption.IGNORE_CASE)
 private val MIDNIGHT = Regex("""\bmidnight\b""", RegexOption.IGNORE_CASE)
 
 /** The first time the sentence names, or null when it names none. */
-private fun firstTime(text: String): LocalTime? {
+private fun firstTime(text: String): LocalTime? = firstTimeMatch(text)?.time
+
+/** The first clock time the text names, together with the matched words, or null when none. */
+internal fun firstTimeMatch(text: String): TimeMatch? {
     val all = ArrayList<TimeCandidate>()
 
     for (match in CLOCK_TIME.findAll(text)) {
@@ -286,27 +291,27 @@ private fun firstTime(text: String): LocalTime? {
                 meridiem == "pm" && hour != 12 -> hour + 12
                 else -> hour
             }
-        all += TimeCandidate(match.range.first, match.range.last + 1, LocalTime.of(hour24, minute))
+        all += TimeCandidate(match.range.first, match.range.last + 1, LocalTime.of(hour24, minute), match.value)
     }
 
     for (match in PLAIN_TIME.findAll(text)) {
         val hour = match.groupValues[1].toInt()
         val minute = match.groupValues[2].toInt()
         if (hour !in 0..23 || minute !in 0..59) continue
-        all += TimeCandidate(match.range.first, match.range.last + 1, LocalTime.of(hour, minute))
+        all += TimeCandidate(match.range.first, match.range.last + 1, LocalTime.of(hour, minute), match.value)
     }
 
     for (match in NOON.findAll(text)) {
-        all += TimeCandidate(match.range.first, match.range.last + 1, LocalTime.NOON)
+        all += TimeCandidate(match.range.first, match.range.last + 1, LocalTime.NOON, match.value)
     }
 
     for (match in MIDNIGHT.findAll(text)) {
-        all += TimeCandidate(match.range.first, match.range.last + 1, LocalTime.MIDNIGHT)
+        all += TimeCandidate(match.range.first, match.range.last + 1, LocalTime.MIDNIGHT, match.value)
     }
 
     val kept = ArrayList<TimeCandidate>()
     for (candidate in all.sortedWith(compareBy({ it.start }, { -(it.end - it.start) }))) {
         if (kept.none { candidate.start < it.end && it.start < candidate.end }) kept += candidate
     }
-    return kept.firstOrNull()?.time
+    return kept.firstOrNull()?.let { TimeMatch(it.time, it.text) }
 }

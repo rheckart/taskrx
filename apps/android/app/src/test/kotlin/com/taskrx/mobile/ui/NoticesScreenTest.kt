@@ -286,4 +286,28 @@ class NoticesScreenTest {
         assertEquals(1, createdTask)
         assertEquals(1, saved)
     }
+
+    @Test
+    fun `the share form shows the detected date and time when present`() {
+        val detectedAt = at(2026, 11, 18, 14)
+        compose.setContent {
+            TaskRxTheme {
+                ShareContent(
+                    state =
+                        ShareState(
+                            text = "Dentist Nov 18 at 2pm",
+                            title = "Dentist Nov 18 at 2pm",
+                            detectedAt = detectedAt,
+                            matchedText = "Nov 18 at 2pm",
+                        ),
+                    onTitle = {},
+                    onSave = {},
+                    now = { NOW },
+                )
+            }
+        }
+
+        compose.onNodeWithText("When").assertIsDisplayed()
+        compose.onNodeWithText("Read from “Nov 18 at 2pm” — tap to change, or keep for Create new task.").assertIsDisplayed()
+    }
 }

@@ -4,10 +4,12 @@ import android.util.Log
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.taskrx.core.domain.SourceKind
+import com.taskrx.core.notices.readSharedMoment
 import com.taskrx.mobile.AppContainer
 import com.taskrx.mobile.data.CreateNoticeInput
 import com.taskrx.mobile.ui.components.ToastKind
 import com.taskrx.mobile.ui.components.ToastRequest
+import java.time.ZoneId
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -18,6 +20,10 @@ import kotlinx.coroutines.launch
 data class ShareState(
     val text: String = "",
     val title: String = "",
+    /** Suggested moment read from [text] (or edited by the person) for Create new task; null if none was read. */
+    val detectedAt: Long? = null,
+    /** The words in [text] that [detectedAt] came from, shown as a hint. */
+    val matchedText: String? = null,
     val saving: Boolean = false,
     val saved: Boolean = false,
     val error: String? = null,
@@ -27,24 +33,39 @@ data class ShareState(
 
 /**
  * The share intake: the person shared something with TaskRx, so the share itself is the
- * approval. Nothing is read from the text; it is kept as a Notice and the Notices screen is
- * where a date is set and a task made.
+ * approval. A clear date/time in the text is suggested for pre-filling Create new task, and
+ * nothing is saved until the person taps Create new task or Save to Notices.
  */
 class ShareViewModel(
     private val app: AppContainer,
+    initialText: String = "",
+    private val zone: () -> ZoneId = { ZoneId.systemDefault() },
     private val log: (String, Throwable) -> Unit = { what, e -> Log.e("share", what, e) },
     private val toast: (ToastRequest) -> Unit = app.toaster::show,
 ) : ViewModel() {
-    private val mutable = MutableStateFlow(ShareState())
+    private val mutable = MutableStateFlow(seed(initialText))
     val state: StateFlow<ShareState> = mutable
+
+    private fun seed(text: String): ShareState {
+        if (text.isBlank()) return ShareState()
+        val moment = readSharedMoment(text, app.clock(), zone())
+        return ShareState(
+            text = text,
+            title = shareTitle(text),
+            detectedAt = moment?.at,
+            matchedText = moment?.matchedText,
+        )
+    }
 
     /** Seeds the form from the shared text, once. */
     fun load(text: String?) {
         if (text.isNullOrBlank() || mutable.value.text.isNotEmpty()) return
-        mutable.value = ShareState(text = text, title = shareTitle(text))
+        mutable.value = seed(text)
     }
 
     fun setTitle(title: String) = mutable.update { it.copy(title = title) }
+
+    fun setDetectedAt(at: Long) = mutable.update { it.copy(detectedAt = at) }
 
     fun save(): Job =
         viewModelScope.launch {
