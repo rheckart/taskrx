@@ -249,6 +249,7 @@ private fun AppNavHost(container: AppContainer, navController: NavController) {
             TodayContent(
                 state = state,
                 now = container.clock::invoke,
+                snoozeMinutes = container.settings.snoozeMinutes.collectAsState().value,
                 actions =
                     TodayActions(
                         onPreviousDay = { vm.previousDay() },
@@ -259,6 +260,7 @@ private fun AppNavHost(container: AppContainer, navController: NavController) {
                         onTakeAsNeeded = { vm.takeAsNeeded(it) },
                         onAnswerTask = { row, action -> vm.answerTask(row, action) },
                         onMoveTask = { vm.beginMove(it) },
+                        onEditReminder = { host.navigate(Routes.edit(it)) },
                         onConfirmMove = { vm.confirmMove(it) },
                         onCancelMove = { vm.cancelMove() },
                         onAnswerSlot = { rows, action, hour, minute -> vm.answerSlot(rows, action, hour, minute) },
@@ -309,6 +311,7 @@ private fun AppNavHost(container: AppContainer, navController: NavController) {
                 snoozeMinutes = container.settings.snoozeMinutes.collectAsState().value,
                 onSnooze = { vm.snooze() },
                 onReschedule = { hour, minute -> vm.rescheduleTo(hour, minute) },
+                onRescheduleToInstant = { vm.rescheduleToInstant(it) },
                 onUndo = { vm.undo() },
                 onDone = ::backToToday,
             )

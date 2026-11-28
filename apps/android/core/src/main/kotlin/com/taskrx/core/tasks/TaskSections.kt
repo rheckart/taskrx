@@ -96,22 +96,30 @@ fun sectionTasks(
 
     val dueToday =
         tasks
-            .filter { it.scheduledTime in today.start..today.end }
+            .filter { taskMoment(it) in today.start..today.end }
             .filter { timelineRowKey(it.reminderId, it.scheduledTime) !in overdueKeys }
-            .sortedWith(compareBy({ it.scheduledTime }, { it.reminderId }))
+            .sortedWith(compareBy({ taskMoment(it) }, { it.scheduledTime }, { it.reminderId }))
             .map { it.copy(isNext = false) }
 
     val upcoming =
         tasks
-            .filter { it.scheduledTime > today.end && it.scheduledTime <= horizonEnd }
-            .groupBy { localDayBounds(it.scheduledTime, 0, zone).start }
+            .filter { taskMoment(it) > today.end && taskMoment(it) <= horizonEnd }
+            .groupBy { localDayBounds(taskMoment(it), 0, zone).start }
             .toSortedMap()
             .map { (dayStart, dayRows) ->
                 UpcomingDay(
                     dayStart = dayStart,
-                    rows = dayRows.sortedWith(compareBy({ it.scheduledTime }, { it.reminderId })).map { it.copy(isNext = false) },
+                    rows = dayRows.sortedWith(compareBy({ taskMoment(it) }, { it.scheduledTime }, { it.reminderId })).map { it.copy(isNext = false) },
                 )
             }
 
     return TaskSections(overdue = overdue, dueToday = dueToday, upcoming = upcoming)
 }
+
+/**
+ * The moment a task row sits at on the Tasks tab: where a live snooze deferred it to,
+ * or the scheduled moment itself. `TimelineRow.scheduledTime` keeps the original moment so
+ * deduplication, answers, and sync stay keyed to the same ReminderInstance.
+ */
+private fun taskMoment(row: TimelineRow): Long =
+    if (row.status == InstanceStatus.Snoozed) row.snoozedUntil ?: row.scheduledTime else row.scheduledTime

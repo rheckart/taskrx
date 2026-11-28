@@ -60,11 +60,19 @@ fun assembleTasksTab(input: TasksTabInput): TaskSections {
     val tasks = input.reminders.filter { it.kind == ReminderKind.Task }
     val byId = tasks.associateBy { it.id }
 
+    val inside =
+        input.instances
+            .filter { it.reminderKind == ReminderKind.Task }
+            .map { instance ->
+                val settled = settleExpiredSnooze(instance, input.now)
+                if (settled == instance.status) instance else instance.copy(status = settled)
+            }
+
     val projected =
         projectTimeline(
             ProjectTimelineInput(
                 reminders = tasks,
-                instances = input.instances.filter { it.reminderKind == ReminderKind.Task },
+                instances = inside,
                 window = window,
                 now = input.now,
                 zone = input.zone,
@@ -77,12 +85,7 @@ fun assembleTasksTab(input: TasksTabInput): TaskSections {
             .filter { it.reminderKind == ReminderKind.Task && it.scheduledTime < window.start }
             .mapNotNull { instance ->
                 val reminder = byId[instance.reminderId] ?: return@mapNotNull null
-                val status =
-                    if (instance.status == InstanceStatus.Snoozed && snoozeRanOut(instance, input.now, GRACE_PERIOD_MS)) {
-                        InstanceStatus.Missed
-                    } else {
-                        instance.status
-                    }
+                val status = settleExpiredSnooze(instance, input.now)
                 TimelineRow(
                     reminderId = reminder.id,
                     instanceId = instance.id,
@@ -121,3 +124,11 @@ fun assembleTasksTab(input: TasksTabInput): TaskSections {
 
     return sectionTasks(projected + older + invented, input.now, input.zone)
 }
+
+/** A snooze nobody came back to reads as the miss it was, both inside and before the window. */
+private fun settleExpiredSnooze(instance: ReminderInstance, now: Long): InstanceStatus =
+    if (instance.status == InstanceStatus.Snoozed && snoozeRanOut(instance, now, GRACE_PERIOD_MS)) {
+        InstanceStatus.Missed
+    } else {
+        instance.status
+    }

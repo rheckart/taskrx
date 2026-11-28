@@ -3,11 +3,15 @@ package com.taskrx.mobile.ui
 import androidx.compose.ui.test.assertIsEnabled
 import androidx.compose.ui.test.assertIsNotEnabled
 import androidx.compose.ui.test.junit4.createComposeRule
+import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performScrollTo
+import com.taskrx.core.domain.InstanceStatus
 import com.taskrx.core.domain.OccurrenceOverride
 import com.taskrx.core.domain.ReminderKind
 import com.taskrx.core.domain.createReminder
+import com.taskrx.core.domain.createReminderInstance
 import com.taskrx.core.domain.dailyTimes
 import com.taskrx.core.domain.onceTimes
 import com.taskrx.core.timeline.TimelineRow
@@ -28,7 +32,7 @@ private val SOURCE = MIDNIGHT + 12 * 3_600_000L
 private fun task(schedule: com.taskrx.core.domain.ScheduleTimes = onceTimes(SOURCE)) =
     createReminder("task", "u", ReminderKind.Task, "Call pharmacy", MIDNIGHT - 86_400_000L, MIDNIGHT - 86_400_000L, schedule = schedule)
 
-private fun row(at: Long = SOURCE) =
+private fun row(at: Long = SOURCE, status: InstanceStatus = InstanceStatus.Pending, snoozedUntil: Long? = null) =
     TimelineRow(
         reminderId = "task",
         instanceId = null,
@@ -36,46 +40,51 @@ private fun row(at: Long = SOURCE) =
         dosage = null,
         kind = ReminderKind.Task,
         scheduledTime = at,
-        status = com.taskrx.core.domain.InstanceStatus.Pending,
-        snoozedUntil = null,
+        status = status,
+        snoozedUntil = snoozedUntil,
         isNext = false,
     )
 
 /**
- * The move dialog. Which moments may move is `:core`'s rule (`moveRefusal`), unit-tested
- * there; what is pinned here is that the dialog shows the person that reason and will not
- * let them press Move while one applies.
+ * The reschedule dialog. Which writes and refusals apply is `:core`'s rule (`planTaskReschedule`),
+ * unit-tested there; what is pinned here is that the dialog shows presets and reasons and only lets
+ * the person press Reschedule when allowed.
  */
 @RunWith(RobolectricTestRunner::class)
 class MoveOccurrenceDialogTest {
     @get:Rule val compose = createComposeRule()
 
-    private fun show(draft: MoveDraft, now: Long = NOW, onConfirm: (Long) -> Unit = {}, onDismiss: () -> Unit = {}) {
-        compose.setContent { MoveOccurrenceDialog(draft, now, onConfirm, onDismiss) }
+    private fun show(
+        draft: MoveDraft,
+        now: Long = NOW,
+        snoozeMinutes: Int = 15,
+        onConfirm: (Long) -> Unit = {},
+        onDismiss: () -> Unit = {},
+    ) {
+        compose.setContent { MoveOccurrenceDialog(draft, now, onConfirm, onDismiss, snoozeMinutes) }
     }
 
     @Test
     fun `it names the task and both moments`() {
         show(MoveDraft(row(), task(), emptyList()))
 
-        compose.onNodeWithText("Move Call pharmacy").assertExists()
-        // The moment it is on, and the moment it would land on, both named in full.
+        compose.onNodeWithText("Reschedule Call pharmacy").assertExists()
         compose.onNodeWithText("Now:", substring = true).assertExists()
-        compose.onNodeWithText("Moves to", substring = true).assertExists()
+        compose.onNodeWithText("Reschedules to", substring = true).assertExists()
     }
 
     @Test
-    fun `it opens on the moment the occurrence already has, so that is not a move`() {
+    fun `a future task opens on its current moment, so confirming untouched is refused`() {
         show(MoveDraft(row(), task(), emptyList()))
 
-        compose.onNodeWithText("Pick a moment after the one it is on.").assertExists()
-        compose.onNodeWithText("Move").assertIsNotEnabled()
+        compose.onNodeWithText("Pick a moment different from the one it is on.").performScrollTo().assertExists()
+        compose.onNodeWithText("Reschedule").assertIsNotEnabled()
     }
 
     @Test
-    fun `a task that was already answered says so instead of offering the move`() {
+    fun `a task that was already answered says so and offers no presets`() {
         val answered =
-            com.taskrx.core.domain.createReminderInstance(
+            createReminderInstance(
                 id = "i1",
                 reminderId = "task",
                 userId = "u",
@@ -83,27 +92,45 @@ class MoveOccurrenceDialogTest {
                 scheduledTime = SOURCE,
                 createdAt = NOW,
                 updatedAt = NOW,
-                status = com.taskrx.core.domain.InstanceStatus.Completed,
+                status = InstanceStatus.Completed,
             )
         show(MoveDraft(row(), task(), listOf(answered)))
 
-        compose.onNodeWithText("This one has already been answered, and an answer is not rewritten.").assertExists()
-        compose.onNodeWithText("Move").assertIsNotEnabled()
+        compose.onNodeWithText("This one has already been answered, and an answer is not rewritten.").performScrollTo().assertExists()
+        compose.onNodeWithText("Reschedule").assertIsNotEnabled()
+        assertEquals(0, compose.onAllNodesWithText("Tomorrow").fetchSemanticsNodes().size)
     }
 
     @Test
-    fun `a move past the two-hour grace period says it is too late`() {
-        // Ten hours late: still on the day, but out of time.
-        show(MoveDraft(row(MIDNIGHT + 1 * 3_600_000L), task(), emptyList()), now = NOW)
+    fun `an overdue task past two hours opens ready to reschedule with presets`() {
+        val overdueAt = MIDNIGHT + 1 * 3_600_000L
+        var chosen: Long? = null
+        show(MoveDraft(row(overdueAt, InstanceStatus.Missed), task(onceTimes(overdueAt)), emptyList()), now = NOW, onConfirm = { chosen = it })
 
-        compose.onNodeWithText("It is too late to move this one. It has been due for more than two hours.").assertExists()
-        compose.onNodeWithText("Move").assertIsNotEnabled()
+        compose.onNodeWithText("In 15 min").assertExists()
+        compose.onNodeWithText("In 1 hour").assertExists()
+        compose.onNodeWithText("Tomorrow").assertExists()
+        compose.onNodeWithText("Reschedule").assertIsEnabled().performClick()
+
+        // Default target for overdue is tomorrow at the same clock time.
+        assertEquals(overdueAt + 24 * 3_600_000L, chosen)
     }
 
     @Test
-    fun `an occurrence with an open row says to answer it first`() {
+    fun `tapping a quick preset confirms immediately`() {
+        val overdueAt = MIDNIGHT + 1 * 3_600_000L
+        var chosen: Long? = null
+        show(MoveDraft(row(overdueAt), task(onceTimes(overdueAt)), emptyList()), now = NOW, snoozeMinutes = 30, onConfirm = { chosen = it })
+
+        compose.onNodeWithText("In 30 min").performClick()
+
+        assertEquals(NOW + 30 * 60_000L, chosen)
+    }
+
+    @Test
+    fun `an occurrence with an open pending row can still be rescheduled`() {
         val pending =
-            com.taskrx.core.domain.createReminderInstance(
+            createReminderInstance(
                 id = "i1",
                 reminderId = "task",
                 userId = "u",
@@ -112,24 +139,26 @@ class MoveOccurrenceDialogTest {
                 createdAt = NOW,
                 updatedAt = NOW,
             )
-        show(MoveDraft(row(), task(), listOf(pending)))
+        var chosen: Long? = null
+        show(MoveDraft(row(), task(), listOf(pending)), onConfirm = { chosen = it })
 
-        compose.onNodeWithText("You have already opened this one. Answer it first, then move the next.").assertExists()
-        compose.onNodeWithText("Move").assertIsNotEnabled()
+        compose.onNodeWithText("Tomorrow").performClick()
+
+        assertEquals(SOURCE + 24 * 3_600_000L, chosen)
     }
 
     @Test
-    fun `a medication is never moved`() {
+    fun `a medication is never rescheduled`() {
         val medication =
             createReminder("m", "u", ReminderKind.Medication, "Warfarin", MIDNIGHT, MIDNIGHT, schedule = dailyTimes(listOf("09:00")))
         show(MoveDraft(row(), medication, emptyList()))
 
-        compose.onNodeWithText("Only a task can be moved: a medication schedule is a clinical instruction.").assertExists()
-        compose.onNodeWithText("Move").assertIsNotEnabled()
+        compose.onNodeWithText("Only a task can be rescheduled: a medication schedule is a clinical instruction.").performScrollTo().assertExists()
+        compose.onNodeWithText("Reschedule").assertIsNotEnabled()
     }
 
     @Test
-    fun `Cancel closes without a move`() {
+    fun `Cancel closes without rescheduling`() {
         var dismissed = false
         var moved: Long? = null
         show(MoveDraft(row(), task(), emptyList()), onConfirm = { moved = it }, onDismiss = { dismissed = true })
@@ -141,19 +170,16 @@ class MoveOccurrenceDialogTest {
     }
 
     @Test
-    fun `a task with a real destination can be moved, and the target is what is handed back`() {
-        // A move the dialog can actually offer: a future source, still inside its day.
-        val future = MIDNIGHT + 18 * 3_600_000L
+    fun `a task scheduled tomorrow offers a +1 day preset`() {
+        val future = MIDNIGHT + 24 * 3_600_000L + 12 * 3_600_000L
         val reminder = task(onceTimes(future))
         var moved: Long? = null
         show(MoveDraft(row(future), reminder, emptyList()), now = NOW, onConfirm = { moved = it })
 
-        compose.onNodeWithText("Move").performClick()
+        compose.onNodeWithText("Reschedule").assertIsNotEnabled()
+        compose.onNodeWithText("+1 day").performClick()
 
-        // The dialog opens on the source moment, so pressing Move without changing the day
-        // changes nothing and is refused; the assertion above covers the refusal text. What
-        // this pins is that the refusals come from the same `moveRefusal` the ViewModel uses.
-        assertNull(moved)
+        assertEquals(future + 24 * 3_600_000L, moved)
     }
 
     @Test
@@ -161,7 +187,7 @@ class MoveOccurrenceDialogTest {
         val moved = task().copy(overrides = listOf(OccurrenceOverride(SOURCE, SOURCE + 3_600_000L)))
         show(MoveDraft(row(), moved, emptyList()))
 
-        compose.onNodeWithText("Only this one. The schedule stays as it is, and the next one comes due as usual.").assertExists()
-        compose.onNodeWithText("Move").assertIsNotEnabled()
+        compose.onNodeWithText("Only this occurrence. The schedule stays as it is.").assertExists()
+        compose.onNodeWithText("Reschedule").assertIsNotEnabled()
     }
 }

@@ -178,6 +178,11 @@ kover {
             // The Tasks tab's rows: what it reaches past its fortnight.
             "com.taskrx.core.tasks.TasksTabKt*",
             "com.taskrx.core.tasks.TasksTabInput",
+            // Rescheduling task occurrences (override, once reschedule, or instance deferral).
+            "com.taskrx.core.tasks.TaskRescheduleKt*",
+            "com.taskrx.core.tasks.TaskReschedulePlan*",
+            "com.taskrx.core.tasks.TaskRescheduleRefusal*",
+            "com.taskrx.core.tasks.TaskRescheduleOutcome*",
         )
 
         filters {

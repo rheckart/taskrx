@@ -5883,6 +5883,18 @@
         ],
         "dueToday": [
           {
+            "reminderId": "task-stretch",
+            "instanceId": "inst-1783306800000-snoozed",
+            "name": "Stretch",
+            "dosage": null,
+            "kind": "task",
+            "scheduledTime": 1783306800000,
+            "status": "snoozed",
+            "snoozedUntil": 1783357200000,
+            "isNext": false,
+            "completedAt": null
+          },
+          {
             "reminderId": "task-pharmacy",
             "instanceId": null,
             "name": "Call the pharmacy",
@@ -7264,6 +7276,18 @@
             "scheduledTime": 1783335600000,
             "status": "pending",
             "snoozedUntil": null,
+            "isNext": false,
+            "completedAt": null
+          },
+          {
+            "reminderId": "task-stretch",
+            "instanceId": "inst-1783306800000-snoozed",
+            "name": "Stretch",
+            "dosage": null,
+            "kind": "task",
+            "scheduledTime": 1783306800000,
+            "status": "snoozed",
+            "snoozedUntil": 1783357200000,
             "isNext": false,
             "completedAt": null
           },
@@ -10044,18 +10068,6 @@
                 "snoozedUntil": null,
                 "isNext": false,
                 "completedAt": null
-              },
-              {
-                "reminderId": "task-stretch",
-                "instanceId": "inst-1783306800000-snoozed",
-                "name": "Stretch",
-                "dosage": null,
-                "kind": "task",
-                "scheduledTime": 1783306800000,
-                "status": "snoozed",
-                "snoozedUntil": 1783357200000,
-                "isNext": false,
-                "completedAt": null
               }
             ]
           },
@@ -10083,6 +10095,18 @@
                 "scheduledTime": 1783339200000,
                 "status": "pending",
                 "snoozedUntil": null,
+                "isNext": false,
+                "completedAt": null
+              },
+              {
+                "reminderId": "task-stretch",
+                "instanceId": "inst-1783306800000-snoozed",
+                "name": "Stretch",
+                "dosage": null,
+                "kind": "task",
+                "scheduledTime": 1783306800000,
+                "status": "snoozed",
+                "snoozedUntil": 1783357200000,
                 "isNext": false,
                 "completedAt": null
               },
@@ -15577,6 +15601,18 @@
         ],
         "dueToday": [
           {
+            "reminderId": "task-stretch",
+            "instanceId": "inst-1783306800000-snoozed",
+            "name": "Stretch",
+            "dosage": null,
+            "kind": "task",
+            "scheduledTime": 1783306800000,
+            "status": "snoozed",
+            "snoozedUntil": 1783357200000,
+            "isNext": false,
+            "completedAt": null
+          },
+          {
             "reminderId": "task-pharmacy",
             "instanceId": null,
             "name": "Call the pharmacy",
@@ -17932,18 +17968,6 @@
                 "snoozedUntil": null,
                 "isNext": false,
                 "completedAt": null
-              },
-              {
-                "reminderId": "task-stretch",
-                "instanceId": "inst-1783306800000-snoozed",
-                "name": "Stretch",
-                "dosage": null,
-                "kind": "task",
-                "scheduledTime": 1783306800000,
-                "status": "snoozed",
-                "snoozedUntil": 1783357200000,
-                "isNext": false,
-                "completedAt": null
               }
             ]
           },
@@ -17971,6 +17995,18 @@
                 "scheduledTime": 1783339200000,
                 "status": "pending",
                 "snoozedUntil": null,
+                "isNext": false,
+                "completedAt": null
+              },
+              {
+                "reminderId": "task-stretch",
+                "instanceId": "inst-1783306800000-snoozed",
+                "name": "Stretch",
+                "dosage": null,
+                "kind": "task",
+                "scheduledTime": 1783306800000,
+                "status": "snoozed",
+                "snoozedUntil": 1783357200000,
                 "isNext": false,
                 "completedAt": null
               },
@@ -18612,6 +18648,18 @@
           }
         ],
         "dueToday": [
+          {
+            "reminderId": "task-stretch",
+            "instanceId": "inst-1783306800000-snoozed",
+            "name": "Stretch",
+            "dosage": null,
+            "kind": "task",
+            "scheduledTime": 1783306800000,
+            "status": "snoozed",
+            "snoozedUntil": 1783357200000,
+            "isNext": false,
+            "completedAt": null
+          },
           {
             "reminderId": "task-pharmacy",
             "instanceId": null,
@@ -19350,6 +19398,18 @@
             "scheduledTime": 1783339200000,
             "status": "pending",
             "snoozedUntil": null,
+            "isNext": false,
+            "completedAt": null
+          },
+          {
+            "reminderId": "task-stretch",
+            "instanceId": "inst-1783306800000-snoozed",
+            "name": "Stretch",
+            "dosage": null,
+            "kind": "task",
+            "scheduledTime": 1783306800000,
+            "status": "snoozed",
+            "snoozedUntil": 1783357200000,
             "isNext": false,
             "completedAt": null
           },
@@ -20211,6 +20271,7 @@
         "zone": "America/New_York"
       },
       "output": [
+        "inst-1783306800000-snoozed",
         "inst-1783335600000-completed",
         "inst-1783339200000-snoozed",
         "inst-1783342800000-completed",

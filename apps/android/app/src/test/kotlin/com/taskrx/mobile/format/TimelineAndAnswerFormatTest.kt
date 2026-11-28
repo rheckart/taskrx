@@ -86,6 +86,10 @@ class TimelineAndAnswerFormatTest {
         val late = row(ReminderKind.Task, InstanceStatus.Missed)
         val text = rowDescription(late, utc, us, statusText = "Overdue", dayText = "Mon, Aug 3")
         assertEquals("Task: Metformin at Mon, Aug 3, 9:00 AM, Overdue", text)
+
+        val snoozed = row(ReminderKind.Task, InstanceStatus.Snoozed, snoozedUntil = nine + 3 * 3_600_000L)
+        val snoozedDesc = rowDescription(snoozed, utc, us, displayTime = nine + 3 * 3_600_000L)
+        assertEquals("Task: Metformin at 12:00 PM, Snoozed until 12:00 PM", snoozedDesc)
     }
 
     @Test

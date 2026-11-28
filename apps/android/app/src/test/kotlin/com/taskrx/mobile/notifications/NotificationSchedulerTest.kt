@@ -6,6 +6,7 @@ import com.taskrx.core.domain.dailyTimes
 import com.taskrx.core.domain.onceTimes
 import com.taskrx.core.notifications.RearmCause
 import com.taskrx.core.notifications.medicationNotificationId
+import com.taskrx.core.notifications.snoozeNotificationId
 import com.taskrx.core.notifications.taskNotificationId
 import com.taskrx.mobile.DAY
 import com.taskrx.mobile.HOUR
@@ -368,6 +369,47 @@ class SnoozeTest {
             assertTrue(snoozes.all().isEmpty())
             assertTrue(alarmIds().none { it.startsWith("snooze-") })
             assertNull(ledger.all().firstOrNull { it.id.startsWith("snooze-") })
+        }
+
+    @Test
+    fun `re-snoozing an occurrence cancels the earlier snooze and arms only the new instant`() =
+        withNotifs(NOW) {
+            fx.reminder("chore", ReminderKind.Task, onceTimes(NOW + HOUR))
+
+            assertTrue(scheduler.snooze("chore", NOW + HOUR, NOW + 2 * HOUR))
+            assertTrue(scheduler.snooze("chore", NOW + HOUR, NOW + 3 * HOUR))
+
+            val firstId = snoozeNotificationId("chore", NOW + HOUR, NOW + 2 * HOUR)
+            val secondId = snoozeNotificationId("chore", NOW + HOUR, NOW + 3 * HOUR)
+            assertFalse(firstId in workIds())
+            assertTrue(secondId in workIds())
+            assertEquals(NOW + 3 * HOUR, snoozes.all().single().fireAt)
+        }
+
+    @Test
+    fun `a future task with a live snooze suppresses its scheduled work request until undone`() =
+        withNotifs(NOW) {
+            val due = NOW + 2 * HOUR
+            fx.reminder("chore", ReminderKind.Task, onceTimes(due))
+            scheduler.rescheduleAll(USER)
+            val scheduledId = taskNotificationId("chore", due)
+            assertTrue(scheduledId in workIds())
+
+            val inst = fx.container.instances.create(CreateReminderInstanceInput(USER, "chore", ReminderKind.Task, due))
+            fx.container.instances.markSnoozed(inst.id, NOW + 4 * HOUR)
+            scheduler.snooze("chore", due, NOW + 4 * HOUR)
+            scheduler.rescheduleAll(USER)
+
+            val snoozeId = snoozeNotificationId("chore", due, NOW + 4 * HOUR)
+            assertFalse(scheduledId in workIds(), "original task work must be cancelled while snoozed")
+            assertTrue(snoozeId in workIds())
+
+            fx.container.instances.reopen(inst.id)
+            scheduler.cancelSnooze("chore", due)
+            scheduler.rescheduleAll(USER)
+
+            assertTrue(scheduledId in workIds())
+            assertFalse(snoozeId in workIds())
         }
 }
 

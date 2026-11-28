@@ -125,4 +125,48 @@ class TasksTabTest {
         assertEquals(setOf("done", "skipped"), undoable)
         assertTrue("off-schedule" !in undoable, "an answer at a moment the Schedule never made")
     }
+
+    @Test
+    fun `an inside-window snoozed task whose snooze ran out settles into Overdue as Missed`() {
+        val call = task("call", onceTimes(utc(8, 19, 9)))
+        val expiredSnooze = stored("call", utc(8, 19, 9), InstanceStatus.Snoozed, snoozedUntil = utc(8, 20, 9))
+
+        val result = tab(listOf(call), inside = listOf(expiredSnooze))
+
+        val overdue = result.overdue.single()
+        assertEquals(InstanceStatus.Missed, overdue.status)
+        assertEquals(utc(8, 19, 9), overdue.scheduledTime)
+        assertEquals(emptyList(), result.dueToday)
+    }
+
+    @Test
+    fun `an inside-window live snooze surfaces in Due today or Upcoming by snoozedUntil`() {
+        val callToday = task("today", onceTimes(utc(8, 19, 9)))
+        val callTomorrow = task("tomorrow", onceTimes(utc(8, 20, 9)))
+        val liveToday = stored("today", utc(8, 19, 9), InstanceStatus.Snoozed, snoozedUntil = utc(8, 20, 15))
+        val liveTomorrow = stored("tomorrow", utc(8, 20, 9), InstanceStatus.Snoozed, snoozedUntil = utc(8, 21, 10))
+
+        val result = tab(listOf(callToday, callTomorrow), inside = listOf(liveToday, liveTomorrow))
+
+        assertEquals(emptyList(), result.overdue)
+        assertEquals(listOf("today"), result.dueToday.map { it.reminderId })
+        assertEquals(utc(8, 19, 9), result.dueToday.single().scheduledTime)
+        assertEquals(utc(8, 20, 15), result.dueToday.single().snoozedUntil)
+        assertEquals(listOf(utc(8, 21)), result.upcoming.map { it.dayStart })
+        assertEquals(listOf("tomorrow"), result.upcoming.single().rows.map { it.reminderId })
+    }
+
+    @Test
+    fun `an old task before the window snoozed to later today or tomorrow appears in Due today or Upcoming`() {
+        val oldToday = task("old-today", onceTimes(utc(7, 1, 9)))
+        val oldTomorrow = task("old-tomorrow", onceTimes(utc(7, 2, 9)))
+        val snoozedToday = stored("old-today", utc(7, 1, 9), InstanceStatus.Snoozed, snoozedUntil = utc(8, 20, 16))
+        val snoozedTomorrow = stored("old-tomorrow", utc(7, 2, 9), InstanceStatus.Snoozed, snoozedUntil = utc(8, 21, 9))
+
+        val result = tab(listOf(oldToday, oldTomorrow), older = listOf(snoozedToday, snoozedTomorrow))
+
+        assertEquals(emptyList(), result.overdue)
+        assertEquals(listOf("old-today"), result.dueToday.map { it.reminderId })
+        assertEquals(listOf("old-tomorrow"), result.upcoming.single().rows.map { it.reminderId })
+    }
 }

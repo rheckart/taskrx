@@ -606,4 +606,52 @@ class AnswerViewModelTest {
             assertEquals(InstanceStatus.Snoozed, stored().single().status)
             assertEquals("Put off for now" to ToastKind.Info, toasts.shown.single().let { it.message to it.kind })
         }
+
+    @Test
+    fun `rescheduleToInstant defers a task to another day and arms its Task-tier snooze`() =
+        withUi(NOW) {
+            reminder("chore", ReminderKind.Task, onceTimes(NINE), createdAt = NOW - 10 * DAY)
+            val vm = vm()
+            vm.load("chore", NINE).join()
+            val tomorrow = NOW + 24 * HOUR
+
+            vm.rescheduleToInstant(tomorrow).join()
+
+            val row = stored().single()
+            assertEquals(InstanceStatus.Snoozed, row.status)
+            assertEquals(tomorrow, row.snoozedUntil)
+            assertTrue(alarms().isEmpty(), "a task must not occupy an alarm slot")
+            val expectedId = com.taskrx.core.notifications.snoozeNotificationId("chore", NINE, tomorrow)
+            assertTrue(container.notifications.taskGateway.armed().any { it.id == expectedId })
+            assertEquals(ToastKind.Info, toasts.shown.single().kind)
+        }
+
+    @Test
+    fun `rescheduleToInstant refuses a moment that is not in the future`() =
+        withUi(NOW) {
+            reminder("chore", ReminderKind.Task, onceTimes(NINE), createdAt = NOW - 10 * DAY)
+            val vm = vm()
+            vm.load("chore", NINE).join()
+
+            vm.rescheduleToInstant(NOW).join()
+
+            assertEquals(InstanceStatus.Pending, stored().single().status)
+            assertEquals(Action.Idle, assertIs<AnswerState.Loaded>(vm.state.value).action)
+            assertEquals("Pick a moment in the future" to ToastKind.Error, toasts.shown.single().let { it.message to it.kind })
+        }
+
+    @Test
+    fun `an overdue Missed task can be snoozed and rescheduled from the answer screen`() =
+        withUi(NOW + 4 * HOUR) {
+            reminder("chore", ReminderKind.Task, onceTimes(NINE), createdAt = NOW - 10 * DAY)
+            container.instances.create(CreateReminderInstanceInput(USER, "chore", ReminderKind.Task, NINE, status = InstanceStatus.Missed))
+            val vm = vm()
+            vm.load("chore", NINE).join()
+
+            vm.snooze().join()
+
+            val row = stored().single()
+            assertEquals(InstanceStatus.Snoozed, row.status)
+            assertEquals(now + 15 * 60_000, row.snoozedUntil)
+        }
 }

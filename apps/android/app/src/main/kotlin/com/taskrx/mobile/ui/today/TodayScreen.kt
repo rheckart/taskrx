@@ -62,6 +62,7 @@ import com.taskrx.core.domain.InstanceStatus
 import com.taskrx.core.domain.Reminder
 import com.taskrx.core.domain.ReminderKind
 import com.taskrx.core.domain.isAnswerable
+import com.taskrx.core.snooze.DEFAULT_SNOOZE_MINUTES
 import com.taskrx.core.tasks.UpcomingDay
 import com.taskrx.core.time.localCalendarDaysBetween
 import com.taskrx.core.time.localDayBounds
@@ -118,6 +119,8 @@ data class TodayActions(
     val onTakeAsNeeded: (Reminder) -> Unit = {},
     /** Open the move dialog for one task occurrence. */
     val onMoveTask: (TimelineRow) -> Unit = {},
+    /** Open the edit form for a task reminder. */
+    val onEditReminder: (String) -> Unit = {},
     /** Move the occurrence the open dialog is showing to this moment. */
     val onConfirmMove: (Long) -> Unit = {},
     val onCancelMove: () -> Unit = {},
@@ -136,6 +139,7 @@ fun TodayContent(
     banner: @Composable () -> Unit = {},
     /** Read when a button is pressed, so a screen left open for hours still judges by the real time. */
     now: () -> Long = System::currentTimeMillis,
+    snoozeMinutes: Int = DEFAULT_SNOOZE_MINUTES,
 ) {
     Box(modifier.fillMaxSize()) {
         Column(Modifier.fillMaxSize()) {
@@ -150,7 +154,7 @@ fun TodayContent(
                 AsNeededCards(state.asNeeded, actions.onTakeAsNeeded, now)
             }
             Box(Modifier.weight(1f).fillMaxWidth()) {
-                Timeline(state, actions, now)
+                Timeline(state, actions, now, snoozeMinutes)
             }
         }
         AddButton(actions, Modifier.align(Alignment.BottomEnd).padding(16.dp))
@@ -162,6 +166,7 @@ fun TodayContent(
             now = now(),
             onConfirm = actions.onConfirmMove,
             onDismiss = actions.onCancelMove,
+            snoozeMinutes = snoozeMinutes,
         )
     }
 }
@@ -261,7 +266,7 @@ private fun DayNav(state: TodayState, actions: TodayActions) {
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-private fun Timeline(state: TodayState, actions: TodayActions, now: () -> Long) {
+private fun Timeline(state: TodayState, actions: TodayActions, now: () -> Long, snoozeMinutes: Int) {
     // The dose whose time is being changed, if any.
     var editing by remember { mutableStateOf<TimelineRow?>(null) }
     // The slot whose overdue doses are waiting to be told when they were taken.
@@ -302,7 +307,7 @@ private fun Timeline(state: TodayState, actions: TodayActions, now: () -> Long) 
                 state = state,
                 actions = actions,
                 now = now,
-                onEdit = { editing = it },
+                snoozeMinutes = snoozeMinutes,
             )
         else ->
             MedicationTimeline(
@@ -411,7 +416,7 @@ private fun TaskTimeline(
     state: TodayState,
     actions: TodayActions,
     now: () -> Long,
-    onEdit: (TimelineRow) -> Unit,
+    snoozeMinutes: Int,
 ) {
     PullToRefreshBox(isRefreshing = state.refreshing, onRefresh = actions.onRefresh, modifier = Modifier.fillMaxSize()) {
         val sections = state.sections
@@ -448,12 +453,9 @@ private fun TaskTimeline(
                     OverdueTaskRow(
                         row = row,
                         now = now(),
+                        snoozeMinutes = snoozeMinutes,
                         canUndo = row.instanceId in state.undoable,
-                        onPress = { actions.onOpenAnswer(row) },
-                        onDone = { actions.onAnswerTask(row, BatchAction.Take) },
-                        onSkip = { actions.onAnswerTask(row, BatchAction.Skip) },
-                        onUndo = { actions.onUndo(row) },
-                        onMove = { actions.onMoveTask(row) },
+                        actions = actions,
                     )
                 }
             }
@@ -463,7 +465,7 @@ private fun TaskTimeline(
                 item(key = "empty-today") { EmptySection("Nothing due today") }
             } else {
                 items(dueToday, key = { "today-${it.reminderId}-${it.scheduledTime}" }) { row ->
-                    TaskRow(row, state, actions, onEdit)
+                    TaskRow(row, state, actions, snoozeMinutes)
                 }
             }
 
@@ -474,7 +476,7 @@ private fun TaskTimeline(
                 for (day in upcoming) {
                     item(key = "upcoming-day-${day.dayStart}") { UpcomingDayHeader(day, now()) }
                     items(day.rows, key = { "upcoming-${it.reminderId}-${it.scheduledTime}" }) { row ->
-                        TaskRow(row, state, actions, onEdit)
+                        TaskRow(row, state, actions, snoozeMinutes)
                     }
                 }
             }
@@ -511,29 +513,65 @@ private fun UpcomingDayHeader(day: UpcomingDay, now: Long) {
     )
 }
 
-/** One task in Due today or Upcoming: the row is the way to the answer screen. */
+/** Long-pressing any task row opens its option menu: Snooze & Reschedule when answerable, plus Edit task. */
 @Composable
-private fun TaskRow(row: TimelineRow, state: TodayState, actions: TodayActions, onEdit: (TimelineRow) -> Unit) {
-    TimelineRowView(
-        row,
-        onPress = { actions.onOpenAnswer(row) },
-        // Held: an answered task opens its edit form, an open one offers to move this occurrence.
-        // The move is here rather than on the answer screen because opening that mints a
-        // `pending` Instance, and a moment with a row on the server cannot be moved.
-        onLongPress =
-            if (row.status == InstanceStatus.Completed) {
-                { onEdit(row) }
-            } else {
-                { actions.onMoveTask(row) }
-            },
-        longPressLabel = if (row.status == InstanceStatus.Completed) "Edit this task" else "Move this occurrence",
-        onUndo = if (row.instanceId in state.undoable) ({ actions.onUndo(row) }) else null,
-    )
+private fun TaskRowWithMenu(
+    row: TimelineRow,
+    snoozeMinutes: Int,
+    actions: TodayActions,
+    content: @Composable (onLongPress: () -> Unit, longPressLabel: String) -> Unit,
+) {
+    var menuOpen by remember { mutableStateOf(false) }
+    val answerable = isAnswerable(row.status)
+    Box {
+        content({ menuOpen = true }, "Task options")
+        DropdownMenu(expanded = menuOpen, onDismissRequest = { menuOpen = false }) {
+            if (answerable) {
+                DropdownMenuItem(
+                    text = { Text("Snooze $snoozeMinutes min") },
+                    onClick = {
+                        menuOpen = false
+                        actions.onAnswerTask(row, BatchAction.Snooze)
+                    },
+                )
+                DropdownMenuItem(
+                    text = { Text("Reschedule…") },
+                    onClick = {
+                        menuOpen = false
+                        actions.onMoveTask(row)
+                    },
+                )
+            }
+            DropdownMenuItem(
+                text = { Text("Edit task") },
+                onClick = {
+                    menuOpen = false
+                    actions.onEditReminder(row.reminderId)
+                },
+            )
+        }
+    }
+}
+
+/** One task in Due today or Upcoming: tap opens the answer screen, hold opens the task options menu. */
+@Composable
+private fun TaskRow(row: TimelineRow, state: TodayState, actions: TodayActions, snoozeMinutes: Int) {
+    val displayTime = if (row.status == InstanceStatus.Snoozed) row.snoozedUntil ?: row.scheduledTime else row.scheduledTime
+    TaskRowWithMenu(row, snoozeMinutes, actions) { onLongPress, longPressLabel ->
+        TimelineRowView(
+            row = row,
+            onPress = { actions.onOpenAnswer(row) },
+            onLongPress = onLongPress,
+            longPressLabel = longPressLabel,
+            onUndo = if (row.instanceId in state.undoable) ({ actions.onUndo(row) }) else null,
+            displayTime = displayTime,
+        )
+    }
 }
 
 /**
  * An Overdue task. The word is the screen's, not a stored status: the row is still `pending` or
- * `missed` underneath, and Done or Skip answers it in place without a trip to the answer screen.
+ * `missed` underneath, and Done, Reschedule or Skip answers it in place without a trip to the answer screen.
  *
  * The day is named as well as the time. Overdue can reach back arbitrarily far, so "09:00" alone
  * would read as this morning's and hide how late the task is.
@@ -542,36 +580,39 @@ private fun TaskRow(row: TimelineRow, state: TodayState, actions: TodayActions, 
 private fun OverdueTaskRow(
     row: TimelineRow,
     now: Long,
+    snoozeMinutes: Int,
     canUndo: Boolean,
-    onPress: () -> Unit,
-    onDone: () -> Unit,
-    onSkip: () -> Unit,
-    onUndo: () -> Unit,
-    onMove: () -> Unit,
+    actions: TodayActions,
 ) {
     val dayStart = localDayBounds(row.scheduledTime, 0).start
     val dayText = dayHeading(localCalendarDaysBetween(now, dayStart), dayStart)
-    TimelineRowView(
-        row = row,
-        onPress = onPress,
-        statusText = "Overdue",
-        dayText = dayText,
-        onLongPress = onMove,
-        longPressLabel = "Move this occurrence",
-        onUndo = if (canUndo) onUndo else null,
-        actions = {
-            Row(Modifier.fillMaxWidth().padding(horizontal = 8.dp), horizontalArrangement = Arrangement.End) {
-                TextButton(
-                    onClick = onDone,
-                    modifier = Modifier.semantics { contentDescription = "Done ${row.name}" },
-                ) { Text("Done") }
-                TextButton(
-                    onClick = onSkip,
-                    modifier = Modifier.semantics { contentDescription = "Skip ${row.name}" },
-                ) { Text("Skip") }
-            }
-        },
-    )
+    TaskRowWithMenu(row, snoozeMinutes, actions) { onLongPress, longPressLabel ->
+        TimelineRowView(
+            row = row,
+            onPress = { actions.onOpenAnswer(row) },
+            statusText = "Overdue",
+            dayText = dayText,
+            onLongPress = onLongPress,
+            longPressLabel = longPressLabel,
+            onUndo = if (canUndo) ({ actions.onUndo(row) }) else null,
+            actions = {
+                Row(Modifier.fillMaxWidth().padding(horizontal = 8.dp), horizontalArrangement = Arrangement.End) {
+                    TextButton(
+                        onClick = { actions.onAnswerTask(row, BatchAction.Take) },
+                        modifier = Modifier.semantics { contentDescription = "Done ${row.name}" },
+                    ) { Text("Done") }
+                    TextButton(
+                        onClick = { actions.onMoveTask(row) },
+                        modifier = Modifier.semantics { contentDescription = "Reschedule ${row.name}" },
+                    ) { Text("Reschedule") }
+                    TextButton(
+                        onClick = { actions.onAnswerTask(row, BatchAction.Skip) },
+                        modifier = Modifier.semantics { contentDescription = "Skip ${row.name}" },
+                    ) { Text("Skip") }
+                }
+            },
+        )
+    }
 }
 
 /**
@@ -650,11 +691,13 @@ fun TimelineRowView(
     dayText: String? = null,
     /** Extra controls under the row, outside its merged description. */
     actions: (@Composable () -> Unit)? = null,
+    /** The clock time shown on the row (a snoozed task shows when it was deferred to). */
+    displayTime: Long = row.scheduledTime,
 ) {
     val answered = !isAnswerable(row.status)
     val label = statusText ?: statusLabel(row)
     val kindColor = if (row.kind == ReminderKind.Medication) TaskRxColors.Medication else TaskRxColors.Task
-    val description = rowDescription(row, statusText = statusText, dayText = dayText)
+    val description = rowDescription(row, statusText = statusText, dayText = dayText, displayTime = displayTime)
 
     val press =
         if (answered) {
@@ -678,7 +721,7 @@ fun TimelineRowView(
             Modifier
         } else {
             Modifier
-                .pointerInput(row.instanceId) { detectTapGestures(onLongPress = { onLongPress() }) }
+                .pointerInput(row.reminderId, row.scheduledTime, row.instanceId) { detectTapGestures(onLongPress = { onLongPress() }) }
                 .semantics { onLongClick(label = longPressLabel) { onLongPress(); true } }
         }
 
@@ -704,7 +747,7 @@ fun TimelineRowView(
                         )
                     }
                     Text(
-                        formatTime(row.scheduledTime),
+                        formatTime(displayTime),
                         fontWeight = FontWeight.SemiBold,
                         color = if (answered) TaskRxColors.Muted else Color.Unspecified,
                     )

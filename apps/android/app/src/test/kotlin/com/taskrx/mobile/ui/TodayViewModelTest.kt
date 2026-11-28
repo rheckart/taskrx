@@ -814,4 +814,114 @@ class TodayViewModelTest {
             assertEquals(listOf("Ahead thing"), vm.state.value.sections.upcoming.flatMap { it.rows }.map { it.name })
             assertEquals(setOf(instance.id), vm.state.value.undoable)
         }
+
+    @Test
+    fun `Snooze on an overdue task moves it to Due today and arms a task notification`() =
+        withUi(MIDNIGHT + 10 * HOUR) {
+            reminder("late", ReminderKind.Task, onceTimes(MIDNIGHT + 8 * HOUR), createdAt = MIDNIGHT - DAY, name = "Call pharmacy")
+            val toasts = ToastLog()
+            val vm = TodayViewModel(container, zone = { UTC }, log = { _, _ -> }, toast = toasts::add)
+            vm.refresh().join()
+
+            vm.answerTask(vm.state.value.sections.overdue.single(), BatchAction.Snooze).join()
+
+            assertEquals("Call pharmacy snoozed 15 minutes" to ToastKind.Info, toasts.shown.single().let { it.message to it.kind })
+            assertTrue(vm.state.value.sections.overdue.isEmpty())
+            val row = vm.state.value.sections.dueToday.single()
+            assertEquals(InstanceStatus.Snoozed, row.status)
+            assertEquals(now + 15 * 60_000, row.snoozedUntil)
+            assertEquals(1, vm.state.value.toDoByKind[ReminderKind.Task])
+            val expectedSnoozeId = com.taskrx.core.notifications.snoozeNotificationId("late", MIDNIGHT + 8 * HOUR, now + 15 * 60_000)
+            assertTrue(container.notifications.taskGateway.armed().any { it.id == expectedSnoozeId })
+        }
+
+    @Test
+    fun `rescheduling an overdue Missed task defers it to Due today or Upcoming and arms a task snooze`() =
+        withUi(MIDNIGHT + 10 * HOUR) {
+            val due = MIDNIGHT + 6 * HOUR
+            reminder("late", ReminderKind.Task, onceTimes(due), createdAt = MIDNIGHT - DAY, name = "Water plants")
+            val vm = TodayViewModel(container, zone = { UTC }, log = { _, _ -> }, toast = ToastLog()::add)
+            vm.refresh().join()
+            val overdueRow = vm.state.value.sections.overdue.single { it.scheduledTime == due }
+            assertEquals(InstanceStatus.Missed, overdueRow.status)
+
+            val laterToday = MIDNIGHT + 18 * HOUR
+            vm.beginMove(overdueRow).join()
+            vm.confirmMove(laterToday).join()
+
+            assertTrue(vm.state.value.sections.overdue.isEmpty())
+            val dueRow = vm.state.value.sections.dueToday.single()
+            assertEquals(InstanceStatus.Snoozed, dueRow.status)
+            assertEquals(laterToday, dueRow.snoozedUntil)
+            assertEquals(due, dueRow.scheduledTime)
+            val expectedId = com.taskrx.core.notifications.snoozeNotificationId("late", due, laterToday)
+            assertTrue(container.notifications.taskGateway.armed().any { it.id == expectedId })
+        }
+
+    @Test
+    fun `rescheduling an opened Pending or Snoozed task works and replaces any prior snooze`() =
+        withUi(MIDNIGHT + 10 * HOUR) {
+            val due = MIDNIGHT + 12 * HOUR
+            reminder("task", ReminderKind.Task, onceTimes(due), createdAt = MIDNIGHT - DAY, name = "Call pharmacy")
+            val pending = container.instances.create(CreateReminderInstanceInput(USER, "task", ReminderKind.Task, due))
+            val vm = TodayViewModel(container, zone = { UTC }, log = { _, _ -> }, toast = ToastLog()::add)
+            vm.refresh().join()
+
+            val firstTarget = MIDNIGHT + 15 * HOUR
+            vm.beginMove(vm.state.value.sections.dueToday.single()).join()
+            vm.confirmMove(firstTarget).join()
+            val firstId = com.taskrx.core.notifications.snoozeNotificationId("task", due, firstTarget)
+            assertTrue(container.notifications.taskGateway.armed().any { it.id == firstId })
+            assertEquals(InstanceStatus.Snoozed, container.instances.get(pending.id)!!.status)
+
+            val secondTarget = MIDNIGHT + DAY + 12 * HOUR
+            vm.beginMove(vm.state.value.sections.dueToday.single()).join()
+            vm.confirmMove(secondTarget).join()
+            val secondId = com.taskrx.core.notifications.snoozeNotificationId("task", due, secondTarget)
+            assertFalse(container.notifications.taskGateway.armed().any { it.id == firstId })
+            assertTrue(container.notifications.taskGateway.armed().any { it.id == secondId })
+            assertEquals(listOf(secondTarget), vm.state.value.sections.upcoming.single().rows.map { it.snoozedUntil })
+        }
+
+    @Test
+    fun `rescheduling an already-moved task occurrence updates its override rather than stacking an inert one`() =
+        withUi(MIDNIGHT + 10 * HOUR) {
+            val orig = MIDNIGHT + 12 * HOUR
+            val firstTarget = MIDNIGHT + 15 * HOUR
+            reminder("task", ReminderKind.Task, dailyTimes(listOf("12:00")), createdAt = MIDNIGHT, name = "Call pharmacy")
+            val vm = TodayViewModel(container, zone = { UTC }, log = { _, _ -> }, toast = ToastLog()::add)
+            vm.refresh().join()
+
+            vm.beginMove(vm.state.value.sections.dueToday.single()).join()
+            vm.confirmMove(firstTarget).join()
+            assertEquals(listOf(OccurrenceOverride(orig, firstTarget)), container.reminders.get("task")!!.overrides)
+
+            val secondTarget = MIDNIGHT + DAY + 16 * HOUR
+            vm.beginMove(vm.state.value.sections.dueToday.single()).join()
+            vm.confirmMove(secondTarget).join()
+
+            assertEquals(listOf(OccurrenceOverride(orig, secondTarget)), container.reminders.get("task")!!.overrides)
+            assertTrue(vm.state.value.sections.dueToday.isEmpty())
+            assertEquals(
+                listOf(MIDNIGHT + DAY + 12 * HOUR, secondTarget),
+                vm.state.value.sections.upcoming.first().rows.map { it.scheduledTime },
+            )
+        }
+
+    @Test
+    fun `rescheduling an untouched OnceTimes task earlier updates its schedule directly`() =
+        withUi(MIDNIGHT + 10 * HOUR) {
+            val scheduled = MIDNIGHT + DAY + 12 * HOUR
+            val earlier = MIDNIGHT + 16 * HOUR
+            reminder("task", ReminderKind.Task, onceTimes(scheduled), createdAt = MIDNIGHT - DAY, name = "Call pharmacy")
+            val vm = TodayViewModel(container, zone = { UTC }, log = { _, _ -> }, toast = ToastLog()::add)
+            vm.refresh().join()
+
+            vm.beginMove(vm.state.value.sections.upcoming.single().rows.single()).join()
+            vm.confirmMove(earlier).join()
+
+            assertEquals(onceTimes(earlier), container.reminders.get("task")!!.schedule)
+            assertEquals(emptyList(), container.reminders.get("task")!!.overrides)
+            assertEquals(listOf(earlier), vm.state.value.sections.dueToday.map { it.scheduledTime })
+        }
 }
