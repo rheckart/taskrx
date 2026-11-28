@@ -11,8 +11,13 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.DatePicker
+import androidx.compose.material3.DatePickerDialog
+import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
+import androidx.compose.material3.rememberDatePickerState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -30,10 +35,15 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.taskrx.core.domain.ReminderKind
 import com.taskrx.core.snooze.canPickATimeToday
+import com.taskrx.core.tasks.tomorrowAtSameTime
 import com.taskrx.core.undo.undoWillBeMissed
 import com.taskrx.mobile.format.undoPastGrace
 import com.taskrx.mobile.ui.forms.TimeDialog
+import com.taskrx.mobile.ui.forms.instantHourMinute
+import com.taskrx.mobile.ui.forms.pickedInstant
+import com.taskrx.mobile.ui.forms.pickerDateMillis
 import com.taskrx.mobile.format.formatDayTime
 import com.taskrx.mobile.format.isOverdue
 import com.taskrx.mobile.format.urgencyLabel
@@ -62,6 +72,7 @@ fun AnswerContent(
     onUndo: () -> Unit,
     onDone: () -> Unit,
     modifier: Modifier = Modifier,
+    onRescheduleToInstant: (Long) -> Unit = {},
 ) {
     when (state) {
         AnswerState.Loading ->
@@ -76,7 +87,21 @@ fun AnswerContent(
                 modifier,
             )
         is AnswerState.Failed -> Problem("Could not load this reminder", state.message, onDone, modifier)
-        is AnswerState.Loaded -> Loaded(state, now, snoozeMinutes, onComplete, onCompleteAt, onSkip, onSnooze, onReschedule, onUndo, onDone, modifier)
+        is AnswerState.Loaded ->
+            Loaded(
+                state,
+                now,
+                snoozeMinutes,
+                onComplete,
+                onCompleteAt,
+                onSkip,
+                onSnooze,
+                onReschedule,
+                onRescheduleToInstant,
+                onUndo,
+                onDone,
+                modifier,
+            )
     }
 }
 
@@ -93,6 +118,7 @@ private fun Problem(title: String, body: String, onDone: () -> Unit, modifier: M
     }
 }
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun Loaded(
     state: AnswerState.Loaded,
@@ -103,12 +129,15 @@ private fun Loaded(
     onSkip: () -> Unit,
     onSnooze: () -> Unit,
     onReschedule: (hour: Int, minute: Int) -> Unit,
+    onRescheduleToInstant: (Long) -> Unit,
     onUndo: () -> Unit,
     onDone: () -> Unit,
     modifier: Modifier,
 ) {
     var picking by rememberSaveable { mutableStateOf(false) }
     var askingWhen by rememberSaveable { mutableStateOf(false) }
+    var pickingDate by rememberSaveable { mutableStateOf(false) }
+    var pickedDateMillis by rememberSaveable { mutableStateOf<Long?>(null) }
     val missed = state.instance.status == InstanceStatus.Missed
     val reminder = state.reminder
     val words = wordsFor(reminder.kind)
@@ -128,6 +157,11 @@ private fun Loaded(
             Text(reminder.name, Modifier.padding(top = 6.dp), fontSize = 22.sp, fontWeight = FontWeight.Bold)
             reminder.dosage?.let { Text(it, Modifier.padding(top = 4.dp), color = TaskRxColors.Secondary, fontSize = 16.sp) }
             Text("Scheduled: ${formatDayTime(state.scheduledTime)}", Modifier.padding(top = 12.dp), color = TaskRxColors.BodyText)
+            if (state.instance.status == InstanceStatus.Snoozed) {
+                state.instance.snoozedUntil?.let { until ->
+                    Text("Snoozed until ${formatDayTime(until)}", Modifier.padding(top = 4.dp), color = TaskRxColors.Secondary)
+                }
+            }
             Text(
                 urgencyLabel(state.scheduledTime, now, words),
                 Modifier.padding(top = 8.dp),
@@ -165,12 +199,14 @@ private fun Loaded(
                 PrimaryButton("Done", onDone, Modifier.padding(top = 12.dp), enabled = state.action == Action.Done)
             }
         } else {
+            val askWhenCompleted = missed && reminder.kind == ReminderKind.Medication
+            val canDefer = !missed || reminder.kind == ReminderKind.Task
             Column(Modifier.padding(top = 24.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
                 // The app only guesses a missed dose was taken now; the person knows when.
-                PrimaryButton(words.complete, if (missed) ({ askingWhen = true }) else onComplete, enabled = idle, busy = state.action == Action.Completing, color = TaskRxColors.CompleteButton)
+                PrimaryButton(words.complete, if (askWhenCompleted) ({ askingWhen = true }) else onComplete, enabled = idle, busy = state.action == Action.Completing, color = TaskRxColors.CompleteButton)
                 PrimaryButton("Skip", onSkip, enabled = idle, busy = state.action == Action.Skipping, color = TaskRxColors.SkipButton)
-                // A missed moment is over: there is nothing left to put off.
-                if (!missed) {
+                // A missed medication is over; a missed task is still a commitment to snooze or reschedule.
+                if (canDefer) {
                     PrimaryButton(
                         "Snooze $snoozeMinutes min",
                         onSnooze,
@@ -183,6 +219,14 @@ private fun Loaded(
                         PrimaryButton(
                             "Pick a time",
                             { picking = true },
+                            enabled = idle,
+                            color = TaskRxColors.SnoozeButton,
+                        )
+                    }
+                    if (reminder.kind == ReminderKind.Task) {
+                        PrimaryButton(
+                            "Pick another day",
+                            { pickingDate = true },
                             enabled = idle,
                             color = TaskRxColors.SnoozeButton,
                         )
@@ -219,6 +263,38 @@ private fun Loaded(
             onConfirm = { hour, minute ->
                 picking = false
                 onReschedule(hour, minute)
+            },
+        )
+    }
+
+    if (pickingDate) {
+        val defaultDay = pickerDateMillis(tomorrowAtSameTime(state.scheduledTime, now))
+        val dateState = rememberDatePickerState(initialSelectedDateMillis = defaultDay)
+        DatePickerDialog(
+            onDismissRequest = { pickingDate = false },
+            confirmButton = {
+                TextButton(
+                    enabled = dateState.selectedDateMillis != null,
+                    onClick = {
+                        pickedDateMillis = dateState.selectedDateMillis
+                        pickingDate = false
+                    },
+                ) { Text("Next") }
+            },
+            dismissButton = { TextButton(onClick = { pickingDate = false }) { Text("Cancel") } },
+        ) { DatePicker(dateState) }
+    }
+
+    pickedDateMillis?.let { chosenDay ->
+        val (h, m) = instantHourMinute(state.scheduledTime)
+        TimeDialog(
+            hour = h,
+            minute = m,
+            title = "Pick a time",
+            onDismiss = { pickedDateMillis = null },
+            onConfirm = { pickedHour, pickedMinute ->
+                pickedDateMillis = null
+                onRescheduleToInstant(pickedInstant(chosenDay, pickedHour, pickedMinute))
             },
         )
     }

@@ -2,7 +2,9 @@ package com.taskrx.mobile.notifications
 
 import com.taskrx.core.asneeded.takings
 import com.taskrx.core.domain.AsNeededTimes
+import com.taskrx.core.domain.InstanceStatus
 import com.taskrx.core.domain.Reminder
+import com.taskrx.core.domain.ReminderKind
 import com.taskrx.core.domain.isAnswerable
 import com.taskrx.core.domain.isMomentAnswered
 import com.taskrx.core.notifications.RearmCause
@@ -87,10 +89,14 @@ class NotificationScheduler(
             }
         }
 
-        // A moment the person already completed or skipped (taken early, say) must not ring.
+        // A moment the person already completed or skipped (taken early, say) must not ring,
+        // and a future task snoozed to a later time rings at its snooze instead of twice.
         val answered =
             instances.list(InstanceFilter(userId = userId, since = now))
-                .filterNot { isAnswerable(it.status) }
+                .filter {
+                    !isAnswerable(it.status) ||
+                        (it.reminderKind == ReminderKind.Task && it.status == InstanceStatus.Snoozed && (it.snoozedUntil ?: 0L) > now)
+                }
                 .mapTo(HashSet()) { it.reminderId to it.scheduledTime }
         val desired = desiredNotifications(list, now, zone(), answered, takingsOf(userId, list, now))
         val armed = medication.armed() + tasks.armed()
@@ -133,6 +139,9 @@ class NotificationScheduler(
         val reminder = reminders.get(reminderId) ?: return false
         val spec = snoozeSpec(reminder, scheduledTime, snoozeUntil, clock())
         lock.withLock {
+            for (prior in snoozes.removeForOccurrence(reminderId, scheduledTime)) {
+                gateway(prior.tier).cancel(prior.id)
+            }
             snoozes.put(spec)
             gateway(spec.tier).arm(spec)
         }

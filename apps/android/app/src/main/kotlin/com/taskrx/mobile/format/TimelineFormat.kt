@@ -63,9 +63,11 @@ fun rowDescription(
      * back, and the time alone would not say which day it belongs to.
      */
     dayText: String? = null,
+    /** The time shown on the row: a snoozed task shows when it was deferred to. */
+    displayTime: Long = row.scheduledTime,
 ): String {
     val status = statusText ?: statusLabel(row, zone, locale)
-    val time = formatTime(row.scheduledTime, zone, locale)
+    val time = formatTime(displayTime, zone, locale)
     val moment = if (dayText.isNullOrEmpty()) time else "$dayText, $time"
     return "${kindLabel(row.kind)}: ${row.name} at $moment${if (status.isEmpty()) "" else ", $status"}"
 }

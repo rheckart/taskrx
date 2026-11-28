@@ -38,6 +38,7 @@ private fun row(
     status: InstanceStatus = InstanceStatus.Pending,
     kind: ReminderKind = ReminderKind.Task,
     isNext: Boolean = false,
+    snoozedUntil: Long? = null,
 ): TimelineRow =
     TimelineRow(
         reminderId = reminderId,
@@ -47,7 +48,7 @@ private fun row(
         kind = kind,
         scheduledTime = scheduledTime,
         status = status,
-        snoozedUntil = null,
+        snoozedUntil = snoozedUntil,
         isNext = isNext,
     )
 
@@ -212,5 +213,38 @@ class TaskSectionsTest {
         val result = sectionTasks(emptyList(), MIDDAY)
 
         assertEquals(TaskSections(emptyList(), emptyList(), emptyList()), result)
+    }
+
+    @Test
+    fun `a past task snoozed until later today appears in Due today sorted by snoozedUntil`() {
+        val snoozedLate = row("snoozed-late", utc(3, 9), InstanceStatus.Snoozed, snoozedUntil = utc(5, 16))
+        val snoozedEarlyB = row("b", utc(2, 9), InstanceStatus.Snoozed, snoozedUntil = utc(5, 14))
+        val snoozedEarlyA = row("a", utc(2, 9), InstanceStatus.Snoozed, snoozedUntil = utc(5, 14))
+        val snoozedEarlyLaterOrig = row("c", utc(4, 9), InstanceStatus.Snoozed, snoozedUntil = utc(5, 14))
+        val normal = row("normal", utc(5, 15), InstanceStatus.Pending)
+
+        val result = sections(snoozedLate, snoozedEarlyB, snoozedEarlyA, snoozedEarlyLaterOrig, normal)
+
+        assertEquals(emptyList(), result.overdue)
+        assertEquals(listOf("a", "b", "c", "normal", "snoozed-late"), result.dueToday.map { it.reminderId })
+        // Original scheduledTime is preserved on the row.
+        assertEquals(utc(3, 9), result.dueToday.last().scheduledTime)
+    }
+
+    @Test
+    fun `a task snoozed into the next seven days appears in Upcoming under snoozedUntil day`() {
+        val fromPast = row("past", utc(2, 9), InstanceStatus.Snoozed, snoozedUntil = utc(6, 15))
+        val fromTodaySameMoment = row("today-same-b", utc(5, 13), InstanceStatus.Snoozed, snoozedUntil = utc(7, 10))
+        val fromTodayEarlierOrig = row("today-same-a", utc(5, 10), InstanceStatus.Snoozed, snoozedUntil = utc(7, 10))
+        val tieBreakId = row("today-same-0", utc(5, 10), InstanceStatus.Snoozed, snoozedUntil = utc(7, 10))
+        val beyondHorizon = row("far", utc(5, 10), InstanceStatus.Snoozed, snoozedUntil = utc(13, 9))
+
+        val result = sections(fromPast, fromTodaySameMoment, fromTodayEarlierOrig, tieBreakId, beyondHorizon)
+
+        assertEquals(emptyList(), result.overdue)
+        assertEquals(emptyList(), result.dueToday)
+        assertEquals(listOf(utc(6, 0), utc(7, 0)), result.upcoming.map { it.dayStart })
+        assertEquals(listOf("past"), result.upcoming[0].rows.map { it.reminderId })
+        assertEquals(listOf("today-same-0", "today-same-a", "today-same-b"), result.upcoming[1].rows.map { it.reminderId })
     }
 }

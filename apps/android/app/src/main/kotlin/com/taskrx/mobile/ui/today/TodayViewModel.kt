@@ -11,9 +11,14 @@ import com.taskrx.core.domain.OccurrenceOverride
 import com.taskrx.core.domain.Reminder
 import com.taskrx.core.domain.ReminderKind
 import com.taskrx.core.domain.isAnswerable
-import com.taskrx.core.domain.moveRefusal
+import com.taskrx.core.domain.onceTimes
 import com.taskrx.core.domain.withOverride
+import com.taskrx.core.tasks.TaskRescheduleOutcome
+import com.taskrx.core.tasks.TaskReschedulePlan
+import com.taskrx.core.tasks.planTaskReschedule
 import com.taskrx.core.time.takenAtOrNull
+import com.taskrx.mobile.data.CreateReminderInstanceInput
+import com.taskrx.mobile.format.formatDayTime
 import com.taskrx.mobile.format.undoToast
 import com.taskrx.mobile.undo.UndoResult
 import com.taskrx.core.time.localDayBounds
@@ -247,11 +252,11 @@ class TodayViewModel(
         }
 
     /**
-     * Answers one task from its row, without the answer screen: Done or Skip on an Overdue row.
+     * Answers one task from its row, without the answer screen: Done, Snooze or Skip.
      *
      * A late Done is stamped with the moment the task was due, as Catch up does, so clearing
-     * up after the fact reads consistently however it was reached. Done and Skipped are the
-     * words here — a task is not a dose, so the slot path's "doses taken" would be wrong.
+     * up after the fact reads consistently however it was reached. Done, Snoozed and Skipped
+     * are the words here — a task is not a dose, so the slot path's "doses taken" would be wrong.
      */
     fun answerTask(row: TimelineRow, action: BatchAction): Job =
         viewModelScope.launch {
@@ -262,8 +267,15 @@ class TodayViewModel(
                     if (result.failed > 0) {
                         ToastRequest("Couldn't answer ${row.name}", ToastKind.Error)
                     } else {
-                        val word = if (action == BatchAction.Take) "Done" else "Skipped"
-                        ToastRequest("${row.name} $word", ToastKind.Success)
+                        when (action) {
+                            BatchAction.Take -> ToastRequest("${row.name} Done", ToastKind.Success)
+                            BatchAction.Skip -> ToastRequest("${row.name} Skipped", ToastKind.Success)
+                            BatchAction.Snooze ->
+                                ToastRequest(
+                                    "${row.name} snoozed ${app.settings.snoozeMinutes.value} minutes",
+                                    ToastKind.Info,
+                                )
+                        }
                     },
                 )
             } catch (e: CancellationException) {
@@ -301,36 +313,87 @@ class TodayViewModel(
     fun cancelMove() = mutable.update { it.copy(move = null) }
 
     /**
-     * Moves the occurrence the dialog is showing to [to], as an override on the Reminder.
-     *
-     * The refusal is checked again here rather than trusted from the dialog: the clock moved
-     * while the dialog was open, and the check is the rule, not the button's state.
+     * Reschedules the occurrence the dialog is showing to [to], using `:core`'s
+     * [planTaskReschedule]: an open moment moves via an override (or updating `OnceTimes` when
+     * pulled earlier), while an overdue, opened, or snoozed moment defers via a `Snoozed`
+     * Reminder Instance.
      */
     fun confirmMove(to: Long): Job =
         viewModelScope.launch {
             val draft = mutable.value.move ?: return@launch
+            val userId = app.session.userId
             val now = app.clock()
-            val refusal = moveRefusal(draft.reminder, draft.row.scheduledTime, to, now, draft.instances)
-            if (refusal != null) {
+            val outcome = planTaskReschedule(draft.reminder, draft.row.scheduledTime, to, now, draft.instances)
+            if (outcome !is TaskRescheduleOutcome.Allowed) {
                 toast(ToastRequest("That one can't be moved", ToastKind.Error))
                 return@launch
             }
 
             try {
-                app.reminders.update(
-                    draft.reminder.id,
-                    UpdateReminderPatch(
-                        overrides =
-                            draft.reminder.overrides.withOverride(
-                                OccurrenceOverride(from = draft.row.scheduledTime, to = to),
+                when (val plan = outcome.plan) {
+                    is TaskReschedulePlan.MoveOverride -> {
+                        app.reminders.update(
+                            draft.reminder.id,
+                            UpdateReminderPatch(
+                                overrides =
+                                    draft.reminder.overrides.withOverride(
+                                        OccurrenceOverride(from = plan.from, to = plan.to),
+                                    ),
                             ),
-                    ),
-                )
-                // The armed notifications now differ: the old moment is gone and the new one
-                // needs an alarm.
-                app.notifications.rescheduleAfterWrite(app.session.userId)
-                mutable.update { it.copy(move = null) }
-                toast(ToastRequest("${draft.row.name} moved", ToastKind.Success))
+                        )
+                        app.notifications.rescheduleAfterWrite(userId)
+                        mutable.update { it.copy(move = null) }
+                        toast(ToastRequest("${draft.row.name} moved", ToastKind.Success))
+                    }
+                    is TaskReschedulePlan.RescheduleOnce -> {
+                        app.reminders.update(
+                            draft.reminder.id,
+                            UpdateReminderPatch(
+                                schedule = onceTimes(plan.to),
+                                overrides = emptyList(),
+                            ),
+                        )
+                        app.notifications.rescheduleAfterWrite(userId)
+                        mutable.update { it.copy(move = null) }
+                        toast(ToastRequest("${draft.row.name} moved", ToastKind.Success))
+                    }
+                    is TaskReschedulePlan.DeferInstance -> {
+                        var instance = app.instances.findAnswerableForOccurrence(userId, draft.reminder.id, plan.scheduledTime)
+                        if (instance == null) {
+                            if (app.instances.findAnyForOccurrence(userId, draft.reminder.id, plan.scheduledTime) != null) {
+                                toast(ToastRequest("That one can't be moved", ToastKind.Error))
+                                return@launch
+                            }
+                            instance =
+                                app.instances.create(
+                                    CreateReminderInstanceInput(
+                                        userId = userId,
+                                        reminderId = draft.reminder.id,
+                                        reminderKind = draft.reminder.kind,
+                                        scheduledTime = plan.scheduledTime,
+                                    ),
+                                )
+                        }
+                        app.instances.markSnoozed(instance.id, plan.until)
+                        val armed =
+                            try {
+                                val didArm = app.notifications.scheduler.snooze(draft.reminder.id, plan.scheduledTime, plan.until)
+                                app.notifications.rescheduleAfterWrite(userId)
+                                app.notifications.dismissPosted(plan.scheduledTime, listOf(draft.reminder.id))
+                                didArm
+                            } catch (e: CancellationException) {
+                                throw e
+                            } catch (e: Exception) {
+                                log("arming rescheduled task failed", e)
+                                false
+                            }
+                        mutable.update { it.copy(move = null) }
+                        val message =
+                            if (armed) "${draft.row.name} rescheduled for ${formatDayTime(plan.until, zone())}"
+                            else "Put off for now"
+                        toast(ToastRequest(message, ToastKind.Info))
+                    }
+                }
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {

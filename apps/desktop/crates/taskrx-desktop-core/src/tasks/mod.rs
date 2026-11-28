@@ -34,10 +34,28 @@ fn not_next(row: &TimelineRow) -> TimelineRow {
     }
 }
 
-fn by_time_then_reminder(a: &TimelineRow, b: &TimelineRow) -> std::cmp::Ordering {
-    a.scheduled_time
-        .cmp(&b.scheduled_time)
+fn task_moment(row: &TimelineRow) -> i64 {
+    if row.status == InstanceStatus::Snoozed {
+        row.snoozed_until.unwrap_or(row.scheduled_time)
+    } else {
+        row.scheduled_time
+    }
+}
+
+fn by_task_moment(a: &TimelineRow, b: &TimelineRow) -> std::cmp::Ordering {
+    task_moment(a)
+        .cmp(&task_moment(b))
+        .then_with(|| a.scheduled_time.cmp(&b.scheduled_time))
         .then_with(|| a.reminder_id.cmp(&b.reminder_id))
+}
+
+fn settle_expired_snooze(instance: &ReminderInstance, now: i64) -> InstanceStatus {
+    if instance.status == InstanceStatus::Snoozed && snooze_ran_out(instance, now, GRACE_PERIOD_MS)
+    {
+        InstanceStatus::Missed
+    } else {
+        instance.status
+    }
 }
 
 /// The three sections from the task rows of a wide window. Medication rows are ignored. Overdue
@@ -75,25 +93,28 @@ pub fn section_tasks(rows: &[TimelineRow], now: i64, tz: &TimeZone) -> TaskSecti
         .collect();
     let mut due_today: Vec<TimelineRow> = tasks
         .iter()
-        .filter(|r| r.scheduled_time >= today.start && r.scheduled_time <= today.end)
+        .filter(|r| {
+            let m = task_moment(r);
+            m >= today.start && m <= today.end
+        })
         .filter(|r| !taken.contains(&timeline_row_key(&r.reminder_id, r.scheduled_time)))
         .map(|r| not_next(r))
         .collect();
-    due_today.sort_by(by_time_then_reminder);
+    due_today.sort_by(by_task_moment);
 
     let mut days: BTreeMap<i64, Vec<TimelineRow>> = BTreeMap::new();
-    for row in tasks
-        .iter()
-        .filter(|r| r.scheduled_time > today.end && r.scheduled_time <= horizon_end)
-    {
-        days.entry(local_day_bounds(row.scheduled_time, 0, tz).start)
+    for row in tasks.iter().filter(|r| {
+        let m = task_moment(r);
+        m > today.end && m <= horizon_end
+    }) {
+        days.entry(local_day_bounds(task_moment(row), 0, tz).start)
             .or_default()
             .push(not_next(row));
     }
     let upcoming = days
         .into_iter()
         .map(|(day_start, mut rows)| {
-            rows.sort_by(by_time_then_reminder);
+            rows.sort_by(by_task_moment);
             UpcomingDay { day_start, rows }
         })
         .collect();
@@ -143,7 +164,17 @@ pub fn assemble_tasks_tab(input: &TasksTabInput) -> TaskSections {
         .instances
         .iter()
         .filter(|i| i.reminder_kind == ReminderKind::Task)
-        .cloned()
+        .map(|instance| {
+            let settled = settle_expired_snooze(instance, input.now);
+            if settled == instance.status {
+                instance.clone()
+            } else {
+                ReminderInstance {
+                    status: settled,
+                    ..instance.clone()
+                }
+            }
+        })
         .collect();
 
     let projected = project_timeline(&ProjectTimelineInput {
@@ -161,13 +192,7 @@ pub fn assemble_tasks_tab(input: &TasksTabInput) -> TaskSections {
         .filter(|i| i.reminder_kind == ReminderKind::Task && i.scheduled_time < window.start)
         .filter_map(|instance| {
             let reminder = by_id.get(instance.reminder_id.as_str())?;
-            let status = if instance.status == InstanceStatus::Snoozed
-                && snooze_ran_out(instance, input.now, GRACE_PERIOD_MS)
-            {
-                InstanceStatus::Missed
-            } else {
-                instance.status
-            };
+            let status = settle_expired_snooze(instance, input.now);
             Some(TimelineRow {
                 reminder_id: reminder.id.clone(),
                 instance_id: Some(instance.id.clone()),

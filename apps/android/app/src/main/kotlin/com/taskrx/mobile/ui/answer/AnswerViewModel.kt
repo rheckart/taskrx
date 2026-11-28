@@ -10,6 +10,7 @@ import com.taskrx.mobile.AppContainer
 import com.taskrx.mobile.data.CreateReminderInstanceInput
 import com.taskrx.core.snooze.rescheduleInstant
 import com.taskrx.core.time.takenAtOrNull
+import com.taskrx.mobile.format.formatDayTime
 import com.taskrx.mobile.format.formatTime
 import com.taskrx.mobile.format.undoToast
 import com.taskrx.mobile.undo.UndoResult
@@ -142,14 +143,14 @@ class AnswerViewModel(
         val stated = hour != null && minute != null
         if (stated) {
             val loaded = mutable.value as? AnswerState.Loaded
-            if (loaded != null && takenAtOrNull(loaded.scheduledTime, hour!!, minute!!, app.clock()) == null) {
+            if (loaded != null && takenAtOrNull(loaded.scheduledTime, hour, minute, app.clock()) == null) {
                 toast(ToastRequest("That time hasn't happened yet", ToastKind.Error))
                 return Job().also { it.complete() }
             }
         }
         return answer(Action.Completing, failure = "Couldn't record it — will retry on next sync") { loaded ->
             val now = app.clock()
-            val at = if (stated) takenAtOrNull(loaded.scheduledTime, hour!!, minute!!, now) ?: now else now
+            val at = if (stated) takenAtOrNull(loaded.scheduledTime, hour, minute, now) ?: now else now
             app.instances.markCompleted(loaded.instance.id, at)
             toast(ToastRequest(wordsFor(loaded.reminder.kind).completed, ToastKind.Success))
             at
@@ -186,6 +187,17 @@ class AnswerViewModel(
             return Job().also { it.complete() }
         }
         return putOff(Action.Snoozing, "Couldn't reschedule reminder", { at }) { "Reminder set for ${formatTime(at)}" }
+    }
+
+    /**
+     * "Pick another day": defers a task to any chosen instant in the future.
+     */
+    fun rescheduleToInstant(at: Long): Job {
+        if (at <= app.clock()) {
+            toast(ToastRequest("Pick a moment in the future", ToastKind.Error))
+            return Job().also { it.complete() }
+        }
+        return putOff(Action.Snoozing, "Couldn't reschedule reminder", { at }) { "Reminder set for ${formatDayTime(at)}" }
     }
 
     /**

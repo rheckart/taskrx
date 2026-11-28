@@ -1306,10 +1306,20 @@ fn section(p: Palette, key: &str, title: &str) -> El {
 
 fn row_view(s: &Ui, p: Palette, r: &Row, task: bool) -> El {
     let key = row_key(&r.row.reminder_id, r.row.scheduled_time);
-    let status_word = if task {
-        words::task_status(r.shown)
+    let status_word = if r.shown == InstanceStatus::Snoozed {
+        r.row
+            .snoozed_until
+            .map(|until| format!("Snoozed until {}", words::clock(until, &s.zone)))
+            .unwrap_or_else(|| "Snoozed".to_string())
+    } else if task {
+        words::task_status(r.shown).to_string()
     } else {
-        words::status(r.shown)
+        words::status(r.shown).to_string()
+    };
+    let display_time = if task && r.shown == InstanceStatus::Snoozed {
+        r.row.snoozed_until.unwrap_or(r.row.scheduled_time)
+    } else {
+        r.row.scheduled_time
     };
     let status_color = match r.shown {
         InstanceStatus::Completed => p.success,
@@ -1350,7 +1360,7 @@ fn row_view(s: &Ui, p: Palette, r: &Row, task: bool) -> El {
             },
         )
         .child(
-            text(words::clock(r.row.scheduled_time, &s.zone))
+            text(words::clock(display_time, &s.zone))
                 .key("time")
                 .font(type_::LABEL)
                 .color(p.text_secondary)
@@ -1404,20 +1414,17 @@ fn row_view(s: &Ui, p: Palette, r: &Row, task: bool) -> El {
                 s.answer(&now_row, Answer::Take { at }, format!("{name} {take_done}"));
             },
         ));
-        // A task row answers Done or Skip, as the phone's does; snoozing is a dose's.
-        if !task {
-            line = line.child(button(p, "snooze", "Snooze", false).on_press_tx(
-                move |s: &mut Ui, tx: &mut Tx| {
-                    s.clock = tx.clock();
-                    let until = s.snooze_until();
-                    s.answer(
-                        &snooze_row,
-                        Answer::Snooze { until },
-                        format!("{snooze_name} snoozed"),
-                    );
-                },
-            ));
-        }
+        line = line.child(button(p, "snooze", "Snooze", false).on_press_tx(
+            move |s: &mut Ui, tx: &mut Tx| {
+                s.clock = tx.clock();
+                let until = s.snooze_until();
+                s.answer(
+                    &snooze_row,
+                    Answer::Snooze { until },
+                    format!("{snooze_name} snoozed"),
+                );
+            },
+        ));
         line = line.child(button(p, "skip", "Skip", false).on_press_tx(
             move |s: &mut Ui, tx: &mut Tx| {
                 s.clock = tx.clock();

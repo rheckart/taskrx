@@ -122,6 +122,8 @@ class ScreensTest {
                 onSettings = { log += "settings" },
                 onTakeAsNeeded = { log += "take:${it.name}" },
                 onAnswerTask = { r, a -> log += "task:${a.wire}:${r.name}" },
+                onMoveTask = { log += "move:${it.name}" },
+                onEditReminder = { log += "edit:$it" },
             )
     }
 
@@ -648,7 +650,7 @@ class ScreensTest {
     }
 
     @Test
-    fun `an Overdue task reads Overdue and answers in place with Done or Skip`() {
+    fun `an Overdue task reads Overdue and answers in place with Done, Reschedule or Skip`() {
         val calls = Calls()
         val late = row("Call the pharmacy", kind = ReminderKind.Task, at = NINE - 3 * 3_600_000L)
         today(state(late, kind = ReminderKind.Task), calls)
@@ -657,9 +659,64 @@ class ScreensTest {
         compose.onAllNodesWithText("Missed").assertCountEquals(0)
 
         compose.onNodeWithContentDescription("Done Call the pharmacy").performClick()
+        compose.onNodeWithContentDescription("Reschedule Call the pharmacy").performClick()
         compose.onNodeWithContentDescription("Skip Call the pharmacy").performClick()
 
-        assertEquals(listOf("task:take:Call the pharmacy", "task:skip:Call the pharmacy"), calls.log)
+        assertEquals(listOf("task:take:Call the pharmacy", "move:Call the pharmacy", "task:skip:Call the pharmacy"), calls.log)
+    }
+
+    @Test
+    fun `long-pressing an answerable task opens Snooze, Reschedule and Edit task`() {
+        val calls = Calls()
+        val task = row("Water plants", kind = ReminderKind.Task, at = NINE + 3 * 3_600_000L)
+        today(state(task, kind = ReminderKind.Task), calls)
+
+        compose.onNodeWithContentDescription(rowDescription(task)).performTouchInput { longClick() }
+        compose.onNodeWithText("Snooze 15 min").performClick()
+
+        compose.onNodeWithContentDescription(rowDescription(task)).performTouchInput { longClick() }
+        compose.onNodeWithText("Reschedule…").performClick()
+
+        compose.onNodeWithContentDescription(rowDescription(task)).performTouchInput { longClick() }
+        compose.onNodeWithText("Edit task").performClick()
+
+        assertEquals(listOf("task:snooze:Water plants", "move:Water plants", "edit:r-Water plants"), calls.log)
+    }
+
+    @Test
+    fun `long-pressing a Completed task opens Edit task only, not the medication time picker`() {
+        val calls = Calls()
+        val done = row("Water plants", kind = ReminderKind.Task, status = InstanceStatus.Completed, completedAt = NINE)
+        today(state(done, kind = ReminderKind.Task), calls)
+
+        compose.onNodeWithContentDescription(rowDescription(done)).performTouchInput { longClick() }
+
+        compose.onAllNodesWithText("Pick a time").assertCountEquals(0)
+        compose.onAllNodesWithText("Snooze 15 min").assertCountEquals(0)
+        compose.onAllNodesWithText("Reschedule…").assertCountEquals(0)
+        compose.onNodeWithText("Edit task").performClick()
+        assertEquals(listOf("edit:r-Water plants"), calls.log)
+    }
+
+    @Test
+    fun `a snoozed task row shows the time it was deferred to`() {
+        val snoozedAt = NINE + 3 * 3_600_000L // 12:00 PM
+        val snoozed =
+            TimelineRow(
+                reminderId = "r-Call",
+                instanceId = "i-Call",
+                name = "Call",
+                dosage = null,
+                kind = ReminderKind.Task,
+                scheduledTime = NINE - 2 * 3_600_000L, // 7:00 AM
+                status = InstanceStatus.Snoozed,
+                snoozedUntil = snoozedAt,
+                isNext = false,
+            )
+        today(state(snoozed, kind = ReminderKind.Task))
+
+        compose.onNodeWithText("12:00 PM").assertExists()
+        compose.onNodeWithText("Snoozed until 12:00 PM").assertExists()
     }
 
     @Test
@@ -1019,6 +1076,28 @@ class ScreensTest {
         compose.onNodeWithText("TASK").assertExists()
         compose.onNodeWithText("Mark done").assertExists()
         compose.onAllNodesWithText("Mark taken").assertCountEquals(0)
+        compose.onNodeWithText("Pick another day").performScrollTo().assertExists()
+    }
+
+    @Test
+    fun `an overdue Missed task still offers Snooze, Pick a time and Pick another day, and Mark done skips When did you take it`() {
+        val open = loaded(ReminderKind.Task)
+        val calls = answer(open.copy(instance = open.instance.copy(status = InstanceStatus.Missed)))
+
+        compose.onNodeWithText("Mark done").performClick()
+        assertEquals(listOf("complete"), calls)
+        compose.onAllNodesWithText("When did you take it?").assertCountEquals(0)
+        compose.onNodeWithText("Snooze 15 min").assertExists()
+        compose.onNodeWithText("Pick a time").performScrollTo().assertExists()
+        compose.onNodeWithText("Pick another day").performScrollTo().assertExists()
+    }
+
+    @Test
+    fun `a snoozed reminder on the answer screen displays when it was snoozed until`() {
+        val open = loaded(ReminderKind.Task)
+        answer(open.copy(instance = open.instance.copy(status = InstanceStatus.Snoozed, snoozedUntil = NINE + 2 * 3_600_000L)))
+
+        compose.onNodeWithText("Snoozed until", substring = true).assertExists()
     }
 
     @Test
